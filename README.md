@@ -5,7 +5,7 @@ and — the key part — **removes an item from the Trakt list once Radarr/Sonar
 have imported it**. It uses **official REST APIs only** (no scraping).
 
 This is the plugin **core** plus the first module, **`traktsync`**. Future
-modules (`bandwidtharr`, `deletearr`, `neutarr`) drop into `modules/` and
+modules (`bandwidtharr`, `deletearr`, `neutarr`) drop into `backend/modules/` and
 auto-load — see [Adding a module](#adding-a-module).
 
 > **DRY_RUN is ON by default.** Until you turn it off, the service only *logs*
@@ -27,28 +27,33 @@ auto-load — see [Adding a module](#adding-a-module).
 ## Architecture
 
 ```
-core/
-  config.py        # typed env config (pydantic-settings), secret masking
-  db.py            # SQLite schema + helpers (WAL, thread-safe)
-  scheduler.py     # APScheduler 4 wrapper (interval + cron)
-  webhooks.py      # single /webhook router; modules register handlers
-  registry.py      # discovers & loads modules, calls setup()
-  context.py       # AppContext shared with modules + live DRY_RUN flag
-  api.py           # dashboard JSON endpoints (/api/*)
-  app.py           # FastAPI factory + lifespan wiring + SPA serving
-  clients/
-    trakt.py       # device auth, token refresh, list read/remove
-    jellyseerr.py  # status check, create request
-    arr.py         # defensive Radarr/Sonarr webhook parsing
-modules/
-  traktsync/       # the first module: poll/request, webhook remove, reconcile
-main.py            # entrypoint: `uvicorn main:app`
-frontend/          # React + TypeScript + Tailwind (Vite) dashboard
+backend/
+  core/
+    config.py        # typed env config (pydantic-settings), secret masking
+    db.py            # SQLite schema + helpers (WAL, thread-safe)
+    scheduler.py     # APScheduler 4 wrapper (interval + cron)
+    webhooks.py      # single /webhook router; modules register handlers
+    registry.py      # discovers & loads modules, calls setup()
+    context.py       # AppContext shared with modules + live DRY_RUN flag
+    api.py           # dashboard JSON endpoints (/api/*)
+    app.py           # FastAPI factory + lifespan wiring + SPA serving
+    clients/
+      trakt.py       # device auth, token refresh, list read/remove
+      jellyseerr.py  # status check, create request
+      arr.py         # defensive Radarr/Sonarr webhook parsing
+  modules/
+    traktsync/       # the first module: poll/request, webhook remove, reconcile
+  main.py            # entrypoint: `uvicorn main:app --app-dir backend`
+  pyproject.toml     # packaging + pytest + coverage config
+  tests/             # backend test suite (100% coverage)
+frontend/            # React + TypeScript + Tailwind (Vite) dashboard
+Dockerfile, docker-compose.yml, .env.example   # project root
 ```
 
 > **Note:** the brief sketched a `aio-arr/` project folder; since a hyphenated
-> name is not an importable Python package, `core/`, `modules/` and `main.py`
-> live at the repository root and the run target is `main:app`.
+> name is not an importable Python package, the backend is exposed as the
+> `core/` and `modules/` packages inside `backend/`, and the run target is
+> `main:app` (run from the repository root with `--app-dir backend`).
 
 ## Configuration
 
@@ -125,12 +130,13 @@ toggle in the dashboard (takes effect immediately, runtime-only) or set
 
 ## Local development
 
-Backend:
+Backend (run from the repository root so `.env`, `data/` and `frontend/dist`
+resolve as they do in Docker):
 
 ```bash
 python3.11 -m venv .venv && . .venv/bin/activate
-pip install -e ".[dev]"
-uvicorn main:app --reload --port 3223
+pip install -e "./backend[dev]"
+uvicorn main:app --app-dir backend --reload --port 3223
 ```
 
 Frontend (Vite dev server proxies `/api` and `/webhook` to port 3223):
@@ -142,16 +148,23 @@ npm run dev
 ```
 
 For a production-style single-origin run, build the frontend first
-(`cd frontend && npm run build`); the FastAPI app then serves `frontend/dist`
-at `/`.
+(`cd frontend && npm run build`), then start the backend **from the repository
+root** (as in the Backend block above) so it resolves the bundle:
+
+```bash
+uvicorn main:app --app-dir backend --port 3223
+```
+
+The FastAPI app then serves `frontend/dist` at `/`.
 
 ## Tests
 
-The Python backend has **100% test coverage**, enforced in `pyproject.toml`:
+The Python backend has **100% test coverage**, enforced in
+`backend/pyproject.toml`:
 
 ```bash
-pip install -e ".[dev]"
-pytest            # runs with --cov-fail-under=100
+pip install -e "./backend[dev]"
+cd backend && pytest   # runs with --cov-fail-under=100
 ```
 
 Coverage spans Trakt list parsing, the TMDB/TVDB reverse mapping, the
@@ -177,12 +190,13 @@ cd frontend && npm run build
 
 ## Adding a module
 
-1. Create `modules/<name>/__init__.py` exposing
+1. Create `backend/modules/<name>/__init__.py` exposing
    `setup(scheduler, app, ctx)` (sync or async).
 2. Use `ctx` for the shared clients, database and config; register scheduled
    jobs via `scheduler.add_interval` / `scheduler.add_cron`, and webhook
    handlers via `ctx.webhooks.register(subpath, handler)`.
-3. Drop the folder in `modules/` — `core/registry.py` auto-loads it on start-up.
+3. Drop the folder in `backend/modules/` — `backend/core/registry.py` auto-loads
+   it on start-up.
 
 ### Frontend: adding a menu or component
 
@@ -196,4 +210,4 @@ cd frontend && npm run build
 - Single Uvicorn worker by design: the scheduler runs in-process and SQLite
   uses WAL with a process-level lock. Multi-worker deployment is out of scope.
 - APScheduler 4 is pre-release; all scheduler usage is isolated behind
-  `core/scheduler.py` so a downgrade to 3.x is a one-file change.
+  `backend/core/scheduler.py` so a downgrade to 3.x is a one-file change.

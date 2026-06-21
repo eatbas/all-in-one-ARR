@@ -2,11 +2,12 @@
 .gitignore
 .venv
 venv
-__pycache__
-*.py[cod]
-.pytest_cache
-.coverage
-htmlcov
+**/__pycache__
+**/*.py[cod]
+**/.pytest_cache
+**/.coverage
+**/htmlcov
+**/*.egg-info
 data
 .env
 .env.*

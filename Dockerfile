@@ -16,10 +16,10 @@ ENV PYTHONUNBUFFERED=1 \
 WORKDIR /app
 
 # Install Python dependencies first for better layer caching.
-COPY pyproject.toml README.md ./
-COPY core ./core
-COPY modules ./modules
-COPY main.py ./
+COPY backend/pyproject.toml ./
+COPY backend/core ./core
+COPY backend/modules ./modules
+COPY backend/main.py ./
 RUN pip install .
 
 # Bring in the built SPA produced by stage 1.
