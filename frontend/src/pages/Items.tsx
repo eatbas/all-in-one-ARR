@@ -29,6 +29,7 @@ import {
 } from "@/components/ui/table"
 import { cn } from "@/lib/utils"
 import { useItems } from "@/lib/queries"
+import { formatTimestamp } from "@/lib/format"
 import type { ItemStatus } from "@/lib/api"
 
 /** "all" is the UI-only sentinel meaning "no status filter". */
@@ -50,17 +51,6 @@ const STATUS_STYLES: Record<ItemStatus, string> = {
   removed: "border-muted-foreground/30 text-muted-foreground",
 }
 
-function formatTimestamp(iso: string): string {
-  const date = new Date(iso)
-  if (Number.isNaN(date.getTime())) {
-    return iso
-  }
-  return date.toLocaleString(undefined, {
-    dateStyle: "medium",
-    timeStyle: "short",
-  })
-}
-
 /** Items page: filterable table of every mirrored movie and show. */
 export function Items() {
   const [filter, setFilter] = useState<StatusFilter>("all")
@@ -68,9 +58,11 @@ export function Items() {
     filter === "all" ? undefined : filter,
   )
 
-  const activeLabel =
-    STATUS_FILTERS.find((option) => option.value === filter)?.label ??
-    "All statuses"
+  const activeOption = STATUS_FILTERS.find((option) => option.value === filter)
+  // `filter` is always one of STATUS_FILTERS' values, so `activeOption` is never
+  // undefined; the optional chain and fallback guard a type-unreachable state.
+  /* v8 ignore next */
+  const activeLabel = activeOption?.label ?? "All statuses"
 
   return (
     <Card>

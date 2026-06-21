@@ -14,6 +14,7 @@ import {
   CardTitle,
 } from "@/components/ui/card"
 import { useActivity, useStatus } from "@/lib/queries"
+import { formatTimestamp } from "@/lib/format"
 import type { StatusCounts } from "@/lib/api"
 
 interface StatCard {
@@ -49,18 +50,6 @@ const STAT_CARDS: ReadonlyArray<StatCard> = [
     icon: Trash2Icon,
   },
 ]
-
-/** Format an ISO timestamp for the activity feed; falls back to the raw value. */
-function formatTimestamp(iso: string): string {
-  const date = new Date(iso)
-  if (Number.isNaN(date.getTime())) {
-    return iso
-  }
-  return date.toLocaleString(undefined, {
-    dateStyle: "medium",
-    timeStyle: "short",
-  })
-}
 
 /** Overview page: four stat cards plus a recent-activity feed. */
 export function Dashboard() {
