@@ -21,9 +21,9 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = [
-    "pytest>=8.3,<9.0",
-    "pytest-asyncio>=0.24,<1.0",
-    "pytest-cov>=5.0,<7.0",
+    "pytest>=9.0,<10.0",
+    "pytest-asyncio>=1.0,<2.0",
+    "pytest-cov>=7.0,<8.0",
     "respx>=0.21,<1.0",
 ]
 
@@ -35,6 +35,9 @@ packages = ["core", "core.clients", "modules", "modules.traktsync"]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
+# pytest-asyncio 1.x: pin the default fixture loop scope explicitly to silence
+# the unset-default deprecation warning (the suite has no custom event_loop).
+asyncio_default_fixture_loop_scope = "function"
 testpaths = ["tests"]
 pythonpath = ["."]
 addopts = "--cov=core --cov=modules --cov-report=term-missing --cov-fail-under=100"
