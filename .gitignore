@@ -25,6 +25,7 @@ coverage.xml
 frontend/node_modules/
 frontend/dist/
 frontend/.vite/
+frontend/coverage/
 
 # Editor / OS
 .DS_Store
