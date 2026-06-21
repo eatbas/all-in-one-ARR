@@ -74,8 +74,10 @@ export class ApiError extends Error {
 
 async function request<T>(input: string, init?: RequestInit): Promise<T> {
   const response = await fetch(input, {
-    headers: { Accept: "application/json", ...init?.headers },
     ...init,
+    // Spread `init` first so caller headers (e.g. Content-Type on POST) are
+    // merged into — not over — the default Accept header.
+    headers: { Accept: "application/json", ...init?.headers },
   })
 
   if (!response.ok) {
