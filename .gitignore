@@ -1,0 +1,32 @@
+# Secrets and runtime state
+.env
+.env.*
+!.env.example
+data/
+*.db
+*.db-wal
+*.db-shm
+tokens.json
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+coverage.xml
+*.egg-info/
+.mypy_cache/
+
+# Frontend
+frontend/node_modules/
+frontend/dist/
+frontend/.vite/
+
+# Editor / OS
+.DS_Store
+.idea/
+.vscode/
