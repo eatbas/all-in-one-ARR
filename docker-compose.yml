@@ -1,0 +1,22 @@
+services:
+  aio-arr:
+    build: .
+    container_name: aio-arr
+    env_file: .env
+    ports:
+      - "3223:3223"
+    volumes:
+      # Persists the SQLite database and the Trakt token store so the one-time
+      # device authorisation survives restarts.
+      - ./data:/app/data
+    restart: unless-stopped
+    # To reach Radarr/Sonarr/Jellyseerr on the same Docker network, either set
+    # the *arr URLs to host-reachable addresses, or attach this service to your
+    # existing media network, e.g.:
+    #
+    # networks:
+    #   - media
+    #
+    # networks:
+    #   media:
+    #     external: true
