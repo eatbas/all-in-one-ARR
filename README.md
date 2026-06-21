@@ -171,6 +171,23 @@ Coverage spans Trakt list parsing, the TMDB/TVDB reverse mapping, the
 remove-on-webhook lookup (mocked HTTP clients, DRY_RUN assertions), and
 reconciliation.
 
+The React frontend also has **100% test coverage** (Vitest + React Testing
+Library on jsdom), enforced via a `thresholds: { 100: true }` gate in
+`frontend/vite.config.ts`:
+
+```bash
+cd frontend
+npm install
+npm run test       # vitest run
+npm run test:cov   # the same run with the 100% coverage gate
+```
+
+Coverage spans the typed API client, the TanStack Query hooks, the theme
+provider, the layout and topbar, both pages, the route table, and the vendored
+UI primitives. The single carve-out is `src/main.tsx` (the DOM bootstrap),
+excluded from the coverage denominator as the direct analogue of the backend's
+excluded `if __name__ == "__main__"` block.
+
 Build the frontend to type-check it:
 
 ```bash
