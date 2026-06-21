@@ -38,6 +38,10 @@ const buttonVariants = cva(
   }
 )
 
+// React 19: `ref` is a regular prop, so it flows through `...props` to the
+// underlying element — Radix `asChild` triggers (e.g. DropdownMenuTrigger) still
+// receive the element ref and anchor their popovers correctly, without
+// `forwardRef` (deprecated in React 19).
 function Button({
   className,
   variant = "default",
