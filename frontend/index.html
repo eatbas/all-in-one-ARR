@@ -5,8 +5,27 @@
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>All-in-One ARR</title>
+    <script>
+      // Apply the saved (or default) theme to <html> before first paint so the
+      // page never flashes the wrong colours. Must mirror ThemeProvider's
+      // storage key and default; the provider takes over once React mounts.
+      (function () {
+        try {
+          var theme = localStorage.getItem("aio-arr-theme") || "dark";
+          var resolved =
+            theme === "system"
+              ? window.matchMedia("(prefers-color-scheme: dark)").matches
+                ? "dark"
+                : "light"
+              : theme;
+          document.documentElement.classList.add(resolved);
+        } catch (e) {
+          document.documentElement.classList.add("dark");
+        }
+      })();
+    </script>
   </head>
-  <body class="dark">
+  <body>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
