@@ -8,7 +8,6 @@ API/webhook routers and finally serves the built React SPA.
 
 from __future__ import annotations
 
-import asyncio
 from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import AsyncIterator
@@ -26,6 +25,9 @@ from core.context import AppContext, DryRunFlag
 from core.db import Database
 from core.logging import configure_logging, get_logger
 from core.scheduler import SchedulerService
+from core.settings_store import SettingsStore, TrackedList
+from core.trakt_api import create_trakt_router
+from core.trakt_auth import cancel_device_auth, start_device_auth
 from core.webhooks import WebhookRegistry
 
 # Location of the built frontend bundle (overridable in tests).
@@ -41,10 +43,22 @@ def build_context(settings: Settings) -> AppContext:
     database = Database(settings.DB_PATH)
     database.init_db()
 
-    trakt = TraktClient(
+    settings_store = SettingsStore(settings.SETTINGS_STORE_PATH)
+    settings_store.load_or_seed(
         client_id=settings.TRAKT_CLIENT_ID,
         client_secret=settings.TRAKT_CLIENT_SECRET,
         user=settings.TRAKT_USER,
+        lists=[
+            TrackedList(owner_user=settings.TRAKT_USER, slug=slug, name=slug)
+            for slug in settings.trakt_lists
+        ],
+    )
+    client_id, client_secret, user = settings_store.trakt_credentials()
+
+    trakt = TraktClient(
+        client_id=client_id,
+        client_secret=client_secret,
+        user=user,
         list_id=settings.TRAKT_LIST_ID,
         token_store_path=settings.TOKEN_STORE_PATH,
         dry_run_provider=flag,
@@ -65,19 +79,23 @@ def build_context(settings: Settings) -> AppContext:
         scheduler=SchedulerService(),
         webhooks=WebhookRegistry(),
         dry_run_flag=flag,
+        settings_store=settings_store,
     )
 
 
-async def _run_device_auth(ctx: AppContext) -> None:
-    """Run the one-time Trakt device-auth flow, logging the code for the user."""
+async def _maybe_start_device_auth(ctx: AppContext) -> None:
+    """Kick off Trakt device auth at start-up when creds exist but no token does.
+
+    The flow runs through the shared :data:`AppContext.trakt_auth` session so the
+    dashboard surfaces the same code/URL. Failures never crash start-up.
+    """
+    client_id, _, _ = ctx.settings_store.trakt_credentials()
+    if not client_id or ctx.trakt.is_authenticated():
+        return
     try:
-        device = await ctx.trakt.request_device_code()
-        if await ctx.trakt.poll_for_token(device):
-            _log.info("Trakt authorisation succeeded")
-        else:
-            _log.error("Trakt authorisation did not complete")
+        await start_device_auth(ctx)
     except Exception as exc:  # never crash startup on auth issues
-        _log.exception("Trakt device auth failed: %s", exc)
+        _log.exception("Trakt device auth failed to start: %s", exc)
 
 
 def _mount_frontend(app: FastAPI) -> None:
@@ -114,17 +132,14 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
     await ctx.scheduler.start()
 
-    auth_task: asyncio.Task | None = None
-    if not ctx.trakt.is_authenticated():
-        auth_task = asyncio.create_task(_run_device_auth(ctx))
+    await _maybe_start_device_auth(ctx)
 
     await registry.load_modules(ctx.scheduler, app, ctx)
 
     try:
         yield
     finally:
-        if auth_task is not None:
-            auth_task.cancel()
+        cancel_device_auth(ctx)
         await ctx.scheduler.stop()
         await ctx.trakt.aclose()
         await ctx.jellyseerr.aclose()
@@ -152,6 +167,7 @@ def create_app() -> FastAPI:
     # Register all routes up front; the webhook handlers are populated by the
     # modules during the lifespan, but requests only arrive after startup.
     app.include_router(create_api_router(ctx))
+    app.include_router(create_trakt_router(ctx))
     app.include_router(ctx.webhooks.router)
     _mount_frontend(app)
 

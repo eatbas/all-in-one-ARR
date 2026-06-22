@@ -159,6 +159,20 @@ class Database:
         ).fetchone()
         return dict(row) if row else None
 
+    def find_all_by_tmdb(self, tmdb: int) -> list[dict[str, Any]]:
+        """Return every item matching a TMDB id (across all lists), newest first."""
+        rows = self._conn.execute(
+            "SELECT * FROM items WHERE tmdb=? ORDER BY updated_at DESC", (tmdb,)
+        ).fetchall()
+        return [dict(row) for row in rows]
+
+    def find_all_by_tvdb(self, tvdb: int) -> list[dict[str, Any]]:
+        """Return every item matching a TVDB id (across all lists), newest first."""
+        rows = self._conn.execute(
+            "SELECT * FROM items WHERE tvdb=? ORDER BY updated_at DESC", (tvdb,)
+        ).fetchall()
+        return [dict(row) for row in rows]
+
     def counts_by_status(self) -> dict[str, int]:
         """Return a count of items per status (all statuses present, zero-filled)."""
         counts = {status: 0 for status in ITEM_STATUSES}

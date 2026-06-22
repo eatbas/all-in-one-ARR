@@ -237,3 +237,102 @@ async def test_remove_items_real_show_watchlist(tmp_path) -> None:
 async def test_aclose(tmp_path) -> None:
     client = make_client(tmp_path)
     await client.aclose()
+
+
+_TOKENS = {"access_token": "a", "refresh_token": "r", "expires_at": 9e9}
+
+
+def test_update_credentials(tmp_path) -> None:
+    client = make_client(tmp_path)
+    client.update_credentials(client_id="c2", client_secret="s2", user="bob")
+    assert client._client_id == "c2"
+    assert client._client_secret == "s2"
+    assert client._user == "bob"
+    client.update_credentials(client_id="c3", client_secret="s3", user="")
+    assert client._user == "me"  # blank user falls back to 'me'
+
+
+@respx.mock
+async def test_read_list_items_explicit_owner_and_list(tmp_path) -> None:
+    respx.get(
+        f"{TRAKT_BASE_URL}/users/bob/lists/anime/items/movies,shows"
+    ).mock(return_value=httpx.Response(200, json=[]))
+    client = make_client(tmp_path, watchlist=False)
+    client._tokens = dict(_TOKENS)
+    assert await client.read_list_items(list_id="anime", owner_user="bob") == []
+
+
+@respx.mock
+async def test_remove_items_explicit_owner_and_list(tmp_path) -> None:
+    route = respx.post(
+        f"{TRAKT_BASE_URL}/users/bob/lists/anime/items/remove"
+    ).mock(return_value=httpx.Response(200, json={"deleted": {"movies": 1}}))
+    client = make_client(tmp_path, dry_run=False, watchlist=False)
+    client._tokens = dict(_TOKENS)
+    result = await client.remove_items(movies=[1], list_id="anime", owner_user="bob")
+    assert result == {"deleted": {"movies": 1}}
+    assert route.called
+
+
+@respx.mock
+async def test_get_user_lists_normalises_and_filters(tmp_path) -> None:
+    respx.get(f"{TRAKT_BASE_URL}/users/me/lists").mock(
+        return_value=httpx.Response(
+            200,
+            json=[
+                {"name": "Movies", "ids": {"slug": "movies", "trakt": 1}, "item_count": 19},
+                {"name": "NoSlug", "ids": {"trakt": 42}, "item_count": 0},
+                {"name": "Bad", "ids": {}},  # no slug, no trakt -> dropped
+            ],
+        )
+    )
+    client = make_client(tmp_path)
+    client._tokens = dict(_TOKENS)
+    lists = await client.get_user_lists()
+    assert [item["slug"] for item in lists] == ["movies", "42"]
+    assert lists[0]["owner_user"] == "me"
+    assert lists[0]["item_count"] == 19
+
+
+@respx.mock
+async def test_get_list_summary_found(tmp_path) -> None:
+    respx.get(f"{TRAKT_BASE_URL}/users/me/lists/movies").mock(
+        return_value=httpx.Response(
+            200, json={"name": "Movies", "ids": {"slug": "movies"}, "item_count": 19}
+        )
+    )
+    client = make_client(tmp_path)
+    client._tokens = dict(_TOKENS)
+    summary = await client.get_list_summary(owner_user="me", slug="movies")
+    assert summary["slug"] == "movies"
+    assert summary["owner_user"] == "me"
+
+
+@respx.mock
+async def test_get_list_summary_not_found(tmp_path) -> None:
+    respx.get(f"{TRAKT_BASE_URL}/users/me/lists/ghost").mock(
+        return_value=httpx.Response(404)
+    )
+    client = make_client(tmp_path)
+    client._tokens = dict(_TOKENS)
+    assert await client.get_list_summary(owner_user="me", slug="ghost") is None
+
+
+@respx.mock
+async def test_test_connection_returns_username(tmp_path) -> None:
+    respx.get(f"{TRAKT_BASE_URL}/users/settings").mock(
+        return_value=httpx.Response(200, json={"user": {"username": "erena"}})
+    )
+    client = make_client(tmp_path)
+    client._tokens = dict(_TOKENS)
+    assert await client.test_connection() == {"username": "erena"}
+
+
+@respx.mock
+async def test_test_connection_missing_user(tmp_path) -> None:
+    respx.get(f"{TRAKT_BASE_URL}/users/settings").mock(
+        return_value=httpx.Response(200, json={})
+    )
+    client = make_client(tmp_path)
+    client._tokens = dict(_TOKENS)
+    assert await client.test_connection() == {"username": None}

@@ -16,6 +16,8 @@ from core.config import Settings
 from core.db import Database
 from core.logging import get_logger
 from core.scheduler import SchedulerService
+from core.settings_store import SettingsStore
+from core.trakt_auth import TraktAuthSession
 from core.webhooks import WebhookRegistry
 
 
@@ -45,6 +47,8 @@ class AppContext:
     scheduler: SchedulerService
     webhooks: WebhookRegistry
     dry_run_flag: DryRunFlag
+    settings_store: SettingsStore
+    trakt_auth: TraktAuthSession = field(default_factory=TraktAuthSession)
     sync_now: Callable[[], Awaitable[Any]] | None = field(default=None)
 
     def __post_init__(self) -> None:

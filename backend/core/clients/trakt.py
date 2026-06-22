@@ -52,7 +52,6 @@ class TraktClient:
         self._client_secret = client_secret
         self._user = user
         self._list_id = list_id
-        self._is_watchlist = list_id.strip().lower() == "watchlist"
         self._token_store_path = token_store_path
         self._dry_run_provider = dry_run_provider
         self._log = get_logger("trakt")
@@ -60,6 +59,20 @@ class TraktClient:
         self._client = http_client or httpx.AsyncClient(
             base_url=TRAKT_BASE_URL, timeout=30.0
         )
+
+    # ---- credentials ----
+
+    def update_credentials(
+        self, *, client_id: str, client_secret: str, user: str
+    ) -> None:
+        """Replace the in-use Trakt credentials (set from the dashboard).
+
+        Subsequent authenticated calls and any new device-auth use these values,
+        so a credential change in the UI takes effect without a restart.
+        """
+        self._client_id = client_id
+        self._client_secret = client_secret
+        self._user = user or "me"
 
     # ---- headers ----
 
@@ -185,25 +198,79 @@ class TraktClient:
             )
         self._save_tokens(response.json())
 
+    # ---- list discovery ----
+
+    @staticmethod
+    def _normalise_list(entry: dict[str, Any], owner_user: str) -> dict[str, Any]:
+        """Normalise a Trakt list object into a compact dict."""
+        ids = entry.get("ids") or {}
+        slug = ids.get("slug") or (str(ids["trakt"]) if ids.get("trakt") else None)
+        return {
+            "name": entry.get("name"),
+            "slug": slug,
+            "owner_user": owner_user,
+            "item_count": entry.get("item_count"),
+        }
+
+    async def get_user_lists(self, *, user: str | None = None) -> list[dict[str, Any]]:
+        """Return all of a user's lists (name, slug, owner, item count)."""
+        owner = user or self._user
+        response = await self._client.get(
+            f"/users/{owner}/lists", headers=await self._auth_headers()
+        )
+        response.raise_for_status()
+        lists = [self._normalise_list(entry, owner) for entry in response.json()]
+        return [item for item in lists if item["slug"]]
+
+    async def get_list_summary(
+        self, *, owner_user: str, slug: str
+    ) -> dict[str, Any] | None:
+        """Return a single list's summary, or ``None`` if it does not exist."""
+        response = await self._client.get(
+            f"/users/{owner_user}/lists/{slug}", headers=await self._auth_headers()
+        )
+        if response.status_code == 404:
+            return None
+        response.raise_for_status()
+        return self._normalise_list(response.json(), owner_user)
+
+    async def test_connection(self) -> dict[str, Any]:
+        """Verify the saved token by reading the account settings.
+
+        Returns ``{"username": ...}`` on success; raises on any failure (e.g.
+        :class:`TraktAuthError` when no token is stored).
+        """
+        response = await self._client.get(
+            "/users/settings", headers=await self._auth_headers()
+        )
+        response.raise_for_status()
+        data = response.json()
+        return {"username": (data.get("user") or {}).get("username")}
+
     # ---- list read ----
 
-    def _list_read_path(self) -> str:
-        if self._is_watchlist:
+    def _list_read_path(self, owner_user: str, list_id: str) -> str:
+        if list_id.strip().lower() == "watchlist":
             return "/sync/watchlist/movies,shows"
-        return f"/users/{self._user}/lists/{self._list_id}/items/movies,shows"
+        return f"/users/{owner_user}/lists/{list_id}/items/movies,shows"
 
-    def _list_remove_path(self) -> str:
-        if self._is_watchlist:
+    def _list_remove_path(self, owner_user: str, list_id: str) -> str:
+        if list_id.strip().lower() == "watchlist":
             return "/sync/watchlist/remove"
-        return f"/users/{self._user}/lists/{self._list_id}/items/remove"
+        return f"/users/{owner_user}/lists/{list_id}/items/remove"
 
-    async def read_list_items(self) -> list[dict[str, Any]]:
-        """Read and normalise the configured Trakt list (or watchlist).
+    async def read_list_items(
+        self, *, list_id: str | None = None, owner_user: str | None = None
+    ) -> list[dict[str, Any]]:
+        """Read and normalise a Trakt list (or the watchlist).
 
-        Follows Trakt pagination via the ``X-Pagination-Page-Count`` header so
-        lists larger than a single page are fully synced.
+        Defaults to the list/user the client was constructed with. Follows Trakt
+        pagination via the ``X-Pagination-Page-Count`` header so lists larger than
+        a single page are fully synced.
         """
-        path = self._list_read_path()
+        owner = owner_user or self._user
+        list_id = self._list_id if list_id is None else list_id
+        path = self._list_read_path(owner, list_id)
         headers = await self._auth_headers()
         items: list[dict[str, Any]] = []
         page = 1
@@ -243,12 +310,16 @@ class TraktClient:
         *,
         movies: list[int] | None = None,
         shows: list[int] | None = None,
+        list_id: str | None = None,
+        owner_user: str | None = None,
     ) -> dict[str, Any]:
-        """Remove items from the Trakt list.
+        """Remove items from a Trakt list (defaults to the configured list).
 
         ``movies`` are TMDB ids; ``shows`` are TVDB ids. Honours DRY_RUN: when on,
         the payload is logged and a simulated result is returned without sending.
         """
+        owner = owner_user or self._user
+        list_id = self._list_id if list_id is None else list_id
         movie_ids = movies or []
         show_ids = shows or []
         body = {
@@ -261,13 +332,14 @@ class TraktClient:
                 self._log,
                 "trakt_remove_skipped",
                 dry_run=True,
+                list_id=list_id,
                 movies=",".join(str(m) for m in movie_ids) or None,
                 shows=",".join(str(s) for s in show_ids) or None,
             )
             return {"dry_run": True, "would_remove": body}
 
         response = await self._client.post(
-            self._list_remove_path(),
+            self._list_remove_path(owner, list_id),
             headers=await self._auth_headers(),
             json=body,
         )
@@ -276,6 +348,7 @@ class TraktClient:
             self._log,
             "trakt_remove",
             dry_run=False,
+            list_id=list_id,
             movies=",".join(str(m) for m in movie_ids) or None,
             shows=",".join(str(s) for s in show_ids) or None,
         )

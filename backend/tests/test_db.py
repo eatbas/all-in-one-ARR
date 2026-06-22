@@ -62,6 +62,18 @@ def test_find_by_tmdb_and_tvdb(db: Database) -> None:
     assert db.find_by_tvdb(0) is None
 
 
+def test_find_all_by_tmdb_and_tvdb_span_lists(db: Database) -> None:
+    # The same title mirrored under two lists must surface both rows.
+    db.upsert_item(**{**_SHOW, "list_id": "tv"})
+    db.upsert_item(**{**_SHOW, "list_id": "anime"})
+    by_tmdb = db.find_all_by_tmdb(95396)
+    by_tvdb = db.find_all_by_tvdb(371980)
+    assert {row["list_id"] for row in by_tmdb} == {"tv", "anime"}
+    assert {row["list_id"] for row in by_tvdb} == {"tv", "anime"}
+    assert db.find_all_by_tmdb(0) == []
+    assert db.find_all_by_tvdb(0) == []
+
+
 def test_counts_by_status_zero_filled(db: Database) -> None:
     db.upsert_item(**_MOVIE)
     db.upsert_item(**_SHOW)

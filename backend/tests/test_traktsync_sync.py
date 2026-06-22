@@ -5,8 +5,9 @@ from __future__ import annotations
 from unittest.mock import AsyncMock
 
 from core.clients.jellyseerr import AVAILABLE, PENDING, JellyseerrError
+from core.settings_store import TrackedList
 from modules.traktsync.sync import poll_and_request
-from tests.conftest import StubJellyseerr, StubTrakt, make_ctx
+from tests.conftest import StubJellyseerr, StubSettingsStore, StubTrakt, make_ctx
 
 _MOVIE = {
     "trakt_id": 1, "type": "movie", "title": "Dune", "year": 2021,
@@ -122,5 +123,60 @@ async def test_per_item_exception_isolated(db, monkeypatch) -> None:
     await poll_and_request(ctx)  # must not raise
     assert any(
         a["action"] == "error" and "sync failed" in a["detail"]
+        for a in db.recent_activity()
+    )
+
+
+async def test_polls_each_selected_list(db) -> None:
+    store = StubSettingsStore(
+        lists=[
+            TrackedList(owner_user="me", slug="movies", name="Movies"),
+            TrackedList(owner_user="me", slug="anime", name="Anime"),
+        ]
+    )
+
+    async def read(*, list_id, owner_user):
+        return [{**_MOVIE, "trakt_id": 1 if list_id == "movies" else 2}]
+
+    trakt = StubTrakt()
+    trakt.read_list_items.side_effect = read
+    ctx = make_ctx(
+        db=db,
+        trakt=trakt,
+        jellyseerr=StubJellyseerr(status=AVAILABLE),
+        settings_store=store,
+    )
+    await poll_and_request(ctx)
+    assert db.get_item(trakt_id=1, list_id="movies")["status"] == "available"
+    assert db.get_item(trakt_id=2, list_id="anime")["status"] == "available"
+    assert trakt.read_list_items.await_count == 2
+
+
+async def test_one_failing_list_does_not_abort_others(db) -> None:
+    store = StubSettingsStore(
+        lists=[
+            TrackedList(owner_user="me", slug="movies", name="Movies"),
+            TrackedList(owner_user="me", slug="anime", name="Anime"),
+        ]
+    )
+
+    async def read(*, list_id, owner_user):
+        if list_id == "movies":
+            raise RuntimeError("not authorised")
+        return [{**_MOVIE, "trakt_id": 2}]
+
+    trakt = StubTrakt()
+    trakt.read_list_items.side_effect = read
+    ctx = make_ctx(
+        db=db,
+        trakt=trakt,
+        jellyseerr=StubJellyseerr(status=AVAILABLE),
+        settings_store=store,
+    )
+    await poll_and_request(ctx)
+    # The anime list was still processed despite the movies list failing.
+    assert db.get_item(trakt_id=2, list_id="anime")["status"] == "available"
+    assert any(
+        a["action"] == "error" and "Trakt list read failed for movies" in a["detail"]
         for a in db.recent_activity()
     )

@@ -29,10 +29,15 @@ class Settings(BaseSettings):
     )
 
     # ---- Trakt ----
+    # Client credentials seed the runtime settings store on first run; thereafter
+    # they are managed from the dashboard (see core.settings_store).
     TRAKT_CLIENT_ID: str = ""
     TRAKT_CLIENT_SECRET: str = ""
     TRAKT_USER: str = "me"
+    # A single list slug (legacy) and/or a comma-separated set of slugs. Both seed
+    # the settings store; TRAKT_LISTS takes precedence when set.
     TRAKT_LIST_ID: str = "watchlist"
+    TRAKT_LISTS: str = ""
 
     # ---- Jellyseerr ----
     JELLYSEERR_URL: str = ""
@@ -50,18 +55,41 @@ class Settings(BaseSettings):
     # ---- Persistence ----
     DB_PATH: str = "data/aio-arr.db"
     TOKEN_STORE_PATH: str = "data/trakt_tokens.json"
+    SETTINGS_STORE_PATH: str = "data/app_settings.json"
 
     @property
     def is_watchlist(self) -> bool:
         """Whether the configured Trakt source is the user's watchlist."""
         return self.TRAKT_LIST_ID.strip().lower() == "watchlist"
 
+    @property
+    def trakt_lists(self) -> list[str]:
+        """The configured list slugs used to seed the settings store.
+
+        Parses the comma-separated ``TRAKT_LISTS`` (whitespace-trimmed, blanks
+        dropped, order-preserving de-dup), falling back to the single
+        ``TRAKT_LIST_ID`` when ``TRAKT_LISTS`` is empty.
+        """
+        raw = self.TRAKT_LISTS.strip()
+        if not raw:
+            return [self.TRAKT_LIST_ID]
+        seen: set[str] = set()
+        slugs: list[str] = []
+        for part in raw.split(","):
+            slug = part.strip()
+            if slug and slug not in seen:
+                seen.add(slug)
+                slugs.append(slug)
+        return slugs or [self.TRAKT_LIST_ID]
+
     @model_validator(mode="after")
     def _require_secrets(self) -> "Settings":
-        """Fail fast when mandatory credentials are missing."""
+        """Fail fast when mandatory credentials are missing.
+
+        Trakt credentials are intentionally *not* required here: they may be
+        configured from the dashboard after start-up (see core.settings_store).
+        """
         required = {
-            "TRAKT_CLIENT_ID": self.TRAKT_CLIENT_ID,
-            "TRAKT_CLIENT_SECRET": self.TRAKT_CLIENT_SECRET,
             "JELLYSEERR_URL": self.JELLYSEERR_URL,
             "JELLYSEERR_API_KEY": self.JELLYSEERR_API_KEY,
         }

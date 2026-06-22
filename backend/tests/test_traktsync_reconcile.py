@@ -28,7 +28,9 @@ async def test_available_item_removed(db) -> None:
     )
     await reconcile(ctx)
     assert db.get_item(trakt_id=1, list_id="watchlist")["status"] == "removed"
-    trakt.remove_items.assert_awaited_once_with(movies=[100])
+    trakt.remove_items.assert_awaited_once_with(
+        movies=[100], list_id="watchlist", owner_user="me"
+    )
 
 
 async def test_unavailable_item_left_alone(db) -> None:

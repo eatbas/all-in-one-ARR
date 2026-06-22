@@ -21,6 +21,7 @@ from core.logging import get_logger, log_action
 
 if TYPE_CHECKING:  # pragma: no cover
     from core.context import AppContext
+    from core.settings_store import TrackedList
 
 _log = get_logger("traktsync.sync")
 
@@ -31,14 +32,26 @@ _TERMINAL_STATUSES = frozenset({"requested", "available", "removed"})
 
 
 async def poll_and_request(ctx: "AppContext") -> None:
-    """Poll the Trakt list and request missing items in Jellyseerr."""
-    list_id = ctx.settings.TRAKT_LIST_ID
+    """Poll every selected Trakt list and request missing items in Jellyseerr.
+
+    Each list is isolated: a failure reading or processing one list (e.g. an
+    unauthorised or transient error) is logged and does not abort the others.
+    """
+    for tracked in ctx.settings_store.tracked_lists():
+        await _poll_one_list(ctx, tracked)
+
+
+async def _poll_one_list(ctx: "AppContext", tracked: "TrackedList") -> None:
+    """Poll a single Trakt list and request its missing items."""
+    list_id = tracked.slug
     try:
-        items = await ctx.trakt.read_list_items()
+        items = await ctx.trakt.read_list_items(
+            list_id=list_id, owner_user=tracked.owner_user
+        )
     except Exception as exc:
         # e.g. Trakt not yet authorised, or a transient API error.
-        _log.error("Trakt list read failed: %s", exc)
-        ctx.db.add_activity("error", f"Trakt list read failed: {exc}")
+        _log.error("Trakt list read failed for %s: %s", list_id, exc)
+        ctx.db.add_activity("error", f"Trakt list read failed for {list_id}: {exc}")
         return
     _log.info("polled Trakt list id=%s items=%d", list_id, len(items))
 

@@ -2,18 +2,21 @@
 
 from __future__ import annotations
 
-import types
-from pathlib import Path
 from unittest.mock import AsyncMock
 
 import pytest
 from fastapi.testclient import TestClient
 
 from core import app as app_mod
-from core.app import _mount_frontend, _run_device_auth, build_context, create_app
+from core.app import (
+    _maybe_start_device_auth,
+    _mount_frontend,
+    build_context,
+    create_app,
+)
 from core.config import Settings
 from core.db import Database
-from tests.conftest import StubJellyseerr, StubTrakt, make_ctx
+from tests.conftest import StubJellyseerr, StubSettingsStore, StubTrakt, make_ctx
 
 _SECRETS = {
     "TRAKT_CLIENT_ID": "cid",
@@ -44,6 +47,8 @@ def test_build_context_real(tmp_path) -> None:
         _env_file=None,
         DB_PATH=str(tmp_path / "db.sqlite"),
         TOKEN_STORE_PATH=str(tmp_path / "tok.json"),
+        SETTINGS_STORE_PATH=str(tmp_path / "settings.json"),
+        TRAKT_LISTS="movies,tv,anime",
         DRY_RUN=False,
         **_SECRETS,
     )
@@ -51,6 +56,12 @@ def test_build_context_real(tmp_path) -> None:
     assert ctx.dry_run is False
     assert ctx.trakt.is_authenticated() is False  # no token file
     assert ctx.db.counts_by_status()["synced"] == 0
+    # The settings store was seeded from the environment (three lists).
+    assert [item.slug for item in ctx.settings_store.tracked_lists()] == [
+        "movies",
+        "tv",
+        "anime",
+    ]
     ctx.db.close()
 
 
@@ -95,7 +106,7 @@ def test_lifespan_unauthenticated_spawns_device_auth(_env, monkeypatch, tmp_path
     async def fake_auth(_ctx):
         spawned["called"] = True
 
-    monkeypatch.setattr(app_mod, "_run_device_auth", fake_auth)
+    monkeypatch.setattr(app_mod, "_maybe_start_device_auth", fake_auth)
 
     with TestClient(create_app()) as client:
         assert client.get("/health").status_code == 200
@@ -103,31 +114,40 @@ def test_lifespan_unauthenticated_spawns_device_auth(_env, monkeypatch, tmp_path
     assert spawned["called"] is True
 
 
-async def test_run_device_auth_success(db) -> None:
-    ctx = make_ctx(db=db)
-    ctx.trakt = types.SimpleNamespace(
-        request_device_code=AsyncMock(return_value={"device_code": "d"}),
-        poll_for_token=AsyncMock(return_value=True),
+async def test_maybe_start_device_auth_starts_when_unauthenticated(db, monkeypatch) -> None:
+    ctx = make_ctx(db=db, trakt=StubTrakt(authenticated=False))
+    started = AsyncMock()
+    monkeypatch.setattr(app_mod, "start_device_auth", started)
+    await _maybe_start_device_auth(ctx)
+    started.assert_awaited_once_with(ctx)
+
+
+async def test_maybe_start_device_auth_skips_when_authenticated(db, monkeypatch) -> None:
+    ctx = make_ctx(db=db, trakt=StubTrakt(authenticated=True))
+    started = AsyncMock()
+    monkeypatch.setattr(app_mod, "start_device_auth", started)
+    await _maybe_start_device_auth(ctx)
+    started.assert_not_awaited()
+
+
+async def test_maybe_start_device_auth_skips_without_credentials(db, monkeypatch) -> None:
+    ctx = make_ctx(
+        db=db,
+        trakt=StubTrakt(authenticated=False),
+        settings_store=StubSettingsStore(client_id=""),
     )
-    await _run_device_auth(ctx)
-    ctx.trakt.poll_for_token.assert_awaited_once()
+    started = AsyncMock()
+    monkeypatch.setattr(app_mod, "start_device_auth", started)
+    await _maybe_start_device_auth(ctx)
+    started.assert_not_awaited()
 
 
-async def test_run_device_auth_incomplete(db) -> None:
-    ctx = make_ctx(db=db)
-    ctx.trakt = types.SimpleNamespace(
-        request_device_code=AsyncMock(return_value={"device_code": "d"}),
-        poll_for_token=AsyncMock(return_value=False),
+async def test_maybe_start_device_auth_swallows_errors(db, monkeypatch) -> None:
+    ctx = make_ctx(db=db, trakt=StubTrakt(authenticated=False))
+    monkeypatch.setattr(
+        app_mod, "start_device_auth", AsyncMock(side_effect=RuntimeError("net down"))
     )
-    await _run_device_auth(ctx)  # logs error, does not raise
-
-
-async def test_run_device_auth_exception(db) -> None:
-    ctx = make_ctx(db=db)
-    ctx.trakt = types.SimpleNamespace(
-        request_device_code=AsyncMock(side_effect=RuntimeError("net down")),
-    )
-    await _run_device_auth(ctx)  # caught, does not raise
+    await _maybe_start_device_auth(ctx)  # caught, does not raise
 
 
 def test_mount_frontend_present(tmp_path, monkeypatch) -> None:
