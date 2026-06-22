@@ -121,6 +121,30 @@ export interface AddListPayload {
   slug?: string
 }
 
+/** The URL/API-key services managed from the Settings tabs. */
+export type ServiceName = "jellyseerr" | "sonarr" | "radarr"
+
+/** A service's masked connection: its base URL and whether a key is stored. */
+export interface ServiceConnection {
+  url: string
+  api_key_set: boolean
+}
+
+/** Response of `GET`/`PUT /api/settings/services[/{name}]`. */
+export type ServicesSettings = Record<ServiceName, ServiceConnection>
+
+/** Body of `PUT /api/settings/services/{name}`; omitted fields stay unchanged. */
+export interface UpdateServicePayload {
+  url?: string
+  api_key?: string
+}
+
+/** Response of `POST /api/services/{name}/test`. */
+export interface ServiceTestResult {
+  ok: boolean
+  detail: string
+}
+
 /** Error raised when the backend returns a non-2xx response. */
 export class ApiError extends Error {
   readonly status: number
@@ -223,4 +247,23 @@ export function removeTraktList(
     `/api/trakt/lists/${encodeURIComponent(ownerUser)}/${encodeURIComponent(slug)}`,
     { method: "DELETE" },
   )
+}
+
+export function getServiceSettings(): Promise<ServicesSettings> {
+  return request<ServicesSettings>("/api/settings/services")
+}
+
+export function updateServiceSettings(
+  name: ServiceName,
+  body: UpdateServicePayload,
+): Promise<ServicesSettings> {
+  return request<ServicesSettings>(`/api/settings/services/${name}`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  })
+}
+
+export function testService(name: ServiceName): Promise<ServiceTestResult> {
+  return postJson<ServiceTestResult>(`/api/services/${name}/test`, {})
 }

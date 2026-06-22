@@ -11,18 +11,26 @@ import {
 } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Switch } from "@/components/ui/switch"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { cn } from "@/lib/utils"
 import {
   useAddTraktList,
   useRemoveTraktList,
+  useServiceSettings,
   useStartTraktAuth,
+  useTestService,
   useTestTrakt,
   useTraktAuthStatus,
   useTraktLists,
   useTraktSettings,
+  useUpdateServiceSettings,
   useUpdateTraktSettings,
 } from "@/lib/queries"
-import type { UpdateTraktSettings } from "@/lib/api"
+import type {
+  ServiceName,
+  UpdateServicePayload,
+  UpdateTraktSettings,
+} from "@/lib/api"
 
 /** A labelled form row with an optional saved/state hint. */
 function Field({
@@ -337,13 +345,115 @@ function ListsCard() {
   )
 }
 
-/** Settings page: Trakt credentials, connection, and list selection. */
+/** Edit a URL + API key for a service (Jellyseerr/Sonarr/Radarr) and test it. */
+function ServiceConnectionCard({
+  name,
+  label,
+}: {
+  name: ServiceName
+  label: string
+}) {
+  const { data: services } = useServiceSettings()
+  const update = useUpdateServiceSettings()
+  const test = useTestService()
+  const current = services?.[name]
+  const [url, setUrl] = useState("")
+  const [apiKey, setApiKey] = useState("")
+
+  function save() {
+    const body: UpdateServicePayload = {}
+    if (url) body.url = url
+    if (apiKey) body.api_key = apiKey
+    update.mutate({ name, body })
+  }
+
+  return (
+    <Card>
+      <CardHeader className="flex flex-row items-center justify-between gap-4 space-y-0">
+        <div>
+          <CardTitle>{label}</CardTitle>
+          <CardDescription>Base URL and API key for {label}.</CardDescription>
+        </div>
+        <Badge
+          variant="outline"
+          className={cn(
+            current?.api_key_set
+              ? "border-emerald-500/40 text-emerald-600 dark:text-emerald-400"
+              : "border-amber-500/40 text-amber-600 dark:text-amber-400",
+          )}
+        >
+          {current?.api_key_set ? "Key set" : "No key"}
+        </Badge>
+      </CardHeader>
+      <CardContent className="flex flex-col gap-4">
+        <Field label="URL" hint={current?.url ? `Saved: ${current.url}` : "Not set"}>
+          <Input
+            value={url}
+            onChange={(event) => setUrl(event.target.value)}
+            placeholder={current?.url || "http://host:port"}
+          />
+        </Field>
+        <Field label="API key" hint={current?.api_key_set ? "Saved" : "Not set"}>
+          <Input
+            type="password"
+            value={apiKey}
+            onChange={(event) => setApiKey(event.target.value)}
+            placeholder="Leave blank to keep current"
+          />
+        </Field>
+        <div className="flex flex-wrap gap-3">
+          <Button onClick={save} disabled={update.isPending}>
+            Save
+          </Button>
+          <Button
+            variant="outline"
+            onClick={() => test.mutate(name)}
+            disabled={test.isPending}
+          >
+            Test connection
+          </Button>
+        </div>
+        {test.data ? (
+          <p
+            className={cn(
+              "text-sm",
+              test.data.ok
+                ? "text-emerald-600 dark:text-emerald-400"
+                : "text-destructive",
+            )}
+          >
+            {test.data.detail}
+          </p>
+        ) : null}
+      </CardContent>
+    </Card>
+  )
+}
+
+/** Settings page: a tab per service (Trakt, Jellyseerr, Sonarr, Radarr). */
 export function Settings() {
   return (
-    <div className="flex flex-col gap-6">
-      <CredentialsCard />
-      <ConnectionCard />
-      <ListsCard />
-    </div>
+    <Tabs defaultValue="trakt">
+      <TabsList>
+        <TabsTrigger value="trakt">Trakt</TabsTrigger>
+        <TabsTrigger value="jellyseerr">Jellyseerr</TabsTrigger>
+        <TabsTrigger value="sonarr">Sonarr</TabsTrigger>
+        <TabsTrigger value="radarr">Radarr</TabsTrigger>
+      </TabsList>
+      <TabsContent value="trakt" className="flex flex-col gap-6">
+        <CredentialsCard />
+        <ConnectionCard />
+        <ListsCard />
+      </TabsContent>
+      <TabsContent value="jellyseerr">
+        <ServiceConnectionCard name="jellyseerr" label="Jellyseerr" />
+      </TabsContent>
+      <TabsContent value="sonarr">
+        <ServiceConnectionCard name="sonarr" label="Sonarr" />
+      </TabsContent>
+      <TabsContent value="radarr">
+        <ServiceConnectionCard name="radarr" label="Radarr" />
+      </TabsContent>
+    </Tabs>
   )
 }

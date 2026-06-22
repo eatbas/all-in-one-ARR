@@ -5,6 +5,7 @@ import {
   ApiError,
   getActivity,
   getItems,
+  getServiceSettings,
   getStatus,
   getTraktAuthStatus,
   getTraktLists,
@@ -12,8 +13,10 @@ import {
   removeTraktList,
   setDryRun,
   startTraktAuth,
+  testService,
   testTrakt,
   triggerSync,
+  updateServiceSettings,
   updateTraktSettings,
   type Status,
 } from "@/lib/api"
@@ -187,6 +190,38 @@ describe("trakt settings and lists", () => {
     expect(fetchSpy).toHaveBeenCalledWith(
       "/api/trakt/lists/me/my%20list",
       expect.objectContaining({ method: "DELETE" }),
+    )
+  })
+})
+
+describe("service settings", () => {
+  it("GETs the service settings", async () => {
+    const fetchSpy = mockFetch(jsonResponse({}))
+    await getServiceSettings()
+    expect(fetchSpy).toHaveBeenCalledWith(
+      "/api/settings/services",
+      expect.anything(),
+    )
+  })
+
+  it("PUTs a service update to the named path", async () => {
+    const fetchSpy = mockFetch(jsonResponse({}))
+    await updateServiceSettings("sonarr", { url: "http://sonarr:8989" })
+    expect(fetchSpy).toHaveBeenCalledWith(
+      "/api/settings/services/sonarr",
+      expect.objectContaining({
+        method: "PUT",
+        body: JSON.stringify({ url: "http://sonarr:8989" }),
+      }),
+    )
+  })
+
+  it("POSTs a service connection test", async () => {
+    const fetchSpy = mockFetch(jsonResponse({ ok: true, detail: "" }))
+    await testService("radarr")
+    expect(fetchSpy).toHaveBeenCalledWith(
+      "/api/services/radarr/test",
+      expect.objectContaining({ method: "POST" }),
     )
   })
 })

@@ -11,6 +11,7 @@ import {
   addTraktList,
   getActivity,
   getItems,
+  getServiceSettings,
   getStatus,
   getTraktAuthStatus,
   getTraktLists,
@@ -18,14 +19,19 @@ import {
   removeTraktList,
   setDryRun,
   startTraktAuth,
+  testService,
   testTrakt,
   triggerSync,
+  updateServiceSettings,
   updateTraktSettings,
   type ActivityEntry,
   type AddListPayload,
   type DryRunResult,
   type Item,
   type ItemStatus,
+  type ServiceName,
+  type ServicesSettings,
+  type ServiceTestResult,
   type Status,
   type SyncResult,
   type TraktAuthStart,
@@ -33,6 +39,7 @@ import {
   type TraktListEntry,
   type TraktSettings,
   type TraktTestResult,
+  type UpdateServicePayload,
   type UpdateTraktSettings,
 } from "@/lib/api"
 
@@ -50,6 +57,7 @@ export const queryKeys = {
   traktSettings: ["trakt", "settings"] as const,
   traktAuthStatus: ["trakt", "auth-status"] as const,
   traktLists: ["trakt", "lists"] as const,
+  services: ["services"] as const,
 }
 
 export function useStatus(): UseQueryResult<Status> {
@@ -234,6 +242,52 @@ export function useRemoveTraktList(): UseMutationResult<
     },
     onError: (error) => {
       toast.error("Could not remove list", { description: error.message })
+    },
+  })
+}
+
+export function useServiceSettings(): UseQueryResult<ServicesSettings> {
+  return useQuery({
+    queryKey: queryKeys.services,
+    queryFn: getServiceSettings,
+  })
+}
+
+export function useUpdateServiceSettings(): UseMutationResult<
+  ServicesSettings,
+  Error,
+  { name: ServiceName; body: UpdateServicePayload }
+> {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: ({ name, body }) => updateServiceSettings(name, body),
+    onSuccess: () => {
+      toast.success("Connection saved")
+      void queryClient.invalidateQueries({ queryKey: queryKeys.services })
+    },
+    onError: (error) => {
+      toast.error("Could not save connection", { description: error.message })
+    },
+  })
+}
+
+export function useTestService(): UseMutationResult<
+  ServiceTestResult,
+  Error,
+  ServiceName
+> {
+  return useMutation({
+    mutationFn: (name) => testService(name),
+    onSuccess: (result) => {
+      if (result.ok) {
+        toast.success("Connection OK", { description: result.detail })
+      } else {
+        toast.error("Connection failed", { description: result.detail })
+      }
+    },
+    onError: (error) => {
+      toast.error("Could not test connection", { description: error.message })
     },
   })
 }

@@ -11,20 +11,27 @@ vi.mock("@/lib/queries", () => ({
   useTestTrakt: vi.fn(),
   useAddTraktList: vi.fn(),
   useRemoveTraktList: vi.fn(),
+  useServiceSettings: vi.fn(),
+  useUpdateServiceSettings: vi.fn(),
+  useTestService: vi.fn(),
 }))
 
 import {
   useAddTraktList,
   useRemoveTraktList,
+  useServiceSettings,
   useStartTraktAuth,
+  useTestService,
   useTestTrakt,
   useTraktAuthStatus,
   useTraktLists,
   useTraktSettings,
+  useUpdateServiceSettings,
   useUpdateTraktSettings,
 } from "@/lib/queries"
 import { Settings } from "@/pages/Settings"
 import type {
+  ServicesSettings,
   TraktAuthStatus,
   TraktListEntry,
   TraktSettings,
@@ -54,11 +61,19 @@ const IDLE_AUTH: TraktAuthStatus = {
   connected: false,
 }
 
+const SERVICES: ServicesSettings = {
+  jellyseerr: { url: "http://js:5055", api_key_set: true },
+  sonarr: { url: "", api_key_set: false },
+  radarr: { url: "", api_key_set: false },
+}
+
 let updateMutate: ReturnType<typeof vi.fn>
 let startMutate: ReturnType<typeof vi.fn>
 let testMutate: ReturnType<typeof vi.fn>
 let addMutate: ReturnType<typeof vi.fn>
 let removeMutate: ReturnType<typeof vi.fn>
+let serviceUpdateMutate: ReturnType<typeof vi.fn>
+let serviceTestMutate: ReturnType<typeof vi.fn>
 
 beforeEach(() => {
   updateMutate = vi.fn()
@@ -66,6 +81,8 @@ beforeEach(() => {
   testMutate = vi.fn()
   addMutate = vi.fn()
   removeMutate = vi.fn()
+  serviceUpdateMutate = vi.fn()
+  serviceTestMutate = vi.fn()
 
   vi.mocked(useTraktSettings).mockReturnValue(queryResult(SETTINGS))
   vi.mocked(useTraktAuthStatus).mockReturnValue(queryResult(IDLE_AUTH))
@@ -75,6 +92,9 @@ beforeEach(() => {
   vi.mocked(useTestTrakt).mockReturnValue(mutation(testMutate))
   vi.mocked(useAddTraktList).mockReturnValue(mutation(addMutate))
   vi.mocked(useRemoveTraktList).mockReturnValue(mutation(removeMutate))
+  vi.mocked(useServiceSettings).mockReturnValue(queryResult(SERVICES))
+  vi.mocked(useUpdateServiceSettings).mockReturnValue(mutation(serviceUpdateMutate))
+  vi.mocked(useTestService).mockReturnValue(mutation(serviceTestMutate))
 })
 
 function withTestResult(data: TraktTestResult) {
@@ -312,5 +332,97 @@ describe("Settings — lists", () => {
     render(<Settings />)
     expect(screen.getByRole("button", { name: "Add" })).toBeDisabled()
     expect(screen.getByRole("switch", { name: "Sync tv" })).toBeDisabled()
+  })
+})
+
+describe("Settings — service tabs", () => {
+  it("shows a service with a saved URL and key", async () => {
+    const user = userEvent.setup()
+    render(<Settings />)
+    await user.click(screen.getByRole("tab", { name: "Jellyseerr" }))
+    expect(screen.getByText("Saved: http://js:5055")).toBeInTheDocument()
+    expect(screen.getByText("Key set")).toBeInTheDocument()
+  })
+
+  it("shows a service without a key as not set", async () => {
+    const user = userEvent.setup()
+    render(<Settings />)
+    await user.click(screen.getByRole("tab", { name: "Sonarr" }))
+    expect(screen.getByText("No key")).toBeInTheDocument()
+    expect(screen.getAllByText("Not set").length).toBeGreaterThan(0)
+  })
+
+  it("falls back gracefully when the services query has no data", async () => {
+    vi.mocked(useServiceSettings).mockReturnValue(
+      queryResult<ServicesSettings>(undefined),
+    )
+    const user = userEvent.setup()
+    render(<Settings />)
+    await user.click(screen.getByRole("tab", { name: "Radarr" }))
+    expect(screen.getByText("No key")).toBeInTheDocument()
+    expect(
+      screen.getByPlaceholderText("http://host:port"),
+    ).toBeInTheDocument()
+  })
+
+  it("saves a service URL and key", async () => {
+    const user = userEvent.setup()
+    render(<Settings />)
+    await user.click(screen.getByRole("tab", { name: "Radarr" }))
+    await user.type(
+      screen.getByPlaceholderText("http://host:port"),
+      "http://radarr:7878",
+    )
+    await user.type(
+      screen.getByPlaceholderText("Leave blank to keep current"),
+      "rk",
+    )
+    await user.click(screen.getByRole("button", { name: "Save" }))
+    expect(serviceUpdateMutate).toHaveBeenCalledWith({
+      name: "radarr",
+      body: { url: "http://radarr:7878", api_key: "rk" },
+    })
+  })
+
+  it("saves an empty body when nothing is entered", async () => {
+    const user = userEvent.setup()
+    render(<Settings />)
+    await user.click(screen.getByRole("tab", { name: "Sonarr" }))
+    await user.click(screen.getByRole("button", { name: "Save" }))
+    expect(serviceUpdateMutate).toHaveBeenCalledWith({ name: "sonarr", body: {} })
+  })
+
+  it("tests a service connection", async () => {
+    const user = userEvent.setup()
+    render(<Settings />)
+    await user.click(screen.getByRole("tab", { name: "Jellyseerr" }))
+    await user.click(screen.getByRole("button", { name: "Test connection" }))
+    expect(serviceTestMutate).toHaveBeenCalledWith("jellyseerr")
+  })
+
+  it("shows a successful test result", async () => {
+    vi.mocked(useTestService).mockReturnValue(
+      mutation(serviceTestMutate, false, {
+        ok: true,
+        detail: "Connected to Sonarr 4.0",
+      }),
+    )
+    const user = userEvent.setup()
+    render(<Settings />)
+    await user.click(screen.getByRole("tab", { name: "Sonarr" }))
+    expect(screen.getByText("Connected to Sonarr 4.0")).toBeInTheDocument()
+  })
+
+  it("shows a failed test result", async () => {
+    vi.mocked(useTestService).mockReturnValue(
+      mutation(serviceTestMutate, false, {
+        ok: false,
+        detail: "Radarr returned HTTP 401",
+      }),
+    )
+    const user = userEvent.setup()
+    render(<Settings />)
+    await user.click(screen.getByRole("tab", { name: "Radarr" }))
+    expect(screen.getByText("Radarr returned HTTP 401")).toBeInTheDocument()
   })
 })

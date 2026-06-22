@@ -17,6 +17,9 @@ vi.mock("@/lib/api", () => ({
   testTrakt: vi.fn(),
   addTraktList: vi.fn(),
   removeTraktList: vi.fn(),
+  getServiceSettings: vi.fn(),
+  updateServiceSettings: vi.fn(),
+  testService: vi.fn(),
 }))
 
 vi.mock("sonner", () => ({
@@ -32,14 +35,17 @@ import {
   useAddTraktList,
   useItems,
   useRemoveTraktList,
+  useServiceSettings,
   useSetDryRun,
   useStartTraktAuth,
   useStatus,
   useSyncNow,
+  useTestService,
   useTestTrakt,
   useTraktAuthStatus,
   useTraktLists,
   useTraktSettings,
+  useUpdateServiceSettings,
   useUpdateTraktSettings,
 } from "@/lib/queries"
 
@@ -81,6 +87,11 @@ beforeEach(() => {
     connected: false,
   })
   vi.mocked(api.getTraktLists).mockResolvedValue([])
+  vi.mocked(api.getServiceSettings).mockResolvedValue({
+    jellyseerr: { url: "http://js", api_key_set: true },
+    sonarr: { url: "", api_key_set: false },
+    radarr: { url: "", api_key_set: false },
+  })
 })
 
 describe("query hooks", () => {
@@ -418,6 +429,96 @@ describe("trakt connection hooks", () => {
     await waitFor(() => expect(result.current.isError).toBe(true))
     expect(toast.error).toHaveBeenCalledWith("Could not remove list", {
       description: "nope",
+    })
+  })
+})
+
+describe("service connection hooks", () => {
+  it("useServiceSettings fetches the service settings", async () => {
+    const { wrapper } = setup()
+    const { result } = renderHook(() => useServiceSettings(), { wrapper })
+    await waitFor(() => expect(result.current.isSuccess).toBe(true))
+    expect(result.current.data?.jellyseerr.api_key_set).toBe(true)
+  })
+
+  it("useUpdateServiceSettings toasts and invalidates on success", async () => {
+    vi.mocked(api.updateServiceSettings).mockResolvedValue({
+      jellyseerr: { url: "http://js", api_key_set: true },
+      sonarr: { url: "http://sonarr", api_key_set: true },
+      radarr: { url: "", api_key_set: false },
+    })
+    const { queryClient, wrapper } = setup()
+    const invalidate = vi.spyOn(queryClient, "invalidateQueries")
+    const { result } = renderHook(() => useUpdateServiceSettings(), { wrapper })
+
+    act(() =>
+      result.current.mutate({ name: "sonarr", body: { url: "http://sonarr" } }),
+    )
+
+    await waitFor(() => expect(result.current.isSuccess).toBe(true))
+    expect(api.updateServiceSettings).toHaveBeenCalledWith("sonarr", {
+      url: "http://sonarr",
+    })
+    expect(toast.success).toHaveBeenCalledWith("Connection saved")
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: queryKeys.services })
+  })
+
+  it("useUpdateServiceSettings toasts on error", async () => {
+    vi.mocked(api.updateServiceSettings).mockRejectedValue(new Error("bad"))
+    const { wrapper } = setup()
+    const { result } = renderHook(() => useUpdateServiceSettings(), { wrapper })
+
+    act(() => result.current.mutate({ name: "sonarr", body: {} }))
+
+    await waitFor(() => expect(result.current.isError).toBe(true))
+    expect(toast.error).toHaveBeenCalledWith("Could not save connection", {
+      description: "bad",
+    })
+  })
+
+  it("useTestService announces a successful test", async () => {
+    vi.mocked(api.testService).mockResolvedValue({
+      ok: true,
+      detail: "Connected to Sonarr 4.0",
+    })
+    const { wrapper } = setup()
+    const { result } = renderHook(() => useTestService(), { wrapper })
+
+    act(() => result.current.mutate("sonarr"))
+
+    await waitFor(() => expect(result.current.isSuccess).toBe(true))
+    expect(api.testService).toHaveBeenCalledWith("sonarr")
+    expect(toast.success).toHaveBeenCalledWith("Connection OK", {
+      description: "Connected to Sonarr 4.0",
+    })
+  })
+
+  it("useTestService reports a failed test", async () => {
+    vi.mocked(api.testService).mockResolvedValue({
+      ok: false,
+      detail: "HTTP 401",
+    })
+    const { wrapper } = setup()
+    const { result } = renderHook(() => useTestService(), { wrapper })
+
+    act(() => result.current.mutate("radarr"))
+
+    await waitFor(() => expect(result.current.isSuccess).toBe(true))
+    expect(toast.error).toHaveBeenCalledWith("Connection failed", {
+      description: "HTTP 401",
+    })
+  })
+
+  it("useTestService toasts on a thrown error", async () => {
+    vi.mocked(api.testService).mockRejectedValue(new Error("boom"))
+    const { wrapper } = setup()
+    const { result } = renderHook(() => useTestService(), { wrapper })
+
+    act(() => result.current.mutate("jellyseerr"))
+
+    await waitFor(() => expect(result.current.isError).toBe(true))
+    expect(toast.error).toHaveBeenCalledWith("Could not test connection", {
+      description: "boom",
     })
   })
 })
