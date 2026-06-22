@@ -86,6 +86,8 @@ describe("Items", () => {
     expect(screen.getByText("Alpha")).toBeInTheDocument()
     expect(screen.getByText("—")).toBeInTheDocument() // Beta has a null year
     expect(screen.getByText("bad-date")).toBeInTheDocument() // invalid timestamp
+    // Each row shows its source list in the new List column.
+    expect(screen.getAllByText("L")).toHaveLength(items.length)
     // Every status renders its styled badge.
     expect(screen.getByText("synced")).toBeInTheDocument()
     expect(screen.getByText("available")).toBeInTheDocument()

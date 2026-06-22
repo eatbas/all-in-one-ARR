@@ -61,6 +61,66 @@ export interface DryRunResult {
   dry_run: boolean
 }
 
+/** A Trakt list selected for syncing. */
+export interface TrackedListRef {
+  owner_user: string
+  slug: string
+  name: string
+}
+
+/** Response of `GET`/`PUT /api/settings/trakt`. */
+export interface TraktSettings {
+  client_id_hint: string
+  client_id_set: boolean
+  client_secret_set: boolean
+  user: string
+  connected: boolean
+  lists: TrackedListRef[]
+}
+
+/** Body of `PUT /api/settings/trakt`; omitted fields are left unchanged. */
+export interface UpdateTraktSettings {
+  client_id?: string
+  client_secret?: string
+  user?: string
+}
+
+/** Response of `POST /api/trakt/auth/start`. */
+export interface TraktAuthStart {
+  state: string
+  user_code: string | null
+  verification_url: string | null
+  message: string | null
+}
+
+/** Response of `GET /api/trakt/auth/status`. */
+export interface TraktAuthStatus extends TraktAuthStart {
+  connected: boolean
+}
+
+/** Response of `POST /api/trakt/test`. */
+export interface TraktTestResult {
+  ok: boolean
+  user: string | null
+  message: string
+}
+
+/** A discoverable Trakt list with its current selection state. */
+export interface TraktListEntry {
+  name: string | null
+  slug: string
+  owner_user: string
+  item_count: number | null
+  selected: boolean
+}
+
+/** Reference to a list to add: a Trakt URL, or an explicit owner + slug. */
+export interface AddListPayload {
+  url?: string
+  owner_user?: string
+  slug?: string
+}
+
 /** Error raised when the backend returns a non-2xx response. */
 export class ApiError extends Error {
   readonly status: number
@@ -119,4 +179,48 @@ export function triggerSync(): Promise<SyncResult> {
 
 export function setDryRun(enabled: boolean): Promise<DryRunResult> {
   return postJson<DryRunResult>("/api/settings/dry-run", { enabled })
+}
+
+export function getTraktSettings(): Promise<TraktSettings> {
+  return request<TraktSettings>("/api/settings/trakt")
+}
+
+export function updateTraktSettings(
+  body: UpdateTraktSettings,
+): Promise<TraktSettings> {
+  return request<TraktSettings>("/api/settings/trakt", {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  })
+}
+
+export function startTraktAuth(): Promise<TraktAuthStart> {
+  return postJson<TraktAuthStart>("/api/trakt/auth/start", {})
+}
+
+export function getTraktAuthStatus(): Promise<TraktAuthStatus> {
+  return request<TraktAuthStatus>("/api/trakt/auth/status")
+}
+
+export function testTrakt(): Promise<TraktTestResult> {
+  return postJson<TraktTestResult>("/api/trakt/test", {})
+}
+
+export function getTraktLists(): Promise<TraktListEntry[]> {
+  return request<TraktListEntry[]>("/api/trakt/lists")
+}
+
+export function addTraktList(payload: AddListPayload): Promise<TraktSettings> {
+  return postJson<TraktSettings>("/api/trakt/lists", payload)
+}
+
+export function removeTraktList(
+  ownerUser: string,
+  slug: string,
+): Promise<TraktSettings> {
+  return request<TraktSettings>(
+    `/api/trakt/lists/${encodeURIComponent(ownerUser)}/${encodeURIComponent(slug)}`,
+    { method: "DELETE" },
+  )
 }

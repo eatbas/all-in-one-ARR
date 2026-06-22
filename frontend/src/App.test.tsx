@@ -8,6 +8,14 @@ vi.mock("@/lib/queries", () => ({
   useItems: vi.fn(() => ({ data: [], isLoading: false })),
   useSyncNow: vi.fn(() => ({ mutate: vi.fn(), isPending: false })),
   useSetDryRun: vi.fn(() => ({ mutate: vi.fn(), isPending: false })),
+  useTraktSettings: vi.fn(() => ({ data: undefined, isLoading: false })),
+  useTraktAuthStatus: vi.fn(() => ({ data: undefined })),
+  useTraktLists: vi.fn(() => ({ data: [], isLoading: false })),
+  useUpdateTraktSettings: vi.fn(() => ({ mutate: vi.fn(), isPending: false })),
+  useStartTraktAuth: vi.fn(() => ({ mutate: vi.fn(), isPending: false })),
+  useTestTrakt: vi.fn(() => ({ mutate: vi.fn(), isPending: false, data: undefined })),
+  useAddTraktList: vi.fn(() => ({ mutate: vi.fn(), isPending: false })),
+  useRemoveTraktList: vi.fn(() => ({ mutate: vi.fn(), isPending: false })),
 }))
 
 import App from "@/App"
@@ -37,6 +45,11 @@ describe("App routing", () => {
     expect(
       screen.getByText("Every movie and show mirrored from Trakt."),
     ).toBeInTheDocument()
+  })
+
+  it("renders the settings page at /settings", () => {
+    renderAt("/settings")
+    expect(screen.getByText("Trakt credentials")).toBeInTheDocument()
   })
 
   it("redirects unknown routes back to the dashboard", () => {

@@ -9,6 +9,14 @@ vi.mock("@/lib/api", () => ({
   getActivity: vi.fn(),
   triggerSync: vi.fn(),
   setDryRun: vi.fn(),
+  getTraktSettings: vi.fn(),
+  getTraktAuthStatus: vi.fn(),
+  getTraktLists: vi.fn(),
+  updateTraktSettings: vi.fn(),
+  startTraktAuth: vi.fn(),
+  testTrakt: vi.fn(),
+  addTraktList: vi.fn(),
+  removeTraktList: vi.fn(),
 }))
 
 vi.mock("sonner", () => ({
@@ -21,10 +29,18 @@ import { toast } from "sonner"
 import {
   queryKeys,
   useActivity,
+  useAddTraktList,
   useItems,
+  useRemoveTraktList,
   useSetDryRun,
+  useStartTraktAuth,
   useStatus,
   useSyncNow,
+  useTestTrakt,
+  useTraktAuthStatus,
+  useTraktLists,
+  useTraktSettings,
+  useUpdateTraktSettings,
 } from "@/lib/queries"
 
 /** A fresh client (retries disabled so failures surface immediately) plus its
@@ -39,6 +55,15 @@ function setup() {
   return { queryClient, wrapper }
 }
 
+const sampleSettings = {
+  client_id_hint: "1234",
+  client_id_set: true,
+  client_secret_set: true,
+  user: "me",
+  connected: true,
+  lists: [],
+}
+
 beforeEach(() => {
   vi.mocked(api.getStatus).mockResolvedValue({
     dry_run: true,
@@ -47,6 +72,15 @@ beforeEach(() => {
   })
   vi.mocked(api.getItems).mockResolvedValue([])
   vi.mocked(api.getActivity).mockResolvedValue([])
+  vi.mocked(api.getTraktSettings).mockResolvedValue(sampleSettings)
+  vi.mocked(api.getTraktAuthStatus).mockResolvedValue({
+    state: "idle",
+    user_code: null,
+    verification_url: null,
+    message: null,
+    connected: false,
+  })
+  vi.mocked(api.getTraktLists).mockResolvedValue([])
 })
 
 describe("query hooks", () => {
@@ -161,6 +195,228 @@ describe("useSetDryRun", () => {
 
     await waitFor(() => expect(result.current.isError).toBe(true))
     expect(toast.error).toHaveBeenCalledWith("Could not change dry-run mode", {
+      description: "nope",
+    })
+  })
+})
+
+describe("trakt connection hooks", () => {
+  it("useTraktSettings fetches the settings", async () => {
+    const { wrapper } = setup()
+    const { result } = renderHook(() => useTraktSettings(), { wrapper })
+    await waitFor(() => expect(result.current.isSuccess).toBe(true))
+    expect(result.current.data?.user).toBe("me")
+  })
+
+  it("useTraktAuthStatus stops polling once not pending", async () => {
+    const { wrapper } = setup()
+    const { result } = renderHook(() => useTraktAuthStatus(), { wrapper })
+    await waitFor(() => expect(result.current.isSuccess).toBe(true))
+    expect(api.getTraktAuthStatus).toHaveBeenCalled()
+  })
+
+  it("useTraktAuthStatus keeps polling while pending", async () => {
+    vi.mocked(api.getTraktAuthStatus).mockResolvedValue({
+      state: "pending",
+      user_code: "ABCD",
+      verification_url: "https://trakt.tv/activate",
+      message: "waiting",
+      connected: false,
+    })
+    const { wrapper } = setup()
+    const { result } = renderHook(() => useTraktAuthStatus(), { wrapper })
+    await waitFor(() => expect(result.current.data?.state).toBe("pending"))
+  })
+
+  it("useTraktLists fetches only when enabled", async () => {
+    const { wrapper } = setup()
+    const { result } = renderHook(() => useTraktLists(true), { wrapper })
+    await waitFor(() => expect(result.current.isSuccess).toBe(true))
+    expect(api.getTraktLists).toHaveBeenCalled()
+  })
+
+  it("useTraktLists stays idle when disabled", () => {
+    const { wrapper } = setup()
+    renderHook(() => useTraktLists(false), { wrapper })
+    expect(api.getTraktLists).not.toHaveBeenCalled()
+  })
+
+  it("useUpdateTraktSettings toasts and invalidates on success", async () => {
+    vi.mocked(api.updateTraktSettings).mockResolvedValue(sampleSettings)
+    const { queryClient, wrapper } = setup()
+    const invalidate = vi.spyOn(queryClient, "invalidateQueries")
+    const { result } = renderHook(() => useUpdateTraktSettings(), { wrapper })
+
+    act(() => result.current.mutate({ user: "bob" }))
+
+    await waitFor(() => expect(result.current.isSuccess).toBe(true))
+    expect(toast.success).toHaveBeenCalledWith("Trakt settings saved")
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: queryKeys.traktSettings })
+  })
+
+  it("useUpdateTraktSettings toasts on error", async () => {
+    vi.mocked(api.updateTraktSettings).mockRejectedValue(new Error("bad"))
+    const { wrapper } = setup()
+    const { result } = renderHook(() => useUpdateTraktSettings(), { wrapper })
+
+    act(() => result.current.mutate({}))
+
+    await waitFor(() => expect(result.current.isError).toBe(true))
+    expect(toast.error).toHaveBeenCalledWith("Could not save Trakt settings", {
+      description: "bad",
+    })
+  })
+
+  it("useStartTraktAuth toasts and invalidates the status on success", async () => {
+    vi.mocked(api.startTraktAuth).mockResolvedValue({
+      state: "pending",
+      user_code: "ABCD",
+      verification_url: "u",
+      message: "m",
+    })
+    const { queryClient, wrapper } = setup()
+    const invalidate = vi.spyOn(queryClient, "invalidateQueries")
+    const { result } = renderHook(() => useStartTraktAuth(), { wrapper })
+
+    act(() => result.current.mutate())
+
+    await waitFor(() => expect(result.current.isSuccess).toBe(true))
+    expect(toast.success).toHaveBeenCalledWith(
+      "Authorisation started",
+      expect.objectContaining({ description: expect.any(String) }),
+    )
+    expect(invalidate).toHaveBeenCalledWith({
+      queryKey: queryKeys.traktAuthStatus,
+    })
+  })
+
+  it("useStartTraktAuth toasts on error", async () => {
+    vi.mocked(api.startTraktAuth).mockRejectedValue(new Error("net"))
+    const { wrapper } = setup()
+    const { result } = renderHook(() => useStartTraktAuth(), { wrapper })
+
+    act(() => result.current.mutate())
+
+    await waitFor(() => expect(result.current.isError).toBe(true))
+    expect(toast.error).toHaveBeenCalledWith("Could not start authorisation", {
+      description: "net",
+    })
+  })
+
+  it("useTestTrakt announces a successful test with the user", async () => {
+    vi.mocked(api.testTrakt).mockResolvedValue({
+      ok: true,
+      user: "erena",
+      message: "Connection OK",
+    })
+    const { wrapper } = setup()
+    const { result } = renderHook(() => useTestTrakt(), { wrapper })
+
+    act(() => result.current.mutate())
+
+    await waitFor(() => expect(result.current.isSuccess).toBe(true))
+    expect(toast.success).toHaveBeenCalledWith("Trakt connection OK", {
+      description: "Signed in as erena",
+    })
+  })
+
+  it("useTestTrakt omits the description when no user is returned", async () => {
+    vi.mocked(api.testTrakt).mockResolvedValue({
+      ok: true,
+      user: null,
+      message: "Connection OK",
+    })
+    const { wrapper } = setup()
+    const { result } = renderHook(() => useTestTrakt(), { wrapper })
+
+    act(() => result.current.mutate())
+
+    await waitFor(() => expect(result.current.isSuccess).toBe(true))
+    expect(toast.success).toHaveBeenCalledWith("Trakt connection OK", {
+      description: undefined,
+    })
+  })
+
+  it("useTestTrakt reports a failed test", async () => {
+    vi.mocked(api.testTrakt).mockResolvedValue({
+      ok: false,
+      user: null,
+      message: "no token",
+    })
+    const { wrapper } = setup()
+    const { result } = renderHook(() => useTestTrakt(), { wrapper })
+
+    act(() => result.current.mutate())
+
+    await waitFor(() => expect(result.current.isSuccess).toBe(true))
+    expect(toast.error).toHaveBeenCalledWith("Trakt connection failed", {
+      description: "no token",
+    })
+  })
+
+  it("useTestTrakt toasts on a thrown error", async () => {
+    vi.mocked(api.testTrakt).mockRejectedValue(new Error("boom"))
+    const { wrapper } = setup()
+    const { result } = renderHook(() => useTestTrakt(), { wrapper })
+
+    act(() => result.current.mutate())
+
+    await waitFor(() => expect(result.current.isError).toBe(true))
+    expect(toast.error).toHaveBeenCalledWith("Could not test connection", {
+      description: "boom",
+    })
+  })
+
+  it("useAddTraktList toasts and invalidates on success", async () => {
+    vi.mocked(api.addTraktList).mockResolvedValue(sampleSettings)
+    const { queryClient, wrapper } = setup()
+    const invalidate = vi.spyOn(queryClient, "invalidateQueries")
+    const { result } = renderHook(() => useAddTraktList(), { wrapper })
+
+    act(() => result.current.mutate({ url: "https://trakt.tv/users/me/lists/anime" }))
+
+    await waitFor(() => expect(result.current.isSuccess).toBe(true))
+    expect(toast.success).toHaveBeenCalledWith("List added")
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: queryKeys.traktSettings })
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: queryKeys.traktLists })
+  })
+
+  it("useAddTraktList toasts on error", async () => {
+    vi.mocked(api.addTraktList).mockRejectedValue(new Error("bad url"))
+    const { wrapper } = setup()
+    const { result } = renderHook(() => useAddTraktList(), { wrapper })
+
+    act(() => result.current.mutate({ url: "x" }))
+
+    await waitFor(() => expect(result.current.isError).toBe(true))
+    expect(toast.error).toHaveBeenCalledWith("Could not add list", {
+      description: "bad url",
+    })
+  })
+
+  it("useRemoveTraktList removes by owner and slug", async () => {
+    vi.mocked(api.removeTraktList).mockResolvedValue(sampleSettings)
+    const { queryClient, wrapper } = setup()
+    const invalidate = vi.spyOn(queryClient, "invalidateQueries")
+    const { result } = renderHook(() => useRemoveTraktList(), { wrapper })
+
+    act(() => result.current.mutate({ owner_user: "me", slug: "movies" }))
+
+    await waitFor(() => expect(result.current.isSuccess).toBe(true))
+    expect(api.removeTraktList).toHaveBeenCalledWith("me", "movies")
+    expect(toast.success).toHaveBeenCalledWith("List removed")
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: queryKeys.traktLists })
+  })
+
+  it("useRemoveTraktList toasts on error", async () => {
+    vi.mocked(api.removeTraktList).mockRejectedValue(new Error("nope"))
+    const { wrapper } = setup()
+    const { result } = renderHook(() => useRemoveTraktList(), { wrapper })
+
+    act(() => result.current.mutate({ owner_user: "me", slug: "movies" }))
+
+    await waitFor(() => expect(result.current.isError).toBe(true))
+    expect(toast.error).toHaveBeenCalledWith("Could not remove list", {
       description: "nope",
     })
   })

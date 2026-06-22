@@ -13,12 +13,13 @@ export function queryResult<T>(
   return { data, isLoading } as unknown as UseQueryResult<T>
 }
 
-/** A `useMutation`-shaped result carrying only `mutate` and `isPending`. */
+/** A `useMutation`-shaped result carrying `mutate`, `isPending`, and `data`. */
 export function mutationResult<TData, TVariables>(
   mutate: (variables: TVariables) => void,
   isPending = false,
+  data?: TData,
 ): UseMutationResult<TData, Error, TVariables> {
-  return { mutate, isPending } as unknown as UseMutationResult<
+  return { mutate, isPending, data } as unknown as UseMutationResult<
     TData,
     Error,
     TVariables

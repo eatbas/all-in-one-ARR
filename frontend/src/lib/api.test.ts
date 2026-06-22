@@ -1,12 +1,20 @@
 import { describe, expect, it, vi } from "vitest"
 
 import {
+  addTraktList,
   ApiError,
   getActivity,
   getItems,
   getStatus,
+  getTraktAuthStatus,
+  getTraktLists,
+  getTraktSettings,
+  removeTraktList,
   setDryRun,
+  startTraktAuth,
+  testTrakt,
   triggerSync,
+  updateTraktSettings,
   type Status,
 } from "@/lib/api"
 
@@ -105,6 +113,80 @@ describe("setDryRun", () => {
         }),
         body: JSON.stringify({ enabled: false }),
       }),
+    )
+  })
+})
+
+describe("trakt settings and lists", () => {
+  it("GETs the trakt settings", async () => {
+    const fetchSpy = mockFetch(jsonResponse({ user: "me" }))
+    await getTraktSettings()
+    expect(fetchSpy).toHaveBeenCalledWith("/api/settings/trakt", expect.anything())
+  })
+
+  it("PUTs updated trakt settings", async () => {
+    const fetchSpy = mockFetch(jsonResponse({ user: "bob" }))
+    await updateTraktSettings({ user: "bob" })
+    expect(fetchSpy).toHaveBeenCalledWith(
+      "/api/settings/trakt",
+      expect.objectContaining({
+        method: "PUT",
+        body: JSON.stringify({ user: "bob" }),
+      }),
+    )
+  })
+
+  it("POSTs to start device auth", async () => {
+    const fetchSpy = mockFetch(jsonResponse({ state: "pending" }))
+    await startTraktAuth()
+    expect(fetchSpy).toHaveBeenCalledWith(
+      "/api/trakt/auth/start",
+      expect.objectContaining({ method: "POST" }),
+    )
+  })
+
+  it("GETs the device-auth status", async () => {
+    const fetchSpy = mockFetch(jsonResponse({ state: "idle", connected: false }))
+    await getTraktAuthStatus()
+    expect(fetchSpy).toHaveBeenCalledWith(
+      "/api/trakt/auth/status",
+      expect.anything(),
+    )
+  })
+
+  it("POSTs a connection test", async () => {
+    const fetchSpy = mockFetch(jsonResponse({ ok: true, user: "me", message: "" }))
+    await testTrakt()
+    expect(fetchSpy).toHaveBeenCalledWith(
+      "/api/trakt/test",
+      expect.objectContaining({ method: "POST" }),
+    )
+  })
+
+  it("GETs the discoverable lists", async () => {
+    const fetchSpy = mockFetch(jsonResponse([]))
+    await getTraktLists()
+    expect(fetchSpy).toHaveBeenCalledWith("/api/trakt/lists", expect.anything())
+  })
+
+  it("POSTs a list to add", async () => {
+    const fetchSpy = mockFetch(jsonResponse({ lists: [] }))
+    await addTraktList({ url: "https://trakt.tv/users/me/lists/anime" })
+    expect(fetchSpy).toHaveBeenCalledWith(
+      "/api/trakt/lists",
+      expect.objectContaining({
+        method: "POST",
+        body: JSON.stringify({ url: "https://trakt.tv/users/me/lists/anime" }),
+      }),
+    )
+  })
+
+  it("DELETEs a list, encoding the path segments", async () => {
+    const fetchSpy = mockFetch(jsonResponse({ lists: [] }))
+    await removeTraktList("me", "my list")
+    expect(fetchSpy).toHaveBeenCalledWith(
+      "/api/trakt/lists/me/my%20list",
+      expect.objectContaining({ method: "DELETE" }),
     )
   })
 })

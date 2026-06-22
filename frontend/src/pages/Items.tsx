@@ -104,6 +104,7 @@ export function Items() {
               <TableHead>Title</TableHead>
               <TableHead className="w-20">Year</TableHead>
               <TableHead className="w-24">Type</TableHead>
+              <TableHead className="w-28">List</TableHead>
               <TableHead className="w-28">Status</TableHead>
               <TableHead className="w-48">Last updated</TableHead>
             </TableRow>
@@ -112,7 +113,7 @@ export function Items() {
             {isLoading ? (
               <TableRow>
                 <TableCell
-                  colSpan={5}
+                  colSpan={6}
                   className="py-8 text-center text-muted-foreground"
                 >
                   Loading items…
@@ -121,7 +122,7 @@ export function Items() {
             ) : (items?.length ?? 0) === 0 ? (
               <TableRow>
                 <TableCell
-                  colSpan={5}
+                  colSpan={6}
                   className="py-8 text-center text-muted-foreground"
                 >
                   No items match this filter.
@@ -136,6 +137,9 @@ export function Items() {
                   </TableCell>
                   <TableCell className="capitalize text-muted-foreground">
                     {item.type}
+                  </TableCell>
+                  <TableCell className="text-muted-foreground">
+                    {item.list_id}
                   </TableCell>
                   <TableCell>
                     <Badge

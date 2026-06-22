@@ -1,4 +1,9 @@
-import { LayoutDashboardIcon, ListVideoIcon, type LucideIcon } from "lucide-react"
+import {
+  LayoutDashboardIcon,
+  ListVideoIcon,
+  SettingsIcon,
+  type LucideIcon,
+} from "lucide-react"
 
 /** A single primary navigation entry. */
 export interface NavItem {
@@ -28,5 +33,11 @@ export const NAV_ITEMS: ReadonlyArray<NavItem> = [
     to: "/items",
     icon: ListVideoIcon,
     description: "Browse every mirrored movie and show",
+  },
+  {
+    title: "Settings",
+    to: "/settings",
+    icon: SettingsIcon,
+    description: "Connect Trakt and choose which lists to sync",
   },
 ]

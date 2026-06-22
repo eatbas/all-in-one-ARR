@@ -8,27 +8,48 @@ import {
 import { toast } from "sonner"
 
 import {
+  addTraktList,
   getActivity,
   getItems,
   getStatus,
+  getTraktAuthStatus,
+  getTraktLists,
+  getTraktSettings,
+  removeTraktList,
   setDryRun,
+  startTraktAuth,
+  testTrakt,
   triggerSync,
+  updateTraktSettings,
   type ActivityEntry,
+  type AddListPayload,
   type DryRunResult,
   type Item,
   type ItemStatus,
   type Status,
   type SyncResult,
+  type TraktAuthStart,
+  type TraktAuthStatus,
+  type TraktListEntry,
+  type TraktSettings,
+  type TraktTestResult,
+  type UpdateTraktSettings,
 } from "@/lib/api"
 
 /** Polling interval (ms) shared by all dashboard queries. */
 const REFETCH_INTERVAL = 10_000
+
+/** While device auth is pending, poll the status this often (ms). */
+const AUTH_POLL_INTERVAL = 2_000
 
 /** Stable query keys so mutations can target invalidations precisely. */
 export const queryKeys = {
   status: ["status"] as const,
   activity: ["activity"] as const,
   items: (status?: ItemStatus) => ["items", status ?? "all"] as const,
+  traktSettings: ["trakt", "settings"] as const,
+  traktAuthStatus: ["trakt", "auth-status"] as const,
+  traktLists: ["trakt", "lists"] as const,
 }
 
 export function useStatus(): UseQueryResult<Status> {
@@ -94,6 +115,125 @@ export function useSetDryRun(): UseMutationResult<DryRunResult, Error, boolean> 
       toast.error("Could not change dry-run mode", {
         description: error.message,
       })
+    },
+  })
+}
+
+export function useTraktSettings(): UseQueryResult<TraktSettings> {
+  return useQuery({
+    queryKey: queryKeys.traktSettings,
+    queryFn: getTraktSettings,
+  })
+}
+
+export function useTraktAuthStatus(): UseQueryResult<TraktAuthStatus> {
+  return useQuery({
+    queryKey: queryKeys.traktAuthStatus,
+    queryFn: getTraktAuthStatus,
+    // Poll only while an authorisation attempt is in progress.
+    refetchInterval: (query) =>
+      query.state.data?.state === "pending" ? AUTH_POLL_INTERVAL : false,
+  })
+}
+
+export function useTraktLists(enabled: boolean): UseQueryResult<TraktListEntry[]> {
+  return useQuery({
+    queryKey: queryKeys.traktLists,
+    queryFn: getTraktLists,
+    enabled,
+  })
+}
+
+export function useUpdateTraktSettings(): UseMutationResult<
+  TraktSettings,
+  Error,
+  UpdateTraktSettings
+> {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: updateTraktSettings,
+    onSuccess: () => {
+      toast.success("Trakt settings saved")
+      void queryClient.invalidateQueries({ queryKey: queryKeys.traktSettings })
+    },
+    onError: (error) => {
+      toast.error("Could not save Trakt settings", { description: error.message })
+    },
+  })
+}
+
+export function useStartTraktAuth(): UseMutationResult<TraktAuthStart, Error, void> {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: startTraktAuth,
+    onSuccess: () => {
+      toast.success("Authorisation started", {
+        description: "Enter the code shown below at trakt.tv/activate.",
+      })
+      void queryClient.invalidateQueries({ queryKey: queryKeys.traktAuthStatus })
+    },
+    onError: (error) => {
+      toast.error("Could not start authorisation", { description: error.message })
+    },
+  })
+}
+
+export function useTestTrakt(): UseMutationResult<TraktTestResult, Error, void> {
+  return useMutation({
+    mutationFn: testTrakt,
+    onSuccess: (result) => {
+      if (result.ok) {
+        toast.success("Trakt connection OK", {
+          description: result.user ? `Signed in as ${result.user}` : undefined,
+        })
+      } else {
+        toast.error("Trakt connection failed", { description: result.message })
+      }
+    },
+    onError: (error) => {
+      toast.error("Could not test connection", { description: error.message })
+    },
+  })
+}
+
+export function useAddTraktList(): UseMutationResult<
+  TraktSettings,
+  Error,
+  AddListPayload
+> {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: addTraktList,
+    onSuccess: () => {
+      toast.success("List added")
+      void queryClient.invalidateQueries({ queryKey: queryKeys.traktSettings })
+      void queryClient.invalidateQueries({ queryKey: queryKeys.traktLists })
+    },
+    onError: (error) => {
+      toast.error("Could not add list", { description: error.message })
+    },
+  })
+}
+
+export function useRemoveTraktList(): UseMutationResult<
+  TraktSettings,
+  Error,
+  { owner_user: string; slug: string }
+> {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: ({ owner_user, slug }) => removeTraktList(owner_user, slug),
+    onSuccess: () => {
+      toast.success("List removed")
+      void queryClient.invalidateQueries({ queryKey: queryKeys.traktSettings })
+      void queryClient.invalidateQueries({ queryKey: queryKeys.traktLists })
+    },
+    onError: (error) => {
+      toast.error("Could not remove list", { description: error.message })
     },
   })
 }
