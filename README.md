@@ -68,7 +68,8 @@ cp .env.example .env
 | `TRAKT_CLIENT_ID` | – | Trakt application client id (**required**) |
 | `TRAKT_CLIENT_SECRET` | – | Trakt application client secret (**required**) |
 | `TRAKT_USER` | `me` | Your Trakt username, or `me` |
-| `TRAKT_LIST_ID` | `watchlist` | A list slug/id, or `watchlist` |
+| `TRAKT_LIST_ID` | `watchlist` | Legacy single list slug/id; used only when `TRAKT_LISTS` is empty |
+| `TRAKT_LISTS` | – | Comma-separated list slugs to sync, e.g. `movies,tv,anime` (seeds the settings store) |
 | `JELLYSEERR_URL` | – | Base URL of Jellyseerr (**required**) |
 | `JELLYSEERR_API_KEY` | – | Jellyseerr API key (**required**) |
 | `SYNC_INTERVAL_MIN` | `15` | Poll interval in minutes |
@@ -78,6 +79,12 @@ cp .env.example .env
 | `LOG_LEVEL` | `INFO` | Log level |
 | `DB_PATH` | `data/aio-arr.db` | SQLite path (persist via volume) |
 | `TOKEN_STORE_PATH` | `data/trakt_tokens.json` | Trakt token store (persist via volume) |
+| `SETTINGS_STORE_PATH` | `data/app_settings.json` | UI-managed Trakt settings (persist via volume) |
+
+The Trakt credentials and list selection are **seeded** from these variables on
+first start and then managed from the dashboard **Settings** page; the resolved
+state is persisted to `SETTINGS_STORE_PATH` (chmod `0600`, inside the gitignored
+`data/` volume). Trakt credentials are therefore optional in `.env`.
 
 Create the Trakt application at <https://trakt.tv/oauth/applications> to obtain
 the client id/secret.
@@ -104,6 +111,22 @@ Open the URL, sign in, and enter the code. The token is saved to
 `TOKEN_STORE_PATH` (inside the `data/` volume) and refreshed automatically, so
 you will not need to re-authorise on restart. The dashboard header shows
 **Connected** once it succeeds.
+
+### Settings page (recommended)
+
+The dashboard **Settings** page manages the whole Trakt connection without
+touching `.env`:
+
+- **Credentials** – enter/update the Trakt client id, secret and user (the
+  secret is stored server-side and never shown again).
+- **Connect** – runs the device-auth flow from the browser: it shows the
+  `trakt.tv/activate` code and polls until it reads **Connected**.
+- **Test connection** – verifies the saved token against the Trakt account.
+- **Your Trakt lists** – discovers every list on your account; tick the ones to
+  sync (TV, Movies, Anime …).
+- **Add by Trakt URL** – paste a list URL such as
+  `https://trakt.tv/users/me/lists/anime` to add it. (Removal on import only
+  works for lists your connected account owns.)
 
 ### Adding the Radarr/Sonarr webhook
 
@@ -203,6 +226,14 @@ cd frontend && npm run build
 - `GET /api/activity` – recent activity feed.
 - `POST /api/sync` – trigger an immediate poll.
 - `POST /api/settings/dry-run` – `{ "enabled": bool }` toggle.
+- `GET /api/settings/trakt` – masked Trakt settings (credentials, user, lists).
+- `PUT /api/settings/trakt` – update Trakt client id/secret/user.
+- `POST /api/trakt/auth/start` – begin device authorisation; returns the code/URL.
+- `GET /api/trakt/auth/status` – poll device-auth progress.
+- `POST /api/trakt/test` – verify the saved Trakt token.
+- `GET /api/trakt/lists` – discover the account's lists with selection state.
+- `POST /api/trakt/lists` – add a list by `{ "url": … }` or `{ owner_user, slug }`.
+- `DELETE /api/trakt/lists/{owner_user}/{slug}` – stop syncing a list.
 - `POST /webhook/arr` – Radarr/Sonarr On-Import webhook.
 
 ## Adding a module
