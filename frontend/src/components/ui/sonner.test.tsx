@@ -9,7 +9,7 @@ vi.mock("@/components/theme-provider", () => ({
 import { Toaster } from "@/components/ui/sonner"
 
 describe("Toaster", () => {
-  it("renders a queued toast using the resolved theme", async () => {
+  it("renders a queued toast top-centre with a close button", async () => {
     render(<Toaster />)
 
     toast.success("Sync triggered")
@@ -17,5 +17,15 @@ describe("Toaster", () => {
     // The toast surfacing proves the Toaster mounted and consumed the theme.
     expect(await screen.findByText("Sync triggered")).toBeInTheDocument()
     expect(document.querySelector(".toaster")).toBeInTheDocument()
+
+    // The wrapper defaults the position to top-centre.
+    const toaster = document.querySelector("[data-sonner-toaster]")
+    expect(toaster).toHaveAttribute("data-y-position", "top")
+    expect(toaster).toHaveAttribute("data-x-position", "center")
+
+    // The close button (X) is rendered on the toast.
+    expect(
+      await screen.findByRole("button", { name: /close toast/i }),
+    ).toBeInTheDocument()
   })
 })

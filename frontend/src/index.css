@@ -118,3 +118,31 @@
     @apply bg-background text-foreground;
   }
 }
+
+/* Countdown bar across the bottom of every toast, draining over its 3 s life.
+   Pure CSS keyed to the fixed Toaster duration; pauses on toaster hover to
+   approximate sonner's own hover-pause (sonner has no built-in progress bar). */
+@keyframes aio-toast-progress {
+  from {
+    transform: scaleX(1);
+  }
+  to {
+    transform: scaleX(0);
+  }
+}
+
+[data-sonner-toast]::after {
+  content: "";
+  position: absolute;
+  inset-inline: 0;
+  bottom: 0;
+  height: 2px;
+  transform-origin: left;
+  background: var(--primary);
+  border-radius: 0 0 var(--radius) var(--radius);
+  animation: aio-toast-progress 3000ms linear forwards;
+}
+
+[data-sonner-toaster]:hover [data-sonner-toast]::after {
+  animation-play-state: paused;
+}

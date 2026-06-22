@@ -31,7 +31,7 @@ createRoot(rootElement).render(
           <BrowserRouter>
             <App />
           </BrowserRouter>
-          <Toaster richColors position="bottom-right" />
+          <Toaster richColors />
         </TooltipProvider>
       </QueryClientProvider>
     </ThemeProvider>
