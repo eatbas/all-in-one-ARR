@@ -70,8 +70,12 @@ cp .env.example .env
 | `TRAKT_USER` | `me` | Your Trakt username, or `me` |
 | `TRAKT_LIST_ID` | `watchlist` | Legacy single list slug/id; used only when `TRAKT_LISTS` is empty |
 | `TRAKT_LISTS` | – | Comma-separated list slugs to sync, e.g. `movies,tv,anime` (seeds the settings store) |
-| `JELLYSEERR_URL` | – | Base URL of Jellyseerr (**required**) |
-| `JELLYSEERR_API_KEY` | – | Jellyseerr API key (**required**) |
+| `JELLYSEERR_URL` | – | Base URL of Jellyseerr (seeds the store; settable in the UI) |
+| `JELLYSEERR_API_KEY` | – | Jellyseerr API key (seeds the store; settable in the UI) |
+| `SONARR_URL` | – | Base URL of Sonarr (seeds the store; settable in the UI) |
+| `SONARR_API_KEY` | – | Sonarr API key (seeds the store; settable in the UI) |
+| `RADARR_URL` | – | Base URL of Radarr (seeds the store; settable in the UI) |
+| `RADARR_API_KEY` | – | Radarr API key (seeds the store; settable in the UI) |
 | `SYNC_INTERVAL_MIN` | `15` | Poll interval in minutes |
 | `WEBHOOK_PORT` | `3223` | Port the service listens on |
 | `DRY_RUN` | `true` | Log-only mode; no real requests/removals |
@@ -114,8 +118,12 @@ you will not need to re-authorise on restart. The dashboard header shows
 
 ### Settings page (recommended)
 
-The dashboard **Settings** page manages the whole Trakt connection without
-touching `.env`:
+The dashboard **Settings** page is organised into a tab per service —
+**Trakt**, **Jellyseerr**, **Sonarr**, **Radarr** — and manages every connection
+without touching `.env`. All values are persisted server-side in
+`SETTINGS_STORE_PATH`.
+
+**Trakt tab:**
 
 - **Credentials** – enter/update the Trakt client id, secret and user (the
   secret is stored server-side and never shown again).
@@ -127,6 +135,12 @@ touching `.env`:
 - **Add by Trakt URL** – paste a list URL such as
   `https://trakt.tv/users/me/lists/anime` to add it. (Removal on import only
   works for lists your connected account owns.)
+
+**Jellyseerr / Sonarr / Radarr tabs:** each takes a **base URL** and an
+**API key** and offers a **Test connection** button. The test validates the key
+against the service's own endpoint (`/api/v1/auth/me` for Jellyseerr,
+`/api/v3/system/status` for Sonarr/Radarr). The key is stored server-side and is
+never returned in clear (the API only exposes whether a key is set).
 
 ### Adding the Radarr/Sonarr webhook
 
@@ -234,6 +248,9 @@ cd frontend && npm run build
 - `GET /api/trakt/lists` – discover the account's lists with selection state.
 - `POST /api/trakt/lists` – add a list by `{ "url": … }` or `{ owner_user, slug }`.
 - `DELETE /api/trakt/lists/{owner_user}/{slug}` – stop syncing a list.
+- `GET /api/settings/services` – masked URL/key state for jellyseerr/sonarr/radarr.
+- `PUT /api/settings/services/{name}` – update a service's `{ url, api_key }`.
+- `POST /api/services/{name}/test` – test a service connection.
 - `POST /webhook/arr` – Radarr/Sonarr On-Import webhook.
 
 ## Adding a module
