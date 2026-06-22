@@ -7,13 +7,8 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import { useTheme, type Theme } from "@/components/theme-provider"
-
-const THEME_OPTIONS: ReadonlyArray<{ value: Theme; label: string }> = [
-  { value: "light", label: "Light" },
-  { value: "dark", label: "Dark" },
-  { value: "system", label: "System" },
-]
+import { useTheme } from "@/components/theme-provider"
+import { THEME_OPTIONS } from "@/lib/theme-options"
 
 /** Dropdown that switches between light, dark, and system colour themes. */
 export function ModeToggle() {

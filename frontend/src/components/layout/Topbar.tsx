@@ -2,15 +2,15 @@ import { RefreshCwIcon } from "lucide-react"
 
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { Switch } from "@/components/ui/switch"
 import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip"
+import { DryRunSwitch } from "@/components/dry-run-switch"
 import { ModeToggle } from "@/components/mode-toggle"
 import { cn } from "@/lib/utils"
-import { useSetDryRun, useStatus, useSyncNow } from "@/lib/queries"
+import { useStatus, useSyncNow } from "@/lib/queries"
 
 /** Pill showing whether the backend currently holds a valid Trakt token. */
 function TraktStatusPill({ connected }: { connected: boolean }) {
@@ -62,7 +62,6 @@ function DryRunBadge({ dryRun }: { dryRun: boolean }) {
 export function Topbar() {
   const { data: status } = useStatus()
   const syncNow = useSyncNow()
-  const setDryRun = useSetDryRun()
 
   const dryRun = status?.dry_run ?? true
   const traktConnected = status?.trakt_connected ?? false
@@ -81,13 +80,7 @@ export function Topbar() {
         <Tooltip>
           <TooltipTrigger asChild>
             <div className="flex items-center gap-2">
-              <Switch
-                id="dry-run-switch"
-                checked={dryRun}
-                disabled={setDryRun.isPending || status === undefined}
-                onCheckedChange={(checked) => setDryRun.mutate(checked)}
-                aria-label="Toggle dry-run mode"
-              />
+              <DryRunSwitch id="dry-run-switch" />
               <label
                 htmlFor="dry-run-switch"
                 className="hidden cursor-pointer text-sm text-muted-foreground sm:inline"

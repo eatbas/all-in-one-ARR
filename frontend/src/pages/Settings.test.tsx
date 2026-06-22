@@ -14,13 +14,22 @@ vi.mock("@/lib/queries", () => ({
   useServiceSettings: vi.fn(),
   useUpdateServiceSettings: vi.fn(),
   useTestService: vi.fn(),
+  useStatus: vi.fn(),
+  useSetDryRun: vi.fn(),
+}))
+
+const { setThemeMock } = vi.hoisted(() => ({ setThemeMock: vi.fn() }))
+vi.mock("@/components/theme-provider", () => ({
+  useTheme: () => ({ theme: "dark", resolvedTheme: "dark", setTheme: setThemeMock }),
 }))
 
 import {
   useAddTraktList,
   useRemoveTraktList,
   useServiceSettings,
+  useSetDryRun,
   useStartTraktAuth,
+  useStatus,
   useTestService,
   useTestTrakt,
   useTraktAuthStatus,
@@ -32,6 +41,7 @@ import {
 import { Settings } from "@/pages/Settings"
 import type {
   ServicesSettings,
+  Status,
   TraktAuthStatus,
   TraktListEntry,
   TraktSettings,
@@ -67,6 +77,12 @@ const SERVICES: ServicesSettings = {
   radarr: { url: "", api_key_set: false },
 }
 
+const STATUS: Status = {
+  dry_run: true,
+  trakt_connected: false,
+  counts: { synced: 0, requested: 0, available: 0, removed: 0 },
+}
+
 let updateMutate: ReturnType<typeof vi.fn>
 let startMutate: ReturnType<typeof vi.fn>
 let testMutate: ReturnType<typeof vi.fn>
@@ -74,6 +90,7 @@ let addMutate: ReturnType<typeof vi.fn>
 let removeMutate: ReturnType<typeof vi.fn>
 let serviceUpdateMutate: ReturnType<typeof vi.fn>
 let serviceTestMutate: ReturnType<typeof vi.fn>
+let setDryRunMutate: ReturnType<typeof vi.fn>
 
 beforeEach(() => {
   updateMutate = vi.fn()
@@ -83,6 +100,7 @@ beforeEach(() => {
   removeMutate = vi.fn()
   serviceUpdateMutate = vi.fn()
   serviceTestMutate = vi.fn()
+  setDryRunMutate = vi.fn()
 
   vi.mocked(useTraktSettings).mockReturnValue(queryResult(SETTINGS))
   vi.mocked(useTraktAuthStatus).mockReturnValue(queryResult(IDLE_AUTH))
@@ -95,23 +113,33 @@ beforeEach(() => {
   vi.mocked(useServiceSettings).mockReturnValue(queryResult(SERVICES))
   vi.mocked(useUpdateServiceSettings).mockReturnValue(mutation(serviceUpdateMutate))
   vi.mocked(useTestService).mockReturnValue(mutation(serviceTestMutate))
+  vi.mocked(useStatus).mockReturnValue(queryResult(STATUS))
+  vi.mocked(useSetDryRun).mockReturnValue(mutation(setDryRunMutate))
 })
 
 function withTestResult(data: TraktTestResult) {
   vi.mocked(useTestTrakt).mockReturnValue(mutation(testMutate, false, data))
 }
 
+/** Render Settings and activate the Trakt tab (General is the default tab). */
+async function renderTrakt() {
+  const user = userEvent.setup()
+  render(<Settings />)
+  await user.click(screen.getByRole("tab", { name: "Trakt" }))
+  return user
+}
+
 describe("Settings — credentials", () => {
-  it("shows a loading state while the settings load", () => {
+  it("shows a loading state while the settings load", async () => {
     vi.mocked(useTraktSettings).mockReturnValue(
       queryResult<TraktSettings>(undefined, true),
     )
-    render(<Settings />)
+    await renderTrakt()
     expect(screen.getByText("Loading…")).toBeInTheDocument()
   })
 
-  it("shows saved hints and the connected state", () => {
-    render(<Settings />)
+  it("shows saved hints and the connected state", async () => {
+    await renderTrakt()
     expect(screen.getByText("Saved (…1234)")).toBeInTheDocument()
     expect(screen.getByText("Saved")).toBeInTheDocument()
     expect(screen.getByText("Connected")).toBeInTheDocument()
@@ -123,11 +151,11 @@ describe("Settings — credentials", () => {
     expect(screen.getByText("(me/movies)")).toBeInTheDocument()
   })
 
-  it("shows 'Not set' hints and disconnected state without settings", () => {
+  it("shows 'Not set' hints and disconnected state without settings", async () => {
     vi.mocked(useTraktSettings).mockReturnValue(
       queryResult<TraktSettings>(undefined, false),
     )
-    render(<Settings />)
+    await renderTrakt()
     expect(screen.getAllByText("Not set")).toHaveLength(2)
     expect(screen.getByText("Not connected")).toBeInTheDocument()
     expect(
@@ -140,8 +168,7 @@ describe("Settings — credentials", () => {
   })
 
   it("saves only the fields that were entered", async () => {
-    const user = userEvent.setup()
-    render(<Settings />)
+    const user = await renderTrakt()
     await user.type(screen.getByPlaceholderText("Trakt client id"), "cid")
     await user.type(
       screen.getByPlaceholderText("Leave blank to keep current"),
@@ -157,8 +184,7 @@ describe("Settings — credentials", () => {
   })
 
   it("saves an empty body when nothing was entered", async () => {
-    const user = userEvent.setup()
-    render(<Settings />)
+    const user = await renderTrakt()
     await user.click(screen.getByRole("button", { name: "Save credentials" }))
     expect(updateMutate).toHaveBeenCalledWith({})
   })
@@ -166,15 +192,14 @@ describe("Settings — credentials", () => {
 
 describe("Settings — connection", () => {
   it("starts auth and tests the connection", async () => {
-    const user = userEvent.setup()
-    render(<Settings />)
+    const user = await renderTrakt()
     await user.click(screen.getByRole("button", { name: "Re-connect Trakt" }))
     await user.click(screen.getByRole("button", { name: "Test connection" }))
     expect(startMutate).toHaveBeenCalledTimes(1)
     expect(testMutate).toHaveBeenCalledTimes(1)
   })
 
-  it("shows the device code while authorisation is pending", () => {
+  it("shows the device code while authorisation is pending", async () => {
     vi.mocked(useTraktAuthStatus).mockReturnValue(
       queryResult<TraktAuthStatus>({
         state: "pending",
@@ -184,7 +209,7 @@ describe("Settings — connection", () => {
         connected: false,
       }),
     )
-    render(<Settings />)
+    await renderTrakt()
     expect(screen.getByText("ABCD-1234")).toBeInTheDocument()
     expect(screen.getByText("Waiting for you")).toBeInTheDocument()
     expect(
@@ -192,7 +217,7 @@ describe("Settings — connection", () => {
     ).toHaveAttribute("href", "https://trakt.tv/activate")
   })
 
-  it("falls back to the default activate URL when none is given", () => {
+  it("falls back to the default activate URL when none is given", async () => {
     vi.mocked(useTraktAuthStatus).mockReturnValue(
       queryResult<TraktAuthStatus>({
         state: "pending",
@@ -202,13 +227,13 @@ describe("Settings — connection", () => {
         connected: false,
       }),
     )
-    render(<Settings />)
+    await renderTrakt()
     expect(
       screen.getByRole("link", { name: "trakt.tv/activate" }),
     ).toHaveAttribute("href", "https://trakt.tv/activate")
   })
 
-  it("hides the code block when pending without a user code", () => {
+  it("hides the code block when pending without a user code", async () => {
     vi.mocked(useTraktAuthStatus).mockReturnValue(
       queryResult<TraktAuthStatus>({
         state: "pending",
@@ -218,11 +243,11 @@ describe("Settings — connection", () => {
         connected: false,
       }),
     )
-    render(<Settings />)
+    await renderTrakt()
     expect(screen.queryByText(/enter code/i)).not.toBeInTheDocument()
   })
 
-  it("shows a failure message when authorisation failed", () => {
+  it("shows a failure message when authorisation failed", async () => {
     vi.mocked(useTraktAuthStatus).mockReturnValue(
       queryResult<TraktAuthStatus>({
         state: "failed",
@@ -232,35 +257,35 @@ describe("Settings — connection", () => {
         connected: false,
       }),
     )
-    render(<Settings />)
+    await renderTrakt()
     expect(
       screen.getByText("Authorisation did not complete"),
     ).toBeInTheDocument()
   })
 
-  it("renders nothing extra when the auth status is unknown", () => {
+  it("renders nothing extra when the auth status is unknown", async () => {
     vi.mocked(useTraktAuthStatus).mockReturnValue(
       queryResult<TraktAuthStatus>(undefined),
     )
-    render(<Settings />)
+    await renderTrakt()
     expect(screen.queryByText(/enter code/i)).not.toBeInTheDocument()
   })
 
-  it("shows a successful test result with the signed-in user", () => {
+  it("shows a successful test result with the signed-in user", async () => {
     withTestResult({ ok: true, user: "erena", message: "Connection OK" })
-    render(<Settings />)
+    await renderTrakt()
     expect(screen.getByText("Connection OK — erena")).toBeInTheDocument()
   })
 
-  it("shows a successful test result without a user", () => {
+  it("shows a successful test result without a user", async () => {
     withTestResult({ ok: true, user: null, message: "Connection OK" })
-    render(<Settings />)
+    await renderTrakt()
     expect(screen.getByText("Connection OK")).toBeInTheDocument()
   })
 
-  it("shows a failed test result message", () => {
+  it("shows a failed test result message", async () => {
     withTestResult({ ok: false, user: null, message: "no token" })
-    render(<Settings />)
+    await renderTrakt()
     expect(screen.getByText("no token")).toBeInTheDocument()
   })
 })
@@ -272,15 +297,13 @@ describe("Settings — lists", () => {
   ]
 
   it("removes a synced list", async () => {
-    const user = userEvent.setup()
-    render(<Settings />)
+    const user = await renderTrakt()
     await user.click(screen.getByRole("button", { name: "Remove" }))
     expect(removeMutate).toHaveBeenCalledWith({ owner_user: "me", slug: "movies" })
   })
 
   it("adds a list by URL", async () => {
-    const user = userEvent.setup()
-    render(<Settings />)
+    const user = await renderTrakt()
     const input = screen.getByPlaceholderText(
       "https://trakt.tv/users/me/lists/anime",
     )
@@ -292,9 +315,8 @@ describe("Settings — lists", () => {
   })
 
   it("discovers lists and toggles their selection", async () => {
-    const user = userEvent.setup()
     vi.mocked(useTraktLists).mockReturnValue(queryResult(DISCOVERED))
-    render(<Settings />)
+    const user = await renderTrakt()
     expect(screen.getByText("TV")).toBeInTheDocument()
     expect(screen.getByText("anime")).toBeInTheDocument() // null name -> slug
     expect(screen.getByText("(6 items)")).toBeInTheDocument()
@@ -307,31 +329,71 @@ describe("Settings — lists", () => {
     expect(removeMutate).toHaveBeenCalledWith({ owner_user: "me", slug: "anime" })
   })
 
-  it("shows a loading state for discovered lists", () => {
+  it("shows a loading state for discovered lists", async () => {
     vi.mocked(useTraktLists).mockReturnValue(
       queryResult<TraktListEntry[]>(undefined, true),
     )
-    render(<Settings />)
+    await renderTrakt()
     expect(screen.getByText("Loading lists…")).toBeInTheDocument()
   })
 
-  it("shows an empty message when no lists are discovered", () => {
+  it("shows an empty message when no lists are discovered", async () => {
     vi.mocked(useTraktLists).mockReturnValue(
       queryResult<TraktListEntry[]>(undefined, false),
     )
-    render(<Settings />)
+    await renderTrakt()
     expect(
       screen.getByText("No lists found on your account."),
     ).toBeInTheDocument()
   })
 
-  it("disables controls while mutations are pending", () => {
+  it("disables controls while mutations are pending", async () => {
     vi.mocked(useTraktLists).mockReturnValue(queryResult(DISCOVERED))
     vi.mocked(useAddTraktList).mockReturnValue(mutation(addMutate, true))
     vi.mocked(useRemoveTraktList).mockReturnValue(mutation(removeMutate, true))
-    render(<Settings />)
+    await renderTrakt()
     expect(screen.getByRole("button", { name: "Add" })).toBeDisabled()
     expect(screen.getByRole("switch", { name: "Sync tv" })).toBeDisabled()
+  })
+})
+
+describe("Settings — general", () => {
+  it("is the default tab and shows dry-run on", () => {
+    render(<Settings />)
+    expect(screen.getByText("Dry-run mode")).toBeInTheDocument()
+    expect(
+      screen.getByRole("switch", { name: "Toggle dry-run mode" }),
+    ).toBeChecked()
+  })
+
+  it("toggles dry-run mode", async () => {
+    const user = userEvent.setup()
+    render(<Settings />)
+    await user.click(screen.getByRole("switch", { name: "Toggle dry-run mode" }))
+    expect(setDryRunMutate).toHaveBeenCalledWith(false)
+  })
+
+  it("disables the dry-run switch while the status is pending", () => {
+    vi.mocked(useSetDryRun).mockReturnValue(mutation(setDryRunMutate, true))
+    render(<Settings />)
+    expect(
+      screen.getByRole("switch", { name: "Toggle dry-run mode" }),
+    ).toBeDisabled()
+  })
+
+  it("disables the dry-run switch until the status loads", () => {
+    vi.mocked(useStatus).mockReturnValue(queryResult<Status>(undefined))
+    render(<Settings />)
+    expect(
+      screen.getByRole("switch", { name: "Toggle dry-run mode" }),
+    ).toBeDisabled()
+  })
+
+  it("changes the colour theme", async () => {
+    const user = userEvent.setup()
+    render(<Settings />)
+    await user.click(screen.getByRole("button", { name: "Light" }))
+    expect(setThemeMock).toHaveBeenCalledWith("light")
   })
 })
 

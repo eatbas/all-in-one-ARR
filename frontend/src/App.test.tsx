@@ -49,7 +49,8 @@ describe("App routing", () => {
 
   it("renders the settings page at /settings", () => {
     renderAt("/settings")
-    expect(screen.getByText("Trakt credentials")).toBeInTheDocument()
+    // The General tab is the default landing tab.
+    expect(screen.getByText("Dry-run mode")).toBeInTheDocument()
   })
 
   it("redirects unknown routes back to the dashboard", () => {

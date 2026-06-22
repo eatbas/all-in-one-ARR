@@ -12,7 +12,10 @@ import {
 import { Input } from "@/components/ui/input"
 import { Switch } from "@/components/ui/switch"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { DryRunSwitch } from "@/components/dry-run-switch"
+import { useTheme } from "@/components/theme-provider"
 import { cn } from "@/lib/utils"
+import { THEME_OPTIONS } from "@/lib/theme-options"
 import {
   useAddTraktList,
   useRemoveTraktList,
@@ -430,16 +433,62 @@ function ServiceConnectionCard({
   )
 }
 
-/** Settings page: a tab per service (Trakt, Jellyseerr, Sonarr, Radarr). */
+/** App-wide settings: the DRY_RUN toggle and the colour theme. */
+function GeneralCard() {
+  const { theme, setTheme } = useTheme()
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>General</CardTitle>
+        <CardDescription>
+          App-wide settings. These mirror the controls in the header.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="flex flex-col gap-6">
+        <div className="flex items-center justify-between gap-4">
+          <div>
+            <p className="text-sm font-medium">Dry-run mode</p>
+            <p className="text-sm text-muted-foreground">
+              When on, requests and removals are only logged, never executed.
+            </p>
+          </div>
+          <DryRunSwitch />
+        </div>
+        <div className="flex flex-col gap-2">
+          <p className="text-sm font-medium">Appearance</p>
+          <div className="flex flex-wrap gap-2">
+            {THEME_OPTIONS.map((option) => (
+              <Button
+                key={option.value}
+                size="sm"
+                variant={theme === option.value ? "default" : "outline"}
+                onClick={() => setTheme(option.value)}
+              >
+                {option.label}
+              </Button>
+            ))}
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  )
+}
+
+/** Settings page: a tab per area (General, Trakt, Jellyseerr, Sonarr, Radarr). */
 export function Settings() {
   return (
-    <Tabs defaultValue="trakt">
+    <Tabs defaultValue="general">
       <TabsList>
+        <TabsTrigger value="general">General</TabsTrigger>
         <TabsTrigger value="trakt">Trakt</TabsTrigger>
         <TabsTrigger value="jellyseerr">Jellyseerr</TabsTrigger>
         <TabsTrigger value="sonarr">Sonarr</TabsTrigger>
         <TabsTrigger value="radarr">Radarr</TabsTrigger>
       </TabsList>
+      <TabsContent value="general">
+        <GeneralCard />
+      </TabsContent>
       <TabsContent value="trakt" className="flex flex-col gap-6">
         <CredentialsCard />
         <ConnectionCard />
