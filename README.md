@@ -118,10 +118,16 @@ you will not need to re-authorise on restart. The dashboard header shows
 
 ### Settings page (recommended)
 
-The dashboard **Settings** page is organised into a tab per service —
-**Trakt**, **Jellyseerr**, **Sonarr**, **Radarr** — and manages every connection
-without touching `.env`. All values are persisted server-side in
+The dashboard **Settings** page is organised into tabs —
+**General**, **Trakt**, **Jellyseerr**, **Sonarr**, **Radarr** — and manages every
+connection without touching `.env`. All values are persisted server-side in
 `SETTINGS_STORE_PATH`.
+
+**General tab** (the default): the app-wide **DRY_RUN** toggle and the
+**light/dark/system** theme control. These mirror the controls in the header.
+
+Notifications (toasts) appear **top-centre** with a close (×) button and a bar
+that drains over their ~3-second lifetime.
 
 **Trakt tab:**
 
