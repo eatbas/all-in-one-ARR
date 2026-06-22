@@ -13,7 +13,7 @@
 #   BACKEND_HOST   (default 127.0.0.1)
 #   BACKEND_PORT   (default 3223)
 #
-# Requires bash 4.3+ (for `wait -n`). Run with:  bash dev.sh
+# Runs on any Bash 3.2+ (the version macOS still ships). Run with:  bash dev.sh
 set -euo pipefail
 
 # Always operate from the repository root (this script's directory).
@@ -48,10 +48,19 @@ if ! command -v npm >/dev/null 2>&1; then
   exit 1
 fi
 
-# Install frontend dependencies on first run so `npm run dev` can start.
-if [[ ! -d "$ROOT_DIR/frontend/node_modules" ]]; then
+# Install frontend dependencies so `npm run dev` can start. Reinstall when the
+# manifest is newer than the last install (npm records `node_modules/.package-
+# lock.json`); otherwise a dependency bump leaves config-time imports such as
+# `vitest/config` (used by vite.config.ts) unresolved and the dev server fails.
+FRONTEND_DIR="$ROOT_DIR/frontend"
+NODE_MODULES_MARKER="$FRONTEND_DIR/node_modules/.package-lock.json"
+if [[ ! -d "$FRONTEND_DIR/node_modules" ]]; then
   echo "Installing frontend dependencies (first run)…"
-  (cd "$ROOT_DIR/frontend" && npm install)
+  (cd "$FRONTEND_DIR" && npm install)
+elif [[ "$FRONTEND_DIR/package.json" -nt "$NODE_MODULES_MARKER" \
+     || "$FRONTEND_DIR/package-lock.json" -nt "$NODE_MODULES_MARKER" ]]; then
+  echo "Frontend dependencies are out of date — running npm install…"
+  (cd "$FRONTEND_DIR" && npm install)
 fi
 
 # The backend's Settings() fails fast (and the server exits) when the required
@@ -115,6 +124,14 @@ echo "  Frontend: http://localhost:5173  (proxies /api and /webhook to the backe
 echo "  Backend:  http://${BACKEND_HOST}:${BACKEND_PORT}"
 echo
 
-# Exit as soon as either server stops, then tear the other one down.
-wait -n 2>/dev/null || true
+# Exit as soon as either server stops, then tear the other one down. `wait -n`
+# would be ideal but needs Bash 4.3+; macOS ships Bash 3.2, so poll the child
+# PIDs portably instead. A Ctrl+C during the sleep fires the trap, which kills
+# both PIDs — the next check then sees them gone and breaks out.
+while :; do
+  for pid in "${pids[@]}"; do
+    kill -0 "$pid" 2>/dev/null || break 2
+  done
+  sleep 1 || true
+done
 cleanup
