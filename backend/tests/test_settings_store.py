@@ -127,6 +127,85 @@ def test_masked_with_and_without_credentials(tmp_path) -> None:
     assert masked_empty["client_secret_set"] is False
 
 
+def test_seeds_and_round_trips_services(tmp_path) -> None:
+    path = tmp_path / "settings.json"
+    store = SettingsStore(str(path))
+    store.load_or_seed(
+        client_id="cid",
+        client_secret="sec",
+        user="me",
+        lists=[],
+        services={
+            "jellyseerr": {"url": "http://js", "api_key": "jk"},
+            "sonarr": {"url": "http://sonarr", "api_key": ""},
+        },
+    )
+    assert store.service_connection("jellyseerr") == ("http://js", "jk")
+    assert store.service_connection("sonarr") == ("http://sonarr", "")
+    assert store.service_connection("radarr") == ("", "")  # absent in seed
+
+    reopened = SettingsStore(str(path))
+    reopened.load_or_seed(
+        client_id="x", client_secret="x", user="x", lists=[], services=None
+    )
+    assert reopened.service_connection("jellyseerr") == ("http://js", "jk")
+
+
+def test_backfills_new_services_from_seed_on_upgrade(tmp_path) -> None:
+    # An older store file without a "services" key (pre-dates the feature).
+    path = tmp_path / "settings.json"
+    path.write_text(
+        json.dumps(
+            {
+                "trakt": {"client_id": "c", "client_secret": "s", "user": "me"},
+                "lists": [],
+            }
+        )
+    )
+    store = SettingsStore(str(path))
+    store.load_or_seed(
+        client_id="x",
+        client_secret="x",
+        user="x",
+        lists=[],
+        services={"jellyseerr": {"url": "http://js", "api_key": "jk"}},
+    )
+    assert store.service_connection("jellyseerr") == ("http://js", "jk")
+
+    # The backfill was persisted, so a later load needs no re-seed.
+    reopened = SettingsStore(str(path))
+    reopened.load_or_seed(
+        client_id="x", client_secret="x", user="x", lists=[], services=None
+    )
+    assert reopened.service_connection("jellyseerr") == ("http://js", "jk")
+
+
+def test_update_service_connection_leaves_unset_fields(tmp_path) -> None:
+    store = SettingsStore(str(tmp_path / "settings.json"))
+    store.load_or_seed(client_id="c", client_secret="s", user="me", lists=[])
+    store.update_service_connection("sonarr", url="http://sonarr:8989", api_key="sk")
+    assert store.service_connection("sonarr") == ("http://sonarr:8989", "sk")
+    store.update_service_connection("sonarr", url="http://new")  # key unchanged
+    assert store.service_connection("sonarr") == ("http://new", "sk")
+    store.update_service_connection("sonarr", api_key="sk2")  # url unchanged
+    assert store.service_connection("sonarr") == ("http://new", "sk2")
+
+
+def test_masked_services_hides_keys(tmp_path) -> None:
+    store = SettingsStore(str(tmp_path / "settings.json"))
+    store.load_or_seed(
+        client_id="c",
+        client_secret="s",
+        user="me",
+        lists=[],
+        services={"jellyseerr": {"url": "http://js", "api_key": "jk"}},
+    )
+    masked = store.masked_services()
+    assert masked["jellyseerr"] == {"url": "http://js", "api_key_set": True}
+    assert masked["radarr"] == {"url": "", "api_key_set": False}
+    assert store.masked()["services"]["jellyseerr"]["api_key_set"] is True
+
+
 def test_tracked_list_helpers() -> None:
     item = TrackedList(owner_user="me", slug="Watchlist", name="WL")
     assert item.is_watchlist is True

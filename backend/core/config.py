@@ -9,12 +9,17 @@ from __future__ import annotations
 
 from typing import Any
 
-from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 # Field names that must be masked whenever the configuration is logged.
 _SECRET_FIELDS = frozenset(
-    {"TRAKT_CLIENT_ID", "TRAKT_CLIENT_SECRET", "JELLYSEERR_API_KEY"}
+    {
+        "TRAKT_CLIENT_ID",
+        "TRAKT_CLIENT_SECRET",
+        "JELLYSEERR_API_KEY",
+        "SONARR_API_KEY",
+        "RADARR_API_KEY",
+    }
 )
 
 
@@ -39,9 +44,13 @@ class Settings(BaseSettings):
     TRAKT_LIST_ID: str = "watchlist"
     TRAKT_LISTS: str = ""
 
-    # ---- Jellyseerr ----
+    # ---- Services (URL + API key; seed the store, then UI-managed) ----
     JELLYSEERR_URL: str = ""
     JELLYSEERR_API_KEY: str = ""
+    SONARR_URL: str = ""
+    SONARR_API_KEY: str = ""
+    RADARR_URL: str = ""
+    RADARR_API_KEY: str = ""
 
     # ---- Sync behaviour ----
     SYNC_INTERVAL_MIN: int = 15
@@ -82,23 +91,19 @@ class Settings(BaseSettings):
                 slugs.append(slug)
         return slugs or [self.TRAKT_LIST_ID]
 
-    @model_validator(mode="after")
-    def _require_secrets(self) -> "Settings":
-        """Fail fast when mandatory credentials are missing.
+    @property
+    def service_seeds(self) -> dict[str, dict[str, str]]:
+        """Seed values for the settings store's service connections.
 
-        Trakt credentials are intentionally *not* required here: they may be
-        configured from the dashboard after start-up (see core.settings_store).
+        Every service (Trakt and these URL/key services) is managed from the
+        dashboard after start-up, so none of these are required in the
+        environment; they only seed the store on first run.
         """
-        required = {
-            "JELLYSEERR_URL": self.JELLYSEERR_URL,
-            "JELLYSEERR_API_KEY": self.JELLYSEERR_API_KEY,
+        return {
+            "jellyseerr": {"url": self.JELLYSEERR_URL, "api_key": self.JELLYSEERR_API_KEY},
+            "sonarr": {"url": self.SONARR_URL, "api_key": self.SONARR_API_KEY},
+            "radarr": {"url": self.RADARR_URL, "api_key": self.RADARR_API_KEY},
         }
-        missing = [name for name, value in required.items() if not value.strip()]
-        if missing:
-            raise ValueError(
-                "Missing required configuration: " + ", ".join(sorted(missing))
-            )
-        return self
 
     def masked(self) -> dict[str, Any]:
         """Return the configuration as a dict with secrets masked for logging."""

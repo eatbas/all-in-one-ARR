@@ -1,7 +1,9 @@
 """Jellyseerr API client: media status checks and request creation.
 
 Request creation honours the live DRY_RUN flag via the injected
-``dry_run_provider`` callable.
+``dry_run_provider`` callable. The base URL and API key are held as attributes
+(not baked into the HTTP client) so they can be reconfigured from the dashboard
+at runtime via :meth:`update_credentials`.
 """
 
 from __future__ import annotations
@@ -35,13 +37,20 @@ class JellyseerrClient:
         dry_run_provider: Callable[[], bool],
         http_client: httpx.AsyncClient | None = None,
     ) -> None:
+        self._base_url = base_url.rstrip("/")
+        self._api_key = api_key
         self._dry_run_provider = dry_run_provider
         self._log = get_logger("jellyseerr")
-        self._client = http_client or httpx.AsyncClient(
-            base_url=base_url.rstrip("/"),
-            headers={"X-Api-Key": api_key, "Content-Type": "application/json"},
-            timeout=30.0,
-        )
+        self._client = http_client or httpx.AsyncClient(timeout=30.0)
+
+    def update_credentials(self, *, base_url: str, api_key: str) -> None:
+        """Replace the in-use base URL and API key (set from the dashboard)."""
+        self._base_url = base_url.rstrip("/")
+        self._api_key = api_key
+
+    @property
+    def _headers(self) -> dict[str, str]:
+        return {"X-Api-Key": self._api_key}
 
     async def get_status(self, *, media_type: str, tmdb_id: int) -> int | None:
         """Return the Jellyseerr ``mediaInfo.status`` for an item.
@@ -51,7 +60,9 @@ class JellyseerrClient:
         """
         endpoint = "movie" if media_type == "movie" else "tv"
         try:
-            response = await self._client.get(f"/api/v1/{endpoint}/{tmdb_id}")
+            response = await self._client.get(
+                f"{self._base_url}/api/v1/{endpoint}/{tmdb_id}", headers=self._headers
+            )
         except httpx.HTTPError as exc:  # network/timeout
             raise JellyseerrError(f"Jellyseerr status request failed: {exc}") from exc
         if response.status_code == 404:
@@ -85,7 +96,9 @@ class JellyseerrClient:
             return None
 
         try:
-            response = await self._client.post("/api/v1/request", json=body)
+            response = await self._client.post(
+                f"{self._base_url}/api/v1/request", json=body, headers=self._headers
+            )
         except httpx.HTTPError as exc:
             raise JellyseerrError(f"Jellyseerr request failed: {exc}") from exc
         if response.status_code not in (200, 201):
@@ -103,6 +116,27 @@ class JellyseerrClient:
         )
         return request_id
 
+    async def test_connection(self) -> dict[str, Any]:
+        """Validate the base URL + API key against ``/api/v1/auth/me``.
+
+        Returns ``{ok, detail}``; never raises for an expected failure so the
+        dashboard can show the reason.
+        """
+        try:
+            response = await self._client.get(
+                f"{self._base_url}/api/v1/auth/me", headers=self._headers
+            )
+        except httpx.HTTPError as exc:
+            return {"ok": False, "detail": f"Connection failed: {exc}"}
+        if response.status_code == 200:
+            data = response.json()
+            user = data.get("displayName") or data.get("username") or data.get("email")
+            return {"ok": True, "detail": f"Connected as {user}" if user else "Connected"}
+        return {"ok": False, "detail": f"Jellyseerr returned HTTP {response.status_code}"}
+
     async def aclose(self) -> None:
         """Close the underlying HTTP client."""
         await self._client.aclose()
+
+
+from core.logging import log_action  # noqa: E402  (kept next to get_logger usage)

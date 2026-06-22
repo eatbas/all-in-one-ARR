@@ -22,6 +22,18 @@ from typing import Any
 
 from core.logging import get_logger
 
+# URL + API-key services managed from the Settings page (besides Trakt).
+SERVICE_NAMES = ("jellyseerr", "sonarr", "radarr")
+
+
+def _service_seed(seed: dict[str, str] | None) -> dict[str, str]:
+    """Normalise a seed entry (or ``None``) into a ``{url, api_key}`` dict."""
+    seed = seed or {}
+    return {
+        "url": (seed.get("url") or "").strip(),
+        "api_key": (seed.get("api_key") or "").strip(),
+    }
+
 
 @dataclass(frozen=True)
 class TrackedList:
@@ -61,6 +73,9 @@ class SettingsStore:
         self._client_secret = ""
         self._user = "me"
         self._lists: list[TrackedList] = []
+        self._services: dict[str, dict[str, str]] = {
+            name: {"url": "", "api_key": ""} for name in SERVICE_NAMES
+        }
 
     # ---- load / seed / persist ----
 
@@ -71,6 +86,7 @@ class SettingsStore:
         client_secret: str,
         user: str,
         lists: list[TrackedList],
+        services: dict[str, dict[str, str]] | None = None,
     ) -> None:
         """Load persisted settings, or seed from the supplied defaults.
 
@@ -79,17 +95,19 @@ class SettingsStore:
         """
         with self._lock:
             if self._path.exists():
-                self._load_locked()
+                self._load_locked(seed_services=services or {})
                 self._log.info("loaded persisted settings")
             else:
                 self._client_id = client_id
                 self._client_secret = client_secret
                 self._user = user or "me"
                 self._lists = list(lists)
+                for name in SERVICE_NAMES:
+                    self._services[name] = _service_seed((services or {}).get(name))
                 self._save_locked()
                 self._log.info("seeded settings from environment")
 
-    def _load_locked(self) -> None:
+    def _load_locked(self, seed_services: dict[str, dict[str, str]] | None = None) -> None:
         data = json.loads(self._path.read_text(encoding="utf-8"))
         trakt = data.get("trakt") or {}
         self._client_id = trakt.get("client_id", "")
@@ -104,6 +122,24 @@ class SettingsStore:
             for entry in data.get("lists", [])
             if entry.get("slug")
         ]
+        # Load stored services; one-time migration backfills services that a
+        # pre-existing (older) store file does not yet contain from the env seed.
+        stored_services = data.get("services") or {}
+        seed = seed_services or {}
+        backfilled = False
+        for name in SERVICE_NAMES:
+            if name in stored_services:
+                entry = stored_services[name]
+                self._services[name] = {
+                    "url": entry.get("url", ""),
+                    "api_key": entry.get("api_key", ""),
+                }
+            else:
+                self._services[name] = _service_seed(seed.get(name))
+                backfilled = True
+        if backfilled:
+            self._save_locked()
+            self._log.info("backfilled new service connections from environment")
 
     def _save_locked(self) -> None:
         payload = {
@@ -113,6 +149,7 @@ class SettingsStore:
                 "user": self._user,
             },
             "lists": [item.to_dict() for item in self._lists],
+            "services": self._services,
         }
         self._path.parent.mkdir(parents=True, exist_ok=True)
         self._path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
@@ -183,6 +220,38 @@ class SettingsStore:
             self._log.info("removed list owner=%s slug=%s", owner_user, slug)
             return True
 
+    # ---- service connections (jellyseerr / sonarr / radarr) ----
+
+    def service_connection(self, name: str) -> tuple[str, str]:
+        """Return ``(url, api_key)`` for a service. Raises ``KeyError`` if unknown."""
+        with self._lock:
+            entry = self._services[name]
+            return (entry["url"], entry["api_key"])
+
+    def update_service_connection(
+        self, name: str, *, url: str | None = None, api_key: str | None = None
+    ) -> None:
+        """Update a service's URL/API key; ``None`` leaves a field unchanged."""
+        with self._lock:
+            entry = self._services[name]
+            if url is not None:
+                entry["url"] = url.strip()
+            if api_key is not None:
+                entry["api_key"] = api_key.strip()
+            self._save_locked()
+            self._log.info("updated %s connection", name)
+
+    def masked_services(self) -> dict[str, dict[str, Any]]:
+        """Return a response-safe view of services: ``{name: {url, api_key_set}}``."""
+        with self._lock:
+            return {
+                name: {
+                    "url": entry["url"],
+                    "api_key_set": bool(entry["api_key"]),
+                }
+                for name, entry in self._services.items()
+            }
+
     # ---- masking ----
 
     def masked(self) -> dict[str, Any]:
@@ -194,4 +263,5 @@ class SettingsStore:
                 "client_secret_set": bool(self._client_secret),
                 "user": self._user,
                 "lists": [item.to_dict() for item in self._lists],
+                "services": self.masked_services(),
             }

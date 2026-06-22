@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import pytest
-
 from core.config import Settings
 
 _VALID = {
@@ -43,31 +41,39 @@ def test_trakt_lists_blank_falls_back_to_list_id() -> None:
     assert settings.trakt_lists == ["watchlist"]
 
 
-def test_missing_jellyseerr_secrets_raises() -> None:
-    with pytest.raises(ValueError) as exc:
-        Settings(_env_file=None, JELLYSEERR_URL="", JELLYSEERR_API_KEY="")
-    message = str(exc.value)
-    assert "JELLYSEERR_URL" in message
-    assert "JELLYSEERR_API_KEY" in message
+def test_all_service_credentials_are_optional() -> None:
+    # Every service (Trakt + Jellyseerr/Sonarr/Radarr) is UI-managed, so an empty
+    # configuration must not fail start-up.
+    settings = Settings(_env_file=None)
+    assert settings.JELLYSEERR_URL == ""
+    assert settings.SONARR_URL == ""
+    assert settings.RADARR_API_KEY == ""
 
 
-def test_trakt_credentials_are_optional() -> None:
-    # Trakt creds may be configured later from the dashboard, so an empty pair
-    # must not fail start-up.
+def test_service_seeds_shape() -> None:
     settings = Settings(
         _env_file=None,
-        TRAKT_CLIENT_ID="",
-        TRAKT_CLIENT_SECRET="",
         JELLYSEERR_URL="http://js:5055",
-        JELLYSEERR_API_KEY="key",
+        JELLYSEERR_API_KEY="jk",
+        SONARR_URL="http://sonarr:8989",
+        SONARR_API_KEY="sk",
+        RADARR_URL="http://radarr:7878",
+        RADARR_API_KEY="rk",
     )
-    assert settings.TRAKT_CLIENT_ID == ""
+    seeds = settings.service_seeds
+    assert seeds["jellyseerr"] == {"url": "http://js:5055", "api_key": "jk"}
+    assert seeds["sonarr"] == {"url": "http://sonarr:8989", "api_key": "sk"}
+    assert seeds["radarr"] == {"url": "http://radarr:7878", "api_key": "rk"}
 
 
 def test_masked_hides_secrets() -> None:
-    settings = Settings(_env_file=None, **_VALID)
+    settings = Settings(
+        _env_file=None, SONARR_API_KEY="sk", RADARR_API_KEY="rk", **_VALID
+    )
     masked = settings.masked()
     assert masked["TRAKT_CLIENT_ID"] == "***"
     assert masked["JELLYSEERR_API_KEY"] == "***"
+    assert masked["SONARR_API_KEY"] == "***"
+    assert masked["RADARR_API_KEY"] == "***"
     assert masked["TRAKT_USER"] == "me"
     assert masked["DRY_RUN"] is True

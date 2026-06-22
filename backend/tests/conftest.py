@@ -67,6 +67,7 @@ class StubSettingsStore:
         client_id: str = "cid",
         client_secret: str = "secret",
         user: str = "me",
+        services: dict[str, dict[str, str]] | None = None,
     ) -> None:
         self._lists = (
             lists
@@ -74,6 +75,11 @@ class StubSettingsStore:
             else [TrackedList(owner_user="me", slug="watchlist", name="watchlist")]
         )
         self._creds = (client_id, client_secret, user)
+        self._services = services or {
+            "jellyseerr": {"url": "http://js:5055", "api_key": "k"},
+            "sonarr": {"url": "http://sonarr:8989", "api_key": ""},
+            "radarr": {"url": "", "api_key": ""},
+        }
 
     def tracked_lists(self) -> list[TrackedList]:
         return list(self._lists)
@@ -87,6 +93,25 @@ class StubSettingsStore:
     def trakt_credentials(self) -> tuple[str, str, str]:
         return self._creds
 
+    def service_connection(self, name: str) -> tuple[str, str]:
+        entry = self._services[name]
+        return (entry["url"], entry["api_key"])
+
+    def update_service_connection(
+        self, name: str, *, url: str | None = None, api_key: str | None = None
+    ) -> None:
+        entry = self._services[name]
+        if url is not None:
+            entry["url"] = url
+        if api_key is not None:
+            entry["api_key"] = api_key
+
+    def masked_services(self) -> dict[str, dict[str, Any]]:
+        return {
+            name: {"url": entry["url"], "api_key_set": bool(entry["api_key"])}
+            for name, entry in self._services.items()
+        }
+
 
 class StubJellyseerr:
     """Minimal stand-in for :class:`JellyseerrClient`."""
@@ -94,6 +119,17 @@ class StubJellyseerr:
     def __init__(self, *, status: int | None = None, request_id: int | None = 99):
         self.get_status = AsyncMock(return_value=status)
         self.create_request = AsyncMock(return_value=request_id)
+        self.update_credentials = MagicMock()
+        self.test_connection = AsyncMock(return_value={"ok": True, "detail": "Connected"})
+        self.aclose = AsyncMock()
+
+
+class StubArr:
+    """Minimal stand-in for :class:`ArrClient` (Sonarr/Radarr)."""
+
+    def __init__(self) -> None:
+        self.update_credentials = MagicMock()
+        self.test_connection = AsyncMock(return_value={"ok": True, "detail": "Connected"})
         self.aclose = AsyncMock()
 
 
@@ -102,6 +138,8 @@ def make_ctx(
     db: Database,
     trakt: Any | None = None,
     jellyseerr: Any | None = None,
+    sonarr: Any | None = None,
+    radarr: Any | None = None,
     dry_run: bool = True,
     settings: Any | None = None,
     settings_store: Any | None = None,
@@ -114,6 +152,8 @@ def make_ctx(
         db=db,
         trakt=trakt or StubTrakt(),
         jellyseerr=jellyseerr or StubJellyseerr(),
+        sonarr=sonarr or StubArr(),
+        radarr=radarr or StubArr(),
         scheduler=scheduler,
         webhooks=WebhookRegistry(),
         dry_run_flag=flag,

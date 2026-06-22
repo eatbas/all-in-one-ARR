@@ -10,6 +10,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any, Awaitable, Callable
 
+from core.clients.arr_client import ArrClient
 from core.clients.jellyseerr import JellyseerrClient
 from core.clients.trakt import TraktClient
 from core.config import Settings
@@ -44,6 +45,8 @@ class AppContext:
     db: Database
     trakt: TraktClient
     jellyseerr: JellyseerrClient
+    sonarr: ArrClient
+    radarr: ArrClient
     scheduler: SchedulerService
     webhooks: WebhookRegistry
     dry_run_flag: DryRunFlag

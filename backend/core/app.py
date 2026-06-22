@@ -18,6 +18,7 @@ from fastapi.staticfiles import StaticFiles
 
 from core import registry
 from core.api import create_api_router
+from core.clients.arr_client import ArrClient
 from core.clients.jellyseerr import JellyseerrClient
 from core.clients.trakt import TraktClient
 from core.config import Settings
@@ -25,6 +26,7 @@ from core.context import AppContext, DryRunFlag
 from core.db import Database
 from core.logging import configure_logging, get_logger
 from core.scheduler import SchedulerService
+from core.services_api import create_services_router
 from core.settings_store import SettingsStore, TrackedList
 from core.trakt_api import create_trakt_router
 from core.trakt_auth import cancel_device_auth, start_device_auth
@@ -52,6 +54,7 @@ def build_context(settings: Settings) -> AppContext:
             TrackedList(owner_user=settings.TRAKT_USER, slug=slug, name=slug)
             for slug in settings.trakt_lists
         ],
+        services=settings.service_seeds,
     )
     client_id, client_secret, user = settings_store.trakt_credentials()
 
@@ -65,17 +68,22 @@ def build_context(settings: Settings) -> AppContext:
     )
     trakt.load_tokens()
 
+    js_url, js_key = settings_store.service_connection("jellyseerr")
     jellyseerr = JellyseerrClient(
-        base_url=settings.JELLYSEERR_URL,
-        api_key=settings.JELLYSEERR_API_KEY,
-        dry_run_provider=flag,
+        base_url=js_url, api_key=js_key, dry_run_provider=flag
     )
+    sonarr_url, sonarr_key = settings_store.service_connection("sonarr")
+    sonarr = ArrClient(name="sonarr", base_url=sonarr_url, api_key=sonarr_key)
+    radarr_url, radarr_key = settings_store.service_connection("radarr")
+    radarr = ArrClient(name="radarr", base_url=radarr_url, api_key=radarr_key)
 
     return AppContext(
         settings=settings,
         db=database,
         trakt=trakt,
         jellyseerr=jellyseerr,
+        sonarr=sonarr,
+        radarr=radarr,
         scheduler=SchedulerService(),
         webhooks=WebhookRegistry(),
         dry_run_flag=flag,
@@ -143,6 +151,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         await ctx.scheduler.stop()
         await ctx.trakt.aclose()
         await ctx.jellyseerr.aclose()
+        await ctx.sonarr.aclose()
+        await ctx.radarr.aclose()
         ctx.db.close()
 
 
@@ -168,6 +178,7 @@ def create_app() -> FastAPI:
     # modules during the lifespan, but requests only arrive after startup.
     app.include_router(create_api_router(ctx))
     app.include_router(create_trakt_router(ctx))
+    app.include_router(create_services_router(ctx))
     app.include_router(ctx.webhooks.router)
     _mount_frontend(app)
 

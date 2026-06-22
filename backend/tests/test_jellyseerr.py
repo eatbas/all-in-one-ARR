@@ -100,6 +100,52 @@ async def test_create_request_network_error_raises() -> None:
         await client.create_request(media_type="movie", tmdb_id=100)
 
 
+@respx.mock
+async def test_test_connection_ok_with_user() -> None:
+    respx.get(f"{_BASE}/api/v1/auth/me").mock(
+        return_value=httpx.Response(200, json={"username": "erena"})
+    )
+    result = await make_client().test_connection()
+    assert result == {"ok": True, "detail": "Connected as erena"}
+
+
+@respx.mock
+async def test_test_connection_ok_without_user() -> None:
+    respx.get(f"{_BASE}/api/v1/auth/me").mock(
+        return_value=httpx.Response(200, json={})
+    )
+    result = await make_client().test_connection()
+    assert result == {"ok": True, "detail": "Connected"}
+
+
+@respx.mock
+async def test_test_connection_forbidden() -> None:
+    respx.get(f"{_BASE}/api/v1/auth/me").mock(return_value=httpx.Response(403))
+    result = await make_client().test_connection()
+    assert result["ok"] is False
+    assert "403" in result["detail"]
+
+
+@respx.mock
+async def test_test_connection_network_error() -> None:
+    respx.get(f"{_BASE}/api/v1/auth/me").mock(
+        side_effect=httpx.ConnectError("boom")
+    )
+    result = await make_client().test_connection()
+    assert result["ok"] is False
+    assert "boom" in result["detail"]
+
+
+@respx.mock
+async def test_update_credentials_changes_target() -> None:
+    respx.get("http://new:5055/api/v1/movie/100").mock(
+        return_value=httpx.Response(200, json={"mediaInfo": {"status": AVAILABLE}})
+    )
+    client = make_client()
+    client.update_credentials(base_url="http://new:5055/", api_key="key2")
+    assert await client.get_status(media_type="movie", tmdb_id=100) == AVAILABLE
+
+
 async def test_aclose() -> None:
     await make_client().aclose()
 
