@@ -76,6 +76,13 @@ cp .env.example .env
 | `SONARR_API_KEY` | – | Sonarr API key (seeds the store; settable in the UI) |
 | `RADARR_URL` | – | Base URL of Radarr (seeds the store; settable in the UI) |
 | `RADARR_API_KEY` | – | Radarr API key (seeds the store; settable in the UI) |
+| `TMDB_API_KEY` | – | TMDB v3 API key or v4 read-access token (seeds the store; settable in the UI) |
+| `OMDB_API_KEY` | – | OMDb API key (seeds the store; settable in the UI) |
+| `SABNZBD_URL` | – | Base URL of SABnzbd (seeds the store; settable in the UI) |
+| `SABNZBD_API_KEY` | – | SABnzbd API key (seeds the store; settable in the UI) |
+| `QBITTORRENT_URL` | – | Base URL of the qBittorrent WebUI (seeds the store; settable in the UI) |
+| `QBITTORRENT_USERNAME` | – | qBittorrent WebUI username (seeds the store; settable in the UI) |
+| `QBITTORRENT_PASSWORD` | – | qBittorrent WebUI password (seeds the store; settable in the UI) |
 | `SYNC_INTERVAL_MIN` | `15` | Poll interval in minutes |
 | `WEBHOOK_PORT` | `3223` | Port the service listens on |
 | `DRY_RUN` | `true` | Log-only mode; no real requests/removals |
@@ -119,9 +126,9 @@ you will not need to re-authorise on restart. The dashboard header shows
 ### Settings page (recommended)
 
 The dashboard **Settings** page is organised into tabs —
-**General**, **Trakt**, **Jellyseerr**, **Sonarr**, **Radarr** — and manages every
-connection without touching `.env`. All values are persisted server-side in
-`SETTINGS_STORE_PATH`.
+**General**, **Trakt**, **Jellyseerr**, **Sonarr**, **Radarr**, **TMDB**, **OMDb**,
+**SABnzbd**, **qBittorrent** — and manages every connection without touching
+`.env`. All values are persisted server-side in `SETTINGS_STORE_PATH`.
 
 **General tab** (the default): the app-wide **DRY_RUN** toggle and the
 **light/dark/system** theme control. These mirror the controls in the header.
@@ -142,11 +149,24 @@ that drains over their ~3-second lifetime.
   `https://trakt.tv/users/me/lists/anime` to add it. (Removal on import only
   works for lists your connected account owns.)
 
-**Jellyseerr / Sonarr / Radarr tabs:** each takes a **base URL** and an
+**Jellyseerr / Sonarr / Radarr / SABnzbd tabs:** each takes a **base URL** and an
 **API key** and offers a **Test connection** button. The test validates the key
 against the service's own endpoint (`/api/v1/auth/me` for Jellyseerr,
-`/api/v3/system/status` for Sonarr/Radarr). The key is stored server-side and is
-never returned in clear (the API only exposes whether a key is set).
+`/api/v3/system/status` for Sonarr/Radarr, and `mode=queue` for SABnzbd). The key
+is stored server-side and is never returned in clear (the API only exposes whether
+a key is set).
+
+**TMDB / OMDb tabs:** each takes only an **API key** (the base URL is the
+service's fixed public endpoint) and offers a **Test connection** button. TMDB
+accepts either a v3 API key or a v4 read-access token and is validated against
+`/3/configuration`; OMDb is validated with a probe lookup. The key is stored
+server-side and never returned in clear.
+
+**qBittorrent tab:** takes a **base URL**, a **username** and a **password** (the
+WebUI login; qBittorrent has no API key) and offers a **Test connection** button,
+which performs the WebUI login and reads the application version. The password is
+stored server-side and never returned in clear (the API only exposes whether a
+password is set).
 
 ### Adding the Radarr/Sonarr webhook
 
@@ -254,8 +274,11 @@ cd frontend && npm run build
 - `GET /api/trakt/lists` – discover the account's lists with selection state.
 - `POST /api/trakt/lists` – add a list by `{ "url": … }` or `{ owner_user, slug }`.
 - `DELETE /api/trakt/lists/{owner_user}/{slug}` – stop syncing a list.
-- `GET /api/settings/services` – masked URL/key state for jellyseerr/sonarr/radarr.
-- `PUT /api/settings/services/{name}` – update a service's `{ url, api_key }`.
+- `GET /api/settings/services` – masked connection state for every service
+  (jellyseerr, sonarr, radarr, tmdb, omdb, sabnzbd, qbittorrent); each emits only
+  its own fields, with secrets reduced to `<field>_set` booleans.
+- `PUT /api/settings/services/{name}` – update a service's fields
+  `{ url?, api_key?, username?, password? }` (only the fields it declares apply).
 - `POST /api/services/{name}/test` – test a service connection.
 - `POST /webhook/arr` – Radarr/Sonarr On-Import webhook.
 
