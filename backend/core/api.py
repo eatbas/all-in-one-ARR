@@ -123,6 +123,8 @@ def _next_sync_at(last_synced_at: str | None, interval_minutes: int) -> str | No
     """
     if last_synced_at is None:
         return None
+    # last_synced_at is always written by db.utcnow_iso() (valid ISO-8601), so
+    # fromisoformat cannot fail here.
     last = datetime.fromisoformat(last_synced_at)
     return (last + timedelta(minutes=interval_minutes)).isoformat()
 

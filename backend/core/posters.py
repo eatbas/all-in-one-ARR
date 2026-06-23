@@ -51,6 +51,11 @@ class PosterCache:
                 self._locks[key] = lock
             return lock
 
+    def _discard_lock(self, key: str) -> None:
+        """Forget a per-key lock once its poster is cached, bounding the map."""
+        with self._locks_guard:
+            self._locks.pop(key, None)
+
     async def get_poster(
         self, *, media_type: str, tmdb_id: int, imdb_id: str | None = None
     ) -> Path | None:
@@ -76,7 +81,11 @@ class PosterCache:
                 return None
             self._write_atomic(path, data)
             self._log.debug("cached poster %s", path.name)
-            return path
+        # The poster is now on disk, so every future call returns at the
+        # existence check above before taking a lock; drop this key's lock to
+        # keep the map bounded by the number of still-uncached posters.
+        self._discard_lock(path.name)
+        return path
 
     def _write_atomic(self, path: Path, data: bytes) -> None:
         """Write ``data`` to ``path`` atomically via a temp file + replace."""

@@ -61,6 +61,14 @@ async def test_atomic_write_leaves_no_temp_file(tmp_path) -> None:
     assert list(path.parent.glob("*.tmp")) == []
 
 
+async def test_lock_discarded_after_caching(tmp_path) -> None:
+    # Once a poster is on disk its per-key lock is no longer needed, so the lock
+    # map must not grow without bound.
+    cache = _cache(tmp_path, tmdb_bytes=b"IMG")
+    await cache.get_poster(media_type="movie", tmdb_id=1)
+    assert cache._locks == {}
+
+
 async def test_concurrent_requests_fetch_once(tmp_path) -> None:
     # Force a genuine overlap: the second request must pass its first existence
     # check and block on the per-key lock while the first is still fetching, so
