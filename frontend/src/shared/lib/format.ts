@@ -13,3 +13,62 @@ export function formatTimestamp(iso: string): string {
     timeStyle: "short",
   })
 }
+
+const MINUTE = 60_000
+const HOUR = 60 * MINUTE
+const DAY = 24 * HOUR
+const WEEK = 7 * DAY
+
+/**
+ * Format a past ISO timestamp as a coarse "time ago" string ("just now",
+ * "45 min ago", "2 hours ago", "3 days ago", "2 weeks ago"). `now` is injectable
+ * so the output is deterministic under test. Falls back to the raw value when
+ * the input cannot be parsed.
+ */
+export function formatRelativeTime(iso: string, now: Date = new Date()): string {
+  const date = new Date(iso)
+  if (Number.isNaN(date.getTime())) {
+    return iso
+  }
+  const diff = now.getTime() - date.getTime()
+  if (diff < MINUTE) {
+    return "just now"
+  }
+  if (diff < HOUR) {
+    return `${Math.floor(diff / MINUTE)} min ago`
+  }
+  if (diff < DAY) {
+    const hours = Math.floor(diff / HOUR)
+    return `${hours} ${hours === 1 ? "hour" : "hours"} ago`
+  }
+  if (diff < WEEK) {
+    const days = Math.floor(diff / DAY)
+    return `${days} ${days === 1 ? "day" : "days"} ago`
+  }
+  const weeks = Math.floor(diff / WEEK)
+  return `${weeks} ${weeks === 1 ? "week" : "weeks"} ago`
+}
+
+/**
+ * Format the next-sync ISO timestamp as a short countdown ("in 12 min",
+ * "in 2 hours", "due now" when overdue, "—" when unknown). `now` is injectable
+ * for deterministic tests; an unparseable value falls back to its raw form.
+ */
+export function formatNextSync(iso: string | null, now: Date = new Date()): string {
+  if (iso === null) {
+    return "—"
+  }
+  const date = new Date(iso)
+  if (Number.isNaN(date.getTime())) {
+    return iso
+  }
+  const diff = date.getTime() - now.getTime()
+  if (diff <= 0) {
+    return "due now"
+  }
+  if (diff < HOUR) {
+    return `in ${Math.max(1, Math.floor(diff / MINUTE))} min`
+  }
+  const hours = Math.floor(diff / HOUR)
+  return `in ${hours} ${hours === 1 ? "hour" : "hours"}`
+}

@@ -57,5 +57,78 @@ async def test_update_credentials_changes_key() -> None:
     assert route.calls.last.request.url.params["api_key"] == "new"
 
 
+_MOVIE_DETAILS = "https://api.themoviedb.org/3/movie/603"
+_TV_DETAILS = "https://api.themoviedb.org/3/tv/1399"
+_IMAGE = "https://image.tmdb.org/t/p/w342/poster.jpg"
+
+
+@respx.mock
+async def test_fetch_poster_movie_downloads_image() -> None:
+    respx.get(_MOVIE_DETAILS).mock(
+        return_value=httpx.Response(200, json={"poster_path": "/poster.jpg"})
+    )
+    respx.get(_IMAGE).mock(return_value=httpx.Response(200, content=b"JPEGDATA"))
+    data = await TmdbClient(api_key="v3key").fetch_poster(
+        media_type="movie", tmdb_id=603
+    )
+    assert data == b"JPEGDATA"
+
+
+@respx.mock
+async def test_fetch_poster_show_uses_tv_endpoint() -> None:
+    route = respx.get(_TV_DETAILS).mock(
+        return_value=httpx.Response(200, json={"poster_path": "/poster.jpg"})
+    )
+    respx.get(_IMAGE).mock(return_value=httpx.Response(200, content=b"X"))
+    data = await TmdbClient(api_key="v3key").fetch_poster(
+        media_type="show", tmdb_id=1399
+    )
+    assert data == b"X"
+    assert route.called
+
+
+@respx.mock
+async def test_fetch_poster_missing_path_returns_none() -> None:
+    respx.get(_MOVIE_DETAILS).mock(
+        return_value=httpx.Response(200, json={"poster_path": None})
+    )
+    result = await TmdbClient(api_key="x").fetch_poster(media_type="movie", tmdb_id=603)
+    assert result is None
+
+
+@respx.mock
+async def test_fetch_poster_details_non_200_returns_none() -> None:
+    respx.get(_MOVIE_DETAILS).mock(return_value=httpx.Response(404, json={}))
+    result = await TmdbClient(api_key="x").fetch_poster(media_type="movie", tmdb_id=603)
+    assert result is None
+
+
+@respx.mock
+async def test_fetch_poster_details_network_error_returns_none() -> None:
+    respx.get(_MOVIE_DETAILS).mock(side_effect=httpx.ConnectError("down"))
+    result = await TmdbClient(api_key="x").fetch_poster(media_type="movie", tmdb_id=603)
+    assert result is None
+
+
+@respx.mock
+async def test_fetch_poster_image_non_200_returns_none() -> None:
+    respx.get(_MOVIE_DETAILS).mock(
+        return_value=httpx.Response(200, json={"poster_path": "/poster.jpg"})
+    )
+    respx.get(_IMAGE).mock(return_value=httpx.Response(500))
+    result = await TmdbClient(api_key="x").fetch_poster(media_type="movie", tmdb_id=603)
+    assert result is None
+
+
+@respx.mock
+async def test_fetch_poster_image_network_error_returns_none() -> None:
+    respx.get(_MOVIE_DETAILS).mock(
+        return_value=httpx.Response(200, json={"poster_path": "/poster.jpg"})
+    )
+    respx.get(_IMAGE).mock(side_effect=httpx.ConnectError("down"))
+    result = await TmdbClient(api_key="x").fetch_poster(media_type="movie", tmdb_id=603)
+    assert result is None
+
+
 async def test_aclose() -> None:
     await TmdbClient(api_key="x").aclose()

@@ -1,0 +1,88 @@
+"""Tests for core.posters (poster disk cache)."""
+
+from __future__ import annotations
+
+import asyncio
+from unittest.mock import AsyncMock
+
+from core.posters import PosterCache
+
+
+def _cache(tmp_path, *, tmdb_bytes=None, omdb_bytes=None) -> PosterCache:
+    """Build a PosterCache with stubbed TMDB/OMDb clients and a temp cache dir."""
+    tmdb = AsyncMock()
+    tmdb.fetch_poster = AsyncMock(return_value=tmdb_bytes)
+    omdb = AsyncMock()
+    omdb.fetch_poster = AsyncMock(return_value=omdb_bytes)
+    return PosterCache(cache_dir=str(tmp_path / "posters"), tmdb=tmdb, omdb=omdb)
+
+
+async def test_cache_miss_fetches_tmdb_and_writes(tmp_path) -> None:
+    cache = _cache(tmp_path, tmdb_bytes=b"IMG")
+    path = await cache.get_poster(media_type="movie", tmdb_id=1)
+    assert path is not None
+    assert path.name == "movie-1.jpg"
+    assert path.read_bytes() == b"IMG"
+
+
+async def test_cache_hit_skips_clients(tmp_path) -> None:
+    cache = _cache(tmp_path, tmdb_bytes=b"IMG")
+    first = await cache.get_poster(media_type="movie", tmdb_id=1)
+    second = await cache.get_poster(media_type="movie", tmdb_id=1)
+    assert first == second
+    # The cached file is served the second time without re-fetching.
+    assert cache._tmdb.fetch_poster.await_count == 1
+
+
+async def test_tmdb_miss_falls_back_to_omdb(tmp_path) -> None:
+    cache = _cache(tmp_path, tmdb_bytes=None, omdb_bytes=b"OMDB")
+    path = await cache.get_poster(media_type="movie", tmdb_id=1, imdb_id="tt1")
+    assert path is not None
+    assert path.read_bytes() == b"OMDB"
+    cache._omdb.fetch_poster.assert_awaited_once_with(imdb_id="tt1")
+
+
+async def test_both_sources_fail_returns_none(tmp_path) -> None:
+    cache = _cache(tmp_path)
+    assert (
+        await cache.get_poster(media_type="movie", tmdb_id=1, imdb_id="tt1") is None
+    )
+
+
+async def test_no_imdb_skips_omdb_fallback(tmp_path) -> None:
+    cache = _cache(tmp_path, tmdb_bytes=None, omdb_bytes=b"OMDB")
+    assert await cache.get_poster(media_type="movie", tmdb_id=1) is None
+    cache._omdb.fetch_poster.assert_not_awaited()
+
+
+async def test_atomic_write_leaves_no_temp_file(tmp_path) -> None:
+    cache = _cache(tmp_path, tmdb_bytes=b"IMG")
+    path = await cache.get_poster(media_type="movie", tmdb_id=1)
+    assert list(path.parent.glob("*.tmp")) == []
+
+
+async def test_concurrent_requests_fetch_once(tmp_path) -> None:
+    # Force a genuine overlap: the second request must pass its first existence
+    # check and block on the per-key lock while the first is still fetching, so
+    # it resolves via the post-lock re-check rather than re-fetching upstream.
+    cache = _cache(tmp_path)
+    started = asyncio.Event()
+    release = asyncio.Event()
+
+    async def slow_fetch(*, media_type, tmdb_id):
+        started.set()
+        await release.wait()
+        return b"IMG"
+
+    cache._tmdb.fetch_poster = AsyncMock(side_effect=slow_fetch)
+
+    task_a = asyncio.create_task(cache.get_poster(media_type="movie", tmdb_id=1))
+    await started.wait()  # A holds the lock and is suspended inside the fetch.
+    task_b = asyncio.create_task(cache.get_poster(media_type="movie", tmdb_id=1))
+    await asyncio.sleep(0)  # Let B pass the first check and block on the lock.
+    release.set()  # A writes and releases; B re-checks and serves the cached file.
+
+    results = await asyncio.gather(task_a, task_b)
+    assert results[0] == results[1]
+    # Only A fetched upstream; B served the freshly-cached file via the re-check.
+    assert cache._tmdb.fetch_poster.await_count == 1

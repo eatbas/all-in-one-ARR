@@ -67,5 +67,68 @@ async def test_update_credentials_changes_key() -> None:
     assert route.calls.last.request.url.params["apikey"] == "new"
 
 
+_POSTER_URL = "https://m.media-amazon.com/images/poster.jpg"
+
+
+@respx.mock
+async def test_fetch_poster_downloads_image() -> None:
+    respx.get(_URL).mock(
+        return_value=httpx.Response(
+            200, json={"Response": "True", "Poster": _POSTER_URL}
+        )
+    )
+    respx.get(_POSTER_URL).mock(return_value=httpx.Response(200, content=b"OMDBJPEG"))
+    data = await OmdbClient(api_key="ok").fetch_poster(imdb_id="tt1")
+    assert data == b"OMDBJPEG"
+
+
+@respx.mock
+async def test_fetch_poster_na_returns_none() -> None:
+    respx.get(_URL).mock(return_value=httpx.Response(200, json={"Poster": "N/A"}))
+    assert await OmdbClient(api_key="ok").fetch_poster(imdb_id="tt1") is None
+
+
+@respx.mock
+async def test_fetch_poster_missing_returns_none() -> None:
+    respx.get(_URL).mock(return_value=httpx.Response(200, json={"Title": "x"}))
+    assert await OmdbClient(api_key="ok").fetch_poster(imdb_id="tt1") is None
+
+
+@respx.mock
+async def test_fetch_poster_lookup_non_200_returns_none() -> None:
+    respx.get(_URL).mock(return_value=httpx.Response(500, json={}))
+    assert await OmdbClient(api_key="ok").fetch_poster(imdb_id="tt1") is None
+
+
+@respx.mock
+async def test_fetch_poster_lookup_network_error_returns_none() -> None:
+    respx.get(_URL).mock(side_effect=httpx.ConnectError("down"))
+    assert await OmdbClient(api_key="ok").fetch_poster(imdb_id="tt1") is None
+
+
+@respx.mock
+async def test_fetch_poster_non_json_returns_none() -> None:
+    respx.get(_URL).mock(return_value=httpx.Response(200, text="<html>"))
+    assert await OmdbClient(api_key="ok").fetch_poster(imdb_id="tt1") is None
+
+
+@respx.mock
+async def test_fetch_poster_image_non_200_returns_none() -> None:
+    respx.get(_URL).mock(
+        return_value=httpx.Response(200, json={"Poster": _POSTER_URL})
+    )
+    respx.get(_POSTER_URL).mock(return_value=httpx.Response(404))
+    assert await OmdbClient(api_key="ok").fetch_poster(imdb_id="tt1") is None
+
+
+@respx.mock
+async def test_fetch_poster_image_network_error_returns_none() -> None:
+    respx.get(_URL).mock(
+        return_value=httpx.Response(200, json={"Poster": _POSTER_URL})
+    )
+    respx.get(_POSTER_URL).mock(side_effect=httpx.ConnectError("down"))
+    assert await OmdbClient(api_key="ok").fetch_poster(imdb_id="tt1") is None
+
+
 async def test_aclose() -> None:
     await OmdbClient(api_key="x").aclose()

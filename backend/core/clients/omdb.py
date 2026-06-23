@@ -58,6 +58,38 @@ class OmdbClient:
             return {"ok": True, "detail": "Connected to OMDb"}
         return {"ok": False, "detail": data.get("Error") or "OMDb rejected the API key"}
 
+    async def fetch_poster(self, *, imdb_id: str) -> bytes | None:
+        """Return poster image bytes for an IMDb id, or ``None`` if unavailable.
+
+        Looks the title up by IMDb id, reads its ``Poster`` URL (OMDb reports a
+        missing poster as the literal ``"N/A"``) and downloads it. Never raises:
+        any error degrades to ``None``.
+        """
+        try:
+            response = await self._client.get(
+                _BASE_URL, params={"apikey": self._api_key, "i": imdb_id}
+            )
+        except httpx.HTTPError as exc:
+            self._log.debug("OMDb lookup failed for %s: %s", imdb_id, exc)
+            return None
+        if response.status_code != 200:
+            return None
+        try:
+            data = response.json()
+        except ValueError:
+            return None
+        poster = data.get("Poster")
+        if not poster or poster == "N/A":
+            return None
+        try:
+            image = await self._client.get(poster)
+        except httpx.HTTPError as exc:
+            self._log.debug("OMDb poster download failed for %s: %s", poster, exc)
+            return None
+        if image.status_code != 200:
+            return None
+        return image.content
+
     async def aclose(self) -> None:
         """Close the underlying HTTP client."""
         await self._client.aclose()

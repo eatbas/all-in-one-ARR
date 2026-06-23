@@ -91,6 +91,37 @@ def test_list_items_filter_and_unfiltered(db: Database) -> None:
     assert len(removed) == 1 and removed[0]["trakt_id"] == 2
 
 
+def test_list_items_filter_by_list_and_combined(db: Database) -> None:
+    db.upsert_item(**{**_MOVIE, "list_id": "movies"})
+    db.upsert_item(**{**_SHOW, "list_id": "tv"})
+    db.set_status(trakt_id=1, list_id="movies", status="requested")
+    # Filter by list only.
+    movies = db.list_items(list_id="movies")
+    assert [row["trakt_id"] for row in movies] == [1]
+    # Status and list compose.
+    assert len(db.list_items(status="requested", list_id="movies")) == 1
+    assert db.list_items(status="requested", list_id="tv") == []
+
+
+def test_counts_by_list(db: Database) -> None:
+    db.upsert_item(**{**_MOVIE, "list_id": "movies"})
+    db.upsert_item(**{**_SHOW, "list_id": "movies"})
+    db.upsert_item(**{**_SHOW, "trakt_id": 3, "list_id": "tv"})
+    assert db.counts_by_list() == {"movies": 2, "tv": 1}
+
+
+def test_list_sync_state_touch_and_read(db: Database) -> None:
+    assert db.list_last_synced() == {}
+    db.touch_list_synced("movies")
+    first = db.list_last_synced()
+    assert "T" in first["movies"]
+    # A second touch refreshes the timestamp in place (no duplicate row).
+    db.touch_list_synced("movies")
+    db.touch_list_synced("tv")
+    states = db.list_last_synced()
+    assert set(states) == {"movies", "tv"}
+
+
 def test_active_items_excludes_removed(db: Database) -> None:
     db.upsert_item(**_MOVIE)
     db.upsert_item(**_SHOW)

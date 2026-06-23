@@ -68,6 +68,17 @@ export interface TrackedListRef {
   name: string
 }
 
+/** A synced list with its item count and sync timing, from `GET /api/lists`. */
+export interface ListSummary {
+  owner_user: string
+  slug: string
+  name: string
+  item_count: number
+  last_synced_at: string | null
+  next_sync_at: string | null
+  interval_minutes: number
+}
+
 /** Response of `GET`/`PUT /api/settings/trakt`. */
 export interface TraktSettings {
   client_id_hint: string
@@ -223,9 +234,21 @@ export function getStatus(): Promise<Status> {
   return request<Status>("/api/status")
 }
 
-export function getItems(status?: ItemStatus): Promise<Item[]> {
-  const query = status ? `?status=${encodeURIComponent(status)}` : ""
-  return request<Item[]>(`/api/items${query}`)
+export function getItems(status?: ItemStatus, list?: string): Promise<Item[]> {
+  const params = new URLSearchParams()
+  if (status) params.set("status", status)
+  if (list) params.set("list", list)
+  const query = params.toString()
+  return request<Item[]>(`/api/items${query ? `?${query}` : ""}`)
+}
+
+export function getLists(): Promise<ListSummary[]> {
+  return request<ListSummary[]>("/api/lists")
+}
+
+/** Build the same-origin URL for an item's cached poster thumbnail. */
+export function posterUrl(mediaType: ItemType, tmdbId: number): string {
+  return `/api/posters/${mediaType}/${tmdbId}`
 }
 
 export function getActivity(): Promise<ActivityEntry[]> {

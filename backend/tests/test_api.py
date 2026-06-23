@@ -42,6 +42,78 @@ def test_items_endpoint_filtered_and_unfiltered(db) -> None:
     assert len(client.get("/api/items?status=requested").json()) == 1
 
 
+def test_items_endpoint_filtered_by_list(db) -> None:
+    db.upsert_item(**_ITEM)
+    db.upsert_item(**{**_ITEM, "trakt_id": 2, "list_id": "other"})
+    ctx = make_ctx(db=db)
+    client = build_client(ctx)
+    assert len(client.get("/api/items?list=watchlist").json()) == 1
+    assert len(client.get("/api/items?list=other").json()) == 1
+    assert len(client.get("/api/items").json()) == 2
+
+
+def test_lists_endpoint_with_counts_and_times(db) -> None:
+    db.upsert_item(**_ITEM)  # list_id="watchlist"
+    db.touch_list_synced("watchlist")
+    ctx = make_ctx(db=db)  # StubSettingsStore tracks the "watchlist" list
+    body = build_client(ctx).get("/api/lists").json()
+    assert len(body) == 1
+    entry = body[0]
+    assert entry["slug"] == "watchlist"
+    assert entry["item_count"] == 1
+    assert entry["interval_minutes"] == 15
+    assert entry["last_synced_at"] is not None
+    assert entry["next_sync_at"] is not None
+
+
+def test_lists_endpoint_never_synced_has_no_times(db) -> None:
+    ctx = make_ctx(db=db)
+    entry = build_client(ctx).get("/api/lists").json()[0]
+    assert entry["item_count"] == 0
+    assert entry["last_synced_at"] is None
+    assert entry["next_sync_at"] is None
+
+
+def test_poster_endpoint_serves_cached_file(db, tmp_path) -> None:
+    poster = tmp_path / "movie-100.jpg"
+    poster.write_bytes(b"JPEGDATA")
+    ctx = make_ctx(db=db)
+    ctx.poster_cache = AsyncMock()
+    ctx.poster_cache.get_poster = AsyncMock(return_value=poster)
+    resp = build_client(ctx).get("/api/posters/movie/100")
+    assert resp.status_code == 200
+    assert resp.content == b"JPEGDATA"
+    assert resp.headers["cache-control"] == "public, max-age=604800"
+    ctx.poster_cache.get_poster.assert_awaited_once_with(
+        media_type="movie", tmdb_id=100, imdb_id=None
+    )
+
+
+def test_poster_endpoint_404_when_missing(db) -> None:
+    ctx = make_ctx(db=db)
+    ctx.poster_cache = AsyncMock()
+    ctx.poster_cache.get_poster = AsyncMock(return_value=None)
+    resp = build_client(ctx).get("/api/posters/show/100?imdb=tt9")
+    assert resp.status_code == 404
+    ctx.poster_cache.get_poster.assert_awaited_once_with(
+        media_type="show", tmdb_id=100, imdb_id="tt9"
+    )
+
+
+def test_poster_endpoint_404_for_bad_media_type(db) -> None:
+    ctx = make_ctx(db=db)
+    ctx.poster_cache = AsyncMock()
+    resp = build_client(ctx).get("/api/posters/bogus/100")
+    assert resp.status_code == 404
+    ctx.poster_cache.get_poster.assert_not_called()
+
+
+def test_poster_endpoint_404_when_cache_unset(db) -> None:
+    ctx = make_ctx(db=db)
+    ctx.poster_cache = None
+    assert build_client(ctx).get("/api/posters/movie/100").status_code == 404
+
+
 def test_activity_endpoint(db) -> None:
     db.add_activity("requested", "requested Dune")
     ctx = make_ctx(db=db)

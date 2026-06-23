@@ -66,6 +66,11 @@ async def _poll_one_list(ctx: "AppContext", tracked: "TrackedList") -> None:
             _log.exception("failed to process item %s: %s", raw.get("title"), exc)
             ctx.db.add_activity("error", f"sync failed for {raw.get('title')}: {exc}")
 
+    # The list was read successfully; record the poll time so the dashboard can
+    # show "last synced" and derive the next poll (per-item failures above are
+    # isolated and must not suppress this).
+    ctx.db.touch_list_synced(list_id)
+
 
 async def _process_item(ctx: "AppContext", raw: dict, list_id: str) -> None:
     """Upsert one item and create a Jellyseerr request when appropriate."""

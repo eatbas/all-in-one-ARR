@@ -82,6 +82,9 @@ class Settings(BaseSettings):
     DB_PATH: str = "data/aio-arr.db"
     TOKEN_STORE_PATH: str = "data/trakt_tokens.json"
     SETTINGS_STORE_PATH: str = "data/app_settings.json"
+    # Disk cache for fetched poster thumbnails; lives inside the gitignored
+    # data/ volume so each poster is downloaded from TMDB/OMDb at most once.
+    POSTER_CACHE_PATH: str = "data/posters"
 
     @property
     def is_watchlist(self) -> bool:

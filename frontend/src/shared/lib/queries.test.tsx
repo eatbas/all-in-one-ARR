@@ -6,6 +6,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest"
 vi.mock("@/shared/lib/api", () => ({
   getStatus: vi.fn(),
   getItems: vi.fn(),
+  getLists: vi.fn(),
   getActivity: vi.fn(),
   triggerSync: vi.fn(),
   setDryRun: vi.fn(),
@@ -40,6 +41,8 @@ import {
   useCheckServiceStatuses,
   useGeneralSettings,
   useItems,
+  useListItems,
+  useLists,
   useRemoveTraktList,
   useServiceSettings,
   useServiceStatuses,
@@ -85,6 +88,7 @@ beforeEach(() => {
     counts: { synced: 0, requested: 0, available: 0, removed: 0 },
   })
   vi.mocked(api.getItems).mockResolvedValue([])
+  vi.mocked(api.getLists).mockResolvedValue([])
   vi.mocked(api.getActivity).mockResolvedValue([])
   vi.mocked(api.getTraktSettings).mockResolvedValue(sampleSettings)
   vi.mocked(api.getTraktAuthStatus).mockResolvedValue({
@@ -149,6 +153,30 @@ describe("query hooks", () => {
 
     await waitFor(() => expect(result.current.isSuccess).toBe(true))
     expect(api.getActivity).toHaveBeenCalled()
+  })
+
+  it("useLists fetches the synced lists", async () => {
+    const { wrapper } = setup()
+    const { result } = renderHook(() => useLists(), { wrapper })
+
+    await waitFor(() => expect(result.current.isSuccess).toBe(true))
+    expect(api.getLists).toHaveBeenCalled()
+  })
+
+  it("useListItems fetches a list's items when enabled", async () => {
+    const { wrapper } = setup()
+    const { result } = renderHook(() => useListItems("movies", true), { wrapper })
+
+    await waitFor(() => expect(result.current.isSuccess).toBe(true))
+    expect(api.getItems).toHaveBeenCalledWith(undefined, "movies")
+  })
+
+  it("useListItems stays idle while disabled", () => {
+    const { wrapper } = setup()
+    const { result } = renderHook(() => useListItems("movies", false), { wrapper })
+
+    expect(result.current.fetchStatus).toBe("idle")
+    expect(api.getItems).not.toHaveBeenCalled()
   })
 })
 

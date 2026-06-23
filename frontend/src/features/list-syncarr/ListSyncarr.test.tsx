@@ -3,28 +3,21 @@ import userEvent from "@testing-library/user-event"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
 vi.mock("@/shared/lib/queries", () => ({
-  useTraktSettings: vi.fn(),
+  useLists: vi.fn(),
+  useListItems: vi.fn(),
   useItems: vi.fn(),
 }))
 
-import { useItems, useTraktSettings } from "@/shared/lib/queries"
+import { useItems, useListItems, useLists } from "@/shared/lib/queries"
 import { ListSyncarr } from "@/features/list-syncarr/ListSyncarr"
 import { LIST_SYNCARR_TAB_STORAGE_KEY } from "@/features/list-syncarr/list-syncarr-tab"
-import type { Item } from "@/shared/lib/api"
+import type { Item, ListSummary } from "@/shared/lib/api"
 import { queryResult } from "@/shared/test/mock-query"
-
-const settings = {
-  client_id_hint: "1234",
-  client_id_set: true,
-  client_secret_set: true,
-  user: "me",
-  connected: true,
-  lists: [{ owner_user: "me", slug: "movies", name: "Movies" }],
-}
 
 beforeEach(() => {
   localStorage.clear()
-  vi.mocked(useTraktSettings).mockReturnValue(queryResult(settings))
+  vi.mocked(useLists).mockReturnValue(queryResult<ListSummary[]>([], false))
+  vi.mocked(useListItems).mockReturnValue(queryResult<Item[]>([], false))
   vi.mocked(useItems).mockReturnValue(queryResult<Item[]>([], false))
 })
 

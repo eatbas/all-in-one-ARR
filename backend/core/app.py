@@ -29,6 +29,7 @@ from core.config import Settings
 from core.context import AppContext, DryRunFlag
 from core.db import Database
 from core.logging import configure_logging, get_logger
+from core.posters import PosterCache
 from core.scheduler import SchedulerService
 from core.services_api import create_services_router
 from core.settings_store import SettingsStore, TrackedList
@@ -109,6 +110,9 @@ def build_context(settings: Settings) -> AppContext:
         settings_store=settings_store,
     )
     ctx.status_checker = StatusChecker(ctx)
+    ctx.poster_cache = PosterCache(
+        cache_dir=settings.POSTER_CACHE_PATH, tmdb=tmdb, omdb=omdb
+    )
     return ctx
 
 

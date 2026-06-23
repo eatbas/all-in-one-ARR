@@ -67,6 +67,11 @@ class Database:
                     action TEXT NOT NULL,
                     detail TEXT NOT NULL
                 );
+
+                CREATE TABLE IF NOT EXISTS list_state (
+                    list_id TEXT PRIMARY KEY,
+                    last_synced_at TEXT NOT NULL
+                );
                 """
             )
             self._conn.commit()
@@ -183,18 +188,34 @@ class Database:
             counts[row["status"]] = row["n"]
         return counts
 
-    def list_items(self, *, status: str | None = None) -> list[dict[str, Any]]:
-        """Return items, optionally filtered by status, newest first."""
+    def list_items(
+        self, *, status: str | None = None, list_id: str | None = None
+    ) -> list[dict[str, Any]]:
+        """Return items, optionally filtered by status and/or list, newest first.
+
+        The ``status`` and ``list_id`` filters compose: passing both narrows to
+        items in that list with that status.
+        """
+        clauses: list[str] = []
+        params: list[Any] = []
         if status is not None:
-            rows = self._conn.execute(
-                "SELECT * FROM items WHERE status=? ORDER BY updated_at DESC",
-                (status,),
-            ).fetchall()
-        else:
-            rows = self._conn.execute(
-                "SELECT * FROM items ORDER BY updated_at DESC"
-            ).fetchall()
+            clauses.append("status=?")
+            params.append(status)
+        if list_id is not None:
+            clauses.append("list_id=?")
+            params.append(list_id)
+        where = f" WHERE {' AND '.join(clauses)}" if clauses else ""
+        rows = self._conn.execute(
+            f"SELECT * FROM items{where} ORDER BY updated_at DESC", params
+        ).fetchall()
         return [dict(row) for row in rows]
+
+    def counts_by_list(self) -> dict[str, int]:
+        """Return a count of items per ``list_id`` (empty for lists with none)."""
+        rows = self._conn.execute(
+            "SELECT list_id, COUNT(*) AS n FROM items GROUP BY list_id"
+        ).fetchall()
+        return {row["list_id"]: row["n"] for row in rows}
 
     def active_items(self) -> list[dict[str, Any]]:
         """Return items that have not yet been removed (for reconciliation)."""
@@ -222,6 +243,25 @@ class Database:
             (limit,),
         ).fetchall()
         return [dict(row) for row in rows]
+
+    # ---- list sync state ----
+
+    def touch_list_synced(self, list_id: str) -> None:
+        """Record that a list was just polled (sets ``last_synced_at`` to now)."""
+        with self._lock:
+            self._conn.execute(
+                "INSERT INTO list_state (list_id, last_synced_at) VALUES (?, ?) "
+                "ON CONFLICT(list_id) DO UPDATE SET last_synced_at=excluded.last_synced_at",
+                (list_id, utcnow_iso()),
+            )
+            self._conn.commit()
+
+    def list_last_synced(self) -> dict[str, str]:
+        """Return ``{list_id: last_synced_at}`` for every list polled so far."""
+        rows = self._conn.execute(
+            "SELECT list_id, last_synced_at FROM list_state"
+        ).fetchall()
+        return {row["list_id"]: row["last_synced_at"] for row in rows}
 
     def close(self) -> None:
         """Close the underlying connection."""

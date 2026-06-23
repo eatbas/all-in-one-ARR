@@ -127,6 +127,25 @@ async def test_per_item_exception_isolated(db, monkeypatch) -> None:
     )
 
 
+async def test_successful_poll_records_last_synced(db) -> None:
+    ctx = make_ctx(
+        db=db,
+        trakt=StubTrakt(items=[_MOVIE]),
+        jellyseerr=StubJellyseerr(status=AVAILABLE),
+    )
+    await poll_and_request(ctx)
+    assert "watchlist" in db.list_last_synced()
+
+
+async def test_failed_list_read_not_recorded(db) -> None:
+    trakt = StubTrakt(items=[])
+    trakt.read_list_items = AsyncMock(side_effect=RuntimeError("not authorised"))
+    ctx = make_ctx(db=db, trakt=trakt)
+    await poll_and_request(ctx)
+    # A list whose read failed must not be marked as synced.
+    assert db.list_last_synced() == {}
+
+
 async def test_polls_each_selected_list(db) -> None:
     store = StubSettingsStore(
         lists=[

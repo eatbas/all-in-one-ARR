@@ -1,7 +1,6 @@
 import { useState } from "react"
 import { ChevronDownIcon, FilterIcon } from "lucide-react"
 
-import { Badge } from "@/shared/components/ui/badge"
 import { Button } from "@/shared/components/ui/button"
 import {
   Card,
@@ -27,7 +26,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/shared/components/ui/table"
-import { cn } from "@/shared/lib/utils"
+import { StatusBadge } from "@/features/list-syncarr/components/status-badge"
 import { useItems } from "@/shared/lib/queries"
 import { formatTimestamp } from "@/shared/lib/format"
 import type { ItemStatus } from "@/shared/lib/api"
@@ -42,14 +41,6 @@ const STATUS_FILTERS: ReadonlyArray<{ value: StatusFilter; label: string }> = [
   { value: "available", label: "Available" },
   { value: "removed", label: "Removed" },
 ]
-
-/** Per-status badge styling so states are distinguishable at a glance. */
-const STATUS_STYLES: Record<ItemStatus, string> = {
-  synced: "border-sky-500/40 text-sky-600 dark:text-sky-400",
-  requested: "border-amber-500/40 text-amber-600 dark:text-amber-400",
-  available: "border-emerald-500/40 text-emerald-600 dark:text-emerald-400",
-  removed: "border-muted-foreground/30 text-muted-foreground",
-}
 
 /** Items page: filterable table of every mirrored movie and show. */
 export function Items() {
@@ -142,12 +133,7 @@ export function Items() {
                     {item.list_id}
                   </TableCell>
                   <TableCell>
-                    <Badge
-                      variant="outline"
-                      className={cn("capitalize", STATUS_STYLES[item.status])}
-                    >
-                      {item.status}
-                    </Badge>
+                    <StatusBadge status={item.status} />
                   </TableCell>
                   <TableCell className="text-muted-foreground">
                     {formatTimestamp(item.updated_at)}

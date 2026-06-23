@@ -20,6 +20,7 @@ from core.clients.trakt import TraktClient
 from core.config import Settings
 from core.db import Database
 from core.logging import get_logger
+from core.posters import PosterCache
 from core.scheduler import SchedulerService
 from core.settings_store import SettingsStore
 from core.status_checker import StatusChecker
@@ -61,6 +62,7 @@ class AppContext:
     dry_run_flag: DryRunFlag
     settings_store: SettingsStore
     status_checker: StatusChecker = field(default_factory=lambda: None)  # type: ignore[arg-type]
+    poster_cache: PosterCache | None = field(default=None)
     trakt_auth: TraktAuthSession = field(default_factory=TraktAuthSession)
     sync_now: Callable[[], Awaitable[Any]] | None = field(default=None)
 

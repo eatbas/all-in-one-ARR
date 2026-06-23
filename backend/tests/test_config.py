@@ -17,6 +17,7 @@ def test_valid_settings_defaults() -> None:
     assert settings.DRY_RUN is True
     assert settings.SYNC_INTERVAL_MIN == 15
     assert settings.is_watchlist is True
+    assert settings.POSTER_CACHE_PATH == "data/posters"
 
 
 def test_non_watchlist_list_id() -> None:

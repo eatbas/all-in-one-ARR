@@ -13,6 +13,7 @@ import {
   getActivity,
   getGeneralSettings,
   getItems,
+  getLists,
   getServiceSettings,
   getServiceStatuses,
   getStatus,
@@ -34,6 +35,7 @@ import {
   type GeneralSettings,
   type Item,
   type ItemStatus,
+  type ListSummary,
   type ServiceName,
   type ServicesSettings,
   type ServicesStatusResponse,
@@ -61,6 +63,8 @@ export const queryKeys = {
   status: ["status"] as const,
   activity: ["activity"] as const,
   items: (status?: ItemStatus) => ["items", status ?? "all"] as const,
+  lists: ["lists"] as const,
+  listItems: (slug: string) => ["items", "by-list", slug] as const,
   traktSettings: ["trakt", "settings"] as const,
   traktAuthStatus: ["trakt", "auth-status"] as const,
   traktLists: ["trakt", "lists"] as const,
@@ -81,6 +85,27 @@ export function useItems(status?: ItemStatus): UseQueryResult<Item[]> {
   return useQuery({
     queryKey: queryKeys.items(status),
     queryFn: () => getItems(status),
+    refetchInterval: REFETCH_INTERVAL,
+  })
+}
+
+export function useLists(): UseQueryResult<ListSummary[]> {
+  return useQuery({
+    queryKey: queryKeys.lists,
+    queryFn: getLists,
+    refetchInterval: REFETCH_INTERVAL,
+  })
+}
+
+/** Items for one synced list, fetched lazily (only while ``enabled``). */
+export function useListItems(
+  slug: string,
+  enabled: boolean,
+): UseQueryResult<Item[]> {
+  return useQuery({
+    queryKey: queryKeys.listItems(slug),
+    queryFn: () => getItems(undefined, slug),
+    enabled,
     refetchInterval: REFETCH_INTERVAL,
   })
 }

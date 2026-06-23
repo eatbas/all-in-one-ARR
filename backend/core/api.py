@@ -7,10 +7,11 @@ authoritative contract that the frontend TypeScript types mirror.
 from __future__ import annotations
 
 import asyncio
+from datetime import datetime, timedelta
 from typing import TYPE_CHECKING
 
-from fastapi import APIRouter
-from fastapi.responses import JSONResponse
+from fastapi import APIRouter, Query, Response
+from fastapi.responses import FileResponse, JSONResponse
 from pydantic import BaseModel
 
 from core.logging import get_logger
@@ -72,6 +73,16 @@ class ActivityEntry(BaseModel):
     detail: str
 
 
+class ListSummary(BaseModel):
+    owner_user: str
+    slug: str
+    name: str
+    item_count: int
+    last_synced_at: str | None
+    next_sync_at: str | None
+    interval_minutes: int
+
+
 class DryRunRequest(BaseModel):
     enabled: bool
 
@@ -104,6 +115,18 @@ class StatusCheckIntervalResponse(BaseModel):
     interval_seconds: int
 
 
+def _next_sync_at(last_synced_at: str | None, interval_minutes: int) -> str | None:
+    """Derive the next poll time from the last sync plus the poll interval.
+
+    This is an approximation of the scheduler's next fire time (the APScheduler 4
+    wrapper does not expose it); ``None`` when the list has never been polled.
+    """
+    if last_synced_at is None:
+        return None
+    last = datetime.fromisoformat(last_synced_at)
+    return (last + timedelta(minutes=interval_minutes)).isoformat()
+
+
 def _services_status_response(snapshot: "StatusResult") -> ServicesStatusResponse:
     """Map a status-checker snapshot onto the API response model."""
     return ServicesStatusResponse(
@@ -130,8 +153,52 @@ def create_api_router(ctx: "AppContext") -> APIRouter:
         )
 
     @router.get("/items", response_model=list[Item])
-    async def get_items(status: str | None = None) -> list[Item]:
-        return [Item(**row) for row in ctx.db.list_items(status=status)]
+    async def get_items(
+        status: str | None = None,
+        list_id: str | None = Query(default=None, alias="list"),
+    ) -> list[Item]:
+        return [
+            Item(**row) for row in ctx.db.list_items(status=status, list_id=list_id)
+        ]
+
+    @router.get("/lists", response_model=list[ListSummary])
+    async def get_lists() -> list[ListSummary]:
+        counts = ctx.db.counts_by_list()
+        last_synced = ctx.db.list_last_synced()
+        interval = ctx.settings.SYNC_INTERVAL_MIN
+        summaries: list[ListSummary] = []
+        for tracked in ctx.settings_store.tracked_lists():
+            last = last_synced.get(tracked.slug)
+            summaries.append(
+                ListSummary(
+                    owner_user=tracked.owner_user,
+                    slug=tracked.slug,
+                    name=tracked.name,
+                    item_count=counts.get(tracked.slug, 0),
+                    last_synced_at=last,
+                    next_sync_at=_next_sync_at(last, interval),
+                    interval_minutes=interval,
+                )
+            )
+        return summaries
+
+    @router.get("/posters/{media_type}/{tmdb_id}")
+    async def get_poster(
+        media_type: str, tmdb_id: int, imdb: str | None = None
+    ) -> Response:
+        """Serve a cached poster thumbnail, fetching it on first request."""
+        if media_type not in ("movie", "show") or ctx.poster_cache is None:
+            return JSONResponse(status_code=404, content={"detail": "poster not found"})
+        path = await ctx.poster_cache.get_poster(
+            media_type=media_type, tmdb_id=tmdb_id, imdb_id=imdb
+        )
+        if path is None:
+            return JSONResponse(status_code=404, content={"detail": "poster not found"})
+        return FileResponse(
+            path,
+            media_type="image/jpeg",
+            headers={"Cache-Control": "public, max-age=604800"},
+        )
 
     @router.get("/activity", response_model=list[ActivityEntry])
     async def get_activity() -> list[ActivityEntry]:

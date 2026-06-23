@@ -7,6 +7,8 @@ vi.mock("@/shared/lib/queries", () => ({
   useStatus: vi.fn(() => ({ data: undefined })),
   useActivity: vi.fn(() => ({ data: [], isLoading: false })),
   useItems: vi.fn(() => ({ data: [], isLoading: false })),
+  useLists: vi.fn(() => ({ data: [], isLoading: false })),
+  useListItems: vi.fn(() => ({ data: [], isLoading: false })),
   useServiceStatuses: vi.fn(() => ({
     data: { interval_seconds: 60, last_check_at: null, services: {} },
     isLoading: false,

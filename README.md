@@ -93,6 +93,7 @@ cp .env.example .env
 | `DB_PATH` | `data/aio-arr.db` | SQLite path (persist via volume) |
 | `TOKEN_STORE_PATH` | `data/trakt_tokens.json` | Trakt token store (persist via volume) |
 | `SETTINGS_STORE_PATH` | `data/app_settings.json` | UI-managed Trakt settings (persist via volume) |
+| `POSTER_CACHE_PATH` | `data/posters` | On-disk poster thumbnail cache (persist via volume) |
 
 The Trakt credentials and list selection are **seeded** from these variables on
 first start and then managed from the dashboard **Settings** page; the resolved
@@ -265,7 +266,11 @@ cd frontend && npm run build
 - `GET /health` – liveness probe.
 - `GET /status` – item counts by status.
 - `GET /api/status` – dashboard status (dry_run, trakt_connected, counts).
-- `GET /api/items[?status=]` – tracked items.
+- `GET /api/items[?status=&list=]` – tracked items, filterable by status and/or list.
+- `GET /api/lists` – synced lists with item counts and last/next sync times.
+- `GET /api/posters/{media_type}/{tmdb_id}[?imdb=]` – cached poster thumbnail
+  (`media_type` is `movie` or `show`); resolved from TMDB, falling back to OMDb,
+  and stored under `POSTER_CACHE_PATH` so each is fetched only once.
 - `GET /api/activity` – recent activity feed.
 - `POST /api/sync` – trigger an immediate poll.
 - `POST /api/settings/dry-run` – `{ "enabled": bool }` toggle.
@@ -304,6 +309,14 @@ cd frontend && npm run build
 
 ## Notes & limitations
 
+- The dashboard **List-Syncarr → Lists** tab is collapsible: each synced list
+  shows its item count, a relative *last synced* time and a *next sync*
+  countdown, and expands to a poster grid of its items (title + request/
+  availability status). Posters are resolved from TMDB (falling back to OMDb)
+  and cached on disk under `POSTER_CACHE_PATH`, so each is downloaded only once.
+  The *next sync* time is derived from the last poll plus `SYNC_INTERVAL_MIN`
+  (an approximation, since the pre-release APScheduler wrapper does not expose a
+  next-fire time).
 - Single Uvicorn worker by design: the scheduler runs in-process and SQLite
   uses WAL with a process-level lock. Multi-worker deployment is out of scope.
 - APScheduler 4 is pre-release; all scheduler usage is isolated behind

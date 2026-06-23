@@ -7,12 +7,14 @@ import {
   getActivity,
   getGeneralSettings,
   getItems,
+  getLists,
   getServiceSettings,
   getServiceStatuses,
   getStatus,
   getTraktAuthStatus,
   getTraktLists,
   getTraktSettings,
+  posterUrl,
   removeTraktList,
   setDryRun,
   startTraktAuth,
@@ -74,6 +76,39 @@ describe("getItems", () => {
       "/api/items?status=requested",
       expect.anything(),
     )
+  })
+
+  it("appends the list filter on its own", async () => {
+    const fetchSpy = mockFetch(jsonResponse([]))
+
+    await getItems(undefined, "movies")
+    expect(fetchSpy).toHaveBeenCalledWith("/api/items?list=movies", expect.anything())
+  })
+
+  it("combines the status and list filters", async () => {
+    const fetchSpy = mockFetch(jsonResponse([]))
+
+    await getItems("synced", "movies")
+    expect(fetchSpy).toHaveBeenCalledWith(
+      "/api/items?status=synced&list=movies",
+      expect.anything(),
+    )
+  })
+})
+
+describe("getLists", () => {
+  it("GETs /api/lists", async () => {
+    const fetchSpy = mockFetch(jsonResponse([]))
+
+    await expect(getLists()).resolves.toEqual([])
+    expect(fetchSpy).toHaveBeenCalledWith("/api/lists", expect.anything())
+  })
+})
+
+describe("posterUrl", () => {
+  it("builds the same-origin poster path for an item", () => {
+    expect(posterUrl("movie", 603)).toBe("/api/posters/movie/603")
+    expect(posterUrl("show", 1399)).toBe("/api/posters/show/1399")
   })
 })
 

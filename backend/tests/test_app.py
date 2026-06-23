@@ -68,6 +68,8 @@ async def test_build_context_real(tmp_path) -> None:
         assert ctx.omdb is not None
         assert ctx.sabnzbd is not None
         assert ctx.qbittorrent is not None
+        # The poster cache is wired from the TMDB/OMDb clients.
+        assert ctx.poster_cache is not None
     finally:
         # Release every resource the real context opened (clients + DB).
         for client in (
