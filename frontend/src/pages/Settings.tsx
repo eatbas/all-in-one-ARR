@@ -348,62 +348,136 @@ function ListsCard() {
   )
 }
 
-/** Edit a URL + API key for a service (Jellyseerr/Sonarr/Radarr) and test it. */
-function ServiceConnectionCard({
-  name,
-  label,
-}: {
+/** Which input rows a service tab renders. */
+type ServiceField = "url" | "apiKey" | "username" | "password"
+
+/** A service tab: its API name, display label and the fields it edits. */
+interface ServiceTab {
   name: ServiceName
   label: string
-}) {
+  fields: readonly ServiceField[]
+}
+
+/**
+ * The service tabs, in display order. Services differ in shape — most carry a
+ * URL + API key, TMDB/OMDb are API-key-only, and qBittorrent carries a URL plus
+ * a WebUI username/password. Adding a service is a one-line change here.
+ */
+const SERVICE_TABS: readonly ServiceTab[] = [
+  { name: "jellyseerr", label: "Jellyseerr", fields: ["url", "apiKey"] },
+  { name: "sonarr", label: "Sonarr", fields: ["url", "apiKey"] },
+  { name: "radarr", label: "Radarr", fields: ["url", "apiKey"] },
+  { name: "tmdb", label: "TMDB", fields: ["apiKey"] },
+  { name: "omdb", label: "OMDb", fields: ["apiKey"] },
+  { name: "sabnzbd", label: "SABnzbd", fields: ["url", "apiKey"] },
+  {
+    name: "qbittorrent",
+    label: "qBittorrent",
+    fields: ["url", "username", "password"],
+  },
+]
+
+/** Edit a service connection (URL / API key / login) and test it. */
+function ServiceConnectionCard({ name, label, fields }: ServiceTab) {
   const { data: services } = useServiceSettings()
   const update = useUpdateServiceSettings()
   const test = useTestService()
   const current = services?.[name]
   const [url, setUrl] = useState("")
   const [apiKey, setApiKey] = useState("")
+  const [username, setUsername] = useState("")
+  const [password, setPassword] = useState("")
+
+  const hasUrl = fields.includes("url")
+  const hasApiKey = fields.includes("apiKey")
+  const hasUsername = fields.includes("username")
+  const hasPassword = fields.includes("password")
 
   function save() {
     const body: UpdateServicePayload = {}
-    if (url) body.url = url
-    if (apiKey) body.api_key = apiKey
+    if (hasUrl && url) body.url = url
+    if (hasApiKey && apiKey) body.api_key = apiKey
+    if (hasUsername && username) body.username = username
+    if (hasPassword && password) body.password = password
     update.mutate({ name, body })
   }
+
+  // The status badge reflects the service's primary secret (key or password).
+  const configured = hasApiKey ? current?.api_key_set : current?.password_set
+  const badgeLabel = hasApiKey
+    ? configured
+      ? "Key set"
+      : "No key"
+    : configured
+      ? "Password set"
+      : "No password"
 
   return (
     <Card>
       <CardHeader className="flex flex-row items-center justify-between gap-4 space-y-0">
         <div>
           <CardTitle>{label}</CardTitle>
-          <CardDescription>Base URL and API key for {label}.</CardDescription>
+          <CardDescription>Connection settings for {label}.</CardDescription>
         </div>
         <Badge
           variant="outline"
           className={cn(
-            current?.api_key_set
+            configured
               ? "border-emerald-500/40 text-emerald-600 dark:text-emerald-400"
               : "border-amber-500/40 text-amber-600 dark:text-amber-400",
           )}
         >
-          {current?.api_key_set ? "Key set" : "No key"}
+          {badgeLabel}
         </Badge>
       </CardHeader>
       <CardContent className="flex flex-col gap-4">
-        <Field label="URL" hint={current?.url ? `Saved: ${current.url}` : "Not set"}>
-          <Input
-            value={url}
-            onChange={(event) => setUrl(event.target.value)}
-            placeholder={current?.url || "http://host:port"}
-          />
-        </Field>
-        <Field label="API key" hint={current?.api_key_set ? "Saved" : "Not set"}>
-          <Input
-            type="password"
-            value={apiKey}
-            onChange={(event) => setApiKey(event.target.value)}
-            placeholder="Leave blank to keep current"
-          />
-        </Field>
+        {hasUrl ? (
+          <Field
+            label="URL"
+            hint={current?.url ? `Saved: ${current.url}` : "Not set"}
+          >
+            <Input
+              value={url}
+              onChange={(event) => setUrl(event.target.value)}
+              placeholder={current?.url || "http://host:port"}
+            />
+          </Field>
+        ) : null}
+        {hasApiKey ? (
+          <Field label="API key" hint={current?.api_key_set ? "Saved" : "Not set"}>
+            <Input
+              type="password"
+              value={apiKey}
+              onChange={(event) => setApiKey(event.target.value)}
+              placeholder="Leave blank to keep current"
+            />
+          </Field>
+        ) : null}
+        {hasUsername ? (
+          <Field
+            label="Username"
+            hint={current?.username ? `Saved: ${current.username}` : "Not set"}
+          >
+            <Input
+              value={username}
+              onChange={(event) => setUsername(event.target.value)}
+              placeholder={current?.username || "Username"}
+            />
+          </Field>
+        ) : null}
+        {hasPassword ? (
+          <Field
+            label="Password"
+            hint={current?.password_set ? "Saved" : "Not set"}
+          >
+            <Input
+              type="password"
+              value={password}
+              onChange={(event) => setPassword(event.target.value)}
+              placeholder="Leave blank to keep current"
+            />
+          </Field>
+        ) : null}
         <div className="flex flex-wrap gap-3">
           <Button onClick={save} disabled={update.isPending}>
             Save
@@ -475,16 +549,22 @@ function GeneralCard() {
   )
 }
 
-/** Settings page: a tab per area (General, Trakt, Jellyseerr, Sonarr, Radarr). */
+/**
+ * Settings page: a tab per area — General, Trakt, then one per managed service
+ * (Jellyseerr, Sonarr, Radarr, TMDB, OMDb, SABnzbd, qBittorrent), driven by
+ * {@link SERVICE_TABS}.
+ */
 export function Settings() {
   return (
     <Tabs defaultValue="general">
       <TabsList>
         <TabsTrigger value="general">General</TabsTrigger>
         <TabsTrigger value="trakt">Trakt</TabsTrigger>
-        <TabsTrigger value="jellyseerr">Jellyseerr</TabsTrigger>
-        <TabsTrigger value="sonarr">Sonarr</TabsTrigger>
-        <TabsTrigger value="radarr">Radarr</TabsTrigger>
+        {SERVICE_TABS.map((tab) => (
+          <TabsTrigger key={tab.name} value={tab.name}>
+            {tab.label}
+          </TabsTrigger>
+        ))}
       </TabsList>
       <TabsContent value="general">
         <GeneralCard />
@@ -494,15 +574,15 @@ export function Settings() {
         <ConnectionCard />
         <ListsCard />
       </TabsContent>
-      <TabsContent value="jellyseerr">
-        <ServiceConnectionCard name="jellyseerr" label="Jellyseerr" />
-      </TabsContent>
-      <TabsContent value="sonarr">
-        <ServiceConnectionCard name="sonarr" label="Sonarr" />
-      </TabsContent>
-      <TabsContent value="radarr">
-        <ServiceConnectionCard name="radarr" label="Radarr" />
-      </TabsContent>
+      {SERVICE_TABS.map((tab) => (
+        <TabsContent key={tab.name} value={tab.name}>
+          <ServiceConnectionCard
+            name={tab.name}
+            label={tab.label}
+            fields={tab.fields}
+          />
+        </TabsContent>
+      ))}
     </Tabs>
   )
 }

@@ -121,13 +121,26 @@ export interface AddListPayload {
   slug?: string
 }
 
-/** The URL/API-key services managed from the Settings tabs. */
-export type ServiceName = "jellyseerr" | "sonarr" | "radarr"
+/** The connection services managed from the Settings tabs. */
+export type ServiceName =
+  | "jellyseerr"
+  | "sonarr"
+  | "radarr"
+  | "tmdb"
+  | "omdb"
+  | "sabnzbd"
+  | "qbittorrent"
 
-/** A service's masked connection: its base URL and whether a key is stored. */
+/**
+ * A service's masked connection. Fields are optional because services differ in
+ * shape: most carry a URL + API key, TMDB/OMDb are API-key-only, and qBittorrent
+ * carries a URL + username + password. Secrets are exposed only as `*_set`.
+ */
 export interface ServiceConnection {
-  url: string
-  api_key_set: boolean
+  url?: string
+  username?: string
+  api_key_set?: boolean
+  password_set?: boolean
 }
 
 /** Response of `GET`/`PUT /api/settings/services[/{name}]`. */
@@ -137,6 +150,8 @@ export type ServicesSettings = Record<ServiceName, ServiceConnection>
 export interface UpdateServicePayload {
   url?: string
   api_key?: string
+  username?: string
+  password?: string
 }
 
 /** Response of `POST /api/services/{name}/test`. */

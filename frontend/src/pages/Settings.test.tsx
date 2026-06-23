@@ -75,6 +75,10 @@ const SERVICES: ServicesSettings = {
   jellyseerr: { url: "http://js:5055", api_key_set: true },
   sonarr: { url: "", api_key_set: false },
   radarr: { url: "", api_key_set: false },
+  tmdb: { api_key_set: false },
+  omdb: { api_key_set: false },
+  sabnzbd: { url: "", api_key_set: false },
+  qbittorrent: { url: "", username: "", password_set: false },
 }
 
 const STATUS: Status = {
@@ -486,5 +490,105 @@ describe("Settings — service tabs", () => {
     render(<Settings />)
     await user.click(screen.getByRole("tab", { name: "Radarr" }))
     expect(screen.getByText("Radarr returned HTTP 401")).toBeInTheDocument()
+  })
+
+  it("renders an API-key-only service (TMDB) with no URL field", async () => {
+    const user = userEvent.setup()
+    render(<Settings />)
+    await user.click(screen.getByRole("tab", { name: "TMDB" }))
+    // An API-key-only service shows no URL row.
+    expect(screen.queryByText("URL")).not.toBeInTheDocument()
+    expect(screen.getByText("API key")).toBeInTheDocument()
+    expect(screen.getByText("No key")).toBeInTheDocument()
+  })
+
+  it("saves only the API key for an API-key-only service", async () => {
+    const user = userEvent.setup()
+    render(<Settings />)
+    await user.click(screen.getByRole("tab", { name: "TMDB" }))
+    await user.type(
+      screen.getByPlaceholderText("Leave blank to keep current"),
+      "tk",
+    )
+    await user.click(screen.getByRole("button", { name: "Save" }))
+    expect(serviceUpdateMutate).toHaveBeenCalledWith({
+      name: "tmdb",
+      body: { api_key: "tk" },
+    })
+  })
+
+  it("renders qBittorrent with username and password and no stored secret", async () => {
+    const user = userEvent.setup()
+    render(<Settings />)
+    await user.click(screen.getByRole("tab", { name: "qBittorrent" }))
+    expect(screen.getByText("Username")).toBeInTheDocument()
+    expect(screen.getByText("Password")).toBeInTheDocument()
+    expect(screen.getByText("No password")).toBeInTheDocument()
+    // Both the username and password hints read "Not set" when unconfigured.
+    expect(screen.getAllByText("Not set")).toHaveLength(3)
+  })
+
+  it("shows qBittorrent saved hints when already configured", async () => {
+    vi.mocked(useServiceSettings).mockReturnValue(
+      queryResult<ServicesSettings>({
+        ...SERVICES,
+        qbittorrent: {
+          url: "http://qb:8080",
+          username: "admin",
+          password_set: true,
+        },
+      }),
+    )
+    const user = userEvent.setup()
+    render(<Settings />)
+    await user.click(screen.getByRole("tab", { name: "qBittorrent" }))
+    expect(screen.getByText("Saved: http://qb:8080")).toBeInTheDocument()
+    expect(screen.getByText("Saved: admin")).toBeInTheDocument()
+    expect(screen.getByText("Password set")).toBeInTheDocument()
+    // The password hint reads the bare "Saved".
+    expect(screen.getByText("Saved")).toBeInTheDocument()
+  })
+
+  it("falls back gracefully for qBittorrent when the query has no data", async () => {
+    vi.mocked(useServiceSettings).mockReturnValue(
+      queryResult<ServicesSettings>(undefined),
+    )
+    const user = userEvent.setup()
+    render(<Settings />)
+    await user.click(screen.getByRole("tab", { name: "qBittorrent" }))
+    expect(screen.getByText("No password")).toBeInTheDocument()
+    expect(screen.getByPlaceholderText("http://host:port")).toBeInTheDocument()
+    expect(screen.getByPlaceholderText("Username")).toBeInTheDocument()
+  })
+
+  it("saves the URL, username and password for qBittorrent", async () => {
+    const user = userEvent.setup()
+    render(<Settings />)
+    await user.click(screen.getByRole("tab", { name: "qBittorrent" }))
+    await user.type(
+      screen.getByPlaceholderText("http://host:port"),
+      "http://qb:8080",
+    )
+    await user.type(screen.getByPlaceholderText("Username"), "admin")
+    await user.type(
+      screen.getByPlaceholderText("Leave blank to keep current"),
+      "pw",
+    )
+    await user.click(screen.getByRole("button", { name: "Save" }))
+    expect(serviceUpdateMutate).toHaveBeenCalledWith({
+      name: "qbittorrent",
+      body: { url: "http://qb:8080", username: "admin", password: "pw" },
+    })
+  })
+
+  it("saves an empty body for qBittorrent when nothing is entered", async () => {
+    const user = userEvent.setup()
+    render(<Settings />)
+    await user.click(screen.getByRole("tab", { name: "qBittorrent" }))
+    await user.click(screen.getByRole("button", { name: "Save" }))
+    expect(serviceUpdateMutate).toHaveBeenCalledWith({
+      name: "qbittorrent",
+      body: {},
+    })
   })
 })

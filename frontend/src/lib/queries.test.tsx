@@ -91,6 +91,10 @@ beforeEach(() => {
     jellyseerr: { url: "http://js", api_key_set: true },
     sonarr: { url: "", api_key_set: false },
     radarr: { url: "", api_key_set: false },
+    tmdb: { api_key_set: false },
+    omdb: { api_key_set: false },
+    sabnzbd: { url: "", api_key_set: false },
+    qbittorrent: { url: "", username: "", password_set: false },
   })
 })
 
@@ -446,6 +450,10 @@ describe("service connection hooks", () => {
       jellyseerr: { url: "http://js", api_key_set: true },
       sonarr: { url: "http://sonarr", api_key_set: true },
       radarr: { url: "", api_key_set: false },
+      tmdb: { api_key_set: false },
+      omdb: { api_key_set: false },
+      sabnzbd: { url: "", api_key_set: false },
+      qbittorrent: { url: "", username: "", password_set: false },
     })
     const { queryClient, wrapper } = setup()
     const invalidate = vi.spyOn(queryClient, "invalidateQueries")
