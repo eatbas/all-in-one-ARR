@@ -133,7 +133,7 @@ The dashboard **Settings** page is organised into tabs —
 **General tab** (the default): the app-wide **DRY_RUN** toggle and the
 **light/dark/system** theme control. These mirror the controls in the header.
 
-Notifications (toasts) appear **top-centre** with a close (×) button and a bar
+Notifications (toasts) appear **bottom-right** with a close (×) button and a bar
 that drains over their ~3-second lifetime.
 
 **Trakt tab:**
