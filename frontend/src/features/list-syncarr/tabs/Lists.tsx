@@ -17,7 +17,11 @@ import { PosterThumb } from "@/features/list-syncarr/components/poster-thumb"
 import { StatusBadge } from "@/features/list-syncarr/components/status-badge"
 import { cn } from "@/shared/lib/utils"
 import { useLists, useListItems } from "@/shared/lib/queries"
-import { formatNextSync, formatRelativeTime } from "@/shared/lib/format"
+import {
+  displayTitle,
+  formatNextSync,
+  formatRelativeTime,
+} from "@/shared/lib/format"
 import type { ListSummary } from "@/shared/lib/api"
 
 /** One collapsible synced-list row; its items load lazily on first expand. */
@@ -71,9 +75,9 @@ function ListRow({ list }: { list: ListSummary }) {
                 <PosterThumb item={item} />
                 <span
                   className="truncate text-xs font-medium"
-                  title={item.title}
+                  title={displayTitle(item.title)}
                 >
-                  {item.title}
+                  {displayTitle(item.title)}
                 </span>
                 <StatusBadge status={item.status} />
               </li>

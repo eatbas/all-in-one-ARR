@@ -3,6 +3,16 @@
  * input cannot be parsed. Shared by the Dashboard activity feed and the Items
  * table so the formatting stays consistent in one place.
  */
+/**
+ * Display title for a mirrored item, falling back to "Untitled" when the
+ * backend has no title (the `Item.title` field is nullable). Centralising the
+ * fallback keeps every consumer — the table, the list grid and the poster
+ * thumbnail — consistent.
+ */
+export function displayTitle(title: string | null): string {
+  return title ?? "Untitled"
+}
+
 export function formatTimestamp(iso: string): string {
   const date = new Date(iso)
   if (Number.isNaN(date.getTime())) {

@@ -31,7 +31,8 @@ export interface Status {
 export interface Item {
   trakt_id: number
   type: ItemType
-  title: string
+  // Nullable to match the backend `Item` model: Trakt may omit a title.
+  title: string | null
   year: number | null
   tmdb: number | null
   tvdb: number | null

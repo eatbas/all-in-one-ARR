@@ -1,10 +1,21 @@
 import { describe, expect, it } from "vitest"
 
 import {
+  displayTitle,
   formatNextSync,
   formatRelativeTime,
   formatTimestamp,
 } from "@/shared/lib/format"
+
+describe("displayTitle", () => {
+  it("returns the title when present", () => {
+    expect(displayTitle("Dune")).toBe("Dune")
+  })
+
+  it("falls back to 'Untitled' when the title is null", () => {
+    expect(displayTitle(null)).toBe("Untitled")
+  })
+})
 
 describe("formatTimestamp", () => {
   it("formats a parseable ISO timestamp into a localised string", () => {
