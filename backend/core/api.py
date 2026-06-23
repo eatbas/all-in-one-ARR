@@ -17,6 +17,7 @@ from core.logging import get_logger
 
 if TYPE_CHECKING:  # pragma: no cover
     from core.context import AppContext
+    from core.status_checker import StatusResult
 
 # Strong references to in-flight background sync tasks so they are not
 # garbage-collected before completion (per the asyncio docs).
@@ -103,6 +104,18 @@ class StatusCheckIntervalResponse(BaseModel):
     interval_seconds: int
 
 
+def _services_status_response(snapshot: "StatusResult") -> ServicesStatusResponse:
+    """Map a status-checker snapshot onto the API response model."""
+    return ServicesStatusResponse(
+        interval_seconds=snapshot.interval_seconds,
+        last_check_at=snapshot.last_check_at,
+        services={
+            name: ServiceStatus(ok=s.ok, detail=s.detail, checked_at=s.checked_at)
+            for name, s in snapshot.services.items()
+        },
+    )
+
+
 def create_api_router(ctx: "AppContext") -> APIRouter:
     """Build the ``/api`` router bound to a specific application context."""
     router = APIRouter(prefix="/api")
@@ -146,27 +159,11 @@ def create_api_router(ctx: "AppContext") -> APIRouter:
 
     @router.get("/status/services", response_model=ServicesStatusResponse)
     async def get_services_status() -> ServicesStatusResponse:
-        snapshot = ctx.status_checker.get_statuses()
-        return ServicesStatusResponse(
-            interval_seconds=snapshot.interval_seconds,
-            last_check_at=snapshot.last_check_at,
-            services={
-                name: ServiceStatus(ok=s.ok, detail=s.detail, checked_at=s.checked_at)
-                for name, s in snapshot.services.items()
-            },
-        )
+        return _services_status_response(ctx.status_checker.get_statuses())
 
     @router.post("/status/services/check", response_model=ServicesStatusResponse)
     async def post_services_check() -> ServicesStatusResponse:
-        snapshot = await ctx.status_checker.check_now()
-        return ServicesStatusResponse(
-            interval_seconds=snapshot.interval_seconds,
-            last_check_at=snapshot.last_check_at,
-            services={
-                name: ServiceStatus(ok=s.ok, detail=s.detail, checked_at=s.checked_at)
-                for name, s in snapshot.services.items()
-            },
-        )
+        return _services_status_response(await ctx.status_checker.check_now())
 
     @router.put("/settings/general", response_model=StatusCheckIntervalResponse)
     async def put_general_settings(

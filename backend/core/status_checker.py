@@ -96,14 +96,14 @@ class StatusChecker:
         """Ping every configured service once and cache the results."""
         self._log.debug("running status checks")
         checked_at = _now_iso()
+        clients = self._service_clients()
         coroutines = [
-            self._check_one(name, client)
-            for name, client in self._service_clients().items()
+            self._check_one(name, client) for name, client in clients.items()
         ]
         results = await asyncio.gather(*coroutines, return_exceptions=True)
 
         new_results: dict[str, StatusSnapshot] = {}
-        for name, outcome in zip(self._service_clients().keys(), results):
+        for name, outcome in zip(clients, results):
             if isinstance(outcome, BaseException):
                 snapshot = StatusSnapshot(
                     ok=False,
