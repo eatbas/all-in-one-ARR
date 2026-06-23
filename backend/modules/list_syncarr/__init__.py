@@ -1,4 +1,4 @@
-"""traktsync module: keep a Trakt list in sync with Jellyseerr and remove items
+"""list_syncarr module: keep a Trakt list in sync with Jellyseerr and remove items
 once Radarr/Sonarr import them.
 
 The module registers:
@@ -22,15 +22,15 @@ from typing import TYPE_CHECKING
 from fastapi import FastAPI
 
 from core.logging import get_logger
-from modules.traktsync.reconcile import reconcile
-from modules.traktsync.sync import poll_and_request
-from modules.traktsync.webhook import handle_arr
+from modules.list_syncarr.reconcile import reconcile
+from modules.list_syncarr.sync import poll_and_request
+from modules.list_syncarr.webhook import handle_arr
 
 if TYPE_CHECKING:  # pragma: no cover
     from core.context import AppContext
     from core.scheduler import SchedulerService
 
-_log = get_logger("traktsync")
+_log = get_logger("list_syncarr")
 
 # The active context, set during setup() so the top-level scheduled jobs can
 # reach the shared clients/db without the scheduler needing to reference a
@@ -46,7 +46,7 @@ def register_context(ctx: "AppContext") -> None:
 
 def _require_context() -> "AppContext":
     if _CONTEXT is None:  # pragma: no cover - guarded by setup ordering
-        raise RuntimeError("traktsync context not initialised")
+        raise RuntimeError("list_syncarr context not initialised")
     return _CONTEXT
 
 
@@ -67,13 +67,13 @@ async def setup(
     register_context(ctx)
 
     await scheduler.add_interval(
-        poll_job, minutes=ctx.settings.SYNC_INTERVAL_MIN, id="traktsync_poll"
+        poll_job, minutes=ctx.settings.SYNC_INTERVAL_MIN, id="list_syncarr_poll"
     )
     await scheduler.add_cron(
-        reconcile_job, hour=3, minute=0, id="traktsync_reconcile"
+        reconcile_job, hour=3, minute=0, id="list_syncarr_reconcile"
     )
 
     ctx.webhooks.register("arr", lambda payload: handle_arr(ctx, payload))
     ctx.sync_now = lambda: poll_and_request(ctx)
 
-    _log.info("traktsync module ready")
+    _log.info("list_syncarr module ready")

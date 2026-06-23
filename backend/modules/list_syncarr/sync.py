@@ -23,7 +23,7 @@ if TYPE_CHECKING:  # pragma: no cover
     from core.context import AppContext
     from core.settings_store import TrackedList
 
-_log = get_logger("traktsync.sync")
+_log = get_logger("list_syncarr.sync")
 
 # Jellyseerr states that mean the item is already in the system (do not re-request).
 _ALREADY_REQUESTED = frozenset({PENDING, PROCESSING, PARTIALLY_AVAILABLE})

@@ -1,4 +1,4 @@
-"""Tests for modules.traktsync.sync (poll -> request)."""
+"""Tests for modules.list_syncarr.sync (poll -> request)."""
 
 from __future__ import annotations
 
@@ -6,7 +6,7 @@ from unittest.mock import AsyncMock
 
 from core.clients.jellyseerr import AVAILABLE, PENDING, JellyseerrError
 from core.settings_store import TrackedList
-from modules.traktsync.sync import poll_and_request
+from modules.list_syncarr.sync import poll_and_request
 from tests.conftest import StubJellyseerr, StubSettingsStore, StubTrakt, make_ctx
 
 _MOVIE = {

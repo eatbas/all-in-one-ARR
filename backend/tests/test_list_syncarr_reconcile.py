@@ -1,11 +1,11 @@
-"""Tests for modules.traktsync.reconcile (nightly safety net)."""
+"""Tests for modules.list_syncarr.reconcile (nightly safety net)."""
 
 from __future__ import annotations
 
 from unittest.mock import AsyncMock
 
 from core.clients.jellyseerr import AVAILABLE, PENDING, JellyseerrError
-from modules.traktsync.reconcile import reconcile
+from modules.list_syncarr.reconcile import reconcile
 from tests.conftest import StubJellyseerr, StubTrakt, make_ctx
 
 _MOVIE = {

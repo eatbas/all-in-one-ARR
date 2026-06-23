@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "aio-arr"
 version = "0.1.0"
-description = "All-in-One ARR: a plugin core with a traktsync module that keeps a Trakt list in sync with Jellyseerr and removes items once imported by Radarr/Sonarr."
+description = "All-in-One ARR: a plugin core with a list_syncarr module that keeps a Trakt list in sync with Jellyseerr and removes items once imported by Radarr/Sonarr."
 requires-python = ">=3.11"
 license = { text = "MIT" }
 authors = [{ name = "Eren Atbas" }]
@@ -31,7 +31,7 @@ dev = [
 # The backend is laid out as top-level packages inside backend/ (this file's
 # directory); a hyphenated distribution name is not importable, so the code is
 # exposed as the core/ and modules/ packages rather than an aio_arr/ package.
-packages = ["core", "core.clients", "modules", "modules.traktsync"]
+packages = ["core", "core.clients", "modules", "modules.list_syncarr"]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"

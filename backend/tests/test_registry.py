@@ -11,15 +11,15 @@ from core import registry
 from tests.conftest import make_ctx
 
 
-def test_discover_includes_traktsync() -> None:
-    assert "traktsync" in registry.discover_module_names()
+def test_discover_includes_list_syncarr() -> None:
+    assert "list_syncarr" in registry.discover_module_names()
 
 
-async def test_load_real_traktsync(db) -> None:
+async def test_load_real_list_syncarr(db) -> None:
     scheduler = AsyncMock()
     ctx = make_ctx(db=db)
     loaded = await registry.load_modules(scheduler, FastAPI(), ctx)
-    assert "traktsync" in loaded
+    assert "list_syncarr" in loaded
     # setup wired the webhook handler and the manual-sync callable.
     assert "arr" in ctx.webhooks._handlers
     assert ctx.sync_now is not None

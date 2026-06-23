@@ -15,7 +15,7 @@ from core.logging import get_logger, log_action
 if TYPE_CHECKING:  # pragma: no cover
     from core.context import AppContext
 
-_log = get_logger("traktsync.webhook")
+_log = get_logger("list_syncarr.webhook")
 
 
 async def remove_tracked_item(ctx: "AppContext", item: dict[str, Any], *, reason: str) -> None:

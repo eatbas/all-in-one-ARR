@@ -11,12 +11,12 @@ from typing import TYPE_CHECKING
 
 from core.clients.jellyseerr import AVAILABLE, JellyseerrError
 from core.logging import get_logger
-from modules.traktsync.webhook import remove_tracked_item
+from modules.list_syncarr.webhook import remove_tracked_item
 
 if TYPE_CHECKING:  # pragma: no cover
     from core.context import AppContext
 
-_log = get_logger("traktsync.reconcile")
+_log = get_logger("list_syncarr.reconcile")
 
 
 async def reconcile(ctx: "AppContext") -> None:

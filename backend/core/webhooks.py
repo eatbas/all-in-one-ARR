@@ -1,6 +1,6 @@
 """Single webhook router shared by all modules.
 
-Modules register a handler for a sub-path (e.g. ``traktsync`` registers
+Modules register a handler for a sub-path (e.g. ``list_syncarr`` registers
 ``arr`` to receive ``/webhook/arr``). The router reads the raw body, logs the
 full JSON on receipt (field names vary across arr versions), then dispatches to
 the registered handler.

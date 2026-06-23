@@ -1,11 +1,11 @@
-"""Tests for modules.traktsync.webhook (remove on import)."""
+"""Tests for modules.list_syncarr.webhook (remove on import)."""
 
 from __future__ import annotations
 
 from unittest.mock import AsyncMock
 
 from core.settings_store import TrackedList
-from modules.traktsync.webhook import handle_arr, remove_tracked_item
+from modules.list_syncarr.webhook import handle_arr, remove_tracked_item
 from tests.conftest import StubSettingsStore, StubTrakt, make_ctx
 
 _MOVIE = {
