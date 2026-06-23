@@ -4,7 +4,7 @@ A small, self-hosted service that keeps a **Trakt list in sync with Jellyseerr**
 and — the key part — **removes an item from the Trakt list once Radarr/Sonarr
 have imported it**. It uses **official REST APIs only** (no scraping).
 
-This is the plugin **core** plus the first module, **`traktsync`**. Future
+This is the plugin **core** plus the first module, **`list_syncarr`**. Future
 modules (`bandwidtharr`, `deletearr`, `neutarr`) drop into `backend/modules/` and
 auto-load — see [Adding a module](#adding-a-module).
 
@@ -42,11 +42,14 @@ backend/
       jellyseerr.py  # status check, create request
       arr.py         # defensive Radarr/Sonarr webhook parsing
   modules/
-    traktsync/       # the first module: poll/request, webhook remove, reconcile
+    list_syncarr/    # the first module: poll/request, webhook remove, reconcile
   main.py            # entrypoint: `uvicorn main:app --app-dir backend`
   pyproject.toml     # packaging + pytest + coverage config
   tests/             # backend test suite (100% coverage)
 frontend/            # React + TypeScript + Tailwind (Vite) dashboard
+  src/
+    features/        # one folder per feature: dashboard, list-syncarr, settings
+    shared/          # cross-cutting UI primitives, layout, API client, hooks, utils
 Dockerfile, docker-compose.yml, .env.example   # project root
 ```
 
@@ -81,8 +84,7 @@ cp .env.example .env
 | `SABNZBD_URL` | – | Base URL of SABnzbd (seeds the store; settable in the UI) |
 | `SABNZBD_API_KEY` | – | SABnzbd API key (seeds the store; settable in the UI) |
 | `QBITTORRENT_URL` | – | Base URL of the qBittorrent WebUI (seeds the store; settable in the UI) |
-| `QBITTORRENT_USERNAME` | – | qBittorrent WebUI username (seeds the store; settable in the UI) |
-| `QBITTORRENT_PASSWORD` | – | qBittorrent WebUI password (seeds the store; settable in the UI) |
+| `QBITTORRENT_API_KEY` | – | qBittorrent WebUI API key, requires qBittorrent ≥ 5.2.0 (seeds the store; settable in the UI) |
 | `SYNC_INTERVAL_MIN` | `15` | Poll interval in minutes |
 | `WEBHOOK_PORT` | `3223` | Port the service listens on |
 | `DRY_RUN` | `true` | Log-only mode; no real requests/removals |
@@ -162,11 +164,11 @@ accepts either a v3 API key or a v4 read-access token and is validated against
 `/3/configuration`; OMDb is validated with a probe lookup. The key is stored
 server-side and never returned in clear.
 
-**qBittorrent tab:** takes a **base URL**, a **username** and a **password** (the
-WebUI login; qBittorrent has no API key) and offers a **Test connection** button,
-which performs the WebUI login and reads the application version. The password is
-stored server-side and never returned in clear (the API only exposes whether a
-password is set).
+**qBittorrent tab:** takes a **base URL** and a **WebUI API key** (generated in
+qBittorrent's Web UI settings; requires qBittorrent ≥ 5.2.0) and offers a **Test
+connection** button, which authenticates with an `Authorization: Bearer` header
+and reads the application version. The key is stored server-side and never
+returned in clear (the API only exposes whether a key is set).
 
 ### Adding the Radarr/Sonarr webhook
 
@@ -246,7 +248,8 @@ npm run test:cov   # the same run with the 100% coverage gate
 ```
 
 Coverage spans the typed API client, the TanStack Query hooks, the theme
-provider, the layout and topbar, both pages, the route table, and the vendored
+provider, the layout and topbar, the feature pages (Dashboard, the List-Syncarr
+tabs — Lists and Items — and Settings), the route table, and the vendored
 UI primitives. The single carve-out is `src/main.tsx` (the DOM bootstrap),
 excluded from the coverage denominator as the direct analogue of the backend's
 excluded `if __name__ == "__main__"` block.
@@ -278,7 +281,7 @@ cd frontend && npm run build
   (jellyseerr, sonarr, radarr, tmdb, omdb, sabnzbd, qbittorrent); each emits only
   its own fields, with secrets reduced to `<field>_set` booleans.
 - `PUT /api/settings/services/{name}` – update a service's fields
-  `{ url?, api_key?, username?, password? }` (only the fields it declares apply).
+  `{ url?, api_key? }` (only the fields it declares apply).
 - `POST /api/services/{name}/test` – test a service connection.
 - `POST /webhook/arr` – Radarr/Sonarr On-Import webhook.
 
@@ -296,8 +299,8 @@ cd frontend && npm run build
 
 - Add a shadcn component: `cd frontend && npx shadcn@latest add <component>`.
 - Add a menu/route: extend the nav config in
-  `frontend/src/components/layout/nav-config.tsx` and add a route in
-  `frontend/src/App.tsx`.
+  `frontend/src/shared/layout/nav-config.tsx` and add a route in
+  `frontend/src/App.tsx` (feature pages live under `frontend/src/features/<name>/`).
 
 ## Notes & limitations
 
