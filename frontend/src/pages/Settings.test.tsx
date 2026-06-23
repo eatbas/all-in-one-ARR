@@ -16,6 +16,8 @@ vi.mock("@/lib/queries", () => ({
   useTestService: vi.fn(),
   useStatus: vi.fn(),
   useSetDryRun: vi.fn(),
+  useGeneralSettings: vi.fn(),
+  useUpdateStatusInterval: vi.fn(),
 }))
 
 const { setThemeMock } = vi.hoisted(() => ({ setThemeMock: vi.fn() }))
@@ -25,6 +27,7 @@ vi.mock("@/components/theme-provider", () => ({
 
 import {
   useAddTraktList,
+  useGeneralSettings,
   useRemoveTraktList,
   useServiceSettings,
   useSetDryRun,
@@ -36,6 +39,7 @@ import {
   useTraktLists,
   useTraktSettings,
   useUpdateServiceSettings,
+  useUpdateStatusInterval,
   useUpdateTraktSettings,
 } from "@/lib/queries"
 import { Settings } from "@/pages/Settings"
@@ -96,6 +100,7 @@ let removeMutate: ReturnType<typeof vi.fn>
 let serviceUpdateMutate: ReturnType<typeof vi.fn>
 let serviceTestMutate: ReturnType<typeof vi.fn>
 let setDryRunMutate: ReturnType<typeof vi.fn>
+let updateStatusIntervalMutate: ReturnType<typeof vi.fn>
 
 beforeEach(() => {
   localStorage.removeItem(SETTINGS_TAB_STORAGE_KEY)
@@ -108,6 +113,7 @@ beforeEach(() => {
   serviceUpdateMutate = vi.fn()
   serviceTestMutate = vi.fn()
   setDryRunMutate = vi.fn()
+  updateStatusIntervalMutate = vi.fn()
 
   vi.mocked(useTraktSettings).mockReturnValue(queryResult(SETTINGS))
   vi.mocked(useTraktAuthStatus).mockReturnValue(queryResult(IDLE_AUTH))
@@ -122,6 +128,12 @@ beforeEach(() => {
   vi.mocked(useTestService).mockReturnValue(mutation(serviceTestMutate))
   vi.mocked(useStatus).mockReturnValue(queryResult(STATUS))
   vi.mocked(useSetDryRun).mockReturnValue(mutation(setDryRunMutate))
+  vi.mocked(useGeneralSettings).mockReturnValue(
+    queryResult({ interval_seconds: 60 }),
+  )
+  vi.mocked(useUpdateStatusInterval).mockReturnValue(
+    mutation(updateStatusIntervalMutate),
+  )
 })
 
 function withTestResult(data: TraktTestResult) {
@@ -394,6 +406,25 @@ describe("Settings — general", () => {
     expect(
       screen.getByRole("switch", { name: "Toggle dry-run mode" }),
     ).toBeDisabled()
+  })
+
+  it("shows the configured status-check interval", () => {
+    vi.mocked(useGeneralSettings).mockReturnValue(
+      queryResult({ interval_seconds: 45 }),
+    )
+    render(<Settings />)
+    expect(screen.getByText("Status check interval")).toBeInTheDocument()
+    expect(screen.getByRole("combobox")).toHaveTextContent("45 seconds")
+  })
+
+  it("updates the status-check interval", async () => {
+    const user = userEvent.setup()
+    render(<Settings />)
+    await user.click(screen.getByRole("combobox"))
+    await user.click(screen.getByRole("option", { name: "30 seconds" }))
+    expect(updateStatusIntervalMutate).toHaveBeenCalledWith({
+      interval_seconds: 30,
+    })
   })
 
   it("changes the colour theme", async () => {

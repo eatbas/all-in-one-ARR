@@ -9,9 +9,12 @@ import { toast } from "sonner"
 
 import {
   addTraktList,
+  checkServiceStatuses,
   getActivity,
+  getGeneralSettings,
   getItems,
   getServiceSettings,
+  getServiceStatuses,
   getStatus,
   getTraktAuthStatus,
   getTraktLists,
@@ -22,15 +25,18 @@ import {
   testService,
   testTrakt,
   triggerSync,
+  updateGeneralSettings,
   updateServiceSettings,
   updateTraktSettings,
   type ActivityEntry,
   type AddListPayload,
   type DryRunResult,
+  type GeneralSettings,
   type Item,
   type ItemStatus,
   type ServiceName,
   type ServicesSettings,
+  type ServicesStatusResponse,
   type ServiceTestResult,
   type Status,
   type SyncResult,
@@ -39,6 +45,7 @@ import {
   type TraktListEntry,
   type TraktSettings,
   type TraktTestResult,
+  type UpdateGeneralSettings,
   type UpdateServicePayload,
   type UpdateTraktSettings,
 } from "@/lib/api"
@@ -58,6 +65,8 @@ export const queryKeys = {
   traktAuthStatus: ["trakt", "auth-status"] as const,
   traktLists: ["trakt", "lists"] as const,
   services: ["services"] as const,
+  serviceStatuses: ["service-statuses"] as const,
+  generalSettings: ["general", "settings"] as const,
 }
 
 export function useStatus(): UseQueryResult<Status> {
@@ -289,5 +298,62 @@ export function useTestService(): UseMutationResult<
     onError: (error) => {
       toast.error("Could not test connection", { description: error.message })
     },
+  })
+}
+
+export function useServiceStatuses(): UseQueryResult<ServicesStatusResponse> {
+  return useQuery({
+    queryKey: queryKeys.serviceStatuses,
+    queryFn: getServiceStatuses,
+    refetchInterval: (query) =>
+      (query.state.data?.interval_seconds ?? 60) * 1000,
+  })
+}
+
+export function useCheckServiceStatuses(): UseMutationResult<
+  ServicesStatusResponse,
+  Error,
+  void
+> {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: checkServiceStatuses,
+    onSuccess: () => {
+      toast.success("Status check complete")
+      void queryClient.invalidateQueries({ queryKey: queryKeys.serviceStatuses })
+    },
+    onError: (error) => {
+      toast.error("Status check failed", { description: error.message })
+    },
+  })
+}
+
+export function useUpdateStatusInterval(): UseMutationResult<
+  GeneralSettings,
+  Error,
+  UpdateGeneralSettings
+> {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: updateGeneralSettings,
+    onSuccess: (result) => {
+      toast.success("Status interval updated", {
+        description: `Checking every ${result.interval_seconds} seconds`,
+      })
+      void queryClient.invalidateQueries({ queryKey: queryKeys.serviceStatuses })
+      void queryClient.invalidateQueries({ queryKey: queryKeys.generalSettings })
+    },
+    onError: (error) => {
+      toast.error("Could not update interval", { description: error.message })
+    },
+  })
+}
+
+export function useGeneralSettings(): UseQueryResult<GeneralSettings> {
+  return useQuery({
+    queryKey: queryKeys.generalSettings,
+    queryFn: getGeneralSettings,
   })
 }

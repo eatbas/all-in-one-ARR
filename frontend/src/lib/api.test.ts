@@ -3,9 +3,12 @@ import { describe, expect, it, vi } from "vitest"
 import {
   addTraktList,
   ApiError,
+  checkServiceStatuses,
   getActivity,
+  getGeneralSettings,
   getItems,
   getServiceSettings,
+  getServiceStatuses,
   getStatus,
   getTraktAuthStatus,
   getTraktLists,
@@ -16,6 +19,7 @@ import {
   testService,
   testTrakt,
   triggerSync,
+  updateGeneralSettings,
   updateServiceSettings,
   updateTraktSettings,
   type Status,
@@ -222,6 +226,55 @@ describe("service settings", () => {
     expect(fetchSpy).toHaveBeenCalledWith(
       "/api/services/radarr/test",
       expect.objectContaining({ method: "POST" }),
+    )
+  })
+})
+
+describe("service status dashboard", () => {
+  it("GETs the cached service statuses", async () => {
+    const fetchSpy = mockFetch(
+      jsonResponse({
+        interval_seconds: 60,
+        last_check_at: null,
+        services: {},
+      }),
+    )
+    await getServiceStatuses()
+    expect(fetchSpy).toHaveBeenCalledWith("/api/status/services", expect.anything())
+  })
+
+  it("POSTs to trigger a fresh status check", async () => {
+    const fetchSpy = mockFetch(
+      jsonResponse({
+        interval_seconds: 60,
+        last_check_at: "2026-06-23T13:22:46Z",
+        services: {},
+      }),
+    )
+    await checkServiceStatuses()
+    expect(fetchSpy).toHaveBeenCalledWith(
+      "/api/status/services/check",
+      expect.objectContaining({ method: "POST" }),
+    )
+  })
+})
+
+describe("general settings", () => {
+  it("GETs the general settings", async () => {
+    const fetchSpy = mockFetch(jsonResponse({ interval_seconds: 60 }))
+    await getGeneralSettings()
+    expect(fetchSpy).toHaveBeenCalledWith("/api/settings/general", expect.anything())
+  })
+
+  it("PUTs the status-check interval", async () => {
+    const fetchSpy = mockFetch(jsonResponse({ interval_seconds: 30 }))
+    await updateGeneralSettings({ interval_seconds: 30 })
+    expect(fetchSpy).toHaveBeenCalledWith(
+      "/api/settings/general",
+      expect.objectContaining({
+        method: "PUT",
+        body: JSON.stringify({ interval_seconds: 30 }),
+      }),
     )
   })
 })

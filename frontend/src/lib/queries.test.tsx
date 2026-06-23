@@ -20,6 +20,10 @@ vi.mock("@/lib/api", () => ({
   getServiceSettings: vi.fn(),
   updateServiceSettings: vi.fn(),
   testService: vi.fn(),
+  getServiceStatuses: vi.fn(),
+  checkServiceStatuses: vi.fn(),
+  getGeneralSettings: vi.fn(),
+  updateGeneralSettings: vi.fn(),
 }))
 
 vi.mock("sonner", () => ({
@@ -33,9 +37,12 @@ import {
   queryKeys,
   useActivity,
   useAddTraktList,
+  useCheckServiceStatuses,
+  useGeneralSettings,
   useItems,
   useRemoveTraktList,
   useServiceSettings,
+  useServiceStatuses,
   useSetDryRun,
   useStartTraktAuth,
   useStatus,
@@ -46,6 +53,7 @@ import {
   useTraktLists,
   useTraktSettings,
   useUpdateServiceSettings,
+  useUpdateStatusInterval,
   useUpdateTraktSettings,
 } from "@/lib/queries"
 
@@ -96,6 +104,17 @@ beforeEach(() => {
     sabnzbd: { url: "", api_key_set: false },
     qbittorrent: { url: "", username: "", password_set: false },
   })
+  vi.mocked(api.getServiceStatuses).mockResolvedValue({
+    interval_seconds: 60,
+    last_check_at: null,
+    services: {},
+  })
+  vi.mocked(api.checkServiceStatuses).mockResolvedValue({
+    interval_seconds: 60,
+    last_check_at: "2026-06-23T13:22:46Z",
+    services: {},
+  })
+  vi.mocked(api.getGeneralSettings).mockResolvedValue({ interval_seconds: 60 })
 })
 
 describe("query hooks", () => {
@@ -528,5 +547,70 @@ describe("service connection hooks", () => {
     expect(toast.error).toHaveBeenCalledWith("Could not test connection", {
       description: "boom",
     })
+  })
+})
+
+describe("service status hooks", () => {
+  it("useServiceStatuses fetches the service status snapshot", async () => {
+    const { wrapper } = setup()
+    const { result } = renderHook(() => useServiceStatuses(), { wrapper })
+
+    await waitFor(() => expect(result.current.isSuccess).toBe(true))
+    expect(api.getServiceStatuses).toHaveBeenCalled()
+    expect(result.current.data?.interval_seconds).toBe(60)
+  })
+
+  it("useServiceStatuses derives the polling interval from the response", async () => {
+    vi.mocked(api.getServiceStatuses).mockResolvedValue({
+      interval_seconds: 30,
+      last_check_at: null,
+      services: {},
+    })
+    const { wrapper } = setup()
+    const { result } = renderHook(() => useServiceStatuses(), { wrapper })
+
+    await waitFor(() => expect(result.current.isSuccess).toBe(true))
+    expect(result.current.data?.interval_seconds).toBe(30)
+  })
+
+  it("useCheckServiceStatuses triggers a fresh check and invalidates the cache", async () => {
+    const { queryClient, wrapper } = setup()
+    const invalidate = vi.spyOn(queryClient, "invalidateQueries")
+    const { result } = renderHook(() => useCheckServiceStatuses(), { wrapper })
+
+    act(() => result.current.mutate())
+
+    await waitFor(() => expect(result.current.isSuccess).toBe(true))
+    expect(api.checkServiceStatuses).toHaveBeenCalled()
+    expect(toast.success).toHaveBeenCalledWith("Status check complete")
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: queryKeys.serviceStatuses })
+  })
+})
+
+describe("general settings hooks", () => {
+  it("useGeneralSettings fetches the interval", async () => {
+    const { wrapper } = setup()
+    const { result } = renderHook(() => useGeneralSettings(), { wrapper })
+
+    await waitFor(() => expect(result.current.isSuccess).toBe(true))
+    expect(api.getGeneralSettings).toHaveBeenCalled()
+    expect(result.current.data?.interval_seconds).toBe(60)
+  })
+
+  it("useUpdateStatusInterval saves the new interval and invalidates queries", async () => {
+    vi.mocked(api.updateGeneralSettings).mockResolvedValue({ interval_seconds: 30 })
+    const { queryClient, wrapper } = setup()
+    const invalidate = vi.spyOn(queryClient, "invalidateQueries")
+    const { result } = renderHook(() => useUpdateStatusInterval(), { wrapper })
+
+    act(() => result.current.mutate({ interval_seconds: 30 }))
+
+    await waitFor(() => expect(result.current.isSuccess).toBe(true))
+    expect(api.updateGeneralSettings).toHaveBeenCalledWith(
+      { interval_seconds: 30 },
+      expect.anything(),
+    )
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: queryKeys.serviceStatuses })
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: queryKeys.generalSettings })
   })
 })

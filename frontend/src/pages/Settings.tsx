@@ -10,15 +10,24 @@ import {
   CardTitle,
 } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
 import { Switch } from "@/components/ui/switch"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { DryRunSwitch } from "@/components/dry-run-switch"
 import { useTheme } from "@/components/theme-provider"
 import { cn } from "@/lib/utils"
+import { SERVICE_TABS, VALID_TAB_VALUES, type ServiceTab } from "@/lib/services"
 import { SETTINGS_TAB_STORAGE_KEY } from "@/lib/settings-tab"
 import { THEME_OPTIONS } from "@/lib/theme-options"
 import {
   useAddTraktList,
+  useGeneralSettings,
   useRemoveTraktList,
   useServiceSettings,
   useStartTraktAuth,
@@ -28,10 +37,10 @@ import {
   useTraktLists,
   useTraktSettings,
   useUpdateServiceSettings,
+  useUpdateStatusInterval,
   useUpdateTraktSettings,
 } from "@/lib/queries"
 import type {
-  ServiceName,
   UpdateServicePayload,
   UpdateTraktSettings,
 } from "@/lib/api"
@@ -349,42 +358,6 @@ function ListsCard() {
   )
 }
 
-/** Which input rows a service tab renders. */
-type ServiceField = "url" | "apiKey" | "username" | "password"
-
-/** A service tab: its API name, display label and the fields it edits. */
-interface ServiceTab {
-  name: ServiceName
-  label: string
-  fields: readonly ServiceField[]
-}
-
-/**
- * The service tabs, in display order. Services differ in shape — most carry a
- * URL + API key, TMDB/OMDb are API-key-only, and qBittorrent carries a URL plus
- * a WebUI username/password. Adding a service is a one-line change here.
- */
-const SERVICE_TABS: readonly ServiceTab[] = [
-  { name: "jellyseerr", label: "Jellyseerr", fields: ["url", "apiKey"] },
-  { name: "sonarr", label: "Sonarr", fields: ["url", "apiKey"] },
-  { name: "radarr", label: "Radarr", fields: ["url", "apiKey"] },
-  { name: "tmdb", label: "TMDB", fields: ["apiKey"] },
-  { name: "omdb", label: "OMDb", fields: ["apiKey"] },
-  { name: "sabnzbd", label: "SABnzbd", fields: ["url", "apiKey"] },
-  {
-    name: "qbittorrent",
-    label: "qBittorrent",
-    fields: ["url", "username", "password"],
-  },
-]
-
-/** Every tab value that can be persisted; used to ignore stale storage entries. */
-const VALID_TAB_VALUES: readonly string[] = [
-  "general",
-  "trakt",
-  ...SERVICE_TABS.map((tab) => tab.name),
-]
-
 /** Edit a service connection (URL / API key / login) and test it. */
 function ServiceConnectionCard({ name, label, fields }: ServiceTab) {
   const { data: services } = useServiceSettings()
@@ -515,9 +488,15 @@ function ServiceConnectionCard({ name, label, fields }: ServiceTab) {
   )
 }
 
-/** App-wide settings: the DRY_RUN toggle and the colour theme. */
+const STATUS_INTERVAL_OPTIONS = [30, 45, 60] as const
+
+/** App-wide settings: dry-run, status-check interval, and appearance. */
 function GeneralCard() {
   const { theme, setTheme } = useTheme()
+  const { data: general } = useGeneralSettings()
+  const updateInterval = useUpdateStatusInterval()
+
+  const interval = general?.interval_seconds ?? 60
 
   return (
     <Card>
@@ -537,6 +516,34 @@ function GeneralCard() {
           </div>
           <DryRunSwitch />
         </div>
+
+        <div className="flex flex-col gap-2">
+          <label htmlFor="status-interval" className="text-sm font-medium">
+            Status check interval
+          </label>
+          <p className="text-sm text-muted-foreground">
+            How often the Lists dashboard pings each integration.
+          </p>
+          <Select
+            value={String(interval)}
+            onValueChange={(value) =>
+              updateInterval.mutate({ interval_seconds: Number(value) })
+            }
+            disabled={updateInterval.isPending}
+          >
+            <SelectTrigger id="status-interval" className="w-40">
+              <SelectValue placeholder="Select interval" />
+            </SelectTrigger>
+            <SelectContent>
+              {STATUS_INTERVAL_OPTIONS.map((seconds) => (
+                <SelectItem key={seconds} value={String(seconds)}>
+                  {seconds} seconds
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+
         <div className="flex flex-col gap-2">
           <p className="text-sm font-medium">Appearance</p>
           <div className="flex flex-wrap gap-2">

@@ -160,6 +160,30 @@ export interface ServiceTestResult {
   detail: string
 }
 
+/** Status snapshot for one integration as returned by `GET /api/status/services`. */
+export interface ServiceStatus {
+  ok: boolean
+  detail: string
+  checked_at: string
+}
+
+/** Response of `GET /api/status/services` and `POST /api/status/services/check`. */
+export interface ServicesStatusResponse {
+  interval_seconds: number
+  last_check_at: string | null
+  services: Partial<Record<ServiceName | "trakt", ServiceStatus>>
+}
+
+/** Body of `PUT /api/settings/general`. */
+export interface UpdateGeneralSettings {
+  interval_seconds: number
+}
+
+/** Response of `PUT /api/settings/general`. */
+export interface GeneralSettings {
+  interval_seconds: number
+}
+
 /** Error raised when the backend returns a non-2xx response. */
 export class ApiError extends Error {
   readonly status: number
@@ -281,4 +305,26 @@ export function updateServiceSettings(
 
 export function testService(name: ServiceName): Promise<ServiceTestResult> {
   return postJson<ServiceTestResult>(`/api/services/${name}/test`, {})
+}
+
+export function getServiceStatuses(): Promise<ServicesStatusResponse> {
+  return request<ServicesStatusResponse>("/api/status/services")
+}
+
+export function checkServiceStatuses(): Promise<ServicesStatusResponse> {
+  return postJson<ServicesStatusResponse>("/api/status/services/check", {})
+}
+
+export function getGeneralSettings(): Promise<GeneralSettings> {
+  return request<GeneralSettings>("/api/settings/general")
+}
+
+export function updateGeneralSettings(
+  body: UpdateGeneralSettings,
+): Promise<GeneralSettings> {
+  return request<GeneralSettings>("/api/settings/general", {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  })
 }
