@@ -267,3 +267,42 @@ def test_tracked_list_helpers() -> None:
     assert item.is_watchlist is True
     assert item.key == ("me", "Watchlist")
     assert item.to_dict() == {"owner_user": "me", "slug": "Watchlist", "name": "WL"}
+
+
+def test_status_check_interval_defaults_to_sixty(tmp_path) -> None:
+    store = SettingsStore(str(tmp_path / "settings.json"))
+    _seed(store)
+    assert store.status_check_interval_seconds() == 60
+
+
+def test_status_check_interval_seed_and_reload(tmp_path) -> None:
+    path = tmp_path / "settings.json"
+    store = SettingsStore(str(path))
+    store.load_or_seed(
+        client_id="cid",
+        client_secret="sec",
+        user="me",
+        lists=[],
+        status_check_interval_seconds=30,
+    )
+    assert store.status_check_interval_seconds() == 30
+    assert json.loads(path.read_text())["status_check_interval_seconds"] == 30
+
+    reopened = SettingsStore(str(path))
+    reopened.load_or_seed(client_id="x", client_secret="x", user="x", lists=[])
+    assert reopened.status_check_interval_seconds() == 30
+
+
+def test_status_check_interval_invalid_value_falls_back(tmp_path) -> None:
+    store = SettingsStore(str(tmp_path / "settings.json"))
+    _seed(store)
+    assert store.update_status_check_interval(45) == 45
+    assert store.update_status_check_interval(99) == 60
+    assert store.status_check_interval_seconds() == 60
+
+
+def test_status_check_interval_in_masked(tmp_path) -> None:
+    store = SettingsStore(str(tmp_path / "settings.json"))
+    _seed(store)
+    store.update_status_check_interval(45)
+    assert store.masked()["status_check_interval_seconds"] == 45

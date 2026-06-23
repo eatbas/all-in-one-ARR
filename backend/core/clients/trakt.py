@@ -237,15 +237,28 @@ class TraktClient:
     async def test_connection(self) -> dict[str, Any]:
         """Verify the saved token by reading the account settings.
 
-        Returns ``{"username": ...}`` on success; raises on any failure (e.g.
-        :class:`TraktAuthError` when no token is stored).
+        Returns ``{"ok": True, "detail": "...", "username": ...}`` on success and
+        ``{"ok": False, "detail": "...", "username": None}`` on failure so the
+        status checker can treat Trakt like every other managed client.
         """
-        response = await self._client.get(
-            "/users/settings", headers=await self._auth_headers()
-        )
-        response.raise_for_status()
+        try:
+            response = await self._client.get(
+                "/users/settings", headers=await self._auth_headers()
+            )
+            response.raise_for_status()
+        except Exception as exc:  # noqa: BLE001 - expected failures are surfaced in detail
+            return {
+                "ok": False,
+                "detail": f"Trakt connection failed: {exc}",
+                "username": None,
+            }
         data = response.json()
-        return {"username": (data.get("user") or {}).get("username")}
+        username = (data.get("user") or {}).get("username")
+        return {
+            "ok": True,
+            "detail": f"Connected as {username}" if username else "Connected to Trakt",
+            "username": username,
+        }
 
     # ---- list read ----
 

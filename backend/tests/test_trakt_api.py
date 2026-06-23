@@ -127,15 +127,19 @@ def test_auth_status_reports_session(db, tmp_path) -> None:
 
 def test_test_connection_ok(db, tmp_path) -> None:
     trakt = StubTrakt()
-    trakt.test_connection = AsyncMock(return_value={"username": "erena"})
+    trakt.test_connection = AsyncMock(
+        return_value={"ok": True, "detail": "Connected as erena", "username": "erena"}
+    )
     ctx = _ctx(db, tmp_path, trakt=trakt)
     body = _client(ctx).post("/api/trakt/test").json()
-    assert body == {"ok": True, "user": "erena", "message": "Connection OK"}
+    assert body == {"ok": True, "user": "erena", "message": "Connected as erena"}
 
 
 def test_test_connection_failure(db, tmp_path) -> None:
     trakt = StubTrakt()
-    trakt.test_connection = AsyncMock(side_effect=RuntimeError("no token"))
+    trakt.test_connection = AsyncMock(
+        return_value={"ok": False, "detail": "no token", "username": None}
+    )
     ctx = _ctx(db, tmp_path, trakt=trakt)
     body = _client(ctx).post("/api/trakt/test").json()
     assert body["ok"] is False

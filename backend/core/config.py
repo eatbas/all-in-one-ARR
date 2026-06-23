@@ -71,6 +71,7 @@ class Settings(BaseSettings):
 
     # ---- Sync behaviour ----
     SYNC_INTERVAL_MIN: int = 15
+    STATUS_CHECK_INTERVAL_SECONDS: int = 60
     WEBHOOK_PORT: int = 3223
     DRY_RUN: bool = True
 

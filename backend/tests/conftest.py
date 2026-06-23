@@ -11,6 +11,7 @@ from core.context import AppContext, DryRunFlag
 from core.db import Database
 from core.service_registry import BY_NAME, SERVICES, empty_values, masked_entry
 from core.settings_store import TrackedList
+from core.status_checker import StatusChecker
 from core.webhooks import WebhookRegistry
 
 
@@ -51,7 +52,9 @@ class StubTrakt:
                 "item_count": 3,
             }
         )
-        self.test_connection = AsyncMock(return_value={"username": "me"})
+        self.test_connection = AsyncMock(
+            return_value={"ok": True, "detail": "Connected as me", "username": "me"}
+        )
         self.aclose = AsyncMock()
 
     def is_authenticated(self) -> bool:
@@ -69,6 +72,7 @@ class StubSettingsStore:
         client_secret: str = "secret",
         user: str = "me",
         services: dict[str, dict[str, str]] | None = None,
+        status_check_interval_seconds: int = 60,
     ) -> None:
         self._lists = (
             lists
@@ -76,6 +80,7 @@ class StubSettingsStore:
             else [TrackedList(owner_user="me", slug="watchlist", name="watchlist")]
         )
         self._creds = (client_id, client_secret, user)
+        self._status_check_interval_seconds = status_check_interval_seconds
         # Start from a complete, descriptor-shaped baseline so every service is
         # present (masked_services iterates them all), then apply the legacy
         # defaults and any explicit override.
@@ -115,6 +120,15 @@ class StubSettingsStore:
         self, name: str, *, url: str | None = None, api_key: str | None = None
     ) -> None:
         self.update_service_fields(name, url=url, api_key=api_key)
+
+    def status_check_interval_seconds(self) -> int:
+        return self._status_check_interval_seconds
+
+    def update_status_check_interval(self, seconds: int) -> int:
+        if seconds not in {30, 45, 60}:
+            seconds = 60
+        self._status_check_interval_seconds = seconds
+        return seconds
 
     def masked_services(self) -> dict[str, dict[str, Any]]:
         return {
@@ -174,7 +188,7 @@ def make_ctx(
     """Build an :class:`AppContext` wired with stubs for unit tests."""
     flag = DryRunFlag(dry_run)
     scheduler = AsyncMock()
-    return AppContext(
+    ctx = AppContext(
         settings=settings or _StubSettings(),
         db=db,
         trakt=trakt or StubTrakt(),
@@ -190,6 +204,8 @@ def make_ctx(
         dry_run_flag=flag,
         settings_store=settings_store or StubSettingsStore(),
     )
+    ctx.status_checker = StatusChecker(ctx)
+    return ctx
 
 
 class _StubSettings:

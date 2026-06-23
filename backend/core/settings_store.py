@@ -29,6 +29,9 @@ from core.service_registry import (
     masked_entry,
 )
 
+# Allowed status-check intervals offered by the dashboard.
+VALID_STATUS_INTERVALS: frozenset[int] = frozenset({30, 45, 60})
+
 
 def _service_seed(
     desc: ServiceDescriptor, seed: dict[str, str] | None
@@ -36,6 +39,11 @@ def _service_seed(
     """Normalise a seed entry (or ``None``) into this service's field dict."""
     seed = seed or {}
     return {field: (seed.get(field) or "").strip() for field in desc.fields}
+
+
+def _normalise_interval(value: int) -> int:
+    """Return a valid status-check interval, defaulting to 60 seconds."""
+    return value if value in VALID_STATUS_INTERVALS else 60
 
 
 @dataclass(frozen=True)
@@ -76,6 +84,7 @@ class SettingsStore:
         self._client_secret = ""
         self._user = "me"
         self._lists: list[TrackedList] = []
+        self._status_check_interval_seconds = 60
         self._services: dict[str, dict[str, str]] = {
             desc.name: empty_values(desc) for desc in SERVICES
         }
@@ -90,6 +99,7 @@ class SettingsStore:
         user: str,
         lists: list[TrackedList],
         services: dict[str, dict[str, str]] | None = None,
+        status_check_interval_seconds: int = 60,
     ) -> None:
         """Load persisted settings, or seed from the supplied defaults.
 
@@ -105,6 +115,9 @@ class SettingsStore:
                 self._client_secret = client_secret
                 self._user = user or "me"
                 self._lists = list(lists)
+                self._status_check_interval_seconds = _normalise_interval(
+                    status_check_interval_seconds
+                )
                 for desc in SERVICES:
                     self._services[desc.name] = _service_seed(
                         desc, (services or {}).get(desc.name)
@@ -118,6 +131,9 @@ class SettingsStore:
         self._client_id = trakt.get("client_id", "")
         self._client_secret = trakt.get("client_secret", "")
         self._user = trakt.get("user") or "me"
+        self._status_check_interval_seconds = _normalise_interval(
+            data.get("status_check_interval_seconds", 60)
+        )
         self._lists = [
             TrackedList(
                 owner_user=entry.get("owner_user", "me"),
@@ -153,6 +169,7 @@ class SettingsStore:
                 "client_secret": self._client_secret,
                 "user": self._user,
             },
+            "status_check_interval_seconds": self._status_check_interval_seconds,
             "lists": [item.to_dict() for item in self._lists],
             "services": self._services,
         }
@@ -184,6 +201,22 @@ class SettingsStore:
                 self._user = user.strip() or "me"
             self._save_locked()
             self._log.info("updated Trakt credentials")
+
+    # ---- status check interval ----
+
+    def status_check_interval_seconds(self) -> int:
+        """Return the configured dashboard status-check interval in seconds."""
+        with self._lock:
+            return self._status_check_interval_seconds
+
+    def update_status_check_interval(self, seconds: int) -> int:
+        """Update the status-check interval; invalid values fall back to 60 s."""
+        seconds = _normalise_interval(seconds)
+        with self._lock:
+            self._status_check_interval_seconds = seconds
+            self._save_locked()
+            self._log.info("updated status check interval to %s seconds", seconds)
+            return seconds
 
     # ---- tracked lists ----
 
@@ -292,6 +325,7 @@ class SettingsStore:
                 "client_id_set": bool(self._client_id),
                 "client_secret_set": bool(self._client_secret),
                 "user": self._user,
+                "status_check_interval_seconds": self._status_check_interval_seconds,
                 "lists": [item.to_dict() for item in self._lists],
                 "services": self.masked_services(),
             }

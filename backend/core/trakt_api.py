@@ -157,12 +157,11 @@ def create_trakt_router(ctx: "AppContext") -> APIRouter:
 
     @router.post("/trakt/test", response_model=TraktTestResponse)
     async def post_trakt_test() -> TraktTestResponse:
-        try:
-            result = await ctx.trakt.test_connection()
-        except Exception as exc:
-            return TraktTestResponse(ok=False, user=None, message=str(exc))
+        result = await ctx.trakt.test_connection()
         return TraktTestResponse(
-            ok=True, user=result.get("username"), message="Connection OK"
+            ok=result["ok"],
+            user=result.get("username"),
+            message=result["detail"],
         )
 
     @router.get("/trakt/lists", response_model=list[TraktListEntry])

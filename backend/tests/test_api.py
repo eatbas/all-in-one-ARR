@@ -105,3 +105,45 @@ async def test_remember_task_handles_cancellation() -> None:
     await asyncio.gather(task, return_exceptions=True)
     await asyncio.sleep(0)
     assert task not in _SYNC_TASKS
+
+
+def test_services_status_endpoint_returns_snapshot(db) -> None:
+    ctx = make_ctx(db=db)
+    build_client(ctx).post("/api/status/services/check")
+    body = build_client(ctx).get("/api/status/services").json()
+    assert body["interval_seconds"] == 60
+    assert body["last_check_at"] is not None
+    assert "trakt" in body["services"]
+    assert "jellyseerr" in body["services"]
+
+
+def test_services_check_endpoint_triggers_check(db) -> None:
+    ctx = make_ctx(db=db)
+    ctx.status_checker.check_now = AsyncMock(
+        return_value=ctx.status_checker.get_statuses()
+    )
+    body = build_client(ctx).post("/api/status/services/check").json()
+    assert "interval_seconds" in body
+    ctx.status_checker.check_now.assert_awaited_once()
+
+
+def test_put_general_settings_updates_interval(db) -> None:
+    ctx = make_ctx(db=db)
+    resp = build_client(ctx).put("/api/settings/general", json={"interval_seconds": 30})
+    assert resp.status_code == 200
+    assert resp.json() == {"interval_seconds": 30}
+    assert ctx.settings_store.status_check_interval_seconds() == 30
+
+
+def test_put_general_settings_rejects_invalid_interval(db) -> None:
+    ctx = make_ctx(db=db)
+    resp = build_client(ctx).put("/api/settings/general", json={"interval_seconds": 99})
+    assert resp.status_code == 200
+    assert resp.json() == {"interval_seconds": 60}
+
+
+def test_get_general_settings_returns_interval(db) -> None:
+    ctx = make_ctx(db=db)
+    ctx.settings_store.update_status_check_interval(45)
+    body = build_client(ctx).get("/api/settings/general").json()
+    assert body == {"interval_seconds": 45}

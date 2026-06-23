@@ -83,6 +83,26 @@ class SyncResponse(BaseModel):
     status: str
 
 
+class ServiceStatus(BaseModel):
+    ok: bool
+    detail: str
+    checked_at: str
+
+
+class ServicesStatusResponse(BaseModel):
+    interval_seconds: int
+    last_check_at: str | None
+    services: dict[str, ServiceStatus]
+
+
+class StatusCheckIntervalRequest(BaseModel):
+    interval_seconds: int
+
+
+class StatusCheckIntervalResponse(BaseModel):
+    interval_seconds: int
+
+
 def create_api_router(ctx: "AppContext") -> APIRouter:
     """Build the ``/api`` router bound to a specific application context."""
     router = APIRouter(prefix="/api")
@@ -117,5 +137,44 @@ def create_api_router(ctx: "AppContext") -> APIRouter:
     async def post_dry_run(body: DryRunRequest) -> DryRunResponse:
         ctx.set_dry_run(body.enabled)
         return DryRunResponse(dry_run=ctx.dry_run)
+
+    @router.get("/settings/general", response_model=StatusCheckIntervalResponse)
+    async def get_general_settings() -> StatusCheckIntervalResponse:
+        return StatusCheckIntervalResponse(
+            interval_seconds=ctx.settings_store.status_check_interval_seconds()
+        )
+
+    @router.get("/status/services", response_model=ServicesStatusResponse)
+    async def get_services_status() -> ServicesStatusResponse:
+        snapshot = ctx.status_checker.get_statuses()
+        return ServicesStatusResponse(
+            interval_seconds=snapshot.interval_seconds,
+            last_check_at=snapshot.last_check_at,
+            services={
+                name: ServiceStatus(ok=s.ok, detail=s.detail, checked_at=s.checked_at)
+                for name, s in snapshot.services.items()
+            },
+        )
+
+    @router.post("/status/services/check", response_model=ServicesStatusResponse)
+    async def post_services_check() -> ServicesStatusResponse:
+        snapshot = await ctx.status_checker.check_now()
+        return ServicesStatusResponse(
+            interval_seconds=snapshot.interval_seconds,
+            last_check_at=snapshot.last_check_at,
+            services={
+                name: ServiceStatus(ok=s.ok, detail=s.detail, checked_at=s.checked_at)
+                for name, s in snapshot.services.items()
+            },
+        )
+
+    @router.put("/settings/general", response_model=StatusCheckIntervalResponse)
+    async def put_general_settings(
+        body: StatusCheckIntervalRequest,
+    ) -> StatusCheckIntervalResponse:
+        interval = ctx.settings_store.update_status_check_interval(
+            body.interval_seconds
+        )
+        return StatusCheckIntervalResponse(interval_seconds=interval)
 
     return router

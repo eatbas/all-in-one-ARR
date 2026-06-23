@@ -325,7 +325,11 @@ async def test_test_connection_returns_username(tmp_path) -> None:
     )
     client = make_client(tmp_path)
     client._tokens = dict(_TOKENS)
-    assert await client.test_connection() == {"username": "erena"}
+    assert await client.test_connection() == {
+        "ok": True,
+        "detail": "Connected as erena",
+        "username": "erena",
+    }
 
 
 @respx.mock
@@ -335,4 +339,21 @@ async def test_test_connection_missing_user(tmp_path) -> None:
     )
     client = make_client(tmp_path)
     client._tokens = dict(_TOKENS)
-    assert await client.test_connection() == {"username": None}
+    assert await client.test_connection() == {
+        "ok": True,
+        "detail": "Connected to Trakt",
+        "username": None,
+    }
+
+
+@respx.mock
+async def test_test_connection_returns_failure_on_http_error(tmp_path) -> None:
+    respx.get(f"{TRAKT_BASE_URL}/users/settings").mock(
+        return_value=httpx.Response(401)
+    )
+    client = make_client(tmp_path)
+    client._tokens = dict(_TOKENS)
+    result = await client.test_connection()
+    assert result["ok"] is False
+    assert "401" in result["detail"]
+    assert result["username"] is None

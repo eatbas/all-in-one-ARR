@@ -32,6 +32,7 @@ from core.logging import configure_logging, get_logger
 from core.scheduler import SchedulerService
 from core.services_api import create_services_router
 from core.settings_store import SettingsStore, TrackedList
+from core.status_checker import StatusChecker
 from core.trakt_api import create_trakt_router
 from core.trakt_auth import cancel_device_auth, start_device_auth
 from core.webhooks import WebhookRegistry
@@ -59,6 +60,7 @@ def build_context(settings: Settings) -> AppContext:
             for slug in settings.trakt_lists
         ],
         services=settings.service_seeds,
+        status_check_interval_seconds=settings.STATUS_CHECK_INTERVAL_SECONDS,
     )
     client_id, client_secret, user = settings_store.trakt_credentials()
 
@@ -92,7 +94,7 @@ def build_context(settings: Settings) -> AppContext:
         password=qbit_fields["password"],
     )
 
-    return AppContext(
+    ctx = AppContext(
         settings=settings,
         db=database,
         trakt=trakt,
@@ -108,6 +110,8 @@ def build_context(settings: Settings) -> AppContext:
         dry_run_flag=flag,
         settings_store=settings_store,
     )
+    ctx.status_checker = StatusChecker(ctx)
+    return ctx
 
 
 async def _maybe_start_device_auth(ctx: AppContext) -> None:
@@ -158,6 +162,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     _log.info("starting aio-arr with config: %s", app.state.settings.masked())
 
     await ctx.scheduler.start()
+    await ctx.status_checker.start()
 
     await _maybe_start_device_auth(ctx)
 
@@ -167,6 +172,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         yield
     finally:
         cancel_device_auth(ctx)
+        await ctx.status_checker.stop()
         await ctx.scheduler.stop()
         await ctx.trakt.aclose()
         await ctx.jellyseerr.aclose()
