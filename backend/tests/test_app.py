@@ -42,7 +42,7 @@ def _stub_ctx(authenticated: bool) -> object:
     )
 
 
-def test_build_context_real(tmp_path) -> None:
+async def test_build_context_real(tmp_path) -> None:
     settings = Settings(
         _env_file=None,
         DB_PATH=str(tmp_path / "db.sqlite"),
@@ -53,16 +53,35 @@ def test_build_context_real(tmp_path) -> None:
         **_SECRETS,
     )
     ctx = build_context(settings)
-    assert ctx.dry_run is False
-    assert ctx.trakt.is_authenticated() is False  # no token file
-    assert ctx.db.counts_by_status()["synced"] == 0
-    # The settings store was seeded from the environment (three lists).
-    assert [item.slug for item in ctx.settings_store.tracked_lists()] == [
-        "movies",
-        "tv",
-        "anime",
-    ]
-    ctx.db.close()
+    try:
+        assert ctx.dry_run is False
+        assert ctx.trakt.is_authenticated() is False  # no token file
+        assert ctx.db.counts_by_status()["synced"] == 0
+        # The settings store was seeded from the environment (three lists).
+        assert [item.slug for item in ctx.settings_store.tracked_lists()] == [
+            "movies",
+            "tv",
+            "anime",
+        ]
+        # The new connection-test clients are constructed alongside the existing ones.
+        assert ctx.tmdb is not None
+        assert ctx.omdb is not None
+        assert ctx.sabnzbd is not None
+        assert ctx.qbittorrent is not None
+    finally:
+        # Release every resource the real context opened (clients + DB).
+        for client in (
+            ctx.trakt,
+            ctx.jellyseerr,
+            ctx.sonarr,
+            ctx.radarr,
+            ctx.tmdb,
+            ctx.omdb,
+            ctx.sabnzbd,
+            ctx.qbittorrent,
+        ):
+            await client.aclose()
+        ctx.db.close()
 
 
 def test_lifespan_authenticated_placeholder_frontend(_env, monkeypatch, tmp_path) -> None:
@@ -80,6 +99,10 @@ def test_lifespan_authenticated_placeholder_frontend(_env, monkeypatch, tmp_path
     ctx.scheduler.stop.assert_awaited()
     ctx.trakt.aclose.assert_awaited()
     ctx.jellyseerr.aclose.assert_awaited()
+    ctx.tmdb.aclose.assert_awaited()
+    ctx.omdb.aclose.assert_awaited()
+    ctx.sabnzbd.aclose.assert_awaited()
+    ctx.qbittorrent.aclose.assert_awaited()
 
 
 def test_lifespan_serves_built_frontend(_env, monkeypatch, tmp_path) -> None:

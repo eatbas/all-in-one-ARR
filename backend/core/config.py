@@ -19,6 +19,10 @@ _SECRET_FIELDS = frozenset(
         "JELLYSEERR_API_KEY",
         "SONARR_API_KEY",
         "RADARR_API_KEY",
+        "TMDB_API_KEY",
+        "OMDB_API_KEY",
+        "SABNZBD_API_KEY",
+        "QBITTORRENT_PASSWORD",
     }
 )
 
@@ -51,6 +55,19 @@ class Settings(BaseSettings):
     SONARR_API_KEY: str = ""
     RADARR_URL: str = ""
     RADARR_API_KEY: str = ""
+
+    # ---- TMDB / OMDb (API key only; fixed public endpoints) ----
+    TMDB_API_KEY: str = ""
+    OMDB_API_KEY: str = ""
+
+    # ---- SABnzbd (URL + API key) ----
+    SABNZBD_URL: str = ""
+    SABNZBD_API_KEY: str = ""
+
+    # ---- qBittorrent (URL + WebUI username/password) ----
+    QBITTORRENT_URL: str = ""
+    QBITTORRENT_USERNAME: str = ""
+    QBITTORRENT_PASSWORD: str = ""
 
     # ---- Sync behaviour ----
     SYNC_INTERVAL_MIN: int = 15
@@ -103,6 +120,14 @@ class Settings(BaseSettings):
             "jellyseerr": {"url": self.JELLYSEERR_URL, "api_key": self.JELLYSEERR_API_KEY},
             "sonarr": {"url": self.SONARR_URL, "api_key": self.SONARR_API_KEY},
             "radarr": {"url": self.RADARR_URL, "api_key": self.RADARR_API_KEY},
+            "tmdb": {"api_key": self.TMDB_API_KEY},
+            "omdb": {"api_key": self.OMDB_API_KEY},
+            "sabnzbd": {"url": self.SABNZBD_URL, "api_key": self.SABNZBD_API_KEY},
+            "qbittorrent": {
+                "url": self.QBITTORRENT_URL,
+                "username": self.QBITTORRENT_USERNAME,
+                "password": self.QBITTORRENT_PASSWORD,
+            },
         }
 
     def masked(self) -> dict[str, Any]:

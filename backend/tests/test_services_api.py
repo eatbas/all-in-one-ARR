@@ -8,7 +8,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from core.services_api import create_services_router
-from tests.conftest import StubArr, make_ctx
+from tests.conftest import StubArr, StubService, make_ctx
 
 
 def build_client(ctx) -> TestClient:
@@ -73,3 +73,53 @@ def test_test_unknown_service_is_404(db) -> None:
     ctx = make_ctx(db=db)
     resp = build_client(ctx).post("/api/services/plex/test")
     assert resp.status_code == 404
+
+
+def test_get_services_masks_new_service_shapes(db) -> None:
+    body = build_client(make_ctx(db=db)).get("/api/settings/services").json()
+    # API-key-only services expose only the boolean (no url field).
+    assert body["tmdb"] == {"api_key_set": False}
+    assert body["omdb"] == {"api_key_set": False}
+    assert body["sabnzbd"] == {"url": "", "api_key_set": False}
+    # qBittorrent exposes url + username in clear, password masked away.
+    assert body["qbittorrent"] == {"url": "", "username": "", "password_set": False}
+    assert "password" not in body["qbittorrent"]
+
+
+def test_put_api_key_only_service_applies_just_the_key(db) -> None:
+    tmdb = StubService()
+    ctx = make_ctx(db=db, tmdb=tmdb)
+    resp = build_client(ctx).put(
+        "/api/settings/services/tmdb", json={"api_key": "tk"}
+    )
+    assert resp.status_code == 200
+    assert resp.json()["tmdb"] == {"api_key_set": True}
+    tmdb.update_credentials.assert_called_once_with(api_key="tk")
+
+
+def test_put_username_password_service_applies_all_fields(db) -> None:
+    qbit = StubService()
+    ctx = make_ctx(db=db, qbittorrent=qbit)
+    resp = build_client(ctx).put(
+        "/api/settings/services/qbittorrent",
+        json={"url": "http://qb:8080", "username": "admin", "password": "pw"},
+    )
+    assert resp.status_code == 200
+    assert resp.json()["qbittorrent"] == {
+        "url": "http://qb:8080",
+        "username": "admin",
+        "password_set": True,
+    }
+    qbit.update_credentials.assert_called_once_with(
+        base_url="http://qb:8080", username="admin", password="pw"
+    )
+
+
+def test_test_new_service_ok(db) -> None:
+    sab = StubService()
+    sab.test_connection = AsyncMock(
+        return_value={"ok": True, "detail": "Connected to SABnzbd"}
+    )
+    ctx = make_ctx(db=db, sabnzbd=sab)
+    body = build_client(ctx).post("/api/services/sabnzbd/test").json()
+    assert body == {"ok": True, "detail": "Connected to SABnzbd"}

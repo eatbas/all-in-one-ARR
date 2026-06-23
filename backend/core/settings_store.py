@@ -21,18 +21,21 @@ from pathlib import Path
 from typing import Any
 
 from core.logging import get_logger
+from core.service_registry import (
+    BY_NAME,
+    SERVICES,
+    ServiceDescriptor,
+    empty_values,
+    masked_entry,
+)
 
-# URL + API-key services managed from the Settings page (besides Trakt).
-SERVICE_NAMES = ("jellyseerr", "sonarr", "radarr")
 
-
-def _service_seed(seed: dict[str, str] | None) -> dict[str, str]:
-    """Normalise a seed entry (or ``None``) into a ``{url, api_key}`` dict."""
+def _service_seed(
+    desc: ServiceDescriptor, seed: dict[str, str] | None
+) -> dict[str, str]:
+    """Normalise a seed entry (or ``None``) into this service's field dict."""
     seed = seed or {}
-    return {
-        "url": (seed.get("url") or "").strip(),
-        "api_key": (seed.get("api_key") or "").strip(),
-    }
+    return {field: (seed.get(field) or "").strip() for field in desc.fields}
 
 
 @dataclass(frozen=True)
@@ -74,7 +77,7 @@ class SettingsStore:
         self._user = "me"
         self._lists: list[TrackedList] = []
         self._services: dict[str, dict[str, str]] = {
-            name: {"url": "", "api_key": ""} for name in SERVICE_NAMES
+            desc.name: empty_values(desc) for desc in SERVICES
         }
 
     # ---- load / seed / persist ----
@@ -102,8 +105,10 @@ class SettingsStore:
                 self._client_secret = client_secret
                 self._user = user or "me"
                 self._lists = list(lists)
-                for name in SERVICE_NAMES:
-                    self._services[name] = _service_seed((services or {}).get(name))
+                for desc in SERVICES:
+                    self._services[desc.name] = _service_seed(
+                        desc, (services or {}).get(desc.name)
+                    )
                 self._save_locked()
                 self._log.info("seeded settings from environment")
 
@@ -127,15 +132,15 @@ class SettingsStore:
         stored_services = data.get("services") or {}
         seed = seed_services or {}
         backfilled = False
-        for name in SERVICE_NAMES:
+        for desc in SERVICES:
+            name = desc.name
             if name in stored_services:
                 entry = stored_services[name]
                 self._services[name] = {
-                    "url": entry.get("url", ""),
-                    "api_key": entry.get("api_key", ""),
+                    field: entry.get(field, "") for field in desc.fields
                 }
             else:
-                self._services[name] = _service_seed(seed.get(name))
+                self._services[name] = _service_seed(desc, seed.get(name))
                 backfilled = True
         if backfilled:
             self._save_locked()
@@ -222,34 +227,59 @@ class SettingsStore:
 
     # ---- service connections (jellyseerr / sonarr / radarr) ----
 
+    def service_fields(self, name: str) -> dict[str, str]:
+        """Return a copy of the stored field dict for a service.
+
+        Raises ``KeyError`` for an unknown service name.
+        """
+        with self._lock:
+            return dict(self._services[name])
+
     def service_connection(self, name: str) -> tuple[str, str]:
-        """Return ``(url, api_key)`` for a service. Raises ``KeyError`` if unknown."""
+        """Return ``(url, api_key)`` for a service (blank for absent fields).
+
+        A thin wrapper over :meth:`service_fields` for callers that only need the
+        legacy URL/API-key pair (Jellyseerr/Sonarr/Radarr/SABnzbd).
+        """
+        fields = self.service_fields(name)
+        return (fields.get("url", ""), fields.get("api_key", ""))
+
+    def update_service_fields(self, name: str, **fields: str | None) -> None:
+        """Update a service's stored fields; ``None`` leaves a field unchanged.
+
+        Only the keys declared by the service descriptor are applied; any other
+        keyword (e.g. ``username`` for a URL/API-key service) is ignored.
+        """
+        desc = BY_NAME[name]
         with self._lock:
             entry = self._services[name]
-            return (entry["url"], entry["api_key"])
+            for field in desc.fields:
+                value = fields.get(field)
+                if value is not None:
+                    entry[field] = value.strip()
+            self._save_locked()
+            self._log.info("updated %s connection", name)
 
     def update_service_connection(
         self, name: str, *, url: str | None = None, api_key: str | None = None
     ) -> None:
-        """Update a service's URL/API key; ``None`` leaves a field unchanged."""
-        with self._lock:
-            entry = self._services[name]
-            if url is not None:
-                entry["url"] = url.strip()
-            if api_key is not None:
-                entry["api_key"] = api_key.strip()
-            self._save_locked()
-            self._log.info("updated %s connection", name)
+        """Update a service's URL/API key; ``None`` leaves a field unchanged.
+
+        Retained for the legacy URL/API-key call site; delegates to
+        :meth:`update_service_fields`.
+        """
+        self.update_service_fields(name, url=url, api_key=api_key)
 
     def masked_services(self) -> dict[str, dict[str, Any]]:
-        """Return a response-safe view of services: ``{name: {url, api_key_set}}``."""
+        """Return a response-safe view: ``{name: <descriptor-masked entry>}``.
+
+        Each service emits only its declared fields, with secrets reduced to
+        ``<field>_set`` booleans (see :func:`core.service_registry.masked_entry`).
+        """
         with self._lock:
             return {
-                name: {
-                    "url": entry["url"],
-                    "api_key_set": bool(entry["api_key"]),
-                }
-                for name, entry in self._services.items()
+                desc.name: masked_entry(desc, self._services[desc.name])
+                for desc in SERVICES
             }
 
     # ---- masking ----

@@ -206,6 +206,62 @@ def test_masked_services_hides_keys(tmp_path) -> None:
     assert store.masked()["services"]["jellyseerr"]["api_key_set"] is True
 
 
+def test_seeds_and_masks_api_key_only_service(tmp_path) -> None:
+    store = SettingsStore(str(tmp_path / "settings.json"))
+    store.load_or_seed(
+        client_id="c",
+        client_secret="s",
+        user="me",
+        lists=[],
+        services={"tmdb": {"api_key": "tk"}},
+    )
+    # An API-key-only service stores and masks just that field.
+    assert store.service_fields("tmdb") == {"api_key": "tk"}
+    assert store.masked_services()["tmdb"] == {"api_key_set": True}
+    assert store.masked_services()["omdb"] == {"api_key_set": False}
+
+
+def test_seeds_updates_and_reloads_username_password_service(tmp_path) -> None:
+    path = tmp_path / "settings.json"
+    store = SettingsStore(str(path))
+    store.load_or_seed(
+        client_id="c",
+        client_secret="s",
+        user="me",
+        lists=[],
+        services={
+            "qbittorrent": {
+                "url": "http://qb",
+                "username": "admin",
+                "password": "pw",
+            }
+        },
+    )
+    assert store.service_fields("qbittorrent") == {
+        "url": "http://qb",
+        "username": "admin",
+        "password": "pw",
+    }
+    assert store.masked_services()["qbittorrent"] == {
+        "url": "http://qb",
+        "username": "admin",
+        "password_set": True,
+    }
+    # Updating leaves unspecified fields unchanged and ignores undeclared ones.
+    store.update_service_fields("qbittorrent", password="new", api_key="ignored")
+    fields = store.service_fields("qbittorrent")
+    assert fields["password"] == "new"
+    assert fields["username"] == "admin"
+    assert "api_key" not in fields
+
+    # The change survives a reload from disk.
+    reopened = SettingsStore(str(path))
+    reopened.load_or_seed(
+        client_id="x", client_secret="x", user="x", lists=[], services=None
+    )
+    assert reopened.service_fields("qbittorrent")["password"] == "new"
+
+
 def test_tracked_list_helpers() -> None:
     item = TrackedList(owner_user="me", slug="Watchlist", name="WL")
     assert item.is_watchlist is True

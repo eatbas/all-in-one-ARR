@@ -12,6 +12,10 @@ from typing import Any, Awaitable, Callable
 
 from core.clients.arr_client import ArrClient
 from core.clients.jellyseerr import JellyseerrClient
+from core.clients.omdb import OmdbClient
+from core.clients.qbittorrent import QbittorrentClient
+from core.clients.sabnzbd import SabnzbdClient
+from core.clients.tmdb import TmdbClient
 from core.clients.trakt import TraktClient
 from core.config import Settings
 from core.db import Database
@@ -47,6 +51,10 @@ class AppContext:
     jellyseerr: JellyseerrClient
     sonarr: ArrClient
     radarr: ArrClient
+    tmdb: TmdbClient
+    omdb: OmdbClient
+    sabnzbd: SabnzbdClient
+    qbittorrent: QbittorrentClient
     scheduler: SchedulerService
     webhooks: WebhookRegistry
     dry_run_flag: DryRunFlag

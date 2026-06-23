@@ -9,6 +9,7 @@ import pytest
 
 from core.context import AppContext, DryRunFlag
 from core.db import Database
+from core.service_registry import BY_NAME, SERVICES, empty_values, masked_entry
 from core.settings_store import TrackedList
 from core.webhooks import WebhookRegistry
 
@@ -75,11 +76,14 @@ class StubSettingsStore:
             else [TrackedList(owner_user="me", slug="watchlist", name="watchlist")]
         )
         self._creds = (client_id, client_secret, user)
-        self._services = services or {
-            "jellyseerr": {"url": "http://js:5055", "api_key": "k"},
-            "sonarr": {"url": "http://sonarr:8989", "api_key": ""},
-            "radarr": {"url": "", "api_key": ""},
-        }
+        # Start from a complete, descriptor-shaped baseline so every service is
+        # present (masked_services iterates them all), then apply the legacy
+        # defaults and any explicit override.
+        self._services = {desc.name: dict(empty_values(desc)) for desc in SERVICES}
+        self._services["jellyseerr"] = {"url": "http://js:5055", "api_key": "k"}
+        self._services["sonarr"] = {"url": "http://sonarr:8989", "api_key": ""}
+        if services is not None:
+            self._services.update(services)
 
     def tracked_lists(self) -> list[TrackedList]:
         return list(self._lists)
@@ -93,23 +97,29 @@ class StubSettingsStore:
     def trakt_credentials(self) -> tuple[str, str, str]:
         return self._creds
 
+    def service_fields(self, name: str) -> dict[str, str]:
+        return dict(self._services[name])
+
     def service_connection(self, name: str) -> tuple[str, str]:
         entry = self._services[name]
-        return (entry["url"], entry["api_key"])
+        return (entry.get("url", ""), entry.get("api_key", ""))
+
+    def update_service_fields(self, name: str, **fields: str | None) -> None:
+        entry = self._services[name]
+        for field in BY_NAME[name].fields:
+            value = fields.get(field)
+            if value is not None:
+                entry[field] = value
 
     def update_service_connection(
         self, name: str, *, url: str | None = None, api_key: str | None = None
     ) -> None:
-        entry = self._services[name]
-        if url is not None:
-            entry["url"] = url
-        if api_key is not None:
-            entry["api_key"] = api_key
+        self.update_service_fields(name, url=url, api_key=api_key)
 
     def masked_services(self) -> dict[str, dict[str, Any]]:
         return {
-            name: {"url": entry["url"], "api_key_set": bool(entry["api_key"])}
-            for name, entry in self._services.items()
+            desc.name: masked_entry(desc, self._services[desc.name])
+            for desc in SERVICES
         }
 
 
@@ -133,6 +143,19 @@ class StubArr:
         self.aclose = AsyncMock()
 
 
+class StubService:
+    """Minimal stand-in for the simple connection-test clients.
+
+    Covers TMDB/OMDb/SABnzbd/qBittorrent, which share the
+    ``update_credentials``/``test_connection``/``aclose`` contract.
+    """
+
+    def __init__(self) -> None:
+        self.update_credentials = MagicMock()
+        self.test_connection = AsyncMock(return_value={"ok": True, "detail": "Connected"})
+        self.aclose = AsyncMock()
+
+
 def make_ctx(
     *,
     db: Database,
@@ -140,6 +163,10 @@ def make_ctx(
     jellyseerr: Any | None = None,
     sonarr: Any | None = None,
     radarr: Any | None = None,
+    tmdb: Any | None = None,
+    omdb: Any | None = None,
+    sabnzbd: Any | None = None,
+    qbittorrent: Any | None = None,
     dry_run: bool = True,
     settings: Any | None = None,
     settings_store: Any | None = None,
@@ -154,6 +181,10 @@ def make_ctx(
         jellyseerr=jellyseerr or StubJellyseerr(),
         sonarr=sonarr or StubArr(),
         radarr=radarr or StubArr(),
+        tmdb=tmdb or StubService(),
+        omdb=omdb or StubService(),
+        sabnzbd=sabnzbd or StubService(),
+        qbittorrent=qbittorrent or StubService(),
         scheduler=scheduler,
         webhooks=WebhookRegistry(),
         dry_run_flag=flag,

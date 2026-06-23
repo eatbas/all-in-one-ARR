@@ -15,3 +15,6 @@ def test_main_exposes_app(monkeypatch, tmp_path) -> None:
     import main
 
     assert main.app.title == "All-in-One ARR"
+    # create_app() eagerly built a context holding a real SQLite connection;
+    # close it so it is not left open for interpreter-shutdown GC.
+    main.app.state.ctx.db.close()

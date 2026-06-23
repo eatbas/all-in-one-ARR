@@ -20,6 +20,10 @@ from core import registry
 from core.api import create_api_router
 from core.clients.arr_client import ArrClient
 from core.clients.jellyseerr import JellyseerrClient
+from core.clients.omdb import OmdbClient
+from core.clients.qbittorrent import QbittorrentClient
+from core.clients.sabnzbd import SabnzbdClient
+from core.clients.tmdb import TmdbClient
 from core.clients.trakt import TraktClient
 from core.config import Settings
 from core.context import AppContext, DryRunFlag
@@ -77,6 +81,17 @@ def build_context(settings: Settings) -> AppContext:
     radarr_url, radarr_key = settings_store.service_connection("radarr")
     radarr = ArrClient(name="radarr", base_url=radarr_url, api_key=radarr_key)
 
+    tmdb = TmdbClient(api_key=settings_store.service_fields("tmdb")["api_key"])
+    omdb = OmdbClient(api_key=settings_store.service_fields("omdb")["api_key"])
+    sab_fields = settings_store.service_fields("sabnzbd")
+    sabnzbd = SabnzbdClient(base_url=sab_fields["url"], api_key=sab_fields["api_key"])
+    qbit_fields = settings_store.service_fields("qbittorrent")
+    qbittorrent = QbittorrentClient(
+        base_url=qbit_fields["url"],
+        username=qbit_fields["username"],
+        password=qbit_fields["password"],
+    )
+
     return AppContext(
         settings=settings,
         db=database,
@@ -84,6 +99,10 @@ def build_context(settings: Settings) -> AppContext:
         jellyseerr=jellyseerr,
         sonarr=sonarr,
         radarr=radarr,
+        tmdb=tmdb,
+        omdb=omdb,
+        sabnzbd=sabnzbd,
+        qbittorrent=qbittorrent,
         scheduler=SchedulerService(),
         webhooks=WebhookRegistry(),
         dry_run_flag=flag,
@@ -153,6 +172,10 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         await ctx.jellyseerr.aclose()
         await ctx.sonarr.aclose()
         await ctx.radarr.aclose()
+        await ctx.tmdb.aclose()
+        await ctx.omdb.aclose()
+        await ctx.sabnzbd.aclose()
+        await ctx.qbittorrent.aclose()
         ctx.db.close()
 
 

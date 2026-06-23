@@ -1,36 +1,36 @@
-"""Dashboard JSON API for the URL/API-key services (Jellyseerr, Sonarr, Radarr).
+"""Dashboard JSON API for the managed connection services.
 
-Backs the per-service Settings tabs: view the saved URL + whether a key is set,
-update the URL/key, and run a Test connection. Kept separate from the core
-dashboard (`core.api`) and the Trakt router (`core.trakt_api`) so each stays
-focused. Trakt has its own richer router; these three share one shape.
+Backs the per-service Settings tabs: view the saved connection (URLs/usernames in
+clear, secrets reduced to ``<field>_set`` booleans), update fields, and run a Test
+connection. The set of services and the fields each one stores are described once
+in :mod:`core.service_registry`; this router stays generic over them. Kept
+separate from the core dashboard (`core.api`) and the Trakt router
+(`core.trakt_api`) so each stays focused.
 """
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from fastapi import APIRouter
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
 from core.logging import get_logger
-from core.settings_store import SERVICE_NAMES
+from core.service_registry import BY_NAME, SERVICE_NAMES
 
 if TYPE_CHECKING:  # pragma: no cover
     from core.context import AppContext
-
-
-class ServiceConnection(BaseModel):
-    url: str
-    api_key_set: bool
+    from core.service_registry import ServiceDescriptor
 
 
 class UpdateServiceRequest(BaseModel):
-    # ``None`` leaves a field unchanged (so the UI can save the URL without
-    # re-entering the key).
+    # ``None`` leaves a field unchanged (so the UI can save one field without
+    # re-entering the others). Fields not declared by a service are ignored.
     url: str | None = None
     api_key: str | None = None
+    username: str | None = None
+    password: str | None = None
 
 
 class ServiceTestResponse(BaseModel):
@@ -44,15 +44,37 @@ def _client_for(ctx: "AppContext", name: str):
         "jellyseerr": ctx.jellyseerr,
         "sonarr": ctx.sonarr,
         "radarr": ctx.radarr,
+        "tmdb": ctx.tmdb,
+        "omdb": ctx.omdb,
+        "sabnzbd": ctx.sabnzbd,
+        "qbittorrent": ctx.qbittorrent,
     }[name]
 
 
-def _services_response(ctx: "AppContext") -> dict[str, ServiceConnection]:
-    """Build the masked services response model from the settings store."""
-    return {
-        name: ServiceConnection(**entry)
-        for name, entry in ctx.settings_store.masked_services().items()
-    }
+def _apply_credentials(ctx: "AppContext", name: str) -> None:
+    """Push the stored connection fields into the live client for ``name``.
+
+    Each client's ``update_credentials`` takes only the keyword arguments for the
+    fields its service declares (``url`` is passed as ``base_url``), so this maps
+    the descriptor's fields onto that call generically.
+    """
+    desc: "ServiceDescriptor" = BY_NAME[name]
+    values = ctx.settings_store.service_fields(name)
+    kwargs: dict[str, str] = {}
+    if "url" in desc.fields:
+        kwargs["base_url"] = values["url"]
+    if "api_key" in desc.fields:
+        kwargs["api_key"] = values["api_key"]
+    if "username" in desc.fields:
+        kwargs["username"] = values["username"]
+    if "password" in desc.fields:
+        kwargs["password"] = values["password"]
+    _client_for(ctx, name).update_credentials(**kwargs)
+
+
+def _services_response(ctx: "AppContext") -> dict[str, dict[str, Any]]:
+    """Build the masked services response (descriptor-trimmed per service)."""
+    return ctx.settings_store.masked_services()
 
 
 def _unknown_service(name: str) -> JSONResponse:
@@ -66,25 +88,27 @@ def create_services_router(ctx: "AppContext") -> APIRouter:
     router = APIRouter(prefix="/api")
     log = get_logger("services_api")
 
-    @router.get(
-        "/settings/services", response_model=dict[str, ServiceConnection]
-    )
-    async def get_services() -> dict[str, ServiceConnection]:
+    # The masked shape varies per service (e.g. ``{url, api_key_set}`` vs
+    # ``{url, username, password_set}``), so the response model is left untyped
+    # and the descriptor-trimmed dict is returned verbatim.
+    @router.get("/settings/services", response_model=None)
+    async def get_services() -> dict[str, dict[str, Any]]:
         return _services_response(ctx)
 
-    @router.put(
-        "/settings/services/{name}", response_model=dict[str, ServiceConnection]
-    )
+    @router.put("/settings/services/{name}", response_model=None)
     async def put_service(
         name: str, body: UpdateServiceRequest
-    ) -> JSONResponse | dict[str, ServiceConnection]:
+    ) -> JSONResponse | dict[str, dict[str, Any]]:
         if name not in SERVICE_NAMES:
             return _unknown_service(name)
-        ctx.settings_store.update_service_connection(
-            name, url=body.url, api_key=body.api_key
+        ctx.settings_store.update_service_fields(
+            name,
+            url=body.url,
+            api_key=body.api_key,
+            username=body.username,
+            password=body.password,
         )
-        url, api_key = ctx.settings_store.service_connection(name)
-        _client_for(ctx, name).update_credentials(base_url=url, api_key=api_key)
+        _apply_credentials(ctx, name)
         log.info("updated %s connection", name)
         return _services_response(ctx)
 

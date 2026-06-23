@@ -42,12 +42,19 @@ def test_trakt_lists_blank_falls_back_to_list_id() -> None:
 
 
 def test_all_service_credentials_are_optional() -> None:
-    # Every service (Trakt + Jellyseerr/Sonarr/Radarr) is UI-managed, so an empty
-    # configuration must not fail start-up.
+    # Every service (Trakt + the URL/key services + TMDB/OMDb/SABnzbd/qBittorrent)
+    # is UI-managed, so an empty configuration must not fail start-up.
     settings = Settings(_env_file=None)
     assert settings.JELLYSEERR_URL == ""
     assert settings.SONARR_URL == ""
     assert settings.RADARR_API_KEY == ""
+    assert settings.TMDB_API_KEY == ""
+    assert settings.OMDB_API_KEY == ""
+    assert settings.SABNZBD_URL == ""
+    assert settings.SABNZBD_API_KEY == ""
+    assert settings.QBITTORRENT_URL == ""
+    assert settings.QBITTORRENT_USERNAME == ""
+    assert settings.QBITTORRENT_PASSWORD == ""
 
 
 def test_service_seeds_shape() -> None:
@@ -59,21 +66,49 @@ def test_service_seeds_shape() -> None:
         SONARR_API_KEY="sk",
         RADARR_URL="http://radarr:7878",
         RADARR_API_KEY="rk",
+        TMDB_API_KEY="tk",
+        OMDB_API_KEY="ok",
+        SABNZBD_URL="http://sab:8080",
+        SABNZBD_API_KEY="zk",
+        QBITTORRENT_URL="http://qb:8080",
+        QBITTORRENT_USERNAME="admin",
+        QBITTORRENT_PASSWORD="pw",
     )
     seeds = settings.service_seeds
     assert seeds["jellyseerr"] == {"url": "http://js:5055", "api_key": "jk"}
     assert seeds["sonarr"] == {"url": "http://sonarr:8989", "api_key": "sk"}
     assert seeds["radarr"] == {"url": "http://radarr:7878", "api_key": "rk"}
+    assert seeds["tmdb"] == {"api_key": "tk"}
+    assert seeds["omdb"] == {"api_key": "ok"}
+    assert seeds["sabnzbd"] == {"url": "http://sab:8080", "api_key": "zk"}
+    assert seeds["qbittorrent"] == {
+        "url": "http://qb:8080",
+        "username": "admin",
+        "password": "pw",
+    }
 
 
 def test_masked_hides_secrets() -> None:
     settings = Settings(
-        _env_file=None, SONARR_API_KEY="sk", RADARR_API_KEY="rk", **_VALID
+        _env_file=None,
+        SONARR_API_KEY="sk",
+        RADARR_API_KEY="rk",
+        TMDB_API_KEY="tk",
+        OMDB_API_KEY="ok",
+        SABNZBD_API_KEY="zk",
+        QBITTORRENT_PASSWORD="pw",
+        **_VALID,
     )
     masked = settings.masked()
     assert masked["TRAKT_CLIENT_ID"] == "***"
     assert masked["JELLYSEERR_API_KEY"] == "***"
     assert masked["SONARR_API_KEY"] == "***"
     assert masked["RADARR_API_KEY"] == "***"
+    assert masked["TMDB_API_KEY"] == "***"
+    assert masked["OMDB_API_KEY"] == "***"
+    assert masked["SABNZBD_API_KEY"] == "***"
+    assert masked["QBITTORRENT_PASSWORD"] == "***"
+    # A non-secret service field is shown in clear.
+    assert masked["QBITTORRENT_USERNAME"] == ""
     assert masked["TRAKT_USER"] == "me"
     assert masked["DRY_RUN"] is True
