@@ -117,6 +117,13 @@
   body {
     @apply bg-background text-foreground;
   }
+  /* Tailwind v4 Preflight sets buttons to `cursor: default`; restore the
+     pointer so interactive controls read as clickable. Excludes disabled
+     controls so their not-allowed/default cursor is preserved. */
+  button:not(:disabled),
+  [role="button"]:not(:disabled) {
+    cursor: pointer;
+  }
 }
 
 /* Countdown bar across the bottom of every toast, draining over its 3 s life.
