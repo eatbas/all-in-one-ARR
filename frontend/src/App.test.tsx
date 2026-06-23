@@ -1,6 +1,7 @@
 import { render, screen } from "@testing-library/react"
+import userEvent from "@testing-library/user-event"
 import { MemoryRouter } from "react-router-dom"
-import { describe, expect, it, vi } from "vitest"
+import { beforeEach, describe, expect, it, vi } from "vitest"
 
 vi.mock("@/lib/queries", () => ({
   useStatus: vi.fn(() => ({ data: undefined })),
@@ -21,6 +22,7 @@ vi.mock("@/lib/queries", () => ({
 import App from "@/App"
 import { ThemeProvider } from "@/components/theme-provider"
 import { TooltipProvider } from "@/components/ui/tooltip"
+import { SETTINGS_TAB_STORAGE_KEY } from "@/lib/settings-tab"
 
 function renderAt(path: string) {
   return render(
@@ -33,6 +35,10 @@ function renderAt(path: string) {
     </ThemeProvider>,
   )
 }
+
+beforeEach(() => {
+  localStorage.removeItem(SETTINGS_TAB_STORAGE_KEY)
+})
 
 describe("App routing", () => {
   it("renders the dashboard at /", () => {
@@ -56,5 +62,21 @@ describe("App routing", () => {
   it("redirects unknown routes back to the dashboard", () => {
     renderAt("/does-not-exist")
     expect(screen.getByText("Recent activity")).toBeInTheDocument()
+  })
+})
+
+describe("Settings tab persistence across navigation", () => {
+  it("remembers the active tab when leaving and returning to Settings", async () => {
+    const user = userEvent.setup()
+    renderAt("/settings")
+    await user.click(screen.getByRole("tab", { name: "Trakt" }))
+    await user.click(screen.getByRole("link", { name: "Dashboard" }))
+    expect(screen.getByText("Recent activity")).toBeInTheDocument()
+    await user.click(screen.getByRole("link", { name: "Settings" }))
+    expect(screen.getByRole("tab", { name: "Trakt" })).toHaveAttribute(
+      "aria-selected",
+      "true",
+    )
+    expect(screen.getByText("Trakt credentials")).toBeInTheDocument()
   })
 })

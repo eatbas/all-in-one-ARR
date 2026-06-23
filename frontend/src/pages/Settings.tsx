@@ -15,6 +15,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { DryRunSwitch } from "@/components/dry-run-switch"
 import { useTheme } from "@/components/theme-provider"
 import { cn } from "@/lib/utils"
+import { SETTINGS_TAB_STORAGE_KEY } from "@/lib/settings-tab"
 import { THEME_OPTIONS } from "@/lib/theme-options"
 import {
   useAddTraktList,
@@ -377,6 +378,13 @@ const SERVICE_TABS: readonly ServiceTab[] = [
   },
 ]
 
+/** Every tab value that can be persisted; used to ignore stale storage entries. */
+const VALID_TAB_VALUES: readonly string[] = [
+  "general",
+  "trakt",
+  ...SERVICE_TABS.map((tab) => tab.name),
+]
+
 /** Edit a service connection (URL / API key / login) and test it. */
 function ServiceConnectionCard({ name, label, fields }: ServiceTab) {
   const { data: services } = useServiceSettings()
@@ -555,8 +563,21 @@ function GeneralCard() {
  * {@link SERVICE_TABS}.
  */
 export function Settings() {
+  const [activeTab, setActiveTab] = useState(() => {
+    if (typeof localStorage === "undefined") return "general"
+    const stored = localStorage.getItem(SETTINGS_TAB_STORAGE_KEY)
+    return stored && VALID_TAB_VALUES.includes(stored) ? stored : "general"
+  })
+
+  function handleTabChange(next: string) {
+    setActiveTab(next)
+    if (typeof localStorage !== "undefined") {
+      localStorage.setItem(SETTINGS_TAB_STORAGE_KEY, next)
+    }
+  }
+
   return (
-    <Tabs defaultValue="general">
+    <Tabs value={activeTab} onValueChange={handleTabChange}>
       <TabsList>
         <TabsTrigger value="general">General</TabsTrigger>
         <TabsTrigger value="trakt">Trakt</TabsTrigger>

@@ -47,6 +47,7 @@ import type {
   TraktSettings,
   TraktTestResult,
 } from "@/lib/api"
+import { SETTINGS_TAB_STORAGE_KEY } from "@/lib/settings-tab"
 import { queryResult } from "@/test/mock-query"
 
 /** Build a mutation-shaped stub; typed loosely as these are test doubles. */
@@ -97,6 +98,8 @@ let serviceTestMutate: ReturnType<typeof vi.fn>
 let setDryRunMutate: ReturnType<typeof vi.fn>
 
 beforeEach(() => {
+  localStorage.removeItem(SETTINGS_TAB_STORAGE_KEY)
+
   updateMutate = vi.fn()
   startMutate = vi.fn()
   testMutate = vi.fn()
@@ -590,5 +593,40 @@ describe("Settings — service tabs", () => {
       name: "qbittorrent",
       body: {},
     })
+  })
+})
+
+describe("Settings — tab persistence", () => {
+  it("restores the previously selected tab from localStorage", () => {
+    localStorage.setItem(SETTINGS_TAB_STORAGE_KEY, "trakt")
+    render(<Settings />)
+    expect(screen.getByRole("tab", { name: "Trakt" })).toHaveAttribute(
+      "aria-selected",
+      "true",
+    )
+    expect(screen.getByText("Trakt credentials")).toBeInTheDocument()
+  })
+
+  it("persists the selected tab and restores it on re-render", async () => {
+    const user = userEvent.setup()
+    const { unmount } = render(<Settings />)
+    await user.click(screen.getByRole("tab", { name: "Sonarr" }))
+    expect(localStorage.getItem(SETTINGS_TAB_STORAGE_KEY)).toBe("sonarr")
+
+    unmount()
+    render(<Settings />)
+    expect(screen.getByRole("tab", { name: "Sonarr" })).toHaveAttribute(
+      "aria-selected",
+      "true",
+    )
+  })
+
+  it("falls back to the General tab when the stored value is invalid", () => {
+    localStorage.setItem(SETTINGS_TAB_STORAGE_KEY, "not-a-tab")
+    render(<Settings />)
+    expect(screen.getByRole("tab", { name: "General" })).toHaveAttribute(
+      "aria-selected",
+      "true",
+    )
   })
 })
