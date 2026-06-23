@@ -47,7 +47,8 @@ class QbittorrentClient:
         Returns ``{ok, detail}``; never raises for an expected failure so the
         dashboard can show the reason. qBittorrent answers the login with the
         text ``Ok.`` (cookie set) or ``Fails.`` and rejects a missing/mismatched
-        ``Referer`` with HTTP 403.
+        ``Referer`` with HTTP 403. Some versions return HTTP 204 with an empty
+        body on success, so that is also treated as logged in.
         """
         try:
             response = await self._client.post(
@@ -62,6 +63,8 @@ class QbittorrentClient:
                 "ok": False,
                 "detail": "qBittorrent refused the request (HTTP 403)",
             }
+        if response.status_code == 204:
+            return {"ok": True, "detail": await self._version_detail()}
         if response.status_code != 200:
             return {
                 "ok": False,

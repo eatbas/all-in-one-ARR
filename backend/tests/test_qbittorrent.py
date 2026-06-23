@@ -35,6 +35,14 @@ async def test_login_ok_version_unavailable_falls_back() -> None:
 
 
 @respx.mock
+async def test_login_ok_204_no_content_succeeds() -> None:
+    respx.post(_LOGIN).mock(return_value=httpx.Response(204))
+    respx.get(_VERSION).mock(return_value=httpx.Response(200, text="v5.0.0"))
+    result = await make_client().test_connection()
+    assert result == {"ok": True, "detail": "Connected to qBittorrent v5.0.0"}
+
+
+@respx.mock
 async def test_login_ok_version_network_error_falls_back() -> None:
     respx.post(_LOGIN).mock(return_value=httpx.Response(200, text="Ok."))
     respx.get(_VERSION).mock(side_effect=httpx.ConnectError("down"))
