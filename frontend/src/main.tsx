@@ -4,9 +4,9 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
 import { BrowserRouter } from "react-router-dom"
 
 import App from "@/App"
-import { ThemeProvider } from "@/components/theme-provider"
-import { Toaster } from "@/components/ui/sonner"
-import { TooltipProvider } from "@/components/ui/tooltip"
+import { ThemeProvider } from "@/shared/components/theme-provider"
+import { Toaster } from "@/shared/components/ui/sonner"
+import { TooltipProvider } from "@/shared/components/ui/tooltip"
 import "@/index.css"
 
 // Single shared client for all queries and mutations.

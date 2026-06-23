@@ -20,7 +20,7 @@ export default defineConfig({
   test: {
     globals: true,
     environment: 'jsdom',
-    setupFiles: ['./src/test/setup.ts'],
+    setupFiles: ['./src/shared/test/setup.ts'],
     clearMocks: true,
     restoreMocks: true,
     coverage: {
@@ -31,7 +31,7 @@ export default defineConfig({
       // `if __name__ == "__main__"` block); test scaffolding is not product code.
       exclude: [
         'src/main.tsx',
-        'src/test/**',
+        'src/shared/test/**',
         'src/**/*.test.{ts,tsx}',
         'src/**/*.d.ts',
       ],

@@ -3,7 +3,7 @@ import userEvent from "@testing-library/user-event"
 import { MemoryRouter } from "react-router-dom"
 import { beforeEach, describe, expect, it, vi } from "vitest"
 
-vi.mock("@/lib/queries", () => ({
+vi.mock("@/shared/lib/queries", () => ({
   useStatus: vi.fn(() => ({ data: undefined })),
   useActivity: vi.fn(() => ({ data: [], isLoading: false })),
   useItems: vi.fn(() => ({ data: [], isLoading: false })),
@@ -30,9 +30,9 @@ vi.mock("@/lib/queries", () => ({
 }))
 
 import App from "@/App"
-import { ThemeProvider } from "@/components/theme-provider"
-import { TooltipProvider } from "@/components/ui/tooltip"
-import { SETTINGS_TAB_STORAGE_KEY } from "@/lib/settings-tab"
+import { ThemeProvider } from "@/shared/components/theme-provider"
+import { TooltipProvider } from "@/shared/components/ui/tooltip"
+import { SETTINGS_TAB_STORAGE_KEY } from "@/features/settings/settings-tab"
 
 function renderAt(path: string) {
   return render(
@@ -56,10 +56,13 @@ describe("App routing", () => {
     expect(screen.getByText("Recent activity")).toBeInTheDocument()
   })
 
-  it("renders the items page at /items", () => {
-    renderAt("/items")
+  it("renders the List-Syncarr page with Lists and Items tabs at /list-syncarr", () => {
+    renderAt("/list-syncarr")
+    expect(screen.getByRole("tab", { name: "Lists" })).toBeInTheDocument()
+    expect(screen.getByRole("tab", { name: "Items" })).toBeInTheDocument()
+    // Lists is the default tab, so its content is shown first.
     expect(
-      screen.getByText("Every movie and show mirrored from Trakt."),
+      screen.getByText("Trakt lists kept in sync by the engine."),
     ).toBeInTheDocument()
   })
 
