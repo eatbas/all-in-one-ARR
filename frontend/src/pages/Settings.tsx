@@ -522,7 +522,7 @@ function GeneralCard() {
             Status check interval
           </label>
           <p className="text-sm text-muted-foreground">
-            How often the Lists dashboard pings each integration.
+            How often the dashboard pings each integration.
           </p>
           <Select
             value={String(interval)}

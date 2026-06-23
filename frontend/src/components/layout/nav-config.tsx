@@ -33,7 +33,7 @@ export const NAV_ITEMS: ReadonlyArray<NavItem> = [
     title: "Lists",
     to: "/lists",
     icon: ListIcon,
-    description: "Trakt List Sync status and integration health",
+    description: "Trakt lists kept in sync by the engine",
   },
   {
     title: "Items",
