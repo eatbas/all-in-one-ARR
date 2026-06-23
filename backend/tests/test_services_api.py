@@ -81,9 +81,9 @@ def test_get_services_masks_new_service_shapes(db) -> None:
     assert body["tmdb"] == {"api_key_set": False}
     assert body["omdb"] == {"api_key_set": False}
     assert body["sabnzbd"] == {"url": "", "api_key_set": False}
-    # qBittorrent exposes url + username in clear, password masked away.
-    assert body["qbittorrent"] == {"url": "", "username": "", "password_set": False}
-    assert "password" not in body["qbittorrent"]
+    # qBittorrent exposes url in clear, api_key masked away.
+    assert body["qbittorrent"] == {"url": "", "api_key_set": False}
+    assert "api_key" not in body["qbittorrent"]
 
 
 def test_put_api_key_only_service_applies_just_the_key(db) -> None:
@@ -97,21 +97,20 @@ def test_put_api_key_only_service_applies_just_the_key(db) -> None:
     tmdb.update_credentials.assert_called_once_with(api_key="tk")
 
 
-def test_put_username_password_service_applies_all_fields(db) -> None:
+def test_put_qbittorrent_service_applies_url_and_api_key(db) -> None:
     qbit = StubService()
     ctx = make_ctx(db=db, qbittorrent=qbit)
     resp = build_client(ctx).put(
         "/api/settings/services/qbittorrent",
-        json={"url": "http://qb:8080", "username": "admin", "password": "pw"},
+        json={"url": "http://qb:8080", "api_key": "qbt_key"},
     )
     assert resp.status_code == 200
     assert resp.json()["qbittorrent"] == {
         "url": "http://qb:8080",
-        "username": "admin",
-        "password_set": True,
+        "api_key_set": True,
     }
     qbit.update_credentials.assert_called_once_with(
-        base_url="http://qb:8080", username="admin", password="pw"
+        base_url="http://qb:8080", api_key="qbt_key"
     )
 
 

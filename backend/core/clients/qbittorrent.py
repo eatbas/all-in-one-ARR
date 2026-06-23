@@ -1,10 +1,11 @@
-"""Outbound qBittorrent client: validates WebUI credentials via login.
+"""Outbound qBittorrent client: validates the WebUI API key (≥ v5.2.0).
 
-qBittorrent's WebUI authenticates with a username/password login that sets a
-session cookie; there is no API key. The connection test performs the login
-(qBittorrent requires a matching ``Referer`` header for CSRF protection) and, on
-success, reads the application version using the session cookie carried by the
-shared HTTP client.
+Since qBittorrent v5.2.0 (WebAPI v2.14.1) the WebUI accepts a stateless API key
+instead of a username/password login: the 32-character key (``qbt_`` prefix plus
+28 random characters) is sent in an ``Authorization: Bearer <key>`` header and no
+session cookie is involved. API keys cannot reach the ``auth`` endpoints, so the
+connection test authenticates directly against a normal endpoint — the
+application version — rather than ``auth/login``.
 """
 
 from __future__ import annotations
@@ -17,75 +18,60 @@ from core.logging import get_logger
 
 
 class QbittorrentClient:
-    """Async client for the qBittorrent WebUI login connection test."""
+    """Async client for the qBittorrent WebUI API-key connection test."""
 
     def __init__(
         self,
         *,
         base_url: str,
-        username: str,
-        password: str,
+        api_key: str,
         http_client: httpx.AsyncClient | None = None,
     ) -> None:
         self._base_url = base_url.rstrip("/")
-        self._username = username
-        self._password = password
+        self._api_key = api_key
         self._log = get_logger("qbittorrent")
         self._client = http_client or httpx.AsyncClient(timeout=30.0)
 
-    def update_credentials(
-        self, *, base_url: str, username: str, password: str
-    ) -> None:
-        """Replace the in-use base URL and login (set from the dashboard)."""
+    def update_credentials(self, *, base_url: str, api_key: str) -> None:
+        """Replace the in-use base URL and API key (set from the dashboard)."""
         self._base_url = base_url.rstrip("/")
-        self._username = username
-        self._password = password
+        self._api_key = api_key
 
     async def test_connection(self) -> dict[str, Any]:
-        """Validate the base URL + login against ``/api/v2/auth/login``.
+        """Validate the base URL + API key against ``/api/v2/app/version``.
 
         Returns ``{ok, detail}``; never raises for an expected failure so the
-        dashboard can show the reason. qBittorrent answers the login with the
-        text ``Ok.`` (cookie set) or ``Fails.`` and rejects a missing/mismatched
-        ``Referer`` with HTTP 403. Some versions return HTTP 204 with an empty
-        body on success, so that is also treated as logged in.
+        dashboard can show the reason. A missing or invalid key is answered with
+        HTTP 401/403; a valid key returns the version text. A matching ``Referer``
+        is sent defensively for deployments that still enforce the WebUI's
+        host/CSRF checks on authenticated requests.
         """
         try:
-            response = await self._client.post(
-                f"{self._base_url}/api/v2/auth/login",
-                data={"username": self._username, "password": self._password},
-                headers={"Referer": self._base_url},
+            response = await self._client.get(
+                f"{self._base_url}/api/v2/app/version",
+                headers={
+                    "Authorization": f"Bearer {self._api_key}",
+                    "Referer": self._base_url,
+                },
             )
         except httpx.HTTPError as exc:
             return {"ok": False, "detail": f"Connection failed: {exc}"}
-        if response.status_code == 403:
-            return {
-                "ok": False,
-                "detail": "qBittorrent refused the request (HTTP 403)",
-            }
-        if response.status_code == 204:
-            return {"ok": True, "detail": await self._version_detail()}
+        if response.status_code in (401, 403):
+            return {"ok": False, "detail": "qBittorrent rejected the API key"}
         if response.status_code != 200:
             return {
                 "ok": False,
                 "detail": f"qBittorrent returned HTTP {response.status_code}",
             }
-        if response.text.strip() != "Ok.":
-            return {"ok": False, "detail": "Invalid username or password"}
-        return {"ok": True, "detail": await self._version_detail()}
-
-    async def _version_detail(self) -> str:
-        """Read the app version after a successful login; degrade gracefully."""
-        try:
-            response = await self._client.get(
-                f"{self._base_url}/api/v2/app/version",
-                headers={"Referer": self._base_url},
-            )
-        except httpx.HTTPError:
-            return "Connected to qBittorrent"
-        if response.status_code == 200 and response.text:
-            return f"Connected to qBittorrent {response.text.strip()}"
-        return "Connected to qBittorrent"
+        version = response.text.strip()
+        return {
+            "ok": True,
+            "detail": (
+                f"Connected to qBittorrent {version}"
+                if version
+                else "Connected to qBittorrent"
+            ),
+        }
 
     async def aclose(self) -> None:
         """Close the underlying HTTP client."""

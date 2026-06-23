@@ -6,11 +6,12 @@ frontend all follow these descriptors, so adding a service is a one-entry change
 here rather than a parallel edit scattered across modules.
 
 Services differ in shape. Most are a ``{url, api_key}`` pair
-(Jellyseerr/Sonarr/Radarr/SABnzbd); TMDB and OMDb are API-key-only against a
-fixed public endpoint (no user URL); qBittorrent authenticates with a
-username/password WebUI login and has no API key. The descriptor captures those
-differences declaratively. ``secret_fields`` are the values that must never be
-returned in clear — they are reduced to ``<field>_set`` booleans when masked.
+(Jellyseerr/Sonarr/Radarr/SABnzbd/qBittorrent); TMDB and OMDb are API-key-only
+against a fixed public endpoint (no user URL). qBittorrent authenticates with its
+WebUI API key (``Authorization: Bearer``, available since v5.2.0). The descriptor
+captures those differences declaratively. ``secret_fields`` are the values that
+must never be returned in clear — they are reduced to ``<field>_set`` booleans
+when masked.
 """
 
 from __future__ import annotations
@@ -52,9 +53,7 @@ SERVICES: tuple[ServiceDescriptor, ...] = (
         default_url="https://www.omdbapi.com",
     ),
     ServiceDescriptor("sabnzbd", "SABnzbd", ("url", "api_key"), ("api_key",)),
-    ServiceDescriptor(
-        "qbittorrent", "qBittorrent", ("url", "username", "password"), ("password",)
-    ),
+    ServiceDescriptor("qbittorrent", "qBittorrent", ("url", "api_key"), ("api_key",)),
 )
 
 # Ordered service names and a name→descriptor lookup, derived once from SERVICES.

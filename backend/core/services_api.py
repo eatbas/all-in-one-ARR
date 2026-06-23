@@ -1,7 +1,7 @@
 """Dashboard JSON API for the managed connection services.
 
-Backs the per-service Settings tabs: view the saved connection (URLs/usernames in
-clear, secrets reduced to ``<field>_set`` booleans), update fields, and run a Test
+Backs the per-service Settings tabs: view the saved connection (URLs in clear,
+secrets reduced to ``<field>_set`` booleans), update fields, and run a Test
 connection. The set of services and the fields each one stores are described once
 in :mod:`core.service_registry`; this router stays generic over them. Kept
 separate from the core dashboard (`core.api`) and the Trakt router
@@ -29,8 +29,6 @@ class UpdateServiceRequest(BaseModel):
     # re-entering the others). Fields not declared by a service are ignored.
     url: str | None = None
     api_key: str | None = None
-    username: str | None = None
-    password: str | None = None
 
 
 class ServiceTestResponse(BaseModel):
@@ -56,19 +54,14 @@ def _apply_credentials(ctx: "AppContext", name: str) -> None:
 
     Each client's ``update_credentials`` takes only the keyword arguments for the
     fields its service declares (``url`` is passed as ``base_url``), so this maps
-    the descriptor's fields onto that call generically.
+    the descriptor's fields onto that call generically. Every managed service
+    carries an ``api_key``; only some also carry a ``url``.
     """
     desc: "ServiceDescriptor" = BY_NAME[name]
     values = ctx.settings_store.service_fields(name)
-    kwargs: dict[str, str] = {}
+    kwargs: dict[str, str] = {"api_key": values["api_key"]}
     if "url" in desc.fields:
         kwargs["base_url"] = values["url"]
-    if "api_key" in desc.fields:
-        kwargs["api_key"] = values["api_key"]
-    if "username" in desc.fields:
-        kwargs["username"] = values["username"]
-    if "password" in desc.fields:
-        kwargs["password"] = values["password"]
     _client_for(ctx, name).update_credentials(**kwargs)
 
 
@@ -88,9 +81,9 @@ def create_services_router(ctx: "AppContext") -> APIRouter:
     router = APIRouter(prefix="/api")
     log = get_logger("services_api")
 
-    # The masked shape varies per service (e.g. ``{url, api_key_set}`` vs
-    # ``{url, username, password_set}``), so the response model is left untyped
-    # and the descriptor-trimmed dict is returned verbatim.
+    # The masked shape varies per service (e.g. ``{url, api_key_set}`` vs the
+    # API-key-only ``{api_key_set}``), so the response model is left untyped and
+    # the descriptor-trimmed dict is returned verbatim.
     @router.get("/settings/services", response_model=None)
     async def get_services() -> dict[str, dict[str, Any]]:
         return _services_response(ctx)
@@ -102,11 +95,7 @@ def create_services_router(ctx: "AppContext") -> APIRouter:
         if name not in SERVICE_NAMES:
             return _unknown_service(name)
         ctx.settings_store.update_service_fields(
-            name,
-            url=body.url,
-            api_key=body.api_key,
-            username=body.username,
-            password=body.password,
+            name, url=body.url, api_key=body.api_key
         )
         _apply_credentials(ctx, name)
         log.info("updated %s connection", name)

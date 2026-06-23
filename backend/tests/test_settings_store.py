@@ -221,7 +221,7 @@ def test_seeds_and_masks_api_key_only_service(tmp_path) -> None:
     assert store.masked_services()["omdb"] == {"api_key_set": False}
 
 
-def test_seeds_updates_and_reloads_username_password_service(tmp_path) -> None:
+def test_seeds_updates_and_reloads_qbittorrent_service(tmp_path) -> None:
     path = tmp_path / "settings.json"
     store = SettingsStore(str(path))
     store.load_or_seed(
@@ -229,37 +229,29 @@ def test_seeds_updates_and_reloads_username_password_service(tmp_path) -> None:
         client_secret="s",
         user="me",
         lists=[],
-        services={
-            "qbittorrent": {
-                "url": "http://qb",
-                "username": "admin",
-                "password": "pw",
-            }
-        },
+        services={"qbittorrent": {"url": "http://qb", "api_key": "qbt_key"}},
     )
     assert store.service_fields("qbittorrent") == {
         "url": "http://qb",
-        "username": "admin",
-        "password": "pw",
+        "api_key": "qbt_key",
     }
     assert store.masked_services()["qbittorrent"] == {
         "url": "http://qb",
-        "username": "admin",
-        "password_set": True,
+        "api_key_set": True,
     }
     # Updating leaves unspecified fields unchanged and ignores undeclared ones.
-    store.update_service_fields("qbittorrent", password="new", api_key="ignored")
+    store.update_service_fields("qbittorrent", api_key="qbt_new", password="ignored")
     fields = store.service_fields("qbittorrent")
-    assert fields["password"] == "new"
-    assert fields["username"] == "admin"
-    assert "api_key" not in fields
+    assert fields["api_key"] == "qbt_new"
+    assert fields["url"] == "http://qb"
+    assert "password" not in fields
 
     # The change survives a reload from disk.
     reopened = SettingsStore(str(path))
     reopened.load_or_seed(
         client_id="x", client_secret="x", user="x", lists=[], services=None
     )
-    assert reopened.service_fields("qbittorrent")["password"] == "new"
+    assert reopened.service_fields("qbittorrent")["api_key"] == "qbt_new"
 
 
 def test_tracked_list_helpers() -> None:

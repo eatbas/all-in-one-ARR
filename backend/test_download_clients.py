@@ -56,12 +56,10 @@ async def main() -> int:
     print()
     print("qBittorrent")
     print(f"  URL      : {settings.QBITTORRENT_URL or '<empty>'}")
-    print(f"  Username : {settings.QBITTORRENT_USERNAME or '<empty>'}")
-    print(f"  Password : {mask(settings.QBITTORRENT_PASSWORD)}")
+    print(f"  API key  : {mask(settings.QBITTORRENT_API_KEY)}")
     qbit = QbittorrentClient(
         base_url=settings.QBITTORRENT_URL,
-        username=settings.QBITTORRENT_USERNAME,
-        password=settings.QBITTORRENT_PASSWORD,
+        api_key=settings.QBITTORRENT_API_KEY,
     )
     try:
         result = await qbit.test_connection()

@@ -22,7 +22,7 @@ _SECRET_FIELDS = frozenset(
         "TMDB_API_KEY",
         "OMDB_API_KEY",
         "SABNZBD_API_KEY",
-        "QBITTORRENT_PASSWORD",
+        "QBITTORRENT_API_KEY",
     }
 )
 
@@ -64,10 +64,9 @@ class Settings(BaseSettings):
     SABNZBD_URL: str = ""
     SABNZBD_API_KEY: str = ""
 
-    # ---- qBittorrent (URL + WebUI username/password) ----
+    # ---- qBittorrent (URL + WebUI API key; requires qBittorrent >= 5.2.0) ----
     QBITTORRENT_URL: str = ""
-    QBITTORRENT_USERNAME: str = ""
-    QBITTORRENT_PASSWORD: str = ""
+    QBITTORRENT_API_KEY: str = ""
 
     # ---- Sync behaviour ----
     SYNC_INTERVAL_MIN: int = 15
@@ -126,8 +125,7 @@ class Settings(BaseSettings):
             "sabnzbd": {"url": self.SABNZBD_URL, "api_key": self.SABNZBD_API_KEY},
             "qbittorrent": {
                 "url": self.QBITTORRENT_URL,
-                "username": self.QBITTORRENT_USERNAME,
-                "password": self.QBITTORRENT_PASSWORD,
+                "api_key": self.QBITTORRENT_API_KEY,
             },
         }
 

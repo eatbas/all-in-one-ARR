@@ -31,18 +31,14 @@ def test_descriptor_field_shapes() -> None:
     assert BY_NAME["tmdb"].fields == ("api_key",)
     assert BY_NAME["tmdb"].default_url == "https://api.themoviedb.org"
     assert BY_NAME["omdb"].default_url == "https://www.omdbapi.com"
-    assert BY_NAME["qbittorrent"].fields == ("url", "username", "password")
-    assert BY_NAME["qbittorrent"].secret_fields == ("password",)
+    assert BY_NAME["qbittorrent"].fields == ("url", "api_key")
+    assert BY_NAME["qbittorrent"].secret_fields == ("api_key",)
 
 
 def test_empty_values_holds_exactly_the_declared_fields() -> None:
     assert empty_values(BY_NAME["jellyseerr"]) == {"url": "", "api_key": ""}
     assert empty_values(BY_NAME["tmdb"]) == {"api_key": ""}
-    assert empty_values(BY_NAME["qbittorrent"]) == {
-        "url": "",
-        "username": "",
-        "password": "",
-    }
+    assert empty_values(BY_NAME["qbittorrent"]) == {"url": "", "api_key": ""}
 
 
 def test_masked_entry_masks_only_secret_fields() -> None:
@@ -52,11 +48,10 @@ def test_masked_entry_masks_only_secret_fields() -> None:
     ) == {"url": "http://js", "api_key_set": True}
     # API-key-only service: just the boolean.
     assert masked_entry(BY_NAME["tmdb"], {"api_key": ""}) == {"api_key_set": False}
-    # Username/password service: username in clear, password masked.
+    # qBittorrent is a url/api_key service: url in clear, api_key masked.
     assert masked_entry(
-        BY_NAME["qbittorrent"],
-        {"url": "http://qb", "username": "admin", "password": "pw"},
-    ) == {"url": "http://qb", "username": "admin", "password_set": True}
+        BY_NAME["qbittorrent"], {"url": "http://qb", "api_key": "k"}
+    ) == {"url": "http://qb", "api_key_set": True}
 
 
 def test_every_secret_field_is_a_declared_field() -> None:

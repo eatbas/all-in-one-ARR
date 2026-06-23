@@ -53,8 +53,7 @@ def test_all_service_credentials_are_optional() -> None:
     assert settings.SABNZBD_URL == ""
     assert settings.SABNZBD_API_KEY == ""
     assert settings.QBITTORRENT_URL == ""
-    assert settings.QBITTORRENT_USERNAME == ""
-    assert settings.QBITTORRENT_PASSWORD == ""
+    assert settings.QBITTORRENT_API_KEY == ""
 
 
 def test_service_seeds_shape() -> None:
@@ -71,8 +70,7 @@ def test_service_seeds_shape() -> None:
         SABNZBD_URL="http://sab:8080",
         SABNZBD_API_KEY="zk",
         QBITTORRENT_URL="http://qb:8080",
-        QBITTORRENT_USERNAME="admin",
-        QBITTORRENT_PASSWORD="pw",
+        QBITTORRENT_API_KEY="qbt_key",
     )
     seeds = settings.service_seeds
     assert seeds["jellyseerr"] == {"url": "http://js:5055", "api_key": "jk"}
@@ -81,11 +79,7 @@ def test_service_seeds_shape() -> None:
     assert seeds["tmdb"] == {"api_key": "tk"}
     assert seeds["omdb"] == {"api_key": "ok"}
     assert seeds["sabnzbd"] == {"url": "http://sab:8080", "api_key": "zk"}
-    assert seeds["qbittorrent"] == {
-        "url": "http://qb:8080",
-        "username": "admin",
-        "password": "pw",
-    }
+    assert seeds["qbittorrent"] == {"url": "http://qb:8080", "api_key": "qbt_key"}
 
 
 def test_masked_hides_secrets() -> None:
@@ -96,7 +90,7 @@ def test_masked_hides_secrets() -> None:
         TMDB_API_KEY="tk",
         OMDB_API_KEY="ok",
         SABNZBD_API_KEY="zk",
-        QBITTORRENT_PASSWORD="pw",
+        QBITTORRENT_API_KEY="qbt_key",
         **_VALID,
     )
     masked = settings.masked()
@@ -107,8 +101,7 @@ def test_masked_hides_secrets() -> None:
     assert masked["TMDB_API_KEY"] == "***"
     assert masked["OMDB_API_KEY"] == "***"
     assert masked["SABNZBD_API_KEY"] == "***"
-    assert masked["QBITTORRENT_PASSWORD"] == "***"
-    # A non-secret service field is shown in clear.
-    assert masked["QBITTORRENT_USERNAME"] == ""
+    assert masked["QBITTORRENT_API_KEY"] == "***"
+    # A non-secret field is shown in clear.
     assert masked["TRAKT_USER"] == "me"
     assert masked["DRY_RUN"] is True

@@ -89,9 +89,7 @@ def build_context(settings: Settings) -> AppContext:
     sabnzbd = SabnzbdClient(base_url=sab_fields["url"], api_key=sab_fields["api_key"])
     qbit_fields = settings_store.service_fields("qbittorrent")
     qbittorrent = QbittorrentClient(
-        base_url=qbit_fields["url"],
-        username=qbit_fields["username"],
-        password=qbit_fields["password"],
+        base_url=qbit_fields["url"], api_key=qbit_fields["api_key"]
     )
 
     ctx = AppContext(
