@@ -31,13 +31,16 @@ const emptyServiceStatuses = {
   services: {},
 }
 
+const checkNowMutate = vi.fn()
+
 describe("Dashboard", () => {
   beforeEach(() => {
+    checkNowMutate.mockClear()
     vi.mocked(useServiceStatuses).mockReturnValue(
       queryResult(emptyServiceStatuses, false),
     )
     vi.mocked(useCheckServiceStatuses).mockReturnValue({
-      mutate: vi.fn(),
+      mutate: checkNowMutate,
       isPending: false,
     } as never)
   })
@@ -126,5 +129,16 @@ describe("Dashboard", () => {
     expect(screen.getByText("Integrations")).toBeInTheDocument()
     expect(screen.getByText("Trakt")).toBeInTheDocument()
     expect(screen.getByText("Jellyseerr")).toBeInTheDocument()
+  })
+
+  it("triggers a fresh check when 'Check now' is clicked", async () => {
+    const user = userEvent.setup()
+    vi.mocked(useStatus).mockReturnValue(queryResult<Status>(loadedStatus, false))
+    vi.mocked(useActivity).mockReturnValue(queryResult<ActivityEntry[]>([], false))
+
+    render(<Dashboard />)
+    await user.click(screen.getByRole("button", { name: /check now/i }))
+
+    expect(checkNowMutate).toHaveBeenCalledTimes(1)
   })
 })
