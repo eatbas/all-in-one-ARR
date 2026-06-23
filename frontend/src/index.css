@@ -146,3 +146,21 @@
 [data-sonner-toaster]:hover [data-sonner-toast]::after {
   animation-play-state: paused;
 }
+
+/* Sonner reuses ::after as a spacer when the stack expands on hover.
+   Hide that spacer so a secondary progress-coloured bar does not appear
+   above every toast. Keep the countdown bar visible on the front toast. */
+[data-sonner-toaster] [data-sonner-toast][data-expanded="true"]::after {
+  background: transparent;
+  border-radius: 0;
+  animation: none;
+}
+
+[data-sonner-toaster]
+  [data-sonner-toast][data-front="true"][data-expanded="true"]::after {
+  bottom: 0;
+  height: 2px;
+  background: var(--primary);
+  border-radius: 0 0 var(--radius) var(--radius);
+  animation: aio-toast-progress 3000ms linear forwards;
+}
