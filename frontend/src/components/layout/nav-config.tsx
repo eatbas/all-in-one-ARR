@@ -1,6 +1,7 @@
 import {
   LayoutDashboardIcon,
   ListVideoIcon,
+  ListIcon,
   SettingsIcon,
   type LucideIcon,
 } from "lucide-react"
@@ -27,6 +28,12 @@ export const NAV_ITEMS: ReadonlyArray<NavItem> = [
     to: "/",
     icon: LayoutDashboardIcon,
     description: "Overview of sync counts and recent activity",
+  },
+  {
+    title: "Lists",
+    to: "/lists",
+    icon: ListIcon,
+    description: "Trakt List Sync status and integration health",
   },
   {
     title: "Items",
