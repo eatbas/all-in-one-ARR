@@ -57,6 +57,17 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/shared/components/ui/tooltip"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/shared/components/ui/alert-dialog"
 
 describe("Button asChild", () => {
   it("renders a slotted child instead of a button", () => {
@@ -181,6 +192,30 @@ describe("Select grouped options", () => {
       </Select>,
     )
     expect(await screen.findByText("Alpha")).toBeInTheDocument()
+  })
+})
+
+describe("AlertDialog open content", () => {
+  it("renders the trigger and portalled header, body and actions when open", async () => {
+    render(
+      <AlertDialog defaultOpen>
+        <AlertDialogTrigger>Open</AlertDialogTrigger>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete?</AlertDialogTitle>
+            <AlertDialogDescription>This is permanent.</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction>Confirm</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>,
+    )
+    expect(await screen.findByText("Delete?")).toBeInTheDocument()
+    expect(screen.getByText("This is permanent.")).toBeInTheDocument()
+    expect(screen.getByRole("button", { name: "Confirm" })).toBeInTheDocument()
+    expect(screen.getByRole("button", { name: "Cancel" })).toBeInTheDocument()
   })
 })
 
