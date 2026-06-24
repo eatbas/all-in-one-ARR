@@ -85,7 +85,6 @@ export interface TraktSettings {
   client_id_hint: string
   client_id_set: boolean
   client_secret_set: boolean
-  user: string
   connected: boolean
   lists: TrackedListRef[]
 }
@@ -94,7 +93,6 @@ export interface TraktSettings {
 export interface UpdateTraktSettings {
   client_id?: string
   client_secret?: string
-  user?: string
 }
 
 /** Response of `POST /api/trakt/auth/start`. */

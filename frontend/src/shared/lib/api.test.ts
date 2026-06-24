@@ -167,13 +167,13 @@ describe("trakt settings and lists", () => {
   })
 
   it("PUTs updated trakt settings", async () => {
-    const fetchSpy = mockFetch(jsonResponse({ user: "bob" }))
-    await updateTraktSettings({ user: "bob" })
+    const fetchSpy = mockFetch(jsonResponse({ client_id_hint: "1234" }))
+    await updateTraktSettings({ client_id: "newid1234" })
     expect(fetchSpy).toHaveBeenCalledWith(
       "/api/settings/trakt",
       expect.objectContaining({
         method: "PUT",
-        body: JSON.stringify({ user: "bob" }),
+        body: JSON.stringify({ client_id: "newid1234" }),
       }),
     )
   })

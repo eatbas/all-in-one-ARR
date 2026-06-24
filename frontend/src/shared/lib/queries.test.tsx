@@ -76,7 +76,6 @@ const sampleSettings = {
   client_id_hint: "1234",
   client_id_set: true,
   client_secret_set: true,
-  user: "me",
   connected: true,
   lists: [],
 }
@@ -267,7 +266,7 @@ describe("trakt connection hooks", () => {
     const { wrapper } = setup()
     const { result } = renderHook(() => useTraktSettings(), { wrapper })
     await waitFor(() => expect(result.current.isSuccess).toBe(true))
-    expect(result.current.data?.user).toBe("me")
+    expect(result.current.data?.client_id_hint).toBe("1234")
   })
 
   it("useTraktAuthStatus stops polling once not pending", async () => {
@@ -309,7 +308,7 @@ describe("trakt connection hooks", () => {
     const invalidate = vi.spyOn(queryClient, "invalidateQueries")
     const { result } = renderHook(() => useUpdateTraktSettings(), { wrapper })
 
-    act(() => result.current.mutate({ user: "bob" }))
+    act(() => result.current.mutate({ client_id: "newid1234" }))
 
     await waitFor(() => expect(result.current.isSuccess).toBe(true))
     expect(toast.success).toHaveBeenCalledWith("Trakt settings saved")

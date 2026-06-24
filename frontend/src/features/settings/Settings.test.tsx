@@ -5,12 +5,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 vi.mock("@/shared/lib/queries", () => ({
   useTraktSettings: vi.fn(),
   useTraktAuthStatus: vi.fn(),
-  useTraktLists: vi.fn(),
   useUpdateTraktSettings: vi.fn(),
   useStartTraktAuth: vi.fn(),
   useTestTrakt: vi.fn(),
-  useAddTraktList: vi.fn(),
-  useRemoveTraktList: vi.fn(),
   useServiceSettings: vi.fn(),
   useUpdateServiceSettings: vi.fn(),
   useTestService: vi.fn(),
@@ -26,9 +23,7 @@ vi.mock("@/shared/components/theme-provider", () => ({
 }))
 
 import {
-  useAddTraktList,
   useGeneralSettings,
-  useRemoveTraktList,
   useServiceSettings,
   useSetDryRun,
   useStartTraktAuth,
@@ -36,7 +31,6 @@ import {
   useTestService,
   useTestTrakt,
   useTraktAuthStatus,
-  useTraktLists,
   useTraktSettings,
   useUpdateServiceSettings,
   useUpdateStatusInterval,
@@ -47,7 +41,6 @@ import type {
   ServicesSettings,
   Status,
   TraktAuthStatus,
-  TraktListEntry,
   TraktSettings,
   TraktTestResult,
 } from "@/shared/lib/api"
@@ -63,7 +56,6 @@ const SETTINGS: TraktSettings = {
   client_id_hint: "1234",
   client_id_set: true,
   client_secret_set: true,
-  user: "me",
   connected: true,
   lists: [{ owner_user: "me", slug: "movies", name: "Movies" }],
 }
@@ -95,8 +87,6 @@ const STATUS: Status = {
 let updateMutate: ReturnType<typeof vi.fn>
 let startMutate: ReturnType<typeof vi.fn>
 let testMutate: ReturnType<typeof vi.fn>
-let addMutate: ReturnType<typeof vi.fn>
-let removeMutate: ReturnType<typeof vi.fn>
 let serviceUpdateMutate: ReturnType<typeof vi.fn>
 let serviceTestMutate: ReturnType<typeof vi.fn>
 let setDryRunMutate: ReturnType<typeof vi.fn>
@@ -108,8 +98,6 @@ beforeEach(() => {
   updateMutate = vi.fn()
   startMutate = vi.fn()
   testMutate = vi.fn()
-  addMutate = vi.fn()
-  removeMutate = vi.fn()
   serviceUpdateMutate = vi.fn()
   serviceTestMutate = vi.fn()
   setDryRunMutate = vi.fn()
@@ -117,12 +105,9 @@ beforeEach(() => {
 
   vi.mocked(useTraktSettings).mockReturnValue(queryResult(SETTINGS))
   vi.mocked(useTraktAuthStatus).mockReturnValue(queryResult(IDLE_AUTH))
-  vi.mocked(useTraktLists).mockReturnValue(queryResult<TraktListEntry[]>([]))
   vi.mocked(useUpdateTraktSettings).mockReturnValue(mutation(updateMutate))
   vi.mocked(useStartTraktAuth).mockReturnValue(mutation(startMutate))
   vi.mocked(useTestTrakt).mockReturnValue(mutation(testMutate))
-  vi.mocked(useAddTraktList).mockReturnValue(mutation(addMutate))
-  vi.mocked(useRemoveTraktList).mockReturnValue(mutation(removeMutate))
   vi.mocked(useServiceSettings).mockReturnValue(queryResult(SERVICES))
   vi.mocked(useUpdateServiceSettings).mockReturnValue(mutation(serviceUpdateMutate))
   vi.mocked(useTestService).mockReturnValue(mutation(serviceTestMutate))
@@ -171,9 +156,6 @@ describe("Settings — credentials", () => {
     expect(
       screen.getByRole("button", { name: "Re-connect Trakt" }),
     ).toBeInTheDocument()
-    // The synced list is listed with its owner/slug.
-    expect(screen.getByText("Movies")).toBeInTheDocument()
-    expect(screen.getByText("(me/movies)")).toBeInTheDocument()
   })
 
   it("shows 'Not set' hints and disconnected state without settings", async () => {
@@ -186,10 +168,6 @@ describe("Settings — credentials", () => {
     expect(
       screen.getByRole("button", { name: "Connect Trakt" }),
     ).toBeInTheDocument()
-    expect(screen.getByText("No lists selected yet.")).toBeInTheDocument()
-    expect(
-      screen.getByText("Connect Trakt to discover your lists."),
-    ).toBeInTheDocument()
   })
 
   it("saves only the fields that were entered", async () => {
@@ -199,12 +177,10 @@ describe("Settings — credentials", () => {
       screen.getByPlaceholderText("Leave blank to keep current"),
       "sec",
     )
-    await user.type(screen.getByPlaceholderText("me"), "bob")
     await user.click(screen.getByRole("button", { name: "Save credentials" }))
     expect(updateMutate).toHaveBeenCalledWith({
       client_id: "cid",
       client_secret: "sec",
-      user: "bob",
     })
   })
 
@@ -312,73 +288,6 @@ describe("Settings — connection", () => {
     withTestResult({ ok: false, user: null, message: "no token" })
     await renderTrakt()
     expect(screen.getByText("no token")).toBeInTheDocument()
-  })
-})
-
-describe("Settings — lists", () => {
-  const DISCOVERED: TraktListEntry[] = [
-    { name: "TV", slug: "tv", owner_user: "me", item_count: 6, selected: false },
-    { name: null, slug: "anime", owner_user: "me", item_count: null, selected: true },
-  ]
-
-  it("removes a synced list", async () => {
-    const user = await renderTrakt()
-    await user.click(screen.getByRole("button", { name: "Remove" }))
-    expect(removeMutate).toHaveBeenCalledWith({ owner_user: "me", slug: "movies" })
-  })
-
-  it("adds a list by URL", async () => {
-    const user = await renderTrakt()
-    const input = screen.getByPlaceholderText(
-      "https://trakt.tv/users/me/lists/anime",
-    )
-    await user.type(input, "https://trakt.tv/users/me/lists/anime")
-    await user.click(screen.getByRole("button", { name: "Add" }))
-    expect(addMutate).toHaveBeenCalledWith({
-      url: "https://trakt.tv/users/me/lists/anime",
-    })
-  })
-
-  it("discovers lists and toggles their selection", async () => {
-    vi.mocked(useTraktLists).mockReturnValue(queryResult(DISCOVERED))
-    const user = await renderTrakt()
-    expect(screen.getByText("TV")).toBeInTheDocument()
-    expect(screen.getByText("anime")).toBeInTheDocument() // null name -> slug
-    expect(screen.getByText("(6 items)")).toBeInTheDocument()
-    expect(screen.getByText("(0 items)")).toBeInTheDocument() // null count -> 0
-
-    await user.click(screen.getByRole("switch", { name: "Sync tv" }))
-    expect(addMutate).toHaveBeenCalledWith({ owner_user: "me", slug: "tv" })
-
-    await user.click(screen.getByRole("switch", { name: "Sync anime" }))
-    expect(removeMutate).toHaveBeenCalledWith({ owner_user: "me", slug: "anime" })
-  })
-
-  it("shows a loading state for discovered lists", async () => {
-    vi.mocked(useTraktLists).mockReturnValue(
-      queryResult<TraktListEntry[]>(undefined, true),
-    )
-    await renderTrakt()
-    expect(screen.getByText("Loading lists…")).toBeInTheDocument()
-  })
-
-  it("shows an empty message when no lists are discovered", async () => {
-    vi.mocked(useTraktLists).mockReturnValue(
-      queryResult<TraktListEntry[]>(undefined, false),
-    )
-    await renderTrakt()
-    expect(
-      screen.getByText("No lists found on your account."),
-    ).toBeInTheDocument()
-  })
-
-  it("disables controls while mutations are pending", async () => {
-    vi.mocked(useTraktLists).mockReturnValue(queryResult(DISCOVERED))
-    vi.mocked(useAddTraktList).mockReturnValue(mutation(addMutate, true))
-    vi.mocked(useRemoveTraktList).mockReturnValue(mutation(removeMutate, true))
-    await renderTrakt()
-    expect(screen.getByRole("button", { name: "Add" })).toBeDisabled()
-    expect(screen.getByRole("switch", { name: "Sync tv" })).toBeDisabled()
   })
 })
 

@@ -1,18 +1,20 @@
 import { useState } from "react"
-import { ListIcon, ListVideoIcon } from "lucide-react"
+import { ListIcon, ListVideoIcon, SettingsIcon } from "lucide-react"
 
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/shared/components/ui/tabs"
 import { Items } from "@/features/list-syncarr/tabs/Items"
 import { Lists } from "@/features/list-syncarr/tabs/Lists"
+import { ListSettings } from "@/features/list-syncarr/tabs/ListSettings"
 import {
   LIST_SYNCARR_TAB_STORAGE_KEY,
   VALID_LIST_SYNCARR_TABS,
 } from "@/features/list-syncarr/list-syncarr-tab"
 
 /**
- * List-Syncarr page: the Trakt list-sync module surfaced as two tabs — **Lists**
- * (the Trakt lists kept in sync) and **Items** (their mirrored movies and shows).
- * The active tab is persisted to localStorage, mirroring the Settings page.
+ * List-Syncarr page: the Trakt list-sync module surfaced as three tabs — **Lists**
+ * (the Trakt lists kept in sync), **Items** (their mirrored movies and shows), and
+ * **Settings** (choosing which Trakt lists to sync). The active tab is persisted to
+ * localStorage, mirroring the Settings page.
  */
 export function ListSyncarr() {
   const [activeTab, setActiveTab] = useState(() => {
@@ -39,12 +41,19 @@ export function ListSyncarr() {
           <ListVideoIcon className="size-4" />
           Items
         </TabsTrigger>
+        <TabsTrigger value="settings">
+          <SettingsIcon className="size-4" />
+          Settings
+        </TabsTrigger>
       </TabsList>
       <TabsContent value="lists">
         <Lists />
       </TabsContent>
       <TabsContent value="items">
         <Items />
+      </TabsContent>
+      <TabsContent value="settings">
+        <ListSettings />
       </TabsContent>
     </Tabs>
   )

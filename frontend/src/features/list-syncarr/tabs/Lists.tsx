@@ -30,19 +30,15 @@ function ListRow({ list }: { list: ListSummary }) {
   const { data: items, isLoading } = useListItems(list.slug, open)
 
   return (
-    <Collapsible
-      open={open}
-      onOpenChange={setOpen}
-      className="py-3 first:pt-0 last:pb-0"
-    >
-      <CollapsibleTrigger className="flex w-full items-center gap-3 text-left">
+    <Collapsible open={open} onOpenChange={setOpen}>
+      <CollapsibleTrigger className="flex min-h-14 w-full items-center gap-3 rounded-md px-2 py-4 text-left transition-colors hover:bg-muted/50">
         <ChevronDownIcon
           className={cn(
-            "size-4 shrink-0 text-muted-foreground transition-transform",
+            "size-5 shrink-0 text-muted-foreground transition-transform",
             open && "rotate-180",
           )}
         />
-        <span className="flex-1 text-sm font-medium">
+        <span className="flex-1 text-base font-medium">
           {list.name}{" "}
           <span className="text-muted-foreground">({list.item_count})</span>
         </span>
@@ -105,7 +101,7 @@ export function Lists() {
       <Card>
         <CardHeader>
           <CardTitle>Synced lists</CardTitle>
-          <CardDescription>Manage these from Settings → Trakt.</CardDescription>
+          <CardDescription>Manage these from the Settings tab.</CardDescription>
         </CardHeader>
         <CardContent>
           {isLoading ? (
