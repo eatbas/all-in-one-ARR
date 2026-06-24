@@ -12,30 +12,6 @@ import { ModeToggle } from "@/shared/components/mode-toggle"
 import { cn } from "@/shared/lib/utils"
 import { useStatus, useSyncNow } from "@/shared/lib/queries"
 
-/** Pill showing whether the backend currently holds a valid Trakt token. */
-function TraktStatusPill({ connected }: { connected: boolean }) {
-  return (
-    <Badge
-      variant="outline"
-      className={cn(
-        "gap-1.5",
-        connected
-          ? "border-emerald-500/40 text-emerald-600 dark:text-emerald-400"
-          : "border-amber-500/40 text-amber-600 dark:text-amber-400",
-      )}
-    >
-      <span
-        className={cn(
-          "size-1.5 rounded-full",
-          connected ? "bg-emerald-500" : "bg-amber-500",
-        )}
-        aria-hidden
-      />
-      {connected ? "Trakt connected" : "Trakt needs auth"}
-    </Badge>
-  )
-}
-
 /**
  * Prominent dry-run indicator. Orange/warning styling whenever dry-run is ON to
  * make it unmistakable that side effects are being suppressed.
@@ -64,7 +40,6 @@ export function Topbar() {
   const syncNow = useSyncNow()
 
   const dryRun = status?.dry_run ?? true
-  const traktConnected = status?.trakt_connected ?? false
 
   return (
     <header className="sticky top-0 z-30 flex h-16 items-center gap-4 border-b bg-background/95 px-4 backdrop-blur supports-[backdrop-filter]:bg-background/60 md:px-6">
@@ -72,7 +47,6 @@ export function Topbar() {
         <span className="truncate text-lg font-semibold tracking-tight">
           All-in-One ARR
         </span>
-        <TraktStatusPill connected={traktConnected} />
         <DryRunBadge dryRun={dryRun} />
       </div>
 

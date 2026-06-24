@@ -43,7 +43,6 @@ describe("Topbar", () => {
     renderTopbar()
 
     expect(screen.getByText("DRY_RUN ON")).toBeInTheDocument()
-    expect(screen.getByText("Trakt needs auth")).toBeInTheDocument()
     // Disabled via the `status === undefined` side of the guard.
     expect(screen.getByRole("switch")).toBeDisabled()
   })
@@ -59,7 +58,9 @@ describe("Topbar", () => {
     renderTopbar()
 
     expect(screen.getByText("LIVE")).toBeInTheDocument()
-    expect(screen.getByText("Trakt connected")).toBeInTheDocument()
+    // The Trakt status pill was removed from the header; its connection state is
+    // surfaced on the dashboard's Integrations card instead.
+    expect(screen.queryByText("Trakt connected")).not.toBeInTheDocument()
 
     const toggle = screen.getByRole("switch")
     expect(toggle).not.toBeDisabled()
