@@ -35,6 +35,24 @@ async def test_connection_ok_empty_version_falls_back() -> None:
 
 
 @respx.mock
+async def test_blank_key_reports_not_set_without_request() -> None:
+    # An empty Bearer value is an illegal header, so no round-trip is attempted.
+    route = respx.get(_VERSION).mock(return_value=httpx.Response(200, text="v5.2.0"))
+    result = await make_client(api_key="   ").test_connection()
+    assert result == {"ok": False, "detail": "qBittorrent API key is not set"}
+    assert not route.called
+
+
+@respx.mock
+async def test_key_whitespace_is_stripped_in_header() -> None:
+    # A stray trailing newline from a paste would otherwise be an illegal header.
+    version = respx.get(_VERSION).mock(return_value=httpx.Response(200, text="v5.2.0"))
+    result = await make_client(api_key=f"  {_KEY}\n").test_connection()
+    assert result == {"ok": True, "detail": "Connected to qBittorrent v5.2.0"}
+    assert version.calls.last.request.headers["Authorization"] == f"Bearer {_KEY}"
+
+
+@respx.mock
 async def test_invalid_key_401_reports_rejected() -> None:
     respx.get(_VERSION).mock(return_value=httpx.Response(401))
     result = await make_client().test_connection()

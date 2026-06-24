@@ -41,16 +41,24 @@ class QbittorrentClient:
         """Validate the base URL + API key against ``/api/v2/app/version``.
 
         Returns ``{ok, detail}``; never raises for an expected failure so the
-        dashboard can show the reason. A missing or invalid key is answered with
+        dashboard can show the reason. An invalid key is answered with
         HTTP 401/403; a valid key returns the version text. A matching ``Referer``
         is sent defensively for deployments that still enforce the WebUI's
         host/CSRF checks on authenticated requests.
+
+        A blank key is reported directly rather than sent: an empty Bearer value
+        is an illegal HTTP header, so building the request would raise before any
+        round-trip. The key is also stripped of stray whitespace (e.g. a trailing
+        newline from a paste) for the same reason.
         """
+        api_key = self._api_key.strip()
+        if not api_key:
+            return {"ok": False, "detail": "qBittorrent API key is not set"}
         try:
             response = await self._client.get(
                 f"{self._base_url}/api/v2/app/version",
                 headers={
-                    "Authorization": f"Bearer {self._api_key}",
+                    "Authorization": f"Bearer {api_key}",
                     "Referer": self._base_url,
                 },
             )
