@@ -2,17 +2,23 @@
 once Radarr/Sonarr import them.
 
 The module registers:
-- an interval poll job (poll Trakt -> request in Jellyseerr),
-- a nightly reconciliation job (safety net),
+- an interval poll job (poll Trakt -> request in Jellyseerr) at the configured,
+  runtime-adjustable sync interval,
 - the ``/webhook/arr`` handler (remove on import),
-- and ``ctx.sync_now`` so the dashboard's "Sync now" button works.
+- ``ctx.sync_now`` so the dashboard's "Sync now" button works,
+- and the manual removal/reschedule callables the dashboard's delete controls and
+  sync-interval setting drive (``ctx.remove_available``/``remove_item``/``reschedule_sync``).
+
+Removal is no longer autonomous: the nightly reconciliation cron has been retired
+in favour of the manual "Delete availables" action (``ctx.remove_available``), which
+runs the same :func:`reconcile` sweep on demand.
 
 ``setup`` is async because APScheduler 4's ``add_schedule`` is async; the
 registry awaits it. APScheduler 4 requires top-level importable callables for
-its jobs, so the scheduled jobs are the module-level ``poll_job``/
-``reconcile_job`` functions which resolve the active context from the single
-module-level reference set in ``setup`` (justified: one context exists per
-process, and the scheduler cannot reference closures).
+its jobs, so the scheduled poll is the module-level ``poll_job`` function which
+resolves the active context from the single module-level reference set in
+``setup`` (justified: one context exists per process, and the scheduler cannot
+reference closures).
 """
 
 from __future__ import annotations
@@ -22,6 +28,7 @@ from typing import TYPE_CHECKING
 from fastapi import FastAPI
 
 from core.logging import get_logger
+from modules.list_syncarr.manual import remove_one
 from modules.list_syncarr.reconcile import reconcile
 from modules.list_syncarr.sync import poll_and_request
 from modules.list_syncarr.webhook import handle_arr
@@ -55,25 +62,24 @@ async def poll_job() -> None:
     await poll_and_request(_require_context())
 
 
-async def reconcile_job() -> None:
-    """Scheduled entrypoint for the nightly reconciliation."""
-    await reconcile(_require_context())
-
-
 async def setup(
     scheduler: "SchedulerService", app: FastAPI, ctx: "AppContext"
 ) -> None:
-    """Register jobs, the webhook handler, and the manual-sync callable."""
+    """Register the poll job, the webhook handler, and the manual callables."""
     register_context(ctx)
 
     await scheduler.add_interval(
-        poll_job, minutes=ctx.settings.SYNC_INTERVAL_MIN, id="list_syncarr_poll"
-    )
-    await scheduler.add_cron(
-        reconcile_job, hour=3, minute=0, id="list_syncarr_reconcile"
+        poll_job,
+        minutes=ctx.settings_store.sync_interval_minutes(),
+        id="list_syncarr_poll",
     )
 
     ctx.webhooks.register("arr", lambda payload: handle_arr(ctx, payload))
     ctx.sync_now = lambda: poll_and_request(ctx)
+    ctx.remove_available = lambda: reconcile(ctx)
+    ctx.remove_item = lambda list_id, trakt_id: remove_one(ctx, list_id, trakt_id)
+    ctx.reschedule_sync = lambda minutes: scheduler.reschedule_interval(
+        poll_job, minutes=minutes, id="list_syncarr_poll"
+    )
 
     _log.info("list_syncarr module ready")

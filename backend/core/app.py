@@ -57,6 +57,7 @@ def build_context(settings: Settings) -> AppContext:
         client_secret=settings.TRAKT_CLIENT_SECRET,
         services=settings.service_seeds,
         status_check_interval_seconds=settings.STATUS_CHECK_INTERVAL_SECONDS,
+        sync_interval_minutes=settings.SYNC_INTERVAL_MIN,
     )
     client_id, client_secret = settings_store.trakt_credentials()
 

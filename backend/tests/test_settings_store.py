@@ -290,3 +290,46 @@ def test_status_check_interval_in_masked(tmp_path) -> None:
     _seed(store)
     store.update_status_check_interval(45)
     assert store.masked()["status_check_interval_seconds"] == 45
+
+
+def test_sync_interval_defaults_to_fifteen(tmp_path) -> None:
+    store = SettingsStore(str(tmp_path / "settings.json"))
+    _seed(store)
+    assert store.sync_interval_minutes() == 15
+
+
+def test_sync_interval_seed_and_reload(tmp_path) -> None:
+    path = tmp_path / "settings.json"
+    store = SettingsStore(str(path))
+    store.load_or_seed(
+        client_id="cid",
+        client_secret="sec",
+        sync_interval_minutes=30,
+    )
+    assert store.sync_interval_minutes() == 30
+    assert json.loads(path.read_text())["sync_interval_minutes"] == 30
+
+    reopened = SettingsStore(str(path))
+    reopened.load_or_seed(client_id="x", client_secret="x")
+    assert reopened.sync_interval_minutes() == 30
+
+
+def test_sync_interval_invalid_value_falls_back(tmp_path) -> None:
+    store = SettingsStore(str(tmp_path / "settings.json"))
+    _seed(store)
+    assert store.update_sync_interval(45) == 45
+    assert store.update_sync_interval(7) == 15
+    assert store.sync_interval_minutes() == 15
+
+
+def test_sync_interval_invalid_seed_falls_back(tmp_path) -> None:
+    store = SettingsStore(str(tmp_path / "settings.json"))
+    store.load_or_seed(client_id="cid", client_secret="sec", sync_interval_minutes=999)
+    assert store.sync_interval_minutes() == 15
+
+
+def test_sync_interval_in_masked(tmp_path) -> None:
+    store = SettingsStore(str(tmp_path / "settings.json"))
+    _seed(store)
+    store.update_sync_interval(60)
+    assert store.masked()["sync_interval_minutes"] == 60

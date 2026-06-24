@@ -72,6 +72,7 @@ class StubSettingsStore:
         client_secret: str = "secret",
         services: dict[str, dict[str, str]] | None = None,
         status_check_interval_seconds: int = 60,
+        sync_interval_minutes: int = 15,
     ) -> None:
         self._lists = (
             lists
@@ -80,6 +81,7 @@ class StubSettingsStore:
         )
         self._creds = (client_id, client_secret)
         self._status_check_interval_seconds = status_check_interval_seconds
+        self._sync_interval_minutes = sync_interval_minutes
         # Start from a complete, descriptor-shaped baseline so every service is
         # present (masked_services iterates them all), then apply the legacy
         # defaults and any explicit override.
@@ -128,6 +130,15 @@ class StubSettingsStore:
             seconds = 60
         self._status_check_interval_seconds = seconds
         return seconds
+
+    def sync_interval_minutes(self) -> int:
+        return self._sync_interval_minutes
+
+    def update_sync_interval(self, minutes: int) -> int:
+        if minutes not in {15, 30, 45, 60}:
+            minutes = 15
+        self._sync_interval_minutes = minutes
+        return minutes
 
     def masked_services(self) -> dict[str, dict[str, Any]]:
         return {

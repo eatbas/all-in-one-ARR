@@ -1,8 +1,9 @@
-"""Nightly reconciliation safety net.
+"""Availability reconciliation sweep (now a manual action).
 
-The webhook is the primary trigger for removal; this job catches anything the
-webhook missed by asking Jellyseerr which tracked items are now Available (5)
-and removing them from Trakt. Honours the live DRY_RUN flag.
+Asks Jellyseerr which tracked items are now Available (5) and removes them from
+Trakt. This used to run on a nightly cron; it is now triggered on demand by the
+dashboard's "Delete availables" button (via ``ctx.remove_available``). Honours the
+live DRY_RUN flag.
 """
 
 from __future__ import annotations

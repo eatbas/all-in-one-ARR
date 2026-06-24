@@ -23,8 +23,10 @@ async def test_load_real_list_syncarr(db) -> None:
     # setup wired the webhook handler and the manual-sync callable.
     assert "arr" in ctx.webhooks._handlers
     assert ctx.sync_now is not None
+    assert ctx.remove_available is not None
     scheduler.add_interval.assert_awaited()
-    scheduler.add_cron.assert_awaited()
+    # Removal is no longer autonomous: no reconcile cron is scheduled.
+    scheduler.add_cron.assert_not_awaited()
 
 
 async def test_load_handles_missing_setup_errors_and_sync_setup(db, monkeypatch) -> None:

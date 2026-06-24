@@ -107,12 +107,16 @@ class ServicesStatusResponse(BaseModel):
     services: dict[str, ServiceStatus]
 
 
-class StatusCheckIntervalRequest(BaseModel):
-    interval_seconds: int
+class GeneralSettingsRequest(BaseModel):
+    # Both optional so the UI can change one without re-sending the other; a
+    # ``None`` field is left unchanged.
+    interval_seconds: int | None = None
+    sync_interval_minutes: int | None = None
 
 
-class StatusCheckIntervalResponse(BaseModel):
+class GeneralSettingsResponse(BaseModel):
     interval_seconds: int
+    sync_interval_minutes: int
 
 
 def _next_sync_at(last_synced_at: str | None, interval_minutes: int) -> str | None:
@@ -167,7 +171,7 @@ def create_api_router(ctx: "AppContext") -> APIRouter:
     async def get_lists() -> list[ListSummary]:
         counts = ctx.db.counts_by_list()
         last_synced = ctx.db.list_last_synced()
-        interval = ctx.settings.SYNC_INTERVAL_MIN
+        interval = ctx.settings_store.sync_interval_minutes()
         summaries: list[ListSummary] = []
         for tracked in ctx.settings_store.tracked_lists():
             last = last_synced.get(tracked.slug)
@@ -220,11 +224,15 @@ def create_api_router(ctx: "AppContext") -> APIRouter:
         ctx.set_dry_run(body.enabled)
         return DryRunResponse(dry_run=ctx.dry_run)
 
-    @router.get("/settings/general", response_model=StatusCheckIntervalResponse)
-    async def get_general_settings() -> StatusCheckIntervalResponse:
-        return StatusCheckIntervalResponse(
-            interval_seconds=ctx.settings_store.status_check_interval_seconds()
+    def _general_settings() -> GeneralSettingsResponse:
+        return GeneralSettingsResponse(
+            interval_seconds=ctx.settings_store.status_check_interval_seconds(),
+            sync_interval_minutes=ctx.settings_store.sync_interval_minutes(),
         )
+
+    @router.get("/settings/general", response_model=GeneralSettingsResponse)
+    async def get_general_settings() -> GeneralSettingsResponse:
+        return _general_settings()
 
     @router.get("/status/services", response_model=ServicesStatusResponse)
     async def get_services_status() -> ServicesStatusResponse:
@@ -234,13 +242,39 @@ def create_api_router(ctx: "AppContext") -> APIRouter:
     async def post_services_check() -> ServicesStatusResponse:
         return _services_status_response(await ctx.status_checker.check_now())
 
-    @router.put("/settings/general", response_model=StatusCheckIntervalResponse)
+    @router.put("/settings/general", response_model=GeneralSettingsResponse)
     async def put_general_settings(
-        body: StatusCheckIntervalRequest,
-    ) -> StatusCheckIntervalResponse:
-        interval = ctx.settings_store.update_status_check_interval(
-            body.interval_seconds
-        )
-        return StatusCheckIntervalResponse(interval_seconds=interval)
+        body: GeneralSettingsRequest,
+    ) -> GeneralSettingsResponse:
+        if body.interval_seconds is not None:
+            ctx.settings_store.update_status_check_interval(body.interval_seconds)
+        if body.sync_interval_minutes is not None:
+            minutes = ctx.settings_store.update_sync_interval(body.sync_interval_minutes)
+            if ctx.reschedule_sync is not None:
+                await ctx.reschedule_sync(minutes)
+        return _general_settings()
+
+    @router.post("/items/remove-available", response_model=SyncResponse, status_code=202)
+    async def post_remove_available() -> JSONResponse:
+        """Sweep every Available item out of its Trakt list (manual reconcile)."""
+        if ctx.remove_available is not None:
+            _remember_task(asyncio.create_task(ctx.remove_available()))
+            log.info("manual remove-available triggered")
+        else:  # no module registered the removal callable
+            log.warning("remove-available requested but no handler registered")
+        return JSONResponse(status_code=202, content={"status": "triggered"})
+
+    @router.delete("/items/{list_id}/{trakt_id}")
+    async def delete_item(list_id: str, trakt_id: int) -> JSONResponse:
+        """Remove a single tracked item from its Trakt list."""
+        if ctx.remove_item is None:  # no module registered the removal callable
+            log.warning("item delete requested but no handler registered")
+            return JSONResponse(
+                status_code=503, content={"detail": "removal unavailable"}
+            )
+        removed = await ctx.remove_item(list_id, trakt_id)
+        if not removed:
+            return JSONResponse(status_code=404, content={"detail": "item not found"})
+        return JSONResponse(status_code=200, content={"status": "removed"})
 
     return router

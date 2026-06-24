@@ -32,6 +32,9 @@ from core.service_registry import (
 # Allowed status-check intervals offered by the dashboard.
 VALID_STATUS_INTERVALS: frozenset[int] = frozenset({30, 45, 60})
 
+# Allowed Trakt sync (poll) intervals in minutes offered by the dashboard.
+VALID_SYNC_INTERVALS: frozenset[int] = frozenset({15, 30, 45, 60})
+
 
 def _service_seed(
     desc: ServiceDescriptor, seed: dict[str, str] | None
@@ -44,6 +47,11 @@ def _service_seed(
 def _normalise_interval(value: int) -> int:
     """Return a valid status-check interval, defaulting to 60 seconds."""
     return value if value in VALID_STATUS_INTERVALS else 60
+
+
+def _normalise_sync_interval(value: int) -> int:
+    """Return a valid Trakt sync interval in minutes, defaulting to 15."""
+    return value if value in VALID_SYNC_INTERVALS else 15
 
 
 @dataclass(frozen=True)
@@ -84,6 +92,7 @@ class SettingsStore:
         self._client_secret = ""
         self._lists: list[TrackedList] = []
         self._status_check_interval_seconds = 60
+        self._sync_interval_minutes = 15
         self._services: dict[str, dict[str, str]] = {
             desc.name: empty_values(desc) for desc in SERVICES
         }
@@ -97,6 +106,7 @@ class SettingsStore:
         client_secret: str,
         services: dict[str, dict[str, str]] | None = None,
         status_check_interval_seconds: int = 60,
+        sync_interval_minutes: int = 15,
     ) -> None:
         """Load persisted settings, or seed from the supplied defaults.
 
@@ -116,6 +126,9 @@ class SettingsStore:
                 self._status_check_interval_seconds = _normalise_interval(
                     status_check_interval_seconds
                 )
+                self._sync_interval_minutes = _normalise_sync_interval(
+                    sync_interval_minutes
+                )
                 for desc in SERVICES:
                     self._services[desc.name] = _service_seed(
                         desc, (services or {}).get(desc.name)
@@ -130,6 +143,9 @@ class SettingsStore:
         self._client_secret = trakt.get("client_secret", "")
         self._status_check_interval_seconds = _normalise_interval(
             data.get("status_check_interval_seconds", 60)
+        )
+        self._sync_interval_minutes = _normalise_sync_interval(
+            data.get("sync_interval_minutes", 15)
         )
         self._lists = [
             TrackedList(
@@ -166,6 +182,7 @@ class SettingsStore:
                 "client_secret": self._client_secret,
             },
             "status_check_interval_seconds": self._status_check_interval_seconds,
+            "sync_interval_minutes": self._sync_interval_minutes,
             "lists": [item.to_dict() for item in self._lists],
             "services": self._services,
         }
@@ -210,6 +227,22 @@ class SettingsStore:
             self._save_locked()
             self._log.info("updated status check interval to %s seconds", seconds)
             return seconds
+
+    # ---- Trakt sync interval ----
+
+    def sync_interval_minutes(self) -> int:
+        """Return the configured Trakt poll interval in minutes."""
+        with self._lock:
+            return self._sync_interval_minutes
+
+    def update_sync_interval(self, minutes: int) -> int:
+        """Update the Trakt sync interval; invalid values fall back to 15 min."""
+        minutes = _normalise_sync_interval(minutes)
+        with self._lock:
+            self._sync_interval_minutes = minutes
+            self._save_locked()
+            self._log.info("updated sync interval to %s minutes", minutes)
+            return minutes
 
     # ---- tracked lists ----
 
@@ -318,6 +351,7 @@ class SettingsStore:
                 "client_id_set": bool(self._client_id),
                 "client_secret_set": bool(self._client_secret),
                 "status_check_interval_seconds": self._status_check_interval_seconds,
+                "sync_interval_minutes": self._sync_interval_minutes,
                 "lists": [item.to_dict() for item in self._lists],
                 "services": self.masked_services(),
             }

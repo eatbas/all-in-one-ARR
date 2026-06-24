@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from typing import Any, Awaitable, Callable
 
-from apscheduler import AsyncScheduler
+from apscheduler import AsyncScheduler, ScheduleLookupError
 from apscheduler.triggers.cron import CronTrigger
 from apscheduler.triggers.interval import IntervalTrigger
 
@@ -31,6 +31,20 @@ class SchedulerService:
             func, IntervalTrigger(minutes=minutes), id=id
         )
         self._log.info("scheduled interval job id=%s minutes=%s", id, minutes)
+
+    async def reschedule_interval(
+        self, func: JobFunc, *, minutes: int, id: str
+    ) -> None:
+        """Re-point an interval job at a new period.
+
+        Removes the existing schedule (tolerating its absence on the first call)
+        and re-adds it under the same ``id`` with the new interval.
+        """
+        try:
+            await self._scheduler.remove_schedule(id)
+        except ScheduleLookupError:
+            self._log.info("no existing schedule id=%s to remove", id)
+        await self.add_interval(func, minutes=minutes, id=id)
 
     async def add_cron(self, func: JobFunc, *, hour: int, minute: int, id: str) -> None:
         """Schedule ``func`` to run daily at ``hour:minute``."""

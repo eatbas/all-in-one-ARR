@@ -199,23 +199,84 @@ def test_services_check_endpoint_triggers_check(db) -> None:
     ctx.status_checker.check_now.assert_awaited_once()
 
 
-def test_put_general_settings_updates_interval(db) -> None:
+def test_put_general_settings_updates_status_interval(db) -> None:
     ctx = make_ctx(db=db)
     resp = build_client(ctx).put("/api/settings/general", json={"interval_seconds": 30})
     assert resp.status_code == 200
-    assert resp.json() == {"interval_seconds": 30}
+    assert resp.json() == {"interval_seconds": 30, "sync_interval_minutes": 15}
     assert ctx.settings_store.status_check_interval_seconds() == 30
 
 
-def test_put_general_settings_rejects_invalid_interval(db) -> None:
+def test_put_general_settings_rejects_invalid_status_interval(db) -> None:
     ctx = make_ctx(db=db)
     resp = build_client(ctx).put("/api/settings/general", json={"interval_seconds": 99})
     assert resp.status_code == 200
-    assert resp.json() == {"interval_seconds": 60}
+    assert resp.json() == {"interval_seconds": 60, "sync_interval_minutes": 15}
 
 
-def test_get_general_settings_returns_interval(db) -> None:
+def test_put_general_settings_updates_sync_interval_and_reschedules(db) -> None:
+    ctx = make_ctx(db=db)
+    ctx.reschedule_sync = AsyncMock()
+    resp = build_client(ctx).put(
+        "/api/settings/general", json={"sync_interval_minutes": 30}
+    )
+    assert resp.status_code == 200
+    assert resp.json() == {"interval_seconds": 60, "sync_interval_minutes": 30}
+    assert ctx.settings_store.sync_interval_minutes() == 30
+    ctx.reschedule_sync.assert_awaited_once_with(30)
+
+
+def test_put_general_settings_rejects_invalid_sync_interval(db) -> None:
+    # No reschedule handler registered: the invalid value falls back to 15 and the
+    # missing handler is tolerated.
+    ctx = make_ctx(db=db)
+    resp = build_client(ctx).put(
+        "/api/settings/general", json={"sync_interval_minutes": 7}
+    )
+    assert resp.status_code == 200
+    assert resp.json() == {"interval_seconds": 60, "sync_interval_minutes": 15}
+
+
+def test_get_general_settings_returns_both_intervals(db) -> None:
     ctx = make_ctx(db=db)
     ctx.settings_store.update_status_check_interval(45)
+    ctx.settings_store.update_sync_interval(60)
     body = build_client(ctx).get("/api/settings/general").json()
-    assert body == {"interval_seconds": 45}
+    assert body == {"interval_seconds": 45, "sync_interval_minutes": 60}
+
+
+def test_remove_available_endpoint_triggers_handler(db) -> None:
+    ctx = make_ctx(db=db)
+    ctx.remove_available = AsyncMock()
+    resp = build_client(ctx).post("/api/items/remove-available")
+    assert resp.status_code == 202
+    assert resp.json() == {"status": "triggered"}
+    ctx.remove_available.assert_awaited()
+
+
+def test_remove_available_endpoint_without_handler(db) -> None:
+    ctx = make_ctx(db=db)  # ctx.remove_available defaults to None
+    resp = build_client(ctx).post("/api/items/remove-available")
+    assert resp.status_code == 202
+
+
+def test_delete_item_endpoint_removes_item(db) -> None:
+    ctx = make_ctx(db=db)
+    ctx.remove_item = AsyncMock(return_value=True)
+    resp = build_client(ctx).delete("/api/items/watchlist/1")
+    assert resp.status_code == 200
+    assert resp.json() == {"status": "removed"}
+    ctx.remove_item.assert_awaited_once_with("watchlist", 1)
+
+
+def test_delete_item_endpoint_404_when_absent(db) -> None:
+    ctx = make_ctx(db=db)
+    ctx.remove_item = AsyncMock(return_value=False)
+    resp = build_client(ctx).delete("/api/items/watchlist/999")
+    assert resp.status_code == 404
+
+
+def test_delete_item_endpoint_503_without_handler(db) -> None:
+    ctx = make_ctx(db=db)  # ctx.remove_item defaults to None
+    resp = build_client(ctx).delete("/api/items/watchlist/1")
+    assert resp.status_code == 503
