@@ -15,8 +15,8 @@ export function displayTitle(title: string | null): string {
 
 /**
  * Display string for a mirrored item's release year, falling back to an em dash
- * when the backend has no year (the `Item.year` field is nullable). Shared by the
- * Items table and the Lists grid so the fallback stays consistent in one place.
+ * when the backend has no year (the `Item.year` field is nullable). Used by the
+ * Lists grid so the fallback stays consistent in one place.
  */
 export function formatYear(year: number | null): string {
   return year?.toString() ?? "—"

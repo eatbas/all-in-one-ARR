@@ -34,7 +34,6 @@ import {
   type DryRunResult,
   type GeneralSettings,
   type Item,
-  type ItemStatus,
   type ListSummary,
   type ServiceName,
   type ServicesSettings,
@@ -62,7 +61,6 @@ const AUTH_POLL_INTERVAL = 2_000
 export const queryKeys = {
   status: ["status"] as const,
   activity: ["activity"] as const,
-  items: (status?: ItemStatus) => ["items", status ?? "all"] as const,
   lists: ["lists"] as const,
   listItems: (slug: string) => ["items", "by-list", slug] as const,
   traktSettings: ["trakt", "settings"] as const,
@@ -77,14 +75,6 @@ export function useStatus(): UseQueryResult<Status> {
   return useQuery({
     queryKey: queryKeys.status,
     queryFn: getStatus,
-    refetchInterval: REFETCH_INTERVAL,
-  })
-}
-
-export function useItems(status?: ItemStatus): UseQueryResult<Item[]> {
-  return useQuery({
-    queryKey: queryKeys.items(status),
-    queryFn: () => getItems(status),
     refetchInterval: REFETCH_INTERVAL,
   })
 }

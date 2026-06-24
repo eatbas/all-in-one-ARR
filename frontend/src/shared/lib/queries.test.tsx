@@ -40,7 +40,6 @@ import {
   useAddTraktList,
   useCheckServiceStatuses,
   useGeneralSettings,
-  useItems,
   useListItems,
   useLists,
   useRemoveTraktList,
@@ -128,22 +127,6 @@ describe("query hooks", () => {
     await waitFor(() => expect(result.current.isSuccess).toBe(true))
     expect(api.getStatus).toHaveBeenCalled()
     expect(result.current.data?.dry_run).toBe(true)
-  })
-
-  it("useItems forwards the status argument to the API", async () => {
-    const { wrapper } = setup()
-    const { result } = renderHook(() => useItems("available"), { wrapper })
-
-    await waitFor(() => expect(result.current.isSuccess).toBe(true))
-    expect(api.getItems).toHaveBeenCalledWith("available")
-  })
-
-  it("useItems passes undefined when unfiltered", async () => {
-    const { wrapper } = setup()
-    const { result } = renderHook(() => useItems(), { wrapper })
-
-    await waitFor(() => expect(result.current.isSuccess).toBe(true))
-    expect(api.getItems).toHaveBeenCalledWith(undefined)
   })
 
   it("useActivity fetches the activity feed", async () => {

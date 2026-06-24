@@ -34,6 +34,8 @@ import {
   DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuPortal,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
   DropdownMenuSeparator,
   DropdownMenuShortcut,
   DropdownMenuSub,
@@ -49,6 +51,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/shared/components/ui/select"
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/shared/components/ui/tooltip"
 
 describe("Button asChild", () => {
   it("renders a slotted child instead of a button", () => {
@@ -137,6 +145,9 @@ describe("DropdownMenu extended parts", () => {
             <DropdownMenuCheckboxItem checked>Toggle</DropdownMenuCheckboxItem>
           </DropdownMenuGroup>
           <DropdownMenuSeparator />
+          <DropdownMenuRadioGroup value="one">
+            <DropdownMenuRadioItem value="one">First</DropdownMenuRadioItem>
+          </DropdownMenuRadioGroup>
           <DropdownMenuSub defaultOpen>
             <DropdownMenuSubTrigger inset>More</DropdownMenuSubTrigger>
             <DropdownMenuSubContent>
@@ -150,6 +161,7 @@ describe("DropdownMenu extended parts", () => {
     expect(await screen.findByText("Section")).toBeInTheDocument()
     expect(screen.getByText("Toggle")).toBeInTheDocument()
     expect(screen.getByText("⌘⌫")).toBeInTheDocument()
+    expect(screen.getByText("First")).toBeInTheDocument()
     expect(screen.getByText("More")).toBeInTheDocument()
   })
 })
@@ -169,5 +181,22 @@ describe("Select grouped options", () => {
       </Select>,
     )
     expect(await screen.findByText("Alpha")).toBeInTheDocument()
+  })
+})
+
+describe("Tooltip open content", () => {
+  it("renders the trigger and portalled content when open by default", async () => {
+    render(
+      <TooltipProvider>
+        <Tooltip defaultOpen>
+          <TooltipTrigger>Hover me</TooltipTrigger>
+          <TooltipContent sideOffset={4}>Tip text</TooltipContent>
+        </Tooltip>
+      </TooltipProvider>,
+    )
+    expect(screen.getByText("Hover me")).toBeInTheDocument()
+    // Radix renders the open content into a portal (and a visually-hidden copy for
+    // assistive tech), so assert at least one match rather than a unique node.
+    expect((await screen.findAllByText("Tip text")).length).toBeGreaterThan(0)
   })
 })

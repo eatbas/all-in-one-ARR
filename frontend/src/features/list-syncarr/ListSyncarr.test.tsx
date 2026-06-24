@@ -6,7 +6,6 @@ vi.mock("@/shared/lib/queries", () => ({
   useStatus: vi.fn(),
   useLists: vi.fn(),
   useListItems: vi.fn(),
-  useItems: vi.fn(),
   useTraktSettings: vi.fn(),
   useTraktLists: vi.fn(),
   useAddTraktList: vi.fn(),
@@ -15,7 +14,6 @@ vi.mock("@/shared/lib/queries", () => ({
 
 import {
   useAddTraktList,
-  useItems,
   useListItems,
   useLists,
   useRemoveTraktList,
@@ -46,7 +44,6 @@ beforeEach(() => {
   vi.mocked(useStatus).mockReturnValue(queryResult<Status>(undefined, false))
   vi.mocked(useLists).mockReturnValue(queryResult<ListSummary[]>([], false))
   vi.mocked(useListItems).mockReturnValue(queryResult<Item[]>([], false))
-  vi.mocked(useItems).mockReturnValue(queryResult<Item[]>([], false))
   vi.mocked(useTraktSettings).mockReturnValue(queryResult(TRAKT_SETTINGS))
   vi.mocked(useTraktLists).mockReturnValue(queryResult([], false))
   vi.mocked(useAddTraktList).mockReturnValue(mutation(vi.fn()))
@@ -79,15 +76,15 @@ describe("ListSyncarr", () => {
     ).toBeInTheDocument()
   })
 
-  it("restores the Items tab from localStorage", () => {
-    localStorage.setItem(LIST_SYNCARR_TAB_STORAGE_KEY, "items")
+  it("restores the Settings tab from localStorage", () => {
+    localStorage.setItem(LIST_SYNCARR_TAB_STORAGE_KEY, "settings")
     render(<ListSyncarr />)
-    expect(screen.getByRole("tab", { name: "Items" })).toHaveAttribute(
+    expect(screen.getByRole("tab", { name: "Settings" })).toHaveAttribute(
       "aria-selected",
       "true",
     )
     expect(
-      screen.getByText("Every movie and show mirrored from Trakt."),
+      screen.getByText("Choose which Trakt lists the engine keeps in sync."),
     ).toBeInTheDocument()
   })
 
@@ -100,16 +97,6 @@ describe("ListSyncarr", () => {
     )
   })
 
-  it("persists the selected tab to localStorage on change", async () => {
-    const user = userEvent.setup()
-    render(<ListSyncarr />)
-    await user.click(screen.getByRole("tab", { name: "Items" }))
-    expect(localStorage.getItem(LIST_SYNCARR_TAB_STORAGE_KEY)).toBe("items")
-    expect(
-      screen.getByText("Every movie and show mirrored from Trakt."),
-    ).toBeInTheDocument()
-  })
-
   it("stays usable when localStorage is unavailable", async () => {
     vi.stubGlobal("localStorage", undefined)
     const user = userEvent.setup()
@@ -120,9 +107,9 @@ describe("ListSyncarr", () => {
       "true",
     )
     // Switching still works; the persistence write is safely skipped.
-    await user.click(screen.getByRole("tab", { name: "Items" }))
+    await user.click(screen.getByRole("tab", { name: "Settings" }))
     expect(
-      screen.getByText("Every movie and show mirrored from Trakt."),
+      screen.getByText("Choose which Trakt lists the engine keeps in sync."),
     ).toBeInTheDocument()
   })
 })

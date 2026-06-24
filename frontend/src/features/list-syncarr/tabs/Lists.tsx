@@ -74,7 +74,6 @@ function ListRow({ list }: { list: ListSummary }) {
                   <PosterThumb item={item} />
                   <StatusBadge
                     status={item.status}
-                    abbreviated={false}
                     className="absolute right-1 bottom-1 bg-background/85 shadow-sm backdrop-blur-sm"
                   />
                 </div>
@@ -84,7 +83,7 @@ function ListRow({ list }: { list: ListSummary }) {
                 >
                   {displayTitle(item.title)}
                 </span>
-                {/* Year and media type on one row, mirroring the Items table. */}
+                {/* Year and media type on one row beneath the poster. */}
                 <span className="truncate text-xs capitalize text-muted-foreground">
                   {formatYear(item.year)} · {item.type}
                 </span>

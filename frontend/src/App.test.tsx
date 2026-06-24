@@ -6,7 +6,6 @@ import { beforeEach, describe, expect, it, vi } from "vitest"
 vi.mock("@/shared/lib/queries", () => ({
   useStatus: vi.fn(() => ({ data: undefined })),
   useActivity: vi.fn(() => ({ data: [], isLoading: false })),
-  useItems: vi.fn(() => ({ data: [], isLoading: false })),
   useLists: vi.fn(() => ({ data: [], isLoading: false })),
   useListItems: vi.fn(() => ({ data: [], isLoading: false })),
   useServiceStatuses: vi.fn(() => ({
@@ -58,10 +57,10 @@ describe("App routing", () => {
     expect(screen.getByText("Recent activity")).toBeInTheDocument()
   })
 
-  it("renders the List-Syncarr page with Lists and Items tabs at /list-syncarr", () => {
+  it("renders the List-Syncarr page with Lists and Settings tabs at /list-syncarr", () => {
     renderAt("/list-syncarr")
     expect(screen.getByRole("tab", { name: "Lists" })).toBeInTheDocument()
-    expect(screen.getByRole("tab", { name: "Items" })).toBeInTheDocument()
+    expect(screen.getByRole("tab", { name: "Settings" })).toBeInTheDocument()
     // Lists is the default tab, so its content is shown first.
     expect(
       screen.getByText("Trakt lists kept in sync by the engine."),

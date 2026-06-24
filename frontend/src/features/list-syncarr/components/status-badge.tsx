@@ -10,35 +10,21 @@ const STATUS_STYLES: Record<ItemStatus, string> = {
   removed: "border-muted-foreground/30 text-muted-foreground",
 }
 
-/** Abbreviated per-status labels so the pill stays compact in tight layouts. */
-const STATUS_LABELS: Record<ItemStatus, string> = {
-  synced: "Sync.",
-  requested: "Req.",
-  available: "Avail.",
-  removed: "Rem.",
-}
-
 /** Outline badge rendering an item's lifecycle status, shared across views. */
 export function StatusBadge({
   status,
-  abbreviated = true,
   className,
 }: {
   status: ItemStatus
-  /** Render the abbreviated label (default) or the full capitalised word. */
-  abbreviated?: boolean
   className?: string
 }) {
-  // The full word doubles as the title so the abbreviated pill stays accessible
-  // on hover and to assistive technology.
-  const fullLabel = status[0].toUpperCase() + status.slice(1)
+  const label = status[0].toUpperCase() + status.slice(1)
   return (
     <Badge
       variant="outline"
-      title={fullLabel}
       className={cn(STATUS_STYLES[status], className)}
     >
-      {abbreviated ? STATUS_LABELS[status] : fullLabel}
+      {label}
     </Badge>
   )
 }

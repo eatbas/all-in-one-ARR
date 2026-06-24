@@ -1,9 +1,8 @@
 import { useState } from "react"
-import { ListIcon, ListVideoIcon, SettingsIcon } from "lucide-react"
+import { ListIcon, SettingsIcon } from "lucide-react"
 
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/shared/components/ui/tabs"
 import { SyncStats } from "@/features/list-syncarr/components/sync-stats"
-import { Items } from "@/features/list-syncarr/tabs/Items"
 import { Lists } from "@/features/list-syncarr/tabs/Lists"
 import { ListSettings } from "@/features/list-syncarr/tabs/ListSettings"
 import {
@@ -12,10 +11,10 @@ import {
 } from "@/features/list-syncarr/list-syncarr-tab"
 
 /**
- * List-Syncarr page: the sync-engine stat cards above three tabs — **Lists** (the
- * Trakt lists kept in sync), **Items** (their mirrored movies and shows), and
- * **Settings** (choosing which Trakt lists to sync). The active tab is persisted to
- * localStorage, mirroring the Settings page.
+ * List-Syncarr page: the sync-engine stat cards above two tabs — **Lists** (the
+ * Trakt lists kept in sync, with their mirrored movies and shows) and **Settings**
+ * (choosing which Trakt lists to sync). The active tab is persisted to localStorage,
+ * mirroring the Settings page.
  */
 export function ListSyncarr() {
   const [activeTab, setActiveTab] = useState(() => {
@@ -40,10 +39,6 @@ export function ListSyncarr() {
             <ListIcon className="size-4" />
             Lists
           </TabsTrigger>
-          <TabsTrigger value="items">
-            <ListVideoIcon className="size-4" />
-            Items
-          </TabsTrigger>
           <TabsTrigger value="settings">
             <SettingsIcon className="size-4" />
             Settings
@@ -51,9 +46,6 @@ export function ListSyncarr() {
         </TabsList>
         <TabsContent value="lists">
           <Lists />
-        </TabsContent>
-        <TabsContent value="items">
-          <Items />
         </TabsContent>
         <TabsContent value="settings">
           <ListSettings />
