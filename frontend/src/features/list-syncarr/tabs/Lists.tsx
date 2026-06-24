@@ -63,7 +63,7 @@ function ListRow({ list }: { list: ListSummary }) {
             This list has no items yet.
           </p>
         ) : (
-          <ul className="grid grid-cols-3 gap-4 px-7 py-3 sm:grid-cols-4 md:grid-cols-6">
+          <ul className="grid grid-cols-3 gap-4 px-7 py-3 sm:grid-cols-4 md:grid-cols-5">
             {items?.map((item) => (
               <li
                 key={`${item.list_id}:${item.trakt_id}`}
