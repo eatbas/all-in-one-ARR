@@ -1,4 +1,4 @@
-import type { Theme } from "@/shared/components/theme-provider"
+import type { Theme } from "@/shared/components/theme-context"
 
 /** The colour-theme choices offered in the UI (header toggle + General tab). */
 export const THEME_OPTIONS: ReadonlyArray<{ value: Theme; label: string }> = [

@@ -34,11 +34,21 @@ elif [[ -f "$ROOT_DIR/.venv/Scripts/python.exe" ]]; then
   VENV_PY="$ROOT_DIR/.venv/Scripts/python.exe"
   IS_WINDOWS=1
 else
-  echo "Error: no virtual environment found at .venv/" >&2
-  echo "Create one and install the backend (with dev extras) first:" >&2
-  echo "  python -m venv .venv" >&2
-  echo "  .venv/bin/pip install -e \"./backend[dev]\"   # .venv/Scripts/pip on Windows" >&2
-  exit 1
+  echo "No virtual environment found at .venv/ — creating one now…"
+  python3 -m venv "$ROOT_DIR/.venv"
+  # Determine the pip path (Unix vs Windows/Git Bash).
+  if [[ -f "$ROOT_DIR/.venv/bin/pip" ]]; then
+    VENV_PIP="$ROOT_DIR/.venv/bin/pip"
+    VENV_PY="$ROOT_DIR/.venv/bin/python"
+    IS_WINDOWS=0
+  else
+    VENV_PIP="$ROOT_DIR/.venv/Scripts/pip.exe"
+    VENV_PY="$ROOT_DIR/.venv/Scripts/python.exe"
+    IS_WINDOWS=1
+  fi
+  echo "Installing backend (with dev extras)…"
+  "$VENV_PIP" install -e "./backend[dev]"
+  echo "  ✔ Virtual environment created and backend installed."
 fi
 
 # --- Verify prerequisites -----------------------------------------------------

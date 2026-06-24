@@ -18,7 +18,7 @@ vi.mock("@/shared/lib/queries", () => ({
 }))
 
 const { setThemeMock } = vi.hoisted(() => ({ setThemeMock: vi.fn() }))
-vi.mock("@/shared/components/theme-provider", () => ({
+vi.mock("@/shared/components/theme-context", () => ({
   useTheme: () => ({ theme: "dark", resolvedTheme: "dark", setTheme: setThemeMock }),
 }))
 
@@ -38,6 +38,7 @@ import {
 } from "@/shared/lib/queries"
 import { Settings } from "@/features/settings/Settings"
 import type {
+  GeneralSettings,
   ServicesSettings,
   Status,
   TraktAuthStatus,
@@ -333,7 +334,9 @@ describe("Settings — general", () => {
   })
 
   it("falls back to a 60s interval when general settings are unset", () => {
-    vi.mocked(useGeneralSettings).mockReturnValue(queryResult(undefined))
+    vi.mocked(useGeneralSettings).mockReturnValue(
+      queryResult<GeneralSettings>(undefined),
+    )
     render(<Settings />)
     expect(screen.getByRole("combobox")).toHaveTextContent("60 seconds")
   })

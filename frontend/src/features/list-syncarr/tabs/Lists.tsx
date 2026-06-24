@@ -21,6 +21,7 @@ import {
   displayTitle,
   formatNextSync,
   formatRelativeTime,
+  formatYear,
 } from "@/shared/lib/format"
 import type { ListSummary } from "@/shared/lib/api"
 
@@ -66,16 +67,27 @@ function ListRow({ list }: { list: ListSummary }) {
             {items?.map((item) => (
               <li
                 key={`${item.list_id}:${item.trakt_id}`}
-                className="flex flex-col gap-1.5"
+                className="flex flex-col gap-1"
               >
-                <PosterThumb item={item} />
+                {/* Poster with the full-name status pill overlaid bottom-right. */}
+                <div className="relative">
+                  <PosterThumb item={item} />
+                  <StatusBadge
+                    status={item.status}
+                    abbreviated={false}
+                    className="absolute right-1 bottom-1 bg-background/85 shadow-sm backdrop-blur-sm"
+                  />
+                </div>
                 <span
                   className="truncate text-xs font-medium"
                   title={displayTitle(item.title)}
                 >
                   {displayTitle(item.title)}
                 </span>
-                <StatusBadge status={item.status} />
+                {/* Year and media type on one row, mirroring the Items table. */}
+                <span className="truncate text-xs capitalize text-muted-foreground">
+                  {formatYear(item.year)} · {item.type}
+                </span>
               </li>
             ))}
           </ul>

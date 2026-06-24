@@ -14,7 +14,7 @@ import {
   useServiceStatuses,
 } from "@/shared/lib/queries"
 import { Dashboard } from "@/features/dashboard/Dashboard"
-import type { ActivityEntry } from "@/shared/lib/api"
+import type { ActivityEntry, ServicesStatusResponse } from "@/shared/lib/api"
 import { queryResult } from "@/shared/test/mock-query"
 
 const emptyServiceStatuses = {
@@ -155,7 +155,9 @@ describe("Dashboard", () => {
     vi.mocked(useActivity).mockReturnValue(queryResult<ActivityEntry[]>([], false))
     // No service-status snapshot at all: `services` falls back to an empty map
     // and `lastCheck` is undefined.
-    vi.mocked(useServiceStatuses).mockReturnValue(queryResult(undefined, false))
+    vi.mocked(useServiceStatuses).mockReturnValue(
+      queryResult<ServicesStatusResponse>(undefined, false),
+    )
     vi.mocked(useCheckServiceStatuses).mockReturnValue({
       mutate: checkNowMutate,
       isPending: true,

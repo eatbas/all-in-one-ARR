@@ -28,7 +28,7 @@ import {
 } from "@/shared/components/ui/table"
 import { StatusBadge } from "@/features/list-syncarr/components/status-badge"
 import { useItems } from "@/shared/lib/queries"
-import { displayTitle, formatTimestamp } from "@/shared/lib/format"
+import { displayTitle, formatTimestamp, formatYear } from "@/shared/lib/format"
 import type { ItemStatus } from "@/shared/lib/api"
 
 /** "all" is the UI-only sentinel meaning "no status filter". */
@@ -126,7 +126,7 @@ export function Items() {
                     {displayTitle(item.title)}
                   </TableCell>
                   <TableCell className="tabular-nums text-muted-foreground">
-                    {item.year ?? "—"}
+                    {formatYear(item.year)}
                   </TableCell>
                   <TableCell className="capitalize text-muted-foreground">
                     {item.type}

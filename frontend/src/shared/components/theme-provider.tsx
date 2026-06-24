@@ -1,30 +1,23 @@
 import {
-  createContext,
-  useContext,
+  useCallback,
   useEffect,
   useMemo,
   useState,
+  useSyncExternalStore,
   type ReactNode,
 } from "react"
 
-/** Available colour themes. "system" follows the OS preference. */
-export type Theme = "dark" | "light" | "system"
+import {
+  ThemeProviderContext,
+  type Theme,
+  type ThemeProviderState,
+} from "@/shared/components/theme-context"
 
-interface ThemeProviderState {
-  theme: Theme
-  /** The concrete theme currently applied to the document ("dark" | "light"). */
-  resolvedTheme: "dark" | "light"
-  setTheme: (theme: Theme) => void
-}
+const SYSTEM_THEME_QUERY = "(prefers-color-scheme: dark)"
 
-const ThemeProviderContext = createContext<ThemeProviderState | undefined>(
-  undefined,
-)
-
-function resolveSystemTheme(): "dark" | "light" {
-  return window.matchMedia("(prefers-color-scheme: dark)").matches
-    ? "dark"
-    : "light"
+/** Read the current OS colour-scheme preference as a concrete theme. */
+function getSystemTheme(): "dark" | "light" {
+  return window.matchMedia(SYSTEM_THEME_QUERY).matches ? "dark" : "light"
 }
 
 interface ThemeProviderProps {
@@ -45,33 +38,33 @@ export function ThemeProvider({
     return stored ?? defaultTheme
   })
 
-  const [resolvedTheme, setResolvedTheme] = useState<"dark" | "light">(() =>
-    theme === "system" ? resolveSystemTheme() : theme,
+  // Subscribe to OS changes only while actually following the system theme, so a
+  // concrete choice attaches no listener. `useSyncExternalStore` reads the live
+  // preference on every render, so the resolved theme can never go stale and no
+  // state is updated inside an effect.
+  const subscribeToSystemTheme = useCallback(
+    (onStoreChange: () => void) => {
+      if (theme !== "system") {
+        return () => {}
+      }
+      const media = window.matchMedia(SYSTEM_THEME_QUERY)
+      media.addEventListener("change", onStoreChange)
+      return () => media.removeEventListener("change", onStoreChange)
+    },
+    [theme],
   )
+  const systemTheme = useSyncExternalStore(subscribeToSystemTheme, getSystemTheme)
 
+  const resolvedTheme: "dark" | "light" =
+    theme === "system" ? systemTheme : theme
+
+  // Apply the resolved theme to the document. This synchronises an external
+  // system (the DOM) and intentionally performs no React state updates.
   useEffect(() => {
     const root = window.document.documentElement
-    const applied = theme === "system" ? resolveSystemTheme() : theme
-
     root.classList.remove("light", "dark")
-    root.classList.add(applied)
-    setResolvedTheme(applied)
-
-    if (theme !== "system") {
-      return
-    }
-
-    // Keep the document in sync with OS changes while in "system" mode.
-    const media = window.matchMedia("(prefers-color-scheme: dark)")
-    const onChange = () => {
-      const next = media.matches ? "dark" : "light"
-      root.classList.remove("light", "dark")
-      root.classList.add(next)
-      setResolvedTheme(next)
-    }
-    media.addEventListener("change", onChange)
-    return () => media.removeEventListener("change", onChange)
-  }, [theme])
+    root.classList.add(resolvedTheme)
+  }, [resolvedTheme])
 
   const value = useMemo<ThemeProviderState>(
     () => ({
@@ -90,12 +83,4 @@ export function ThemeProvider({
       {children}
     </ThemeProviderContext.Provider>
   )
-}
-
-export function useTheme(): ThemeProviderState {
-  const context = useContext(ThemeProviderContext)
-  if (context === undefined) {
-    throw new Error("useTheme must be used within a ThemeProvider")
-  }
-  return context
 }

@@ -103,7 +103,7 @@ describe("Lists page", () => {
     expect(screen.getByText(/next sync —/)).toBeInTheDocument()
   })
 
-  it("expands a row to reveal posters, titles and statuses", async () => {
+  it("expands a row to reveal posters, titles, meta and statuses", async () => {
     const user = userEvent.setup()
     render(<Lists />)
 
@@ -118,8 +118,13 @@ describe("Lists page", () => {
     expect(
       screen.getByRole("img", { name: "No poster for NoPoster" }),
     ).toBeInTheDocument()
-    expect(screen.getByText("available")).toBeInTheDocument()
-    expect(screen.getByText("requested")).toBeInTheDocument()
+    // Each card shows a "year · type" meta row; a missing year falls back to "—".
+    // (CSS `capitalize` does not change textContent, so the type stays lowercase.)
+    expect(screen.getByText("2021 · movie")).toBeInTheDocument()
+    expect(screen.getByText("— · movie")).toBeInTheDocument()
+    // The availability pill is overlaid on each poster with its full status name.
+    expect(screen.getByText("Available")).toBeInTheDocument()
+    expect(screen.getByText("Requested")).toBeInTheDocument()
   })
 
   it("shows a loading message while a list's items load", async () => {

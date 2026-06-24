@@ -2,7 +2,7 @@ import { render, screen } from "@testing-library/react"
 import { describe, expect, it, vi } from "vitest"
 import { toast } from "sonner"
 
-vi.mock("@/shared/components/theme-provider", () => ({
+vi.mock("@/shared/components/theme-context", () => ({
   useTheme: () => ({ resolvedTheme: "dark", theme: "dark", setTheme: vi.fn() }),
 }))
 

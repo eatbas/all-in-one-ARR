@@ -5,6 +5,7 @@ import {
   formatNextSync,
   formatRelativeTime,
   formatTimestamp,
+  formatYear,
 } from "@/shared/lib/format"
 
 describe("displayTitle", () => {
@@ -14,6 +15,16 @@ describe("displayTitle", () => {
 
   it("falls back to 'Untitled' when the title is null", () => {
     expect(displayTitle(null)).toBe("Untitled")
+  })
+})
+
+describe("formatYear", () => {
+  it("returns the year as a string when present", () => {
+    expect(formatYear(2021)).toBe("2021")
+  })
+
+  it("falls back to an em dash when the year is null", () => {
+    expect(formatYear(null)).toBe("—")
   })
 })
 

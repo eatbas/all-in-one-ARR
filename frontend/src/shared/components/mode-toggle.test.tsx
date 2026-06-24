@@ -3,7 +3,7 @@ import userEvent from "@testing-library/user-event"
 import { describe, expect, it, vi } from "vitest"
 
 const { setTheme } = vi.hoisted(() => ({ setTheme: vi.fn() }))
-vi.mock("@/shared/components/theme-provider", () => ({
+vi.mock("@/shared/components/theme-context", () => ({
   useTheme: () => ({ theme: "dark", resolvedTheme: "dark", setTheme }),
 }))
 

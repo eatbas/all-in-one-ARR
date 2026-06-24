@@ -7,7 +7,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/shared/components/ui/dropdown-menu"
-import { useTheme } from "@/shared/components/theme-provider"
+import { useTheme } from "@/shared/components/theme-context"
 import { THEME_OPTIONS } from "@/shared/lib/theme-options"
 
 /** Dropdown that switches between light, dark, and system colour themes. */

@@ -3,7 +3,8 @@ import userEvent from "@testing-library/user-event"
 import { Component, type ReactNode } from "react"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
-import { ThemeProvider, useTheme } from "@/shared/components/theme-provider"
+import { ThemeProvider } from "@/shared/components/theme-provider"
+import { useTheme } from "@/shared/components/theme-context"
 
 const STORAGE_KEY = "test-theme"
 

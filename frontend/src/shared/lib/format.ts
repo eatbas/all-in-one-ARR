@@ -13,6 +13,15 @@ export function displayTitle(title: string | null): string {
   return title ?? "Untitled"
 }
 
+/**
+ * Display string for a mirrored item's release year, falling back to an em dash
+ * when the backend has no year (the `Item.year` field is nullable). Shared by the
+ * Items table and the Lists grid so the fallback stays consistent in one place.
+ */
+export function formatYear(year: number | null): string {
+  return year?.toString() ?? "—"
+}
+
 export function formatTimestamp(iso: string): string {
   const date = new Date(iso)
   if (Number.isNaN(date.getTime())) {

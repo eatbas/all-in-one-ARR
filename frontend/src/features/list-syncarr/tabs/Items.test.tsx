@@ -88,10 +88,10 @@ describe("Items", () => {
     expect(screen.getByText("bad-date")).toBeInTheDocument() // invalid timestamp
     // Each row shows its source list in the new List column.
     expect(screen.getAllByText("L")).toHaveLength(items.length)
-    // Every status renders its styled badge.
-    expect(screen.getByText("synced")).toBeInTheDocument()
-    expect(screen.getByText("available")).toBeInTheDocument()
-    expect(screen.getByText("removed")).toBeInTheDocument()
+    // Every status renders its styled badge with the abbreviated label.
+    expect(screen.getByText("Sync.")).toBeInTheDocument()
+    expect(screen.getByText("Avail.")).toBeInTheDocument()
+    expect(screen.getByText("Rem.")).toBeInTheDocument()
   })
 
   it("re-queries with the chosen status filter", async () => {

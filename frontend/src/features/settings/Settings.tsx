@@ -19,7 +19,7 @@ import {
 } from "@/shared/components/ui/select"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/shared/components/ui/tabs"
 import { DryRunSwitch } from "@/shared/components/dry-run-switch"
-import { useTheme } from "@/shared/components/theme-provider"
+import { useTheme } from "@/shared/components/theme-context"
 import { cn } from "@/shared/lib/utils"
 import { SERVICE_TABS, VALID_TAB_VALUES, type ServiceTab } from "@/shared/lib/services"
 import { SETTINGS_TAB_STORAGE_KEY } from "@/features/settings/settings-tab"
