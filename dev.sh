@@ -24,10 +24,15 @@ BACKEND_HOST="${BACKEND_HOST:-127.0.0.1}"
 BACKEND_PORT="${BACKEND_PORT:-3223}"
 
 # --- Locate the virtual environment's Python (Unix vs Windows/Git Bash) -------
+# IS_WINDOWS selects the backend reload strategy below: uvicorn's own --reload
+# hangs on Windows (see the backend start-up block), so a Windows venv uses a
+# watchfiles wrapper instead.
 if [[ -f "$ROOT_DIR/.venv/bin/python" ]]; then
   VENV_PY="$ROOT_DIR/.venv/bin/python"
+  IS_WINDOWS=0
 elif [[ -f "$ROOT_DIR/.venv/Scripts/python.exe" ]]; then
   VENV_PY="$ROOT_DIR/.venv/Scripts/python.exe"
+  IS_WINDOWS=1
 else
   echo "Error: no virtual environment found at .venv/" >&2
   echo "Create one and install the backend (with dev extras) first:" >&2
@@ -105,13 +110,29 @@ cleanup() {
 }
 trap cleanup INT TERM
 
-echo "Starting backend (uvicorn --reload) on http://${BACKEND_HOST}:${BACKEND_PORT} …"
-"$VENV_PY" -m uvicorn main:app \
-  --app-dir backend \
-  --reload \
-  --reload-dir backend \
-  --host "$BACKEND_HOST" \
-  --port "$BACKEND_PORT" &
+echo "Starting backend on http://${BACKEND_HOST}:${BACKEND_PORT} …"
+if [[ "$IS_WINDOWS" == 1 ]]; then
+  # uvicorn's own --reload restart hangs on Windows: on a change it signals the
+  # worker with CTRL_C_EVENT and then joins it with no timeout, but the spawned
+  # worker never receives the event, so the reloader blocks forever and the
+  # server stops applying edits. Wrap a plain uvicorn with watchfiles (ships
+  # with uvicorn[standard]) instead — it restarts the whole process and
+  # escalates to a hard kill if the child does not stop, so it reloads
+  # reliably. watchfiles' subprocess needs a native Windows path for the
+  # interpreter, so translate the venv Python out of its /c/... Git Bash form.
+  PY_WIN="$(cygpath -w "$VENV_PY" 2>/dev/null || printf '%s' "$VENV_PY")"
+  "$VENV_PY" -m watchfiles --filter python \
+    "$PY_WIN -m uvicorn main:app --app-dir backend --host $BACKEND_HOST --port $BACKEND_PORT" \
+    backend &
+else
+  # macOS/Linux: uvicorn's native worker reload works and is faster.
+  "$VENV_PY" -m uvicorn main:app \
+    --app-dir backend \
+    --reload \
+    --reload-dir backend \
+    --host "$BACKEND_HOST" \
+    --port "$BACKEND_PORT" &
+fi
 pids+=("$!")
 
 echo "Starting frontend (vite dev server) …"
