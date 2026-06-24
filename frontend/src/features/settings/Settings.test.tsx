@@ -15,6 +15,7 @@ vi.mock("@/shared/lib/queries", () => ({
   useSetDryRun: vi.fn(),
   useGeneralSettings: vi.fn(),
   useUpdateStatusInterval: vi.fn(),
+  useUpdateSyncInterval: vi.fn(),
 }))
 
 const { setThemeMock } = vi.hoisted(() => ({ setThemeMock: vi.fn() }))
@@ -34,6 +35,7 @@ import {
   useTraktSettings,
   useUpdateServiceSettings,
   useUpdateStatusInterval,
+  useUpdateSyncInterval,
   useUpdateTraktSettings,
 } from "@/shared/lib/queries"
 import { Settings } from "@/features/settings/Settings"
@@ -92,6 +94,7 @@ let serviceUpdateMutate: ReturnType<typeof vi.fn>
 let serviceTestMutate: ReturnType<typeof vi.fn>
 let setDryRunMutate: ReturnType<typeof vi.fn>
 let updateStatusIntervalMutate: ReturnType<typeof vi.fn>
+let updateSyncIntervalMutate: ReturnType<typeof vi.fn>
 
 beforeEach(() => {
   localStorage.removeItem(SETTINGS_TAB_STORAGE_KEY)
@@ -103,6 +106,7 @@ beforeEach(() => {
   serviceTestMutate = vi.fn()
   setDryRunMutate = vi.fn()
   updateStatusIntervalMutate = vi.fn()
+  updateSyncIntervalMutate = vi.fn()
 
   vi.mocked(useTraktSettings).mockReturnValue(queryResult(SETTINGS))
   vi.mocked(useTraktAuthStatus).mockReturnValue(queryResult(IDLE_AUTH))
@@ -115,10 +119,13 @@ beforeEach(() => {
   vi.mocked(useStatus).mockReturnValue(queryResult(STATUS))
   vi.mocked(useSetDryRun).mockReturnValue(mutation(setDryRunMutate))
   vi.mocked(useGeneralSettings).mockReturnValue(
-    queryResult({ interval_seconds: 60 }),
+    queryResult({ interval_seconds: 60, sync_interval_minutes: 15 }),
   )
   vi.mocked(useUpdateStatusInterval).mockReturnValue(
     mutation(updateStatusIntervalMutate),
+  )
+  vi.mocked(useUpdateSyncInterval).mockReturnValue(
+    mutation(updateSyncIntervalMutate),
   )
 })
 
@@ -326,29 +333,57 @@ describe("Settings — general", () => {
 
   it("shows the configured status-check interval", () => {
     vi.mocked(useGeneralSettings).mockReturnValue(
-      queryResult({ interval_seconds: 45 }),
+      queryResult({ interval_seconds: 45, sync_interval_minutes: 15 }),
     )
     render(<Settings />)
     expect(screen.getByText("Status check interval")).toBeInTheDocument()
-    expect(screen.getByRole("combobox")).toHaveTextContent("45 seconds")
+    expect(
+      screen.getByRole("combobox", { name: "Status check interval" }),
+    ).toHaveTextContent("45 seconds")
   })
 
-  it("falls back to a 60s interval when general settings are unset", () => {
+  it("falls back to default intervals when general settings are unset", () => {
     vi.mocked(useGeneralSettings).mockReturnValue(
       queryResult<GeneralSettings>(undefined),
     )
     render(<Settings />)
-    expect(screen.getByRole("combobox")).toHaveTextContent("60 seconds")
+    expect(
+      screen.getByRole("combobox", { name: "Status check interval" }),
+    ).toHaveTextContent("60 seconds")
+    expect(
+      screen.getByRole("combobox", { name: "Sync interval" }),
+    ).toHaveTextContent("15 minutes")
   })
 
   it("updates the status-check interval", async () => {
     const user = userEvent.setup()
     render(<Settings />)
-    await user.click(screen.getByRole("combobox"))
+    await user.click(
+      screen.getByRole("combobox", { name: "Status check interval" }),
+    )
     await user.click(screen.getByRole("option", { name: "30 seconds" }))
     expect(updateStatusIntervalMutate).toHaveBeenCalledWith({
       interval_seconds: 30,
     })
+  })
+
+  it("shows the configured sync interval", () => {
+    vi.mocked(useGeneralSettings).mockReturnValue(
+      queryResult({ interval_seconds: 60, sync_interval_minutes: 45 }),
+    )
+    render(<Settings />)
+    expect(screen.getByText("Sync interval")).toBeInTheDocument()
+    expect(
+      screen.getByRole("combobox", { name: "Sync interval" }),
+    ).toHaveTextContent("45 minutes")
+  })
+
+  it("updates the sync interval", async () => {
+    const user = userEvent.setup()
+    render(<Settings />)
+    await user.click(screen.getByRole("combobox", { name: "Sync interval" }))
+    await user.click(screen.getByRole("option", { name: "30 minutes" }))
+    expect(updateSyncIntervalMutate).toHaveBeenCalledWith(30)
   })
 
   it("changes the colour theme", async () => {

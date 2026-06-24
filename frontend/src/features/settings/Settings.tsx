@@ -34,6 +34,7 @@ import {
   useTraktSettings,
   useUpdateServiceSettings,
   useUpdateStatusInterval,
+  useUpdateSyncInterval,
   useUpdateTraktSettings,
 } from "@/shared/lib/queries"
 import type {
@@ -290,14 +291,17 @@ function ServiceConnectionCard({ name, label, fields }: ServiceTab) {
 }
 
 const STATUS_INTERVAL_OPTIONS = [30, 45, 60] as const
+const SYNC_INTERVAL_OPTIONS = [15, 30, 45, 60] as const
 
 /** App-wide settings: dry-run, status-check interval, and appearance. */
 function GeneralCard() {
   const { theme, setTheme } = useTheme()
   const { data: general } = useGeneralSettings()
   const updateInterval = useUpdateStatusInterval()
+  const updateSyncInterval = useUpdateSyncInterval()
 
   const interval = general?.interval_seconds ?? 60
+  const syncInterval = general?.sync_interval_minutes ?? 15
 
   return (
     <Card>
@@ -339,6 +343,31 @@ function GeneralCard() {
               {STATUS_INTERVAL_OPTIONS.map((seconds) => (
                 <SelectItem key={seconds} value={String(seconds)}>
                   {seconds} seconds
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+
+        <div className="flex flex-col gap-2">
+          <label htmlFor="sync-interval" className="text-sm font-medium">
+            Sync interval
+          </label>
+          <p className="text-sm text-muted-foreground">
+            How often the engine polls Trakt and requests in Jellyseerr.
+          </p>
+          <Select
+            value={String(syncInterval)}
+            onValueChange={(value) => updateSyncInterval.mutate(Number(value))}
+            disabled={updateSyncInterval.isPending}
+          >
+            <SelectTrigger id="sync-interval" className="w-40">
+              <SelectValue placeholder="Select interval" />
+            </SelectTrigger>
+            <SelectContent>
+              {SYNC_INTERVAL_OPTIONS.map((minutes) => (
+                <SelectItem key={minutes} value={String(minutes)}>
+                  {minutes} minutes
                 </SelectItem>
               ))}
             </SelectContent>

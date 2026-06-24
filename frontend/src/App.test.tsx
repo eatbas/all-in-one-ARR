@@ -8,6 +8,8 @@ vi.mock("@/shared/lib/queries", () => ({
   useActivity: vi.fn(() => ({ data: [], isLoading: false })),
   useLists: vi.fn(() => ({ data: [], isLoading: false })),
   useListItems: vi.fn(() => ({ data: [], isLoading: false })),
+  useRemoveItem: vi.fn(() => ({ mutate: vi.fn(), isPending: false })),
+  useRemoveAvailable: vi.fn(() => ({ mutate: vi.fn(), isPending: false })),
   useServiceStatuses: vi.fn(() => ({
     data: { interval_seconds: 60, last_check_at: null, services: {} },
     isLoading: false,
@@ -23,8 +25,11 @@ vi.mock("@/shared/lib/queries", () => ({
   useTestTrakt: vi.fn(() => ({ mutate: vi.fn(), isPending: false, data: undefined })),
   useAddTraktList: vi.fn(() => ({ mutate: vi.fn(), isPending: false })),
   useRemoveTraktList: vi.fn(() => ({ mutate: vi.fn(), isPending: false })),
-  useGeneralSettings: vi.fn(() => ({ data: { interval_seconds: 60 } })),
+  useGeneralSettings: vi.fn(() => ({
+    data: { interval_seconds: 60, sync_interval_minutes: 15 },
+  })),
   useUpdateStatusInterval: vi.fn(() => ({ mutate: vi.fn(), isPending: false })),
+  useUpdateSyncInterval: vi.fn(() => ({ mutate: vi.fn(), isPending: false })),
   useServiceSettings: vi.fn(() => ({ data: undefined })),
   useUpdateServiceSettings: vi.fn(() => ({ mutate: vi.fn(), isPending: false })),
   useTestService: vi.fn(() => ({ mutate: vi.fn(), isPending: false })),

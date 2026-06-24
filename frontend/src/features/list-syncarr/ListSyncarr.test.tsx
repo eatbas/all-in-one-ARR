@@ -7,6 +7,8 @@ vi.mock("@/shared/lib/queries", () => ({
   useLists: vi.fn(),
   useListItems: vi.fn(),
   useServiceSettings: vi.fn(),
+  useRemoveItem: vi.fn(),
+  useRemoveAvailable: vi.fn(),
   useTraktSettings: vi.fn(),
   useTraktLists: vi.fn(),
   useAddTraktList: vi.fn(),
@@ -17,6 +19,8 @@ import {
   useAddTraktList,
   useListItems,
   useLists,
+  useRemoveAvailable,
+  useRemoveItem,
   useRemoveTraktList,
   useServiceSettings,
   useStatus,
@@ -47,6 +51,8 @@ beforeEach(() => {
   vi.mocked(useLists).mockReturnValue(queryResult<ListSummary[]>([], false))
   vi.mocked(useListItems).mockReturnValue(queryResult<Item[]>([], false))
   vi.mocked(useServiceSettings).mockReturnValue(queryResult(undefined, false))
+  vi.mocked(useRemoveItem).mockReturnValue(mutation(vi.fn()))
+  vi.mocked(useRemoveAvailable).mockReturnValue(mutation(vi.fn()))
   vi.mocked(useTraktSettings).mockReturnValue(queryResult(TRAKT_SETTINGS))
   vi.mocked(useTraktLists).mockReturnValue(queryResult([], false))
   vi.mocked(useAddTraktList).mockReturnValue(mutation(vi.fn()))

@@ -20,6 +20,8 @@ import {
   getTraktAuthStatus,
   getTraktLists,
   getTraktSettings,
+  removeAvailable,
+  removeItem,
   removeTraktList,
   setDryRun,
   startTraktAuth,
@@ -370,5 +372,71 @@ export function useGeneralSettings(): UseQueryResult<GeneralSettings> {
   return useQuery({
     queryKey: queryKeys.generalSettings,
     queryFn: getGeneralSettings,
+  })
+}
+
+export function useUpdateSyncInterval(): UseMutationResult<
+  GeneralSettings,
+  Error,
+  number
+> {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: (minutes) =>
+      updateGeneralSettings({ sync_interval_minutes: minutes }),
+    onSuccess: (result) => {
+      toast.success("Sync interval updated", {
+        description: `Polling Trakt every ${result.sync_interval_minutes} minutes`,
+      })
+      void queryClient.invalidateQueries({ queryKey: queryKeys.generalSettings })
+      void queryClient.invalidateQueries({ queryKey: queryKeys.lists })
+    },
+    onError: (error) => {
+      toast.error("Could not update sync interval", { description: error.message })
+    },
+  })
+}
+
+export function useRemoveItem(): UseMutationResult<
+  void,
+  Error,
+  { list_id: string; trakt_id: number }
+> {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: ({ list_id, trakt_id }) => removeItem(list_id, trakt_id),
+    onSuccess: () => {
+      toast.success("Item removed from the Trakt list")
+      void queryClient.invalidateQueries({ queryKey: ["items"] })
+      void queryClient.invalidateQueries({ queryKey: queryKeys.lists })
+      void queryClient.invalidateQueries({ queryKey: queryKeys.status })
+    },
+    onError: (error) => {
+      toast.error("Could not remove item", { description: error.message })
+    },
+  })
+}
+
+export function useRemoveAvailable(): UseMutationResult<SyncResult, Error, void> {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: removeAvailable,
+    onSuccess: () => {
+      toast.success("Removing available items", {
+        description: "Available items are being removed from their Trakt lists.",
+      })
+      void queryClient.invalidateQueries({ queryKey: ["items"] })
+      void queryClient.invalidateQueries({ queryKey: queryKeys.lists })
+      void queryClient.invalidateQueries({ queryKey: queryKeys.status })
+      void queryClient.invalidateQueries({ queryKey: queryKeys.activity })
+    },
+    onError: (error) => {
+      toast.error("Could not remove available items", {
+        description: error.message,
+      })
+    },
   })
 }

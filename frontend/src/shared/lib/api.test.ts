@@ -16,6 +16,8 @@ import {
   getTraktSettings,
   jellyseerrMediaUrl,
   posterUrl,
+  removeAvailable,
+  removeItem,
   removeTraktList,
   setDryRun,
   startTraktAuth,
@@ -126,6 +128,28 @@ describe("jellyseerrMediaUrl", () => {
   it("trims trailing slashes from the base URL", () => {
     expect(jellyseerrMediaUrl("https://req.example.com///", "movie", 603)).toBe(
       "https://req.example.com/movie/603",
+    )
+  })
+})
+
+describe("removeItem", () => {
+  it("DELETEs the encoded item path", async () => {
+    const fetchSpy = mockFetch(jsonResponse({ status: "removed" }))
+    await removeItem("my list", 438631)
+    expect(fetchSpy).toHaveBeenCalledWith(
+      "/api/items/my%20list/438631",
+      expect.objectContaining({ method: "DELETE" }),
+    )
+  })
+})
+
+describe("removeAvailable", () => {
+  it("POSTs the remove-available trigger", async () => {
+    const fetchSpy = mockFetch(jsonResponse({ status: "triggered" }))
+    await removeAvailable()
+    expect(fetchSpy).toHaveBeenCalledWith(
+      "/api/items/remove-available",
+      expect.objectContaining({ method: "POST" }),
     )
   })
 })

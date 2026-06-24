@@ -25,6 +25,8 @@ vi.mock("@/shared/lib/api", () => ({
   checkServiceStatuses: vi.fn(),
   getGeneralSettings: vi.fn(),
   updateGeneralSettings: vi.fn(),
+  removeItem: vi.fn(),
+  removeAvailable: vi.fn(),
 }))
 
 vi.mock("sonner", () => ({
@@ -51,11 +53,14 @@ import {
   useSyncNow,
   useTestService,
   useTestTrakt,
+  useRemoveAvailable,
+  useRemoveItem,
   useTraktAuthStatus,
   useTraktLists,
   useTraktSettings,
   useUpdateServiceSettings,
   useUpdateStatusInterval,
+  useUpdateSyncInterval,
   useUpdateTraktSettings,
 } from "@/shared/lib/queries"
 
@@ -621,7 +626,10 @@ describe("general settings hooks", () => {
   })
 
   it("useUpdateStatusInterval saves the new interval and invalidates queries", async () => {
-    vi.mocked(api.updateGeneralSettings).mockResolvedValue({ interval_seconds: 30 })
+    vi.mocked(api.updateGeneralSettings).mockResolvedValue({
+      interval_seconds: 30,
+      sync_interval_minutes: 15,
+    })
     const { queryClient, wrapper } = setup()
     const invalidate = vi.spyOn(queryClient, "invalidateQueries")
     const { result } = renderHook(() => useUpdateStatusInterval(), { wrapper })
@@ -647,6 +655,93 @@ describe("general settings hooks", () => {
     await waitFor(() => expect(result.current.isError).toBe(true))
     expect(toast.error).toHaveBeenCalledWith("Could not update interval", {
       description: "nope",
+    })
+  })
+
+  it("useUpdateSyncInterval saves the sync interval and invalidates queries", async () => {
+    vi.mocked(api.updateGeneralSettings).mockResolvedValue({
+      interval_seconds: 60,
+      sync_interval_minutes: 30,
+    })
+    const { queryClient, wrapper } = setup()
+    const invalidate = vi.spyOn(queryClient, "invalidateQueries")
+    const { result } = renderHook(() => useUpdateSyncInterval(), { wrapper })
+
+    act(() => result.current.mutate(30))
+
+    await waitFor(() => expect(result.current.isSuccess).toBe(true))
+    expect(api.updateGeneralSettings).toHaveBeenCalledWith({
+      sync_interval_minutes: 30,
+    })
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: queryKeys.generalSettings })
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: queryKeys.lists })
+  })
+
+  it("useUpdateSyncInterval toasts on error", async () => {
+    vi.mocked(api.updateGeneralSettings).mockRejectedValue(new Error("boom"))
+    const { wrapper } = setup()
+    const { result } = renderHook(() => useUpdateSyncInterval(), { wrapper })
+
+    act(() => result.current.mutate(45))
+
+    await waitFor(() => expect(result.current.isError).toBe(true))
+    expect(toast.error).toHaveBeenCalledWith("Could not update sync interval", {
+      description: "boom",
+    })
+  })
+
+  it("useRemoveItem deletes an item and invalidates queries", async () => {
+    vi.mocked(api.removeItem).mockResolvedValue(undefined)
+    const { queryClient, wrapper } = setup()
+    const invalidate = vi.spyOn(queryClient, "invalidateQueries")
+    const { result } = renderHook(() => useRemoveItem(), { wrapper })
+
+    act(() => result.current.mutate({ list_id: "movies", trakt_id: 1 }))
+
+    await waitFor(() => expect(result.current.isSuccess).toBe(true))
+    expect(api.removeItem).toHaveBeenCalledWith("movies", 1)
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: ["items"] })
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: queryKeys.lists })
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: queryKeys.status })
+  })
+
+  it("useRemoveItem toasts on error", async () => {
+    vi.mocked(api.removeItem).mockRejectedValue(new Error("denied"))
+    const { wrapper } = setup()
+    const { result } = renderHook(() => useRemoveItem(), { wrapper })
+
+    act(() => result.current.mutate({ list_id: "movies", trakt_id: 1 }))
+
+    await waitFor(() => expect(result.current.isError).toBe(true))
+    expect(toast.error).toHaveBeenCalledWith("Could not remove item", {
+      description: "denied",
+    })
+  })
+
+  it("useRemoveAvailable triggers the sweep and invalidates queries", async () => {
+    vi.mocked(api.removeAvailable).mockResolvedValue({ status: "triggered" })
+    const { queryClient, wrapper } = setup()
+    const invalidate = vi.spyOn(queryClient, "invalidateQueries")
+    const { result } = renderHook(() => useRemoveAvailable(), { wrapper })
+
+    act(() => result.current.mutate())
+
+    await waitFor(() => expect(result.current.isSuccess).toBe(true))
+    expect(api.removeAvailable).toHaveBeenCalled()
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: ["items"] })
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: queryKeys.activity })
+  })
+
+  it("useRemoveAvailable toasts on error", async () => {
+    vi.mocked(api.removeAvailable).mockRejectedValue(new Error("offline"))
+    const { wrapper } = setup()
+    const { result } = renderHook(() => useRemoveAvailable(), { wrapper })
+
+    act(() => result.current.mutate())
+
+    await waitFor(() => expect(result.current.isError).toBe(true))
+    expect(toast.error).toHaveBeenCalledWith("Could not remove available items", {
+      description: "offline",
     })
   })
 })

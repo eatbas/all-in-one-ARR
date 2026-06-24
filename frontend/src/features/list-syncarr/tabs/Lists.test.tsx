@@ -6,9 +6,17 @@ vi.mock("@/shared/lib/queries", () => ({
   useLists: vi.fn(),
   useListItems: vi.fn(),
   useServiceSettings: vi.fn(),
+  useRemoveItem: vi.fn(),
+  useRemoveAvailable: vi.fn(),
 }))
 
-import { useLists, useListItems, useServiceSettings } from "@/shared/lib/queries"
+import {
+  useLists,
+  useListItems,
+  useRemoveAvailable,
+  useRemoveItem,
+  useServiceSettings,
+} from "@/shared/lib/queries"
 
 import { Lists } from "@/features/list-syncarr/tabs/Lists"
 import type { Item, ListSummary, ServicesSettings } from "@/shared/lib/api"
@@ -77,11 +85,23 @@ const items: Item[] = [
   },
 ]
 
+/** Build a mutation-shaped stub; typed loosely as these are test doubles. */
+function mutation(mutate: unknown, isPending = false) {
+  return { mutate, isPending } as never
+}
+
 describe("Lists page", () => {
+  let removeItemMutate: ReturnType<typeof vi.fn>
+  let removeAvailableMutate: ReturnType<typeof vi.fn>
+
   beforeEach(() => {
+    removeItemMutate = vi.fn()
+    removeAvailableMutate = vi.fn()
     vi.mocked(useLists).mockReturnValue(queryResult(lists))
     vi.mocked(useListItems).mockReturnValue(queryResult(items))
     vi.mocked(useServiceSettings).mockReturnValue(queryResult(SERVICES))
+    vi.mocked(useRemoveItem).mockReturnValue(mutation(removeItemMutate))
+    vi.mocked(useRemoveAvailable).mockReturnValue(mutation(removeAvailableMutate))
   })
 
   it("shows a loading message while the lists query is pending", () => {
@@ -181,5 +201,60 @@ describe("Lists page", () => {
 
     await user.click(screen.getByRole("button", { name: /Movies/ }))
     expect(screen.getByText("This list has no items yet.")).toBeInTheDocument()
+  })
+
+  it("removes all available items after confirming the bulk action", async () => {
+    const user = userEvent.setup()
+    render(<Lists />)
+
+    await user.click(screen.getByRole("button", { name: "Delete availables" }))
+    // The confirmation dialog appears; cancelling first does nothing.
+    await user.click(screen.getByRole("button", { name: "Cancel" }))
+    expect(removeAvailableMutate).not.toHaveBeenCalled()
+
+    await user.click(screen.getByRole("button", { name: "Delete availables" }))
+    await user.click(screen.getByRole("button", { name: "Delete" }))
+    expect(removeAvailableMutate).toHaveBeenCalled()
+  })
+
+  it("removes a single item after confirming on its thumbnail", async () => {
+    const user = userEvent.setup()
+    render(<Lists />)
+
+    await user.click(screen.getByRole("button", { name: /Movies/ }))
+    await user.click(
+      screen.getByRole("button", { name: 'Remove "Dune" from the list' }),
+    )
+    await user.click(screen.getByRole("button", { name: "Remove" }))
+    expect(removeItemMutate).toHaveBeenCalledWith({
+      list_id: "movies",
+      trakt_id: 1,
+    })
+  })
+
+  it("omits the delete control for already-removed items", async () => {
+    vi.mocked(useListItems).mockReturnValue(
+      queryResult<Item[]>([
+        {
+          ...itemBase,
+          trakt_id: 9,
+          list_id: "movies",
+          title: "Gone",
+          year: 2000,
+          type: "movie",
+          tmdb: 111,
+          status: "removed",
+        },
+      ]),
+    )
+    const user = userEvent.setup()
+    render(<Lists />)
+
+    await user.click(screen.getByRole("button", { name: /Movies/ }))
+    // The removed item still renders (with its status pill) but offers no delete.
+    expect(screen.getByText("Removed")).toBeInTheDocument()
+    expect(
+      screen.queryByRole("button", { name: 'Remove "Gone" from the list' }),
+    ).not.toBeInTheDocument()
   })
 })

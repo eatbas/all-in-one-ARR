@@ -180,14 +180,16 @@ export interface ServicesStatusResponse {
   services: Partial<Record<ServiceName | "trakt", ServiceStatus>>
 }
 
-/** Body of `PUT /api/settings/general`. */
+/** Body of `PUT /api/settings/general`; omitted fields stay unchanged. */
 export interface UpdateGeneralSettings {
-  interval_seconds: number
+  interval_seconds?: number
+  sync_interval_minutes?: number
 }
 
-/** Response of `PUT /api/settings/general`. */
+/** Response of `GET`/`PUT /api/settings/general`. */
 export interface GeneralSettings {
   interval_seconds: number
+  sync_interval_minutes: number
 }
 
 /** Error raised when the backend returns a non-2xx response. */
@@ -361,4 +363,17 @@ export function updateGeneralSettings(
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
   })
+}
+
+/** Remove a single tracked item from its Trakt list. */
+export function removeItem(listId: string, traktId: number): Promise<void> {
+  return request<void>(
+    `/api/items/${encodeURIComponent(listId)}/${traktId}`,
+    { method: "DELETE" },
+  )
+}
+
+/** Trigger removal of every Available item from its Trakt list. */
+export function removeAvailable(): Promise<SyncResult> {
+  return postJson<SyncResult>("/api/items/remove-available", {})
 }
