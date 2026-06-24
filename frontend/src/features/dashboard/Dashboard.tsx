@@ -1,14 +1,5 @@
 import { useState } from "react"
-import {
-  CheckCircle2Icon,
-  ChevronDownIcon,
-  ChevronUpIcon,
-  DownloadIcon,
-  RefreshCwIcon,
-  SendIcon,
-  Trash2Icon,
-  type LucideIcon,
-} from "lucide-react"
+import { ChevronDownIcon, ChevronUpIcon, RefreshCwIcon } from "lucide-react"
 
 import { Button } from "@/shared/components/ui/button"
 import {
@@ -21,52 +12,16 @@ import {
 import { cn } from "@/shared/lib/utils"
 import { IntegrationStatusCard } from "@/features/dashboard/components/integration-status-card"
 import { SERVICE_TABS } from "@/shared/lib/services"
-import type { ServicesStatusResponse, StatusCounts } from "@/shared/lib/api"
+import type { ServicesStatusResponse } from "@/shared/lib/api"
 import {
   useActivity,
   useCheckServiceStatuses,
   useServiceStatuses,
-  useStatus,
 } from "@/shared/lib/queries"
 import { formatTimestamp } from "@/shared/lib/format"
 
-interface StatCard {
-  key: keyof StatusCounts
-  title: string
-  description: string
-  icon: LucideIcon
-}
-
-const STAT_CARDS: ReadonlyArray<StatCard> = [
-  {
-    key: "synced",
-    title: "Synced",
-    description: "Mirrored from Trakt",
-    icon: SendIcon,
-  },
-  {
-    key: "requested",
-    title: "Requested",
-    description: "Sent to Jellyseerr",
-    icon: DownloadIcon,
-  },
-  {
-    key: "available",
-    title: "Available",
-    description: "Imported and ready",
-    icon: CheckCircle2Icon,
-  },
-  {
-    key: "removed",
-    title: "Removed",
-    description: "Cleared from the list",
-    icon: Trash2Icon,
-  },
-]
-
-/** Overview page: stat cards, integration health, and collapsible recent activity. */
+/** Overview page: integration health and collapsible recent activity. */
 export function Dashboard() {
-  const { data: status, isLoading: statusLoading } = useStatus()
   const { data: activity, isLoading: activityLoading } = useActivity()
   const { data: serviceStatuses, isLoading: servicesLoading } =
     useServiceStatuses()
@@ -86,29 +41,6 @@ export function Dashboard() {
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        {STAT_CARDS.map((card) => (
-          <Card key={card.key}>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">
-                {card.title}
-              </CardTitle>
-              <card.icon className="size-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-3xl font-bold tabular-nums">
-                {statusLoading || status === undefined
-                  ? "–"
-                  : status.counts[card.key]}
-              </div>
-              <p className="mt-1 text-xs text-muted-foreground">
-                {card.description}
-              </p>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
-
       <div className="flex flex-col gap-3">
         <div className="flex items-center justify-between gap-4">
           <div>

@@ -121,7 +121,7 @@ beforeEach(() => {
 })
 
 describe("query hooks", () => {
-  it("useStatus fetches the dashboard status", async () => {
+  it("useStatus fetches the app status (dry-run flag and counts)", async () => {
     const { wrapper } = setup()
     const { result } = renderHook(() => useStatus(), { wrapper })
 

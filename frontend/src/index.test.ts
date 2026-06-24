@@ -28,3 +28,13 @@ describe("global cursor base style", () => {
     expect(activeCss).toContain("cursor: pointer")
   })
 })
+
+describe("scrollbar gutter base style", () => {
+  // Same presence-tripwire rationale as above: jsdom applies no stylesheets, so
+  // the reserved gutter cannot be measured here. The guard ensures a future edit
+  // cannot silently drop the rule that stops the layout shifting horizontally as
+  // the document scrollbar appears and disappears between routes.
+  it("reserves a stable scrollbar gutter in index.css", () => {
+    expect(activeCss).toMatch(/html\s*\{[^}]*scrollbar-gutter:\s*stable/)
+  })
+})

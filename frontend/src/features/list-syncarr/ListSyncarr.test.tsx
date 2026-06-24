@@ -3,6 +3,7 @@ import userEvent from "@testing-library/user-event"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
 vi.mock("@/shared/lib/queries", () => ({
+  useStatus: vi.fn(),
   useLists: vi.fn(),
   useListItems: vi.fn(),
   useItems: vi.fn(),
@@ -18,12 +19,13 @@ import {
   useListItems,
   useLists,
   useRemoveTraktList,
+  useStatus,
   useTraktLists,
   useTraktSettings,
 } from "@/shared/lib/queries"
 import { ListSyncarr } from "@/features/list-syncarr/ListSyncarr"
 import { LIST_SYNCARR_TAB_STORAGE_KEY } from "@/features/list-syncarr/list-syncarr-tab"
-import type { Item, ListSummary, TraktSettings } from "@/shared/lib/api"
+import type { Item, ListSummary, Status, TraktSettings } from "@/shared/lib/api"
 import { queryResult } from "@/shared/test/mock-query"
 
 /** Build a mutation-shaped stub; typed loosely as these are test doubles. */
@@ -41,6 +43,7 @@ const TRAKT_SETTINGS: TraktSettings = {
 
 beforeEach(() => {
   localStorage.clear()
+  vi.mocked(useStatus).mockReturnValue(queryResult<Status>(undefined, false))
   vi.mocked(useLists).mockReturnValue(queryResult<ListSummary[]>([], false))
   vi.mocked(useListItems).mockReturnValue(queryResult<Item[]>([], false))
   vi.mocked(useItems).mockReturnValue(queryResult<Item[]>([], false))

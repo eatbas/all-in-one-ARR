@@ -114,6 +114,14 @@
   * {
     @apply border-border outline-ring/50;
   }
+  /* Reserve the scrollbar gutter on the document scroll container so a page
+     taller than the viewport does not shift the layout horizontally when the
+     vertical scrollbar appears or disappears between routes. Equivalent to
+     Tailwind v4's `scrollbar-gutter-stable` utility, kept here beside the other
+     base rules. */
+  html {
+    scrollbar-gutter: stable;
+  }
   body {
     @apply bg-background text-foreground;
   }

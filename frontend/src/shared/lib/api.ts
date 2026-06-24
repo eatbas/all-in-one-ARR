@@ -12,7 +12,7 @@ export type ItemStatus = "synced" | "requested" | "available" | "removed"
 /** Media type of a mirrored item. */
 export type ItemType = "movie" | "show"
 
-/** Aggregate counts shown on the dashboard stat cards. */
+/** Aggregate sync-engine counts shown on the List-Syncarr stat cards. */
 export interface StatusCounts {
   synced: number
   requested: number

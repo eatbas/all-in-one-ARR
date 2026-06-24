@@ -3,7 +3,6 @@ import userEvent from "@testing-library/user-event"
 import { beforeEach, describe, expect, it, vi } from "vitest"
 
 vi.mock("@/shared/lib/queries", () => ({
-  useStatus: vi.fn(),
   useActivity: vi.fn(),
   useServiceStatuses: vi.fn(),
   useCheckServiceStatuses: vi.fn(),
@@ -13,17 +12,10 @@ import {
   useActivity,
   useCheckServiceStatuses,
   useServiceStatuses,
-  useStatus,
 } from "@/shared/lib/queries"
 import { Dashboard } from "@/features/dashboard/Dashboard"
-import type { ActivityEntry, Status } from "@/shared/lib/api"
+import type { ActivityEntry } from "@/shared/lib/api"
 import { queryResult } from "@/shared/test/mock-query"
-
-const loadedStatus: Status = {
-  dry_run: false,
-  trakt_connected: true,
-  counts: { synced: 5, requested: 4, available: 3, removed: 2 },
-}
 
 const emptyServiceStatuses = {
   interval_seconds: 60,
@@ -44,28 +36,23 @@ describe("Dashboard", () => {
       isPending: false,
     } as never)
   })
-  it("shows placeholders while the queries are loading", () => {
-    vi.mocked(useStatus).mockReturnValue(queryResult<Status>(undefined, true))
+  it("shows a loading placeholder while the activity query is loading", () => {
     vi.mocked(useActivity).mockReturnValue(queryResult<ActivityEntry[]>(undefined, true))
 
     render(<Dashboard />)
 
-    expect(screen.getAllByText("–")).toHaveLength(4)
     expect(screen.getByText("Loading activity…")).toBeInTheDocument()
   })
 
-  it("shows placeholders and an empty feed when settled but unpopulated", () => {
-    vi.mocked(useStatus).mockReturnValue(queryResult<Status>(undefined, false))
+  it("shows an empty feed when settled but unpopulated", () => {
     vi.mocked(useActivity).mockReturnValue(queryResult<ActivityEntry[]>([], false))
 
     render(<Dashboard />)
 
-    expect(screen.getAllByText("–")).toHaveLength(4)
     expect(screen.getByText("No activity recorded yet.")).toBeInTheDocument()
   })
 
-  it("renders counts and a newest-first activity feed", () => {
-    vi.mocked(useStatus).mockReturnValue(queryResult<Status>(loadedStatus, false))
+  it("renders a newest-first activity feed", () => {
     vi.mocked(useActivity).mockReturnValue(
       queryResult<ActivityEntry[]>(
         [
@@ -77,8 +64,6 @@ describe("Dashboard", () => {
     )
 
     render(<Dashboard />)
-
-    expect(screen.getByText("5")).toBeInTheDocument()
 
     const entries = screen.getAllByRole("listitem")
     // Sorted by id descending: entry 2 ("Newer") comes first.
@@ -107,7 +92,6 @@ describe("Dashboard", () => {
   })
 
   it("toggles the activity feed with the keyboard and ignores other keys", () => {
-    vi.mocked(useStatus).mockReturnValue(queryResult<Status>(loadedStatus, false))
     vi.mocked(useActivity).mockReturnValue(
       queryResult<ActivityEntry[]>(
         [{ id: 1, ts: "2024-01-01T10:00:00Z", action: "Requested", detail: "Dune" }],
@@ -159,7 +143,6 @@ describe("Dashboard", () => {
 
   it("triggers a fresh check when 'Check now' is clicked", async () => {
     const user = userEvent.setup()
-    vi.mocked(useStatus).mockReturnValue(queryResult<Status>(loadedStatus, false))
     vi.mocked(useActivity).mockReturnValue(queryResult<ActivityEntry[]>([], false))
 
     render(<Dashboard />)
@@ -169,10 +152,9 @@ describe("Dashboard", () => {
   })
 
   it("defaults services and spins the button while a check is pending", () => {
-    vi.mocked(useStatus).mockReturnValue(queryResult<Status>(loadedStatus, false))
     vi.mocked(useActivity).mockReturnValue(queryResult<ActivityEntry[]>([], false))
-    // No status snapshot at all: `services` falls back to an empty map and
-    // `lastCheck` is undefined.
+    // No service-status snapshot at all: `services` falls back to an empty map
+    // and `lastCheck` is undefined.
     vi.mocked(useServiceStatuses).mockReturnValue(queryResult(undefined, false))
     vi.mocked(useCheckServiceStatuses).mockReturnValue({
       mutate: checkNowMutate,
