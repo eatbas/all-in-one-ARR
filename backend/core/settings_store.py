@@ -1,10 +1,10 @@
 """Persistent, runtime-mutable application settings.
 
-Trakt connection details (client id/secret/user) and the set of synced lists are
+Trakt connection details (client id/secret) and the set of synced lists are
 managed from the dashboard rather than static environment variables, so they live
-in a small JSON store. The store is **seeded** from the environment on first run
-and then becomes the source of truth; subsequent environment changes are ignored
-(the UI owns these settings).
+in a small JSON store. The connected account is always addressed as ``me``. The
+store is **seeded** from the environment on first run and then becomes the source
+of truth; subsequent environment changes are ignored (the UI owns these settings).
 
 Secrets are persisted with ``0600`` permissions and never returned in clear by
 :meth:`SettingsStore.masked`. The store is thread-safe so the scheduler thread and
@@ -82,7 +82,6 @@ class SettingsStore:
         self._log = get_logger("settings_store")
         self._client_id = ""
         self._client_secret = ""
-        self._user = "me"
         self._lists: list[TrackedList] = []
         self._status_check_interval_seconds = 60
         self._services: dict[str, dict[str, str]] = {
@@ -96,15 +95,15 @@ class SettingsStore:
         *,
         client_id: str,
         client_secret: str,
-        user: str,
-        lists: list[TrackedList],
         services: dict[str, dict[str, str]] | None = None,
         status_check_interval_seconds: int = 60,
     ) -> None:
         """Load persisted settings, or seed from the supplied defaults.
 
         On first run (no store file) the supplied environment-derived values are
-        written to disk; thereafter the persisted file is authoritative.
+        written to disk; thereafter the persisted file is authoritative. The set
+        of synced lists is not seeded from the environment — it starts empty and
+        is populated from the dashboard (discovered lists or added by URL).
         """
         with self._lock:
             if self._path.exists():
@@ -113,8 +112,7 @@ class SettingsStore:
             else:
                 self._client_id = client_id
                 self._client_secret = client_secret
-                self._user = user or "me"
-                self._lists = list(lists)
+                self._lists = []
                 self._status_check_interval_seconds = _normalise_interval(
                     status_check_interval_seconds
                 )
@@ -130,7 +128,6 @@ class SettingsStore:
         trakt = data.get("trakt") or {}
         self._client_id = trakt.get("client_id", "")
         self._client_secret = trakt.get("client_secret", "")
-        self._user = trakt.get("user") or "me"
         self._status_check_interval_seconds = _normalise_interval(
             data.get("status_check_interval_seconds", 60)
         )
@@ -167,7 +164,6 @@ class SettingsStore:
             "trakt": {
                 "client_id": self._client_id,
                 "client_secret": self._client_secret,
-                "user": self._user,
             },
             "status_check_interval_seconds": self._status_check_interval_seconds,
             "lists": [item.to_dict() for item in self._lists],
@@ -179,17 +175,16 @@ class SettingsStore:
 
     # ---- Trakt credentials ----
 
-    def trakt_credentials(self) -> tuple[str, str, str]:
-        """Return ``(client_id, client_secret, user)``."""
+    def trakt_credentials(self) -> tuple[str, str]:
+        """Return ``(client_id, client_secret)``."""
         with self._lock:
-            return (self._client_id, self._client_secret, self._user)
+            return (self._client_id, self._client_secret)
 
     def update_trakt_credentials(
         self,
         *,
         client_id: str | None = None,
         client_secret: str | None = None,
-        user: str | None = None,
     ) -> None:
         """Update the Trakt credentials; ``None`` leaves a field unchanged."""
         with self._lock:
@@ -197,8 +192,6 @@ class SettingsStore:
                 self._client_id = client_id.strip()
             if client_secret is not None:
                 self._client_secret = client_secret.strip()
-            if user is not None:
-                self._user = user.strip() or "me"
             self._save_locked()
             self._log.info("updated Trakt credentials")
 
@@ -226,12 +219,12 @@ class SettingsStore:
             return list(self._lists)
 
     def owner_for(self, slug: str) -> str:
-        """Return the owner of a tracked list by slug, defaulting to the user."""
+        """Return the owner of a tracked list by slug, defaulting to ``me``."""
         with self._lock:
             for item in self._lists:
                 if item.slug == slug:
                     return item.owner_user
-            return self._user
+            return "me"
 
     def add_list(self, *, owner_user: str, slug: str, name: str) -> bool:
         """Add a list to the synced set. Returns ``False`` if already present."""
@@ -324,7 +317,6 @@ class SettingsStore:
                 "client_id_hint": self._client_id[-4:] if self._client_id else "",
                 "client_id_set": bool(self._client_id),
                 "client_secret_set": bool(self._client_secret),
-                "user": self._user,
                 "status_check_interval_seconds": self._status_check_interval_seconds,
                 "lists": [item.to_dict() for item in self._lists],
                 "services": self.masked_services(),

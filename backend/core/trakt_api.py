@@ -33,17 +33,15 @@ class TraktSettingsResponse(BaseModel):
     client_id_hint: str
     client_id_set: bool
     client_secret_set: bool
-    user: str
     connected: bool
     lists: list[TrackedListModel]
 
 
 class UpdateTraktSettingsRequest(BaseModel):
-    # ``None`` leaves a field unchanged (so the UI can save the username without
+    # ``None`` leaves a field unchanged (so the UI can save the client id without
     # re-entering the secret).
     client_id: str | None = None
     client_secret: str | None = None
-    user: str | None = None
 
 
 class TraktAuthStartResponse(BaseModel):
@@ -83,12 +81,11 @@ class AddListRequest(BaseModel):
 
 def _settings_response(ctx: "AppContext") -> TraktSettingsResponse:
     """Build the masked Trakt settings view from the store and client."""
-    client_id, client_secret, user = ctx.settings_store.trakt_credentials()
+    client_id, client_secret = ctx.settings_store.trakt_credentials()
     return TraktSettingsResponse(
         client_id_hint=client_id[-4:] if client_id else "",
         client_id_set=bool(client_id),
         client_secret_set=bool(client_secret),
-        user=user,
         connected=ctx.trakt.is_authenticated(),
         lists=[
             TrackedListModel(**item.to_dict())
@@ -113,18 +110,17 @@ def create_trakt_router(ctx: "AppContext") -> APIRouter:
         ctx.settings_store.update_trakt_credentials(
             client_id=body.client_id,
             client_secret=body.client_secret,
-            user=body.user,
         )
-        client_id, client_secret, user = ctx.settings_store.trakt_credentials()
+        client_id, client_secret = ctx.settings_store.trakt_credentials()
         ctx.trakt.update_credentials(
-            client_id=client_id, client_secret=client_secret, user=user
+            client_id=client_id, client_secret=client_secret
         )
         log.info("Trakt settings updated")
         return _settings_response(ctx)
 
     @router.post("/trakt/auth/start", response_model=TraktAuthStartResponse)
     async def post_trakt_auth_start() -> JSONResponse | TraktAuthStartResponse:
-        client_id, _, _ = ctx.settings_store.trakt_credentials()
+        client_id, _ = ctx.settings_store.trakt_credentials()
         if not client_id:
             return JSONResponse(
                 status_code=400,

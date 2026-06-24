@@ -19,11 +19,13 @@ def _store(tmp_path, *, client_id="cid", lists=None) -> SettingsStore:
     store.load_or_seed(
         client_id=client_id,
         client_secret="secret" if client_id else "",
-        user="me",
-        lists=lists
-        if lists is not None
-        else [TrackedList(owner_user="me", slug="movies", name="Movies")],
     )
+    for item in (
+        lists
+        if lists is not None
+        else [TrackedList(owner_user="me", slug="movies", name="Movies")]
+    ):
+        store.add_list(owner_user=item.owner_user, slug=item.slug, name=item.name)
     return store
 
 
@@ -66,13 +68,13 @@ def test_put_settings_updates_store_and_client(db, tmp_path) -> None:
     ctx = _ctx(db, tmp_path, trakt=trakt)
     resp = _client(ctx).put(
         "/api/settings/trakt",
-        json={"client_id": "newid1234", "client_secret": "newsec", "user": "bob"},
+        json={"client_id": "newid1234", "client_secret": "newsec"},
     )
     assert resp.status_code == 200
-    assert resp.json()["user"] == "bob"
-    assert ctx.settings_store.trakt_credentials() == ("newid1234", "newsec", "bob")
+    assert resp.json()["client_id_hint"] == "1234"
+    assert ctx.settings_store.trakt_credentials() == ("newid1234", "newsec")
     trakt.update_credentials.assert_called_once_with(
-        client_id="newid1234", client_secret="newsec", user="bob"
+        client_id="newid1234", client_secret="newsec"
     )
 
 

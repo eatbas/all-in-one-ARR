@@ -39,14 +39,12 @@ class Settings(BaseSettings):
 
     # ---- Trakt ----
     # Client credentials seed the runtime settings store on first run; thereafter
-    # they are managed from the dashboard (see core.settings_store).
+    # they are managed from the dashboard (see core.settings_store). The connected
+    # account is always addressed as ``me``, and the lists to sync are chosen from
+    # the dashboard (discovered from the account, or added by URL), so neither the
+    # account user nor the list set is configured here.
     TRAKT_CLIENT_ID: str = ""
     TRAKT_CLIENT_SECRET: str = ""
-    TRAKT_USER: str = "me"
-    # A single list slug (legacy) and/or a comma-separated set of slugs. Both seed
-    # the settings store; TRAKT_LISTS takes precedence when set.
-    TRAKT_LIST_ID: str = "watchlist"
-    TRAKT_LISTS: str = ""
 
     # ---- Services (URL + API key; seed the store, then UI-managed) ----
     JELLYSEERR_URL: str = ""
@@ -85,31 +83,6 @@ class Settings(BaseSettings):
     # Disk cache for fetched poster thumbnails; lives inside the gitignored
     # data/ volume so each poster is downloaded from TMDB/OMDb at most once.
     POSTER_CACHE_PATH: str = "data/posters"
-
-    @property
-    def is_watchlist(self) -> bool:
-        """Whether the configured Trakt source is the user's watchlist."""
-        return self.TRAKT_LIST_ID.strip().lower() == "watchlist"
-
-    @property
-    def trakt_lists(self) -> list[str]:
-        """The configured list slugs used to seed the settings store.
-
-        Parses the comma-separated ``TRAKT_LISTS`` (whitespace-trimmed, blanks
-        dropped, order-preserving de-dup), falling back to the single
-        ``TRAKT_LIST_ID`` when ``TRAKT_LISTS`` is empty.
-        """
-        raw = self.TRAKT_LISTS.strip()
-        if not raw:
-            return [self.TRAKT_LIST_ID]
-        seen: set[str] = set()
-        slugs: list[str] = []
-        for part in raw.split(","):
-            slug = part.strip()
-            if slug and slug not in seen:
-                seen.add(slug)
-                slugs.append(slug)
-        return slugs or [self.TRAKT_LIST_ID]
 
     @property
     def service_seeds(self) -> dict[str, dict[str, str]]:

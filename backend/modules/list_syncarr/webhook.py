@@ -23,9 +23,10 @@ async def remove_tracked_item(ctx: "AppContext", item: dict[str, Any], *, reason
 
     The owner of the list is resolved from the settings store so the removal hits
     the correct ``/users/{owner}/lists/{slug}`` endpoint. Trakt only permits
-    removing items from a list the connected account owns, so a list owned by
-    someone else (added by URL) is **skipped** without issuing a doomed request;
-    the skip is recorded so it is visible in the activity feed.
+    removing items from a list the connected account owns; the app always operates
+    as ``me``, so a list whose stored owner is not ``me`` (another user's list
+    added by URL) is **skipped** without issuing a doomed request; the skip is
+    recorded so it is visible in the activity feed.
 
     The Trakt client honours DRY_RUN internally (logging the would-be removal
     without sending). In DRY_RUN we deliberately do **not** persist a 'removed'
@@ -35,8 +36,7 @@ async def remove_tracked_item(ctx: "AppContext", item: dict[str, Any], *, reason
     """
     list_id = item["list_id"]
     owner = ctx.settings_store.owner_for(list_id)
-    _, _, connected_user = ctx.settings_store.trakt_credentials()
-    if owner != "me" and owner != connected_user:
+    if owner != "me":
         ctx.db.add_activity(
             "remove_skipped",
             f"cannot remove {item['title']} from {owner}'s list {list_id}",

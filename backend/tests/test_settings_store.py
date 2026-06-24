@@ -8,14 +8,19 @@ from core.settings_store import SettingsStore, TrackedList
 
 
 def _seed(store: SettingsStore, **overrides) -> None:
+    """Seed credentials, then add any requested lists.
+
+    Lists are no longer seeded by ``load_or_seed`` (they come from the dashboard),
+    so the helper adds them explicitly after the store is initialised.
+    """
     store.load_or_seed(
         client_id=overrides.get("client_id", "cid"),
         client_secret=overrides.get("client_secret", "secret"),
-        user=overrides.get("user", "me"),
-        lists=overrides.get(
-            "lists", [TrackedList(owner_user="me", slug="movies", name="Movies")]
-        ),
     )
+    for item in overrides.get(
+        "lists", [TrackedList(owner_user="me", slug="movies", name="Movies")]
+    ):
+        store.add_list(owner_user=item.owner_user, slug=item.slug, name=item.name)
 
 
 def test_seeds_and_persists_on_first_run(tmp_path) -> None:
@@ -23,7 +28,7 @@ def test_seeds_and_persists_on_first_run(tmp_path) -> None:
     store = SettingsStore(str(path))
     _seed(store)
     assert path.exists()
-    assert store.trakt_credentials() == ("cid", "secret", "me")
+    assert store.trakt_credentials() == ("cid", "secret")
     assert [item.slug for item in store.tracked_lists()] == ["movies"]
 
 
@@ -33,10 +38,8 @@ def test_loads_existing_and_ignores_seed(tmp_path) -> None:
 
     reopened = SettingsStore(str(path))
     # Different seed values must be ignored because the file already exists.
-    reopened.load_or_seed(
-        client_id="other", client_secret="x", user="bob", lists=[]
-    )
-    assert reopened.trakt_credentials() == ("cid", "secret", "me")
+    reopened.load_or_seed(client_id="other", client_secret="x")
+    assert reopened.trakt_credentials() == ("cid", "secret")
     assert [item.slug for item in reopened.tracked_lists()] == ["movies"]
 
 
@@ -45,7 +48,7 @@ def test_load_skips_entries_without_slug_and_defaults_name(tmp_path) -> None:
     path.write_text(
         json.dumps(
             {
-                "trakt": {"client_id": "c", "client_secret": "s", "user": "me"},
+                "trakt": {"client_id": "c", "client_secret": "s"},
                 "lists": [
                     {"owner_user": "me", "slug": "tv"},  # no name -> name == slug
                     {"owner_user": "me"},  # no slug -> skipped
@@ -54,28 +57,20 @@ def test_load_skips_entries_without_slug_and_defaults_name(tmp_path) -> None:
         )
     )
     store = SettingsStore(str(path))
-    _seed(store)  # file exists -> loads
+    store.load_or_seed(client_id="cid", client_secret="secret")  # file exists -> loads
     tracked = store.tracked_lists()
     assert len(tracked) == 1
     assert tracked[0].slug == "tv"
     assert tracked[0].name == "tv"
 
 
-def test_seed_blank_user_defaults_to_me(tmp_path) -> None:
-    store = SettingsStore(str(tmp_path / "settings.json"))
-    _seed(store, user="")
-    assert store.trakt_credentials()[2] == "me"
-
-
 def test_update_credentials_leaves_unset_fields(tmp_path) -> None:
     store = SettingsStore(str(tmp_path / "settings.json"))
     _seed(store)
-    store.update_trakt_credentials(user="bob")
-    assert store.trakt_credentials() == ("cid", "secret", "bob")
-    store.update_trakt_credentials(client_id="new", client_secret="ns")
-    assert store.trakt_credentials() == ("new", "ns", "bob")
-    store.update_trakt_credentials(user="   ")  # blank -> "me"
-    assert store.trakt_credentials()[2] == "me"
+    store.update_trakt_credentials(client_id="new")
+    assert store.trakt_credentials() == ("new", "secret")
+    store.update_trakt_credentials(client_secret="ns")
+    assert store.trakt_credentials() == ("new", "ns")
 
 
 def test_update_credentials_survives_reload(tmp_path) -> None:
@@ -92,11 +87,10 @@ def test_owner_for_found_and_default(tmp_path) -> None:
     store = SettingsStore(str(tmp_path / "settings.json"))
     _seed(
         store,
-        user="erena",
         lists=[TrackedList(owner_user="sean", slug="shared", name="Shared")],
     )
     assert store.owner_for("shared") == "sean"
-    assert store.owner_for("unknown") == "erena"
+    assert store.owner_for("unknown") == "me"
 
 
 def test_add_and_remove_list_are_idempotent(tmp_path) -> None:
@@ -110,6 +104,22 @@ def test_add_and_remove_list_are_idempotent(tmp_path) -> None:
     assert store.tracked_lists() == []
 
 
+def test_added_lists_survive_reload(tmp_path) -> None:
+    # Lists chosen from the dashboard are persisted and reloaded across restarts.
+    path = tmp_path / "settings.json"
+    store = SettingsStore(str(path))
+    _seed(store, lists=[])
+    store.add_list(owner_user="me", slug="tv", name="TV")
+    store.add_list(owner_user="sean", slug="shared", name="Shared")
+
+    reopened = SettingsStore(str(path))
+    reopened.load_or_seed(client_id="x", client_secret="x")
+    assert [(i.owner_user, i.slug) for i in reopened.tracked_lists()] == [
+        ("me", "tv"),
+        ("sean", "shared"),
+    ]
+
+
 def test_masked_with_and_without_credentials(tmp_path) -> None:
     store = SettingsStore(str(tmp_path / "settings.json"))
     _seed(store, client_id="abc1234")
@@ -120,7 +130,7 @@ def test_masked_with_and_without_credentials(tmp_path) -> None:
     assert masked["lists"][0]["slug"] == "movies"
 
     empty = SettingsStore(str(tmp_path / "empty.json"))
-    empty.load_or_seed(client_id="", client_secret="", user="me", lists=[])
+    empty.load_or_seed(client_id="", client_secret="")
     masked_empty = empty.masked()
     assert masked_empty["client_id_hint"] == ""
     assert masked_empty["client_id_set"] is False
@@ -133,8 +143,6 @@ def test_seeds_and_round_trips_services(tmp_path) -> None:
     store.load_or_seed(
         client_id="cid",
         client_secret="sec",
-        user="me",
-        lists=[],
         services={
             "jellyseerr": {"url": "http://js", "api_key": "jk"},
             "sonarr": {"url": "http://sonarr", "api_key": ""},
@@ -145,9 +153,7 @@ def test_seeds_and_round_trips_services(tmp_path) -> None:
     assert store.service_connection("radarr") == ("", "")  # absent in seed
 
     reopened = SettingsStore(str(path))
-    reopened.load_or_seed(
-        client_id="x", client_secret="x", user="x", lists=[], services=None
-    )
+    reopened.load_or_seed(client_id="x", client_secret="x", services=None)
     assert reopened.service_connection("jellyseerr") == ("http://js", "jk")
 
 
@@ -157,7 +163,7 @@ def test_backfills_new_services_from_seed_on_upgrade(tmp_path) -> None:
     path.write_text(
         json.dumps(
             {
-                "trakt": {"client_id": "c", "client_secret": "s", "user": "me"},
+                "trakt": {"client_id": "c", "client_secret": "s"},
                 "lists": [],
             }
         )
@@ -166,23 +172,19 @@ def test_backfills_new_services_from_seed_on_upgrade(tmp_path) -> None:
     store.load_or_seed(
         client_id="x",
         client_secret="x",
-        user="x",
-        lists=[],
         services={"jellyseerr": {"url": "http://js", "api_key": "jk"}},
     )
     assert store.service_connection("jellyseerr") == ("http://js", "jk")
 
     # The backfill was persisted, so a later load needs no re-seed.
     reopened = SettingsStore(str(path))
-    reopened.load_or_seed(
-        client_id="x", client_secret="x", user="x", lists=[], services=None
-    )
+    reopened.load_or_seed(client_id="x", client_secret="x", services=None)
     assert reopened.service_connection("jellyseerr") == ("http://js", "jk")
 
 
 def test_update_service_connection_leaves_unset_fields(tmp_path) -> None:
     store = SettingsStore(str(tmp_path / "settings.json"))
-    store.load_or_seed(client_id="c", client_secret="s", user="me", lists=[])
+    store.load_or_seed(client_id="c", client_secret="s")
     store.update_service_connection("sonarr", url="http://sonarr:8989", api_key="sk")
     assert store.service_connection("sonarr") == ("http://sonarr:8989", "sk")
     store.update_service_connection("sonarr", url="http://new")  # key unchanged
@@ -196,8 +198,6 @@ def test_masked_services_hides_keys(tmp_path) -> None:
     store.load_or_seed(
         client_id="c",
         client_secret="s",
-        user="me",
-        lists=[],
         services={"jellyseerr": {"url": "http://js", "api_key": "jk"}},
     )
     masked = store.masked_services()
@@ -211,8 +211,6 @@ def test_seeds_and_masks_api_key_only_service(tmp_path) -> None:
     store.load_or_seed(
         client_id="c",
         client_secret="s",
-        user="me",
-        lists=[],
         services={"tmdb": {"api_key": "tk"}},
     )
     # An API-key-only service stores and masks just that field.
@@ -227,8 +225,6 @@ def test_seeds_updates_and_reloads_qbittorrent_service(tmp_path) -> None:
     store.load_or_seed(
         client_id="c",
         client_secret="s",
-        user="me",
-        lists=[],
         services={"qbittorrent": {"url": "http://qb", "api_key": "qbt_key"}},
     )
     assert store.service_fields("qbittorrent") == {
@@ -248,9 +244,7 @@ def test_seeds_updates_and_reloads_qbittorrent_service(tmp_path) -> None:
 
     # The change survives a reload from disk.
     reopened = SettingsStore(str(path))
-    reopened.load_or_seed(
-        client_id="x", client_secret="x", user="x", lists=[], services=None
-    )
+    reopened.load_or_seed(client_id="x", client_secret="x", services=None)
     assert reopened.service_fields("qbittorrent")["api_key"] == "qbt_new"
 
 
@@ -273,15 +267,13 @@ def test_status_check_interval_seed_and_reload(tmp_path) -> None:
     store.load_or_seed(
         client_id="cid",
         client_secret="sec",
-        user="me",
-        lists=[],
         status_check_interval_seconds=30,
     )
     assert store.status_check_interval_seconds() == 30
     assert json.loads(path.read_text())["status_check_interval_seconds"] == 30
 
     reopened = SettingsStore(str(path))
-    reopened.load_or_seed(client_id="x", client_secret="x", user="x", lists=[])
+    reopened.load_or_seed(client_id="x", client_secret="x")
     assert reopened.status_check_interval_seconds() == 30
 
 

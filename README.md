@@ -70,9 +70,6 @@ cp .env.example .env
 | --- | --- | --- |
 | `TRAKT_CLIENT_ID` | – | Trakt application client id (**required**) |
 | `TRAKT_CLIENT_SECRET` | – | Trakt application client secret (**required**) |
-| `TRAKT_USER` | `me` | Your Trakt username, or `me` |
-| `TRAKT_LIST_ID` | `watchlist` | Legacy single list slug/id; used only when `TRAKT_LISTS` is empty |
-| `TRAKT_LISTS` | – | Comma-separated list slugs to sync, e.g. `movies,tv,anime` (seeds the settings store) |
 | `JELLYSEERR_URL` | – | Base URL of Jellyseerr (seeds the store; settable in the UI) |
 | `JELLYSEERR_API_KEY` | – | Jellyseerr API key (seeds the store; settable in the UI) |
 | `SONARR_URL` | – | Base URL of Sonarr (seeds the store; settable in the UI) |
@@ -141,8 +138,9 @@ that drains over their ~3-second lifetime.
 
 **Trakt tab:**
 
-- **Credentials** – enter/update the Trakt client id, secret and user (the
-  secret is stored server-side and never shown again).
+- **Credentials** – enter/update the Trakt client id and secret (the secret is
+  stored server-side and never shown again). The connected account is always
+  addressed as `me`.
 - **Connect** – runs the device-auth flow from the browser: it shows the
   `trakt.tv/activate` code and polls until it reads **Connected**.
 - **Test connection** – verifies the saved token against the Trakt account.

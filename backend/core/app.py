@@ -32,7 +32,7 @@ from core.logging import configure_logging, get_logger
 from core.posters import PosterCache
 from core.scheduler import SchedulerService
 from core.services_api import create_services_router
-from core.settings_store import SettingsStore, TrackedList
+from core.settings_store import SettingsStore
 from core.status_checker import StatusChecker
 from core.trakt_api import create_trakt_router
 from core.trakt_auth import cancel_device_auth, start_device_auth
@@ -55,21 +55,14 @@ def build_context(settings: Settings) -> AppContext:
     settings_store.load_or_seed(
         client_id=settings.TRAKT_CLIENT_ID,
         client_secret=settings.TRAKT_CLIENT_SECRET,
-        user=settings.TRAKT_USER,
-        lists=[
-            TrackedList(owner_user=settings.TRAKT_USER, slug=slug, name=slug)
-            for slug in settings.trakt_lists
-        ],
         services=settings.service_seeds,
         status_check_interval_seconds=settings.STATUS_CHECK_INTERVAL_SECONDS,
     )
-    client_id, client_secret, user = settings_store.trakt_credentials()
+    client_id, client_secret = settings_store.trakt_credentials()
 
     trakt = TraktClient(
         client_id=client_id,
         client_secret=client_secret,
-        user=user,
-        list_id=settings.TRAKT_LIST_ID,
         token_store_path=settings.TOKEN_STORE_PATH,
         dry_run_provider=flag,
     )
@@ -122,7 +115,7 @@ async def _maybe_start_device_auth(ctx: AppContext) -> None:
     The flow runs through the shared :data:`AppContext.trakt_auth` session so the
     dashboard surfaces the same code/URL. Failures never crash start-up.
     """
-    client_id, _, _ = ctx.settings_store.trakt_credentials()
+    client_id, _ = ctx.settings_store.trakt_credentials()
     if not client_id or ctx.trakt.is_authenticated():
         return
     try:

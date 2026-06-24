@@ -42,16 +42,12 @@ class TraktClient:
         *,
         client_id: str,
         client_secret: str,
-        user: str,
-        list_id: str,
         token_store_path: str,
         dry_run_provider: Callable[[], bool],
         http_client: httpx.AsyncClient | None = None,
     ) -> None:
         self._client_id = client_id
         self._client_secret = client_secret
-        self._user = user
-        self._list_id = list_id
         self._token_store_path = token_store_path
         self._dry_run_provider = dry_run_provider
         self._log = get_logger("trakt")
@@ -62,9 +58,7 @@ class TraktClient:
 
     # ---- credentials ----
 
-    def update_credentials(
-        self, *, client_id: str, client_secret: str, user: str
-    ) -> None:
+    def update_credentials(self, *, client_id: str, client_secret: str) -> None:
         """Replace the in-use Trakt credentials (set from the dashboard).
 
         Subsequent authenticated calls and any new device-auth use these values,
@@ -72,7 +66,6 @@ class TraktClient:
         """
         self._client_id = client_id
         self._client_secret = client_secret
-        self._user = user or "me"
 
     # ---- headers ----
 
@@ -213,8 +206,12 @@ class TraktClient:
         }
 
     async def get_user_lists(self, *, user: str | None = None) -> list[dict[str, Any]]:
-        """Return all of a user's lists (name, slug, owner, item count)."""
-        owner = user or self._user
+        """Return all of a user's lists (name, slug, owner, item count).
+
+        Defaults to the connected account (``me``); pass ``user`` to discover
+        another account's public lists.
+        """
+        owner = user or "me"
         response = await self._client.get(
             f"/users/{owner}/lists", headers=await self._auth_headers()
         )
@@ -273,16 +270,15 @@ class TraktClient:
         return f"/users/{owner_user}/lists/{list_id}/items/remove"
 
     async def read_list_items(
-        self, *, list_id: str | None = None, owner_user: str | None = None
+        self, *, list_id: str, owner_user: str | None = None
     ) -> list[dict[str, Any]]:
         """Read and normalise a Trakt list (or the watchlist).
 
-        Defaults to the list/user the client was constructed with. Follows Trakt
+        ``owner_user`` defaults to the connected account (``me``). Follows Trakt
         pagination via the ``X-Pagination-Page-Count`` header so lists larger than
         a single page are fully synced.
         """
-        owner = owner_user or self._user
-        list_id = self._list_id if list_id is None else list_id
+        owner = owner_user or "me"
         path = self._list_read_path(owner, list_id)
         headers = await self._auth_headers()
         items: list[dict[str, Any]] = []
@@ -323,16 +319,16 @@ class TraktClient:
         *,
         movies: list[int] | None = None,
         shows: list[int] | None = None,
-        list_id: str | None = None,
+        list_id: str,
         owner_user: str | None = None,
     ) -> dict[str, Any]:
-        """Remove items from a Trakt list (defaults to the configured list).
+        """Remove items from a Trakt list.
 
-        ``movies`` are TMDB ids; ``shows`` are TVDB ids. Honours DRY_RUN: when on,
-        the payload is logged and a simulated result is returned without sending.
+        ``movies`` are TMDB ids; ``shows`` are TVDB ids. ``owner_user`` defaults to
+        the connected account (``me``). Honours DRY_RUN: when on, the payload is
+        logged and a simulated result is returned without sending.
         """
-        owner = owner_user or self._user
-        list_id = self._list_id if list_id is None else list_id
+        owner = owner_user or "me"
         movie_ids = movies or []
         show_ids = shows or []
         body = {

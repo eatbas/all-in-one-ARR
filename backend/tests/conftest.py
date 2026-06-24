@@ -70,7 +70,6 @@ class StubSettingsStore:
         lists: list[TrackedList] | None = None,
         client_id: str = "cid",
         client_secret: str = "secret",
-        user: str = "me",
         services: dict[str, dict[str, str]] | None = None,
         status_check_interval_seconds: int = 60,
     ) -> None:
@@ -79,7 +78,7 @@ class StubSettingsStore:
             if lists is not None
             else [TrackedList(owner_user="me", slug="watchlist", name="watchlist")]
         )
-        self._creds = (client_id, client_secret, user)
+        self._creds = (client_id, client_secret)
         self._status_check_interval_seconds = status_check_interval_seconds
         # Start from a complete, descriptor-shaped baseline so every service is
         # present (masked_services iterates them all), then apply the legacy
@@ -97,9 +96,9 @@ class StubSettingsStore:
         for item in self._lists:
             if item.slug == slug:
                 return item.owner_user
-        return self._creds[2]
+        return "me"
 
-    def trakt_credentials(self) -> tuple[str, str, str]:
+    def trakt_credentials(self) -> tuple[str, str]:
         return self._creds
 
     def service_fields(self, name: str) -> dict[str, str]:
@@ -211,7 +210,6 @@ def make_ctx(
 class _StubSettings:
     """A tiny settings object exposing only what modules read."""
 
-    TRAKT_LIST_ID = "watchlist"
     SYNC_INTERVAL_MIN = 15
 
 

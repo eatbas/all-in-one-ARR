@@ -178,8 +178,10 @@ async def test_remove_failure_is_logged_and_item_left(db) -> None:
     assert any(a["action"] == "error" for a in db.recent_activity())
 
 
-async def test_removal_skipped_for_list_owned_by_someone_else(db) -> None:
-    # Trakt forbids removing from a list you do not own: skip without a request.
+async def test_removal_skipped_for_list_not_owned_by_me(db) -> None:
+    # Trakt forbids removing from a list you do not own, and the app always
+    # operates as 'me', so any list whose stored owner is not 'me' (another
+    # user's list added by URL) is skipped without a request.
     db.upsert_item(
         trakt_id=2, type="show", title="Severance", year=2022,
         tmdb=200, tvdb=300, imdb="tt2", list_id="shared",
@@ -187,7 +189,6 @@ async def test_removal_skipped_for_list_owned_by_someone_else(db) -> None:
     trakt = StubTrakt()
     store = StubSettingsStore(
         lists=[TrackedList(owner_user="sean", slug="shared", name="Shared")],
-        user="me",
     )
     ctx = make_ctx(db=db, trakt=trakt, dry_run=False, settings_store=store)
     item = db.get_item(trakt_id=2, list_id="shared")
@@ -195,24 +196,3 @@ async def test_removal_skipped_for_list_owned_by_someone_else(db) -> None:
     trakt.remove_items.assert_not_awaited()
     assert db.get_item(trakt_id=2, list_id="shared")["status"] == "synced"
     assert any(a["action"] == "remove_skipped" for a in db.recent_activity())
-
-
-async def test_removal_proceeds_for_list_owned_by_connected_username(db) -> None:
-    # A list owned by the connected account's real username (not the 'me' alias)
-    # is still owned, so removal proceeds.
-    db.upsert_item(
-        trakt_id=2, type="show", title="Severance", year=2022,
-        tmdb=200, tvdb=300, imdb="tt2", list_id="mine",
-    )
-    trakt = StubTrakt()
-    store = StubSettingsStore(
-        lists=[TrackedList(owner_user="erena", slug="mine", name="Mine")],
-        user="erena",
-    )
-    ctx = make_ctx(db=db, trakt=trakt, dry_run=False, settings_store=store)
-    item = db.get_item(trakt_id=2, list_id="mine")
-    await remove_tracked_item(ctx, item, reason="imported")
-    trakt.remove_items.assert_awaited_once_with(
-        shows=[300], list_id="mine", owner_user="erena"
-    )
-    assert db.get_item(trakt_id=2, list_id="mine")["status"] == "removed"

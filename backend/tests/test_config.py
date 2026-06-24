@@ -16,30 +16,7 @@ def test_valid_settings_defaults() -> None:
     settings = Settings(_env_file=None, **_VALID)
     assert settings.DRY_RUN is True
     assert settings.SYNC_INTERVAL_MIN == 15
-    assert settings.is_watchlist is True
     assert settings.POSTER_CACHE_PATH == "data/posters"
-
-
-def test_non_watchlist_list_id() -> None:
-    settings = Settings(_env_file=None, TRAKT_LIST_ID="my-list", **_VALID)
-    assert settings.is_watchlist is False
-
-
-def test_default_trakt_lists_falls_back_to_list_id() -> None:
-    settings = Settings(_env_file=None, TRAKT_LIST_ID="my-list", **_VALID)
-    assert settings.trakt_lists == ["my-list"]
-
-
-def test_trakt_lists_parses_dedupes_and_trims() -> None:
-    settings = Settings(
-        _env_file=None, TRAKT_LISTS="movies, tv ,anime,, movies", **_VALID
-    )
-    assert settings.trakt_lists == ["movies", "tv", "anime"]
-
-
-def test_trakt_lists_blank_falls_back_to_list_id() -> None:
-    settings = Settings(_env_file=None, TRAKT_LISTS="  , ", **_VALID)
-    assert settings.trakt_lists == ["watchlist"]
 
 
 def test_all_service_credentials_are_optional() -> None:
@@ -104,5 +81,4 @@ def test_masked_hides_secrets() -> None:
     assert masked["SABNZBD_API_KEY"] == "***"
     assert masked["QBITTORRENT_API_KEY"] == "***"
     # A non-secret field is shown in clear.
-    assert masked["TRAKT_USER"] == "me"
     assert masked["DRY_RUN"] is True
