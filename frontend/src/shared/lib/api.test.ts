@@ -14,6 +14,7 @@ import {
   getTraktAuthStatus,
   getTraktLists,
   getTraktSettings,
+  jellyseerrMediaUrl,
   posterUrl,
   removeTraktList,
   setDryRun,
@@ -109,6 +110,23 @@ describe("posterUrl", () => {
   it("builds the same-origin poster path for an item", () => {
     expect(posterUrl("movie", 603)).toBe("/api/posters/movie/603")
     expect(posterUrl("show", 1399)).toBe("/api/posters/show/1399")
+  })
+})
+
+describe("jellyseerrMediaUrl", () => {
+  it("maps the media type onto Overseerr/Jellyseerr routes", () => {
+    expect(jellyseerrMediaUrl("https://req.example.com", "movie", 603)).toBe(
+      "https://req.example.com/movie/603",
+    )
+    expect(jellyseerrMediaUrl("https://req.example.com", "show", 1399)).toBe(
+      "https://req.example.com/tv/1399",
+    )
+  })
+
+  it("trims trailing slashes from the base URL", () => {
+    expect(jellyseerrMediaUrl("https://req.example.com///", "movie", 603)).toBe(
+      "https://req.example.com/movie/603",
+    )
   })
 })
 

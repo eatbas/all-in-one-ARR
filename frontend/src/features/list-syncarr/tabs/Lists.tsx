@@ -1,5 +1,5 @@
 import { useState } from "react"
-import { ChevronDownIcon } from "lucide-react"
+import { ChevronDownIcon, ExternalLinkIcon } from "lucide-react"
 
 import {
   Card,
@@ -16,17 +16,25 @@ import {
 import { PosterThumb } from "@/features/list-syncarr/components/poster-thumb"
 import { StatusBadge } from "@/features/list-syncarr/components/status-badge"
 import { cn } from "@/shared/lib/utils"
-import { useLists, useListItems } from "@/shared/lib/queries"
+import { useLists, useListItems, useServiceSettings } from "@/shared/lib/queries"
 import {
   displayTitle,
   formatNextSync,
   formatRelativeTime,
   formatYear,
 } from "@/shared/lib/format"
+import { jellyseerrMediaUrl } from "@/shared/lib/api"
 import type { ListSummary } from "@/shared/lib/api"
 
 /** One collapsible synced-list row; its items load lazily on first expand. */
-function ListRow({ list }: { list: ListSummary }) {
+function ListRow({
+  list,
+  jellyseerrUrl,
+}: {
+  list: ListSummary
+  /** Jellyseerr base URL, when configured, used to deep-link each item's request page. */
+  jellyseerrUrl?: string
+}) {
   const [open, setOpen] = useState(false)
   const { data: items, isLoading } = useListItems(list.slug, open)
 
@@ -69,9 +77,22 @@ function ListRow({ list }: { list: ListSummary }) {
                 key={`${item.list_id}:${item.trakt_id}`}
                 className="flex flex-col gap-1"
               >
-                {/* Poster with the full-name status pill overlaid bottom-right. */}
+                {/* Poster with the Jellyseerr request link overlaid top-right and
+                    the full-name status pill bottom-right. */}
                 <div className="relative">
                   <PosterThumb item={item} />
+                  {jellyseerrUrl && item.tmdb !== null ? (
+                    <a
+                      href={jellyseerrMediaUrl(jellyseerrUrl, item.type, item.tmdb)}
+                      target="_blank"
+                      rel="noreferrer noopener"
+                      title={`Request "${displayTitle(item.title)}" in Jellyseerr`}
+                      aria-label={`Request "${displayTitle(item.title)}" in Jellyseerr`}
+                      className="absolute right-1 top-1 inline-flex items-center justify-center rounded-md bg-background/85 p-1 text-muted-foreground shadow-sm backdrop-blur-sm transition-colors hover:text-foreground"
+                    >
+                      <ExternalLinkIcon className="size-4" />
+                    </a>
+                  ) : null}
                   <StatusBadge
                     status={item.status}
                     className="absolute right-1 bottom-1 bg-background/85 shadow-sm backdrop-blur-sm"
@@ -99,6 +120,8 @@ function ListRow({ list }: { list: ListSummary }) {
 /** Collapsible view of the Trakt lists selected for syncing. */
 export function Lists() {
   const { data: lists, isLoading } = useLists()
+  const { data: services } = useServiceSettings()
+  const jellyseerrUrl = services?.jellyseerr.url
 
   return (
     <div className="flex flex-col gap-6">
@@ -125,7 +148,7 @@ export function Lists() {
             <ul className="divide-y">
               {lists?.map((list) => (
                 <li key={`${list.owner_user}:${list.slug}`}>
-                  <ListRow list={list} />
+                  <ListRow list={list} jellyseerrUrl={jellyseerrUrl} />
                 </li>
               ))}
             </ul>

@@ -5,13 +5,24 @@ import { beforeEach, describe, expect, it, vi } from "vitest"
 vi.mock("@/shared/lib/queries", () => ({
   useLists: vi.fn(),
   useListItems: vi.fn(),
+  useServiceSettings: vi.fn(),
 }))
 
-import { useLists, useListItems } from "@/shared/lib/queries"
+import { useLists, useListItems, useServiceSettings } from "@/shared/lib/queries"
 
 import { Lists } from "@/features/list-syncarr/tabs/Lists"
-import type { Item, ListSummary } from "@/shared/lib/api"
+import type { Item, ListSummary, ServicesSettings } from "@/shared/lib/api"
 import { queryResult } from "@/shared/test/mock-query"
+
+const SERVICES: ServicesSettings = {
+  jellyseerr: { url: "https://requests.example.com", api_key_set: true },
+  sonarr: { url: "", api_key_set: false },
+  radarr: { url: "", api_key_set: false },
+  tmdb: { api_key_set: false },
+  omdb: { api_key_set: false },
+  sabnzbd: { url: "", api_key_set: false },
+  qbittorrent: { url: "", api_key_set: false },
+}
 
 const lists: ListSummary[] = [
   {
@@ -70,6 +81,7 @@ describe("Lists page", () => {
   beforeEach(() => {
     vi.mocked(useLists).mockReturnValue(queryResult(lists))
     vi.mocked(useListItems).mockReturnValue(queryResult(items))
+    vi.mocked(useServiceSettings).mockReturnValue(queryResult(SERVICES))
   })
 
   it("shows a loading message while the lists query is pending", () => {
@@ -125,6 +137,23 @@ describe("Lists page", () => {
     // The availability pill is overlaid on each poster with its full status name.
     expect(screen.getByText("Available")).toBeInTheDocument()
     expect(screen.getByText("Requested")).toBeInTheDocument()
+    // The item with a TMDB id links to its Jellyseerr request page.
+    expect(
+      screen.getByRole("link", { name: 'Request "Dune" in Jellyseerr' }),
+    ).toHaveAttribute("href", "https://requests.example.com/movie/438631")
+    // The item without a TMDB id cannot be deep-linked, so it shows no link.
+    expect(screen.getAllByRole("link")).toHaveLength(1)
+  })
+
+  it("omits the request link when Jellyseerr is not configured", async () => {
+    vi.mocked(useServiceSettings).mockReturnValue(
+      queryResult<ServicesSettings>(undefined, false),
+    )
+    const user = userEvent.setup()
+    render(<Lists />)
+
+    await user.click(screen.getByRole("button", { name: /Movies/ }))
+    expect(screen.queryByRole("link")).not.toBeInTheDocument()
   })
 
   it("shows a loading message while a list's items load", async () => {

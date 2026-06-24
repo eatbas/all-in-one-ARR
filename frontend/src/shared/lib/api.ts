@@ -250,6 +250,22 @@ export function posterUrl(mediaType: ItemType, tmdbId: number): string {
   return `/api/posters/${mediaType}/${tmdbId}`
 }
 
+/**
+ * Deep link to an item's media page in Overseerr/Jellyseerr, where the Request
+ * button lives. `baseUrl` is the configured Jellyseerr connection URL (any
+ * trailing slashes are trimmed); movies use the `/movie/{tmdb}` route and shows
+ * the `/tv/{tmdb}` route, matching Overseerr's and Jellyseerr's URL scheme.
+ */
+export function jellyseerrMediaUrl(
+  baseUrl: string,
+  mediaType: ItemType,
+  tmdbId: number,
+): string {
+  const root = baseUrl.replace(/\/+$/, "")
+  const path = mediaType === "movie" ? "movie" : "tv"
+  return `${root}/${path}/${tmdbId}`
+}
+
 export function getActivity(): Promise<ActivityEntry[]> {
   return request<ActivityEntry[]>("/api/activity")
 }
