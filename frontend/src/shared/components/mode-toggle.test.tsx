@@ -2,28 +2,39 @@ import { render, screen } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { describe, expect, it, vi } from "vitest"
 
-const { setTheme } = vi.hoisted(() => ({ setTheme: vi.fn() }))
+const { setTheme, resolvedTheme } = vi.hoisted(() => ({
+  setTheme: vi.fn(),
+  resolvedTheme: { value: "dark" as "dark" | "light" },
+}))
+
 vi.mock("@/shared/components/theme-context", () => ({
-  useTheme: () => ({ theme: "dark", resolvedTheme: "dark", setTheme }),
+  useTheme: () => ({
+    theme: resolvedTheme.value,
+    resolvedTheme: resolvedTheme.value,
+    setTheme,
+  }),
 }))
 
 import { ModeToggle } from "@/shared/components/mode-toggle"
 
 describe("ModeToggle", () => {
-  it("sets the theme for each menu option", async () => {
+  it("switches from dark to light when clicked", async () => {
     const user = userEvent.setup()
+    resolvedTheme.value = "dark"
+    setTheme.mockClear()
     render(<ModeToggle />)
 
-    const options = [
-      { label: "Light", value: "light" },
-      { label: "Dark", value: "dark" },
-      { label: "System", value: "system" },
-    ] as const
+    await user.click(screen.getByRole("button", { name: /toggle theme/i }))
+    expect(setTheme).toHaveBeenCalledWith("light")
+  })
 
-    for (const { label, value } of options) {
-      await user.click(screen.getByRole("button", { name: /toggle theme/i }))
-      await user.click(await screen.findByRole("menuitem", { name: label }))
-      expect(setTheme).toHaveBeenCalledWith(value)
-    }
+  it("switches from light to dark when clicked", async () => {
+    const user = userEvent.setup()
+    resolvedTheme.value = "light"
+    setTheme.mockClear()
+    render(<ModeToggle />)
+
+    await user.click(screen.getByRole("button", { name: /toggle theme/i }))
+    expect(setTheme).toHaveBeenCalledWith("dark")
   })
 })

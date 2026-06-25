@@ -110,6 +110,17 @@ def test_counts_by_list(db: Database) -> None:
     assert db.counts_by_list() == {"movies": 2, "tv": 1}
 
 
+def test_removed_counts_by_list(db: Database) -> None:
+    # "movies" keeps an active item; "tv" has only a removed one.
+    db.upsert_item(**{**_MOVIE, "list_id": "movies"})
+    db.upsert_item(**{**_SHOW, "list_id": "movies"})
+    db.upsert_item(**{**_SHOW, "trakt_id": 3, "list_id": "tv"})
+    db.set_status(trakt_id=2, list_id="movies", status="removed")
+    db.set_status(trakt_id=3, list_id="tv", status="removed")
+    # Only lists with removed items appear; fully-active lists are omitted.
+    assert db.removed_counts_by_list() == {"movies": 1, "tv": 1}
+
+
 def test_list_sync_state_touch_and_read(db: Database) -> None:
     assert db.list_last_synced() == {}
     db.touch_list_synced("movies")

@@ -94,6 +94,39 @@ async def test_create_request_network_error_raises() -> None:
 
 
 @respx.mock
+async def test_delete_request() -> None:
+    route = respx.delete(f"{_BASE}/api/v1/request/7").mock(
+        return_value=httpx.Response(204)
+    )
+    client = make_client()
+    await client.delete_request(request_id=7)
+    assert route.called
+
+
+@respx.mock
+async def test_delete_request_404_is_already_gone() -> None:
+    respx.delete(f"{_BASE}/api/v1/request/7").mock(return_value=httpx.Response(404))
+    client = make_client()
+    await client.delete_request(request_id=7)
+
+
+@respx.mock
+async def test_delete_request_error_status_raises() -> None:
+    respx.delete(f"{_BASE}/api/v1/request/7").mock(return_value=httpx.Response(500))
+    client = make_client()
+    with pytest.raises(JellyseerrError):
+        await client.delete_request(request_id=7)
+
+
+@respx.mock
+async def test_delete_request_network_error_raises() -> None:
+    respx.delete(f"{_BASE}/api/v1/request/7").mock(side_effect=httpx.ConnectError("x"))
+    client = make_client()
+    with pytest.raises(JellyseerrError):
+        await client.delete_request(request_id=7)
+
+
+@respx.mock
 async def test_test_connection_ok_with_user() -> None:
     respx.get(f"{_BASE}/api/v1/auth/me").mock(
         return_value=httpx.Response(200, json={"username": "erena"})

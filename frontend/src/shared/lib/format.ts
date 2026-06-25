@@ -69,9 +69,12 @@ export function formatRelativeTime(iso: string, now: Date = new Date()): string 
 }
 
 /**
- * Format the next-sync ISO timestamp as a short countdown ("in 12 min",
- * "in 2 hours", "due now" when overdue, "—" when unknown). `now` is injectable
- * for deterministic tests; an unparseable value falls back to its raw form.
+ * Format the next-sync ISO timestamp as a short, minute-granular countdown
+ * ("in 12 min", "in 2 hours", "due now" when overdue, "—" when unknown).
+ * Re-evaluated against a fresh `now` each second so it counts down live without
+ * a page refresh; the displayed value changes on each minute boundary. `now` is
+ * injectable for deterministic tests; an unparseable value falls back to its raw
+ * form.
  */
 export function formatNextSync(iso: string | null, now: Date = new Date()): string {
   if (iso === null) {

@@ -27,8 +27,6 @@ _log = get_logger("list_syncarr.sync")
 
 # Jellyseerr states that mean the item is already in the system (do not re-request).
 _ALREADY_REQUESTED = frozenset({PENDING, PROCESSING, PARTIALLY_AVAILABLE})
-# Item statuses that need no further action during a poll.
-_TERMINAL_STATUSES = frozenset({"requested", "available", "removed"})
 
 
 async def poll_and_request(ctx: "AppContext") -> None:
@@ -92,7 +90,11 @@ async def _process_item(ctx: "AppContext", raw: dict, list_id: str) -> None:
 
     item = ctx.db.get_item(trakt_id=trakt_id, list_id=list_id)
     assert item is not None  # just upserted
-    if item["status"] in _TERMINAL_STATUSES:
+    if item["status"] == "removed":
+        return
+    if item["status"] == "available":
+        if ctx.settings_store.auto_remove_when_available():
+            await remove_tracked_item(ctx, item, reason="available in Jellyseerr")
         return
 
     if tmdb is None:
@@ -113,10 +115,10 @@ async def _process_item(ctx: "AppContext", raw: dict, list_id: str) -> None:
     if js_status == AVAILABLE:
         # The item is downloaded and ready to serve. Mark it available, then —
         # when auto-remove is enabled — drop it from the Trakt list in the same
-        # pass. Removal deletes only the Trakt list entry; the media files in
-        # Radarr/Sonarr are never touched. remove_tracked_item skips lists not
-        # owned by 'me', so the item simply stays 'available' when it cannot
-        # (yet) be removed.
+        # pass. Removal deletes the Trakt list entry and known Jellyseerr
+        # request; the media files in Radarr/Sonarr are never touched.
+        # remove_tracked_item skips lists not owned by 'me', so the item simply
+        # stays 'available' when it cannot (yet) be removed.
         ctx.db.set_status(trakt_id=trakt_id, list_id=list_id, status="available")
         log_action(_log, "already_available", tmdb=tmdb, title=title)
         if ctx.settings_store.auto_remove_when_available():

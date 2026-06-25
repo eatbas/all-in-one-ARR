@@ -97,7 +97,44 @@ async def test_already_requested_in_jellyseerr(db) -> None:
     ctx.jellyseerr.create_request.assert_not_awaited()
 
 
-async def test_terminal_status_skips_processing(db) -> None:
+async def test_requested_item_rechecked_and_auto_removed_when_available(db) -> None:
+    db.upsert_item(**_MOVIE, list_id="watchlist")
+    db.set_request_id(trakt_id=1, list_id="watchlist", request_id=77)
+    db.set_status(trakt_id=1, list_id="watchlist", status="requested")
+    trakt = StubTrakt(items=[_MOVIE])
+    jelly = StubJellyseerr(status=AVAILABLE)
+    ctx = make_ctx(db=db, trakt=trakt, jellyseerr=jelly)
+
+    await poll_and_request(ctx)
+
+    item = db.get_item(trakt_id=1, list_id="watchlist")
+    assert item["status"] == "removed"
+    jelly.get_status.assert_awaited_once_with(media_type="movie", tmdb_id=100)
+    jelly.create_request.assert_not_awaited()
+    jelly.delete_request.assert_awaited_once_with(request_id=77)
+    trakt.remove_items.assert_awaited_once_with(
+        movies=[100], list_id="watchlist", owner_user="me"
+    )
+
+
+async def test_requested_item_rechecked_without_duplicate_request(db) -> None:
+    db.upsert_item(**_MOVIE, list_id="watchlist")
+    db.set_status(trakt_id=1, list_id="watchlist", status="requested")
+    jelly = StubJellyseerr(status=PENDING)
+    ctx = make_ctx(
+        db=db,
+        trakt=StubTrakt(items=[_MOVIE]),
+        jellyseerr=jelly,
+    )
+
+    await poll_and_request(ctx)
+
+    assert db.get_item(trakt_id=1, list_id="watchlist")["status"] == "requested"
+    jelly.get_status.assert_awaited_once_with(media_type="movie", tmdb_id=100)
+    jelly.create_request.assert_not_awaited()
+
+
+async def test_removed_status_skips_processing(db) -> None:
     db.upsert_item(**_MOVIE, list_id="watchlist")
     db.set_status(trakt_id=1, list_id="watchlist", status="removed")
     ctx = make_ctx(
@@ -106,6 +143,41 @@ async def test_terminal_status_skips_processing(db) -> None:
     await poll_and_request(ctx)
     assert db.get_item(trakt_id=1, list_id="watchlist")["status"] == "removed"
     ctx.jellyseerr.get_status.assert_not_awaited()
+
+
+async def test_available_status_skips_processing_when_auto_remove_disabled(db) -> None:
+    db.upsert_item(**_MOVIE, list_id="watchlist")
+    db.set_status(trakt_id=1, list_id="watchlist", status="available")
+    trakt = StubTrakt(items=[_MOVIE])
+    jelly = StubJellyseerr()
+    ctx = make_ctx(
+        db=db,
+        trakt=trakt,
+        jellyseerr=jelly,
+        settings_store=StubSettingsStore(auto_remove_when_available=False),
+    )
+
+    await poll_and_request(ctx)
+
+    assert db.get_item(trakt_id=1, list_id="watchlist")["status"] == "available"
+    jelly.get_status.assert_not_awaited()
+    trakt.remove_items.assert_not_awaited()
+
+
+async def test_available_status_retries_auto_remove_when_enabled(db) -> None:
+    db.upsert_item(**_MOVIE, list_id="watchlist")
+    db.set_status(trakt_id=1, list_id="watchlist", status="available")
+    trakt = StubTrakt(items=[_MOVIE])
+    jelly = StubJellyseerr()
+    ctx = make_ctx(db=db, trakt=trakt, jellyseerr=jelly)
+
+    await poll_and_request(ctx)
+
+    assert db.get_item(trakt_id=1, list_id="watchlist")["status"] == "removed"
+    jelly.get_status.assert_not_awaited()
+    trakt.remove_items.assert_awaited_once_with(
+        movies=[100], list_id="watchlist", owner_user="me"
+    )
 
 
 async def test_jellyseerr_status_error_recorded(db) -> None:

@@ -217,6 +217,18 @@ class Database:
         ).fetchall()
         return {row["list_id"]: row["n"] for row in rows}
 
+    def removed_counts_by_list(self) -> dict[str, int]:
+        """Return a count of ``removed`` items per ``list_id``.
+
+        Only lists with at least one removed item appear; the per-list total from
+        ``counts_by_list`` minus this value gives the active (non-removed) count.
+        """
+        rows = self._conn.execute(
+            "SELECT list_id, COUNT(*) AS n FROM items "
+            "WHERE status='removed' GROUP BY list_id"
+        ).fetchall()
+        return {row["list_id"]: row["n"] for row in rows}
+
     def active_items(self) -> list[dict[str, Any]]:
         """Return items that have not yet been removed (for reconciliation)."""
         rows = self._conn.execute(

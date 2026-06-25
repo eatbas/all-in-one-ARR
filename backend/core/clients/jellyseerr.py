@@ -102,6 +102,35 @@ class JellyseerrClient:
         )
         return request_id
 
+    async def delete_request(self, *, request_id: int) -> None:
+        """Delete a Jellyseerr request without touching Radarr/Sonarr media."""
+        try:
+            response = await self._client.delete(
+                f"{self._base_url}/api/v1/request/{request_id}",
+                headers=self._headers,
+            )
+        except httpx.HTTPError as exc:
+            raise JellyseerrError(
+                f"Jellyseerr request delete failed: {exc}"
+            ) from exc
+        if response.status_code == 404:
+            log_action(
+                self._log,
+                "jellyseerr_request_missing",
+                request_id=request_id,
+            )
+            return
+        if response.status_code not in (200, 202, 204):
+            raise JellyseerrError(
+                f"Jellyseerr request delete returned {response.status_code} "
+                f"for request {request_id}"
+            )
+        log_action(
+            self._log,
+            "jellyseerr_request_deleted",
+            request_id=request_id,
+        )
+
     async def test_connection(self) -> dict[str, Any]:
         """Validate the base URL + API key against ``/api/v1/auth/me``.
 

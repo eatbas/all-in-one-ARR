@@ -3,8 +3,9 @@
 Every delete path in the module funnels through :func:`remove_tracked_item`: the
 in-sync availability removal (``sync.py``), the manual "Delete availables" sweep
 (``reconcile.py``), and the per-item delete (``manual.py``). Removal only deletes
-the entry from the Trakt list (``ctx.trakt.remove_items``) — it never touches the
-media files in Radarr/Sonarr or the Jellyseerr request.
+the entry from the Trakt list (``ctx.trakt.remove_items``) and the corresponding
+Jellyseerr request when the request id is known — it never touches the media
+files in Radarr/Sonarr.
 """
 
 from __future__ import annotations
@@ -33,8 +34,8 @@ async def remove_tracked_item(ctx: "AppContext", item: dict[str, Any], *, reason
     the id its type needs is skipped (recorded) rather than sent as a malformed
     request.
 
-    A transient removal error is logged and the item is left untouched rather
-    than crashing the caller.
+    A transient removal error is logged and the item is left active rather than
+    crashing the caller.
     """
     list_id = item["list_id"]
     owner = ctx.settings_store.owner_for(list_id)
@@ -87,6 +88,10 @@ async def remove_tracked_item(ctx: "AppContext", item: dict[str, Any], *, reason
         ctx.db.add_activity("error", f"Trakt remove failed for {item['title']}: {exc}")
         return
 
+    request_deleted = await _delete_jellyseerr_request(ctx, item)
+    if not request_deleted:
+        return
+
     ctx.db.set_status(
         trakt_id=item["trakt_id"], list_id=item["list_id"], status="removed"
     )
@@ -100,3 +105,26 @@ async def remove_tracked_item(ctx: "AppContext", item: dict[str, Any], *, reason
         tvdb=item["tvdb"],
         title=item["title"],
     )
+
+
+async def _delete_jellyseerr_request(
+    ctx: "AppContext", item: dict[str, Any]
+) -> bool:
+    """Delete the stored Jellyseerr request, if this app knows its id."""
+    request_id = item.get("jellyseerr_request_id")
+    if request_id is None:
+        return True
+    try:
+        await ctx.jellyseerr.delete_request(request_id=request_id)
+    except Exception as exc:
+        _log.error("Jellyseerr request delete failed for %s: %s", item["title"], exc)
+        ctx.db.add_activity(
+            "error",
+            f"Jellyseerr request delete failed for {item['title']}: {exc}",
+        )
+        return False
+    ctx.db.add_activity(
+        "request_deleted",
+        f"deleted Jellyseerr request {request_id} for {item['title']}",
+    )
+    return True

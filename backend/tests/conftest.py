@@ -165,6 +165,7 @@ class StubJellyseerr:
     def __init__(self, *, status: int | None = None, request_id: int | None = 99):
         self.get_status = AsyncMock(return_value=status)
         self.create_request = AsyncMock(return_value=request_id)
+        self.delete_request = AsyncMock(return_value=None)
         self.update_credentials = MagicMock()
         self.test_connection = AsyncMock(return_value={"ok": True, "detail": "Connected"})
         self.aclose = AsyncMock()
