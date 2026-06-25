@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from unittest.mock import AsyncMock
 
+import httpx
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
@@ -233,6 +234,72 @@ def test_add_list_not_found(db, tmp_path) -> None:
         "/api/trakt/lists", json={"url": "https://trakt.tv/users/me/lists/ghost"}
     )
     assert resp.status_code == 404
+    assert "me/ghost" in resp.json()["detail"]
+
+
+def test_add_official_list_by_url(db, tmp_path) -> None:
+    trakt = StubTrakt()
+    trakt.get_list_summary = AsyncMock(
+        return_value={
+            "name": "The Matrix Collection",
+            "slug": "the-matrix-collection",
+            "owner_user": "official",
+            "item_count": 42,
+        }
+    )
+    ctx = _ctx(db, tmp_path, trakt=trakt)
+    resp = _client(ctx).post(
+        "/api/trakt/lists",
+        json={"url": "https://app.trakt.tv/lists/official/the-matrix-collection"},
+    )
+    assert resp.status_code == 200
+    trakt.get_list_summary.assert_awaited_once_with(
+        owner_user="official", slug="the-matrix-collection"
+    )
+    slugs = {entry["slug"] for entry in resp.json()["lists"]}
+    assert "the-matrix-collection" in slugs
+
+
+def test_add_user_list_app_subdomain_by_url(db, tmp_path) -> None:
+    trakt = StubTrakt()
+    trakt.get_list_summary = AsyncMock(
+        return_value={
+            "name": "Matrix",
+            "slug": "matrix",
+            "owner_user": "josephg5",
+            "item_count": 12,
+        }
+    )
+    ctx = _ctx(db, tmp_path, trakt=trakt)
+    resp = _client(ctx).post(
+        "/api/trakt/lists",
+        json={"url": "https://app.trakt.tv/users/josephg5/lists/matrix"},
+    )
+    assert resp.status_code == 200
+    trakt.get_list_summary.assert_awaited_once_with(
+        owner_user="josephg5", slug="matrix"
+    )
+    slugs = {entry["slug"] for entry in resp.json()["lists"]}
+    assert "matrix" in slugs
+
+
+def test_add_list_http_error_includes_status(db, tmp_path) -> None:
+    trakt = StubTrakt()
+    response = httpx.Response(403, text="private list")
+    trakt.get_list_summary = AsyncMock(
+        side_effect=httpx.HTTPStatusError(
+            "forbidden", request=httpx.Request("GET", "test"), response=response
+        )
+    )
+    ctx = _ctx(db, tmp_path, trakt=trakt)
+    resp = _client(ctx).post(
+        "/api/trakt/lists", json={"url": "https://trakt.tv/users/me/lists/private"}
+    )
+    assert resp.status_code == 400
+    detail = resp.json()["detail"]
+    assert "me/private" in detail
+    assert "HTTP 403" in detail
+    assert "private list" in detail
 
 
 def test_remove_list(db, tmp_path) -> None:

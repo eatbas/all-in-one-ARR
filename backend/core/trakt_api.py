@@ -11,6 +11,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+import httpx
 from fastapi import APIRouter
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
@@ -193,14 +194,26 @@ def create_trakt_router(ctx: "AppContext") -> APIRouter:
             summary = await ctx.trakt.get_list_summary(
                 owner_user=owner_user, slug=slug
             )
+        except httpx.HTTPStatusError as exc:
+            body = exc.response.text[:200]
+            return JSONResponse(
+                status_code=400,
+                content={
+                    "detail": (
+                        f"Could not validate list {owner_user}/{slug}: "
+                        f"HTTP {exc.response.status_code} — {body}"
+                    )
+                },
+            )
         except Exception as exc:
             return JSONResponse(
                 status_code=400,
-                content={"detail": f"Could not validate list: {exc}"},
+                content={"detail": f"Could not validate list {owner_user}/{slug}: {exc}"},
             )
         if summary is None:
             return JSONResponse(
-                status_code=404, content={"detail": "Trakt list not found"}
+                status_code=404,
+                content={"detail": f"Trakt list not found: {owner_user}/{slug}"},
             )
         ctx.settings_store.add_list(
             owner_user=summary["owner_user"],
