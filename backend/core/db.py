@@ -50,7 +50,7 @@ class Database:
                     tvdb INTEGER,
                     imdb TEXT,
                     list_id TEXT NOT NULL,
-                    jellyseerr_request_id INTEGER,
+                    seer_request_id INTEGER,
                     status TEXT NOT NULL
                         CHECK(status IN ('synced','requested','available','removed')),
                     created_at TEXT NOT NULL,
@@ -92,7 +92,7 @@ class Database:
     ) -> None:
         """Insert a new item (status ``synced``) or refresh an existing one.
 
-        Existing ``status`` and ``jellyseerr_request_id`` are preserved on
+        Existing ``status`` and ``seer_request_id`` are preserved on
         update; only the descriptive fields and ``updated_at`` change.
         """
         now = utcnow_iso()
@@ -101,7 +101,7 @@ class Database:
                 """
                 INSERT INTO items (
                     trakt_id, type, title, year, tmdb, tvdb, imdb, list_id,
-                    jellyseerr_request_id, status, created_at, updated_at
+                    seer_request_id, status, created_at, updated_at
                 ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL, 'synced', ?, ?)
                 ON CONFLICT(trakt_id, list_id) DO UPDATE SET
                     type=excluded.type,
@@ -131,10 +131,10 @@ class Database:
     def set_request_id(
         self, *, trakt_id: int, list_id: str, request_id: int | None
     ) -> None:
-        """Store the Jellyseerr request id for an item."""
+        """Store the Seer request id for an item."""
         with self._lock:
             self._conn.execute(
-                "UPDATE items SET jellyseerr_request_id=?, updated_at=? "
+                "UPDATE items SET seer_request_id=?, updated_at=? "
                 "WHERE trakt_id=? AND list_id=?",
                 (request_id, utcnow_iso(), trakt_id, list_id),
             )

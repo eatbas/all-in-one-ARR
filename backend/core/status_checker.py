@@ -149,7 +149,7 @@ class StatusChecker:
         """Map service names to the live client instances on the context."""
         return {
             "trakt": self._ctx.trakt,
-            "jellyseerr": self._ctx.jellyseerr,
+            "seer": self._ctx.seer,
             "sonarr": self._ctx.sonarr,
             "radarr": self._ctx.radarr,
             "tmdb": self._ctx.tmdb,

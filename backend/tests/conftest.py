@@ -91,7 +91,7 @@ class StubSettingsStore:
         # present (masked_services iterates them all), then apply the legacy
         # defaults and any explicit override.
         self._services = {desc.name: dict(empty_values(desc)) for desc in SERVICES}
-        self._services["jellyseerr"] = {"url": "http://js:5055", "api_key": "k"}
+        self._services["seer"] = {"url": "http://js:5055", "api_key": "k"}
         self._services["sonarr"] = {"url": "http://sonarr:8989", "api_key": ""}
         if services is not None:
             self._services.update(services)
@@ -159,8 +159,8 @@ class StubSettingsStore:
         }
 
 
-class StubJellyseerr:
-    """Minimal stand-in for :class:`JellyseerrClient`."""
+class StubSeer:
+    """Minimal stand-in for :class:`SeerClient`."""
 
     def __init__(self, *, status: int | None = None, request_id: int | None = 99):
         self.get_status = AsyncMock(return_value=status)
@@ -197,7 +197,7 @@ def make_ctx(
     *,
     db: Database,
     trakt: Any | None = None,
-    jellyseerr: Any | None = None,
+    seer: Any | None = None,
     sonarr: Any | None = None,
     radarr: Any | None = None,
     tmdb: Any | None = None,
@@ -213,7 +213,7 @@ def make_ctx(
         settings=settings or _StubSettings(),
         db=db,
         trakt=trakt or StubTrakt(),
-        jellyseerr=jellyseerr or StubJellyseerr(),
+        seer=seer or StubSeer(),
         sonarr=sonarr or StubArr(),
         radarr=radarr or StubArr(),
         tmdb=tmdb or StubService(),

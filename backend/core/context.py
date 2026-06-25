@@ -11,7 +11,7 @@ from dataclasses import dataclass, field
 from typing import Any, Awaitable, Callable, TypeVar
 
 from core.clients.arr_client import ArrClient
-from core.clients.jellyseerr import JellyseerrClient
+from core.clients.seer import SeerClient
 from core.clients.omdb import OmdbClient
 from core.clients.qbittorrent import QbittorrentClient
 from core.clients.sabnzbd import SabnzbdClient
@@ -88,7 +88,7 @@ class AppContext:
     settings: Settings
     db: Database
     trakt: TraktClient
-    jellyseerr: JellyseerrClient
+    seer: SeerClient
     sonarr: ArrClient
     radarr: ArrClient
     tmdb: TmdbClient

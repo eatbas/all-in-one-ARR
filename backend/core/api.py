@@ -60,7 +60,7 @@ class Item(BaseModel):
     tvdb: int | None
     imdb: str | None
     list_id: str
-    jellyseerr_request_id: int | None
+    seer_request_id: int | None
     status: str
     created_at: str
     updated_at: str

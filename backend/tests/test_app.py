@@ -16,13 +16,13 @@ from core.app import (
 )
 from core.config import Settings
 from core.db import Database
-from tests.conftest import StubJellyseerr, StubSettingsStore, StubTrakt, make_ctx
+from tests.conftest import StubSeer, StubSettingsStore, StubTrakt, make_ctx
 
 _SECRETS = {
     "TRAKT_CLIENT_ID": "cid",
     "TRAKT_CLIENT_SECRET": "secret",
-    "JELLYSEERR_URL": "http://js:5055",
-    "JELLYSEERR_API_KEY": "key",
+    "SEER_URL": "http://js:5055",
+    "SEER_API_KEY": "key",
 }
 
 
@@ -38,7 +38,7 @@ def _stub_ctx(authenticated: bool) -> object:
     return make_ctx(
         db=database,
         trakt=StubTrakt(authenticated=authenticated),
-        jellyseerr=StubJellyseerr(),
+        seer=StubSeer(),
     )
 
 
@@ -68,7 +68,7 @@ async def test_build_context_real(tmp_path) -> None:
         # Release every resource the real context opened (clients + DB).
         for client in (
             ctx.trakt,
-            ctx.jellyseerr,
+            ctx.seer,
             ctx.sonarr,
             ctx.radarr,
             ctx.tmdb,
@@ -94,7 +94,7 @@ def test_lifespan_authenticated_placeholder_frontend(_env, monkeypatch, tmp_path
 
     ctx.scheduler.stop.assert_awaited()
     ctx.trakt.aclose.assert_awaited()
-    ctx.jellyseerr.aclose.assert_awaited()
+    ctx.seer.aclose.assert_awaited()
     ctx.tmdb.aclose.assert_awaited()
     ctx.omdb.aclose.assert_awaited()
     ctx.sabnzbd.aclose.assert_awaited()

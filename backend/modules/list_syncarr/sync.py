@@ -2,19 +2,19 @@
 
 Reads the configured Trakt list, mirrors each item into SQLite (storing both
 TMDB and TVDB ids for later reverse lookup), then ensures each not-yet-handled
-item has a Jellyseerr request.
+item has a Seer request.
 """
 
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from core.clients.jellyseerr import (
+from core.clients.seer import (
     AVAILABLE,
     PARTIALLY_AVAILABLE,
     PENDING,
     PROCESSING,
-    JellyseerrError,
+    SeerError,
 )
 from core.logging import get_logger, log_action
 from modules.list_syncarr.removal import remove_tracked_item
@@ -25,12 +25,12 @@ if TYPE_CHECKING:  # pragma: no cover
 
 _log = get_logger("list_syncarr.sync")
 
-# Jellyseerr states that mean the item is already in the system (do not re-request).
+# Seer states that mean the item is already in the system (do not re-request).
 _ALREADY_REQUESTED = frozenset({PENDING, PROCESSING, PARTIALLY_AVAILABLE})
 
 
 async def poll_and_request(ctx: "AppContext") -> None:
-    """Poll every selected Trakt list and request missing items in Jellyseerr.
+    """Poll every selected Trakt list and request missing items in Seer.
 
     Each list is isolated: a failure reading or processing one list (e.g. an
     unauthorised or transient error) is logged and does not abort the others.
@@ -71,7 +71,7 @@ async def _poll_one_list(ctx: "AppContext", tracked: "TrackedList") -> None:
 
 
 async def _process_item(ctx: "AppContext", raw: dict, list_id: str) -> None:
-    """Upsert one item and create a Jellyseerr request when appropriate."""
+    """Upsert one item and create a Seer request when appropriate."""
     trakt_id = raw["trakt_id"]
     media_type = raw.get("type")
     title = raw.get("title")
@@ -94,7 +94,7 @@ async def _process_item(ctx: "AppContext", raw: dict, list_id: str) -> None:
         return
     if item["status"] == "available":
         if ctx.settings_store.auto_remove_when_available():
-            await remove_tracked_item(ctx, item, reason="available in Jellyseerr")
+            await remove_tracked_item(ctx, item, reason="available in Seer")
         return
 
     if tmdb is None:
@@ -102,36 +102,36 @@ async def _process_item(ctx: "AppContext", raw: dict, list_id: str) -> None:
         ctx.db.add_activity("skipped", f"no TMDB id for {title}")
         return
 
-    js_media_type = "movie" if media_type == "movie" else "tv"
+    seer_media_type = "movie" if media_type == "movie" else "tv"
     try:
-        js_status = await ctx.jellyseerr.get_status(
-            media_type=js_media_type, tmdb_id=tmdb
+        seer_status = await ctx.seer.get_status(
+            media_type=seer_media_type, tmdb_id=tmdb
         )
-    except JellyseerrError as exc:
-        _log.error("Jellyseerr status check failed for %s: %s", title, exc)
+    except SeerError as exc:
+        _log.error("Seer status check failed for %s: %s", title, exc)
         ctx.db.add_activity("error", f"status check failed for {title}: {exc}")
         return
 
-    if js_status == AVAILABLE:
+    if seer_status == AVAILABLE:
         # The item is downloaded and ready to serve. Mark it available, then —
         # when auto-remove is enabled — drop it from the Trakt list in the same
-        # pass. Removal deletes the Trakt list entry and known Jellyseerr
+        # pass. Removal deletes the Trakt list entry and known Seer
         # request; the media files in Radarr/Sonarr are never touched.
         # remove_tracked_item skips lists not owned by 'me', so the item simply
         # stays 'available' when it cannot (yet) be removed.
         ctx.db.set_status(trakt_id=trakt_id, list_id=list_id, status="available")
         log_action(_log, "already_available", tmdb=tmdb, title=title)
         if ctx.settings_store.auto_remove_when_available():
-            await remove_tracked_item(ctx, item, reason="available in Jellyseerr")
+            await remove_tracked_item(ctx, item, reason="available in Seer")
         return
 
-    if js_status in _ALREADY_REQUESTED:
+    if seer_status in _ALREADY_REQUESTED:
         ctx.db.set_status(trakt_id=trakt_id, list_id=list_id, status="requested")
         log_action(_log, "already_requested", tmdb=tmdb, title=title)
         return
 
-    request_id = await ctx.jellyseerr.create_request(
-        media_type=js_media_type, tmdb_id=tmdb
+    request_id = await ctx.seer.create_request(
+        media_type=seer_media_type, tmdb_id=tmdb
     )
     ctx.db.set_request_id(trakt_id=trakt_id, list_id=list_id, request_id=request_id)
     ctx.db.set_status(trakt_id=trakt_id, list_id=list_id, status="requested")

@@ -1,4 +1,4 @@
-"""Tests for core.clients.jellyseerr."""
+"""Tests for core.clients.seer."""
 
 from __future__ import annotations
 
@@ -6,13 +6,13 @@ import httpx
 import pytest
 import respx
 
-from core.clients.jellyseerr import AVAILABLE, JellyseerrClient, JellyseerrError
+from core.clients.seer import AVAILABLE, SeerClient, SeerError
 
 _BASE = "http://js:5055"
 
 
 def make_client():
-    return JellyseerrClient(base_url=_BASE + "/", api_key="key")
+    return SeerClient(base_url=_BASE + "/", api_key="key")
 
 
 @respx.mock
@@ -44,7 +44,7 @@ async def test_get_status_404_returns_none() -> None:
 async def test_get_status_other_error_raises() -> None:
     respx.get(f"{_BASE}/api/v1/movie/400").mock(return_value=httpx.Response(500))
     client = make_client()
-    with pytest.raises(JellyseerrError):
+    with pytest.raises(SeerError):
         await client.get_status(media_type="movie", tmdb_id=400)
 
 
@@ -52,7 +52,7 @@ async def test_get_status_other_error_raises() -> None:
 async def test_get_status_network_error_raises() -> None:
     respx.get(f"{_BASE}/api/v1/movie/500").mock(side_effect=httpx.ConnectError("boom"))
     client = make_client()
-    with pytest.raises(JellyseerrError):
+    with pytest.raises(SeerError):
         await client.get_status(media_type="movie", tmdb_id=500)
 
 
@@ -81,7 +81,7 @@ async def test_create_request_tv_includes_seasons() -> None:
 async def test_create_request_error_status_raises() -> None:
     respx.post(f"{_BASE}/api/v1/request").mock(return_value=httpx.Response(409))
     client = make_client()
-    with pytest.raises(JellyseerrError):
+    with pytest.raises(SeerError):
         await client.create_request(media_type="movie", tmdb_id=100)
 
 
@@ -89,7 +89,7 @@ async def test_create_request_error_status_raises() -> None:
 async def test_create_request_network_error_raises() -> None:
     respx.post(f"{_BASE}/api/v1/request").mock(side_effect=httpx.ConnectError("x"))
     client = make_client()
-    with pytest.raises(JellyseerrError):
+    with pytest.raises(SeerError):
         await client.create_request(media_type="movie", tmdb_id=100)
 
 
@@ -114,7 +114,7 @@ async def test_delete_request_404_is_already_gone() -> None:
 async def test_delete_request_error_status_raises() -> None:
     respx.delete(f"{_BASE}/api/v1/request/7").mock(return_value=httpx.Response(500))
     client = make_client()
-    with pytest.raises(JellyseerrError):
+    with pytest.raises(SeerError):
         await client.delete_request(request_id=7)
 
 
@@ -122,7 +122,7 @@ async def test_delete_request_error_status_raises() -> None:
 async def test_delete_request_network_error_raises() -> None:
     respx.delete(f"{_BASE}/api/v1/request/7").mock(side_effect=httpx.ConnectError("x"))
     client = make_client()
-    with pytest.raises(JellyseerrError):
+    with pytest.raises(SeerError):
         await client.delete_request(request_id=7)
 
 

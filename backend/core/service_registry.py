@@ -6,7 +6,7 @@ frontend all follow these descriptors, so adding a service is a one-entry change
 here rather than a parallel edit scattered across modules.
 
 Services differ in shape. Most are a ``{url, api_key}`` pair
-(Jellyseerr/Sonarr/Radarr/SABnzbd/qBittorrent); TMDB and OMDb are API-key-only
+(Seer/Sonarr/Radarr/SABnzbd/qBittorrent); TMDB and OMDb are API-key-only
 against a fixed public endpoint (no user URL). qBittorrent authenticates with its
 WebUI API key (``Authorization: Bearer``, available since v5.2.0). The descriptor
 captures those differences declaratively. ``secret_fields`` are the values that
@@ -35,7 +35,7 @@ class ServiceDescriptor:
 
 
 SERVICES: tuple[ServiceDescriptor, ...] = (
-    ServiceDescriptor("jellyseerr", "Jellyseerr", ("url", "api_key"), ("api_key",)),
+    ServiceDescriptor("seer", "Seer", ("url", "api_key"), ("api_key",)),
     ServiceDescriptor("sonarr", "Sonarr", ("url", "api_key"), ("api_key",)),
     ServiceDescriptor("radarr", "Radarr", ("url", "api_key"), ("api_key",)),
     ServiceDescriptor(

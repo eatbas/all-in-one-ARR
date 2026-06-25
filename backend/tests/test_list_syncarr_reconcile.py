@@ -4,9 +4,9 @@ from __future__ import annotations
 
 from unittest.mock import AsyncMock
 
-from core.clients.jellyseerr import AVAILABLE, PENDING, JellyseerrError
+from core.clients.seer import AVAILABLE, PENDING, SeerError
 from modules.list_syncarr.reconcile import reconcile
-from tests.conftest import StubJellyseerr, StubTrakt, make_ctx
+from tests.conftest import StubSeer, StubTrakt, make_ctx
 
 _MOVIE = {
     "trakt_id": 1, "type": "movie", "title": "Dune", "year": 2021,
@@ -24,7 +24,7 @@ async def test_available_item_removed(db) -> None:
     trakt = StubTrakt()
     ctx = make_ctx(
         db=db, trakt=trakt,
-        jellyseerr=StubJellyseerr(status=AVAILABLE),
+        seer=StubSeer(status=AVAILABLE),
     )
     await reconcile(ctx)
     assert db.get_item(trakt_id=1, list_id="watchlist")["status"] == "removed"
@@ -36,7 +36,7 @@ async def test_available_item_removed(db) -> None:
 async def test_unavailable_item_left_alone(db) -> None:
     seed(db)
     trakt = StubTrakt()
-    ctx = make_ctx(db=db, trakt=trakt, jellyseerr=StubJellyseerr(status=PENDING))
+    ctx = make_ctx(db=db, trakt=trakt, seer=StubSeer(status=PENDING))
     await reconcile(ctx)
     assert db.get_item(trakt_id=1, list_id="watchlist")["status"] == "requested"
     trakt.remove_items.assert_not_awaited()
@@ -44,16 +44,16 @@ async def test_unavailable_item_left_alone(db) -> None:
 
 async def test_item_without_tmdb_skipped(db) -> None:
     db.upsert_item(**{**_MOVIE, "tmdb": None}, list_id="watchlist")
-    jelly = StubJellyseerr()
-    ctx = make_ctx(db=db, jellyseerr=jelly)
+    seer = StubSeer()
+    ctx = make_ctx(db=db, seer=seer)
     await reconcile(ctx)
-    jelly.get_status.assert_not_awaited()
+    seer.get_status.assert_not_awaited()
 
 
 async def test_error_recorded(db) -> None:
     seed(db)
-    jelly = StubJellyseerr()
-    jelly.get_status = AsyncMock(side_effect=JellyseerrError("boom"))
-    ctx = make_ctx(db=db, jellyseerr=jelly)
+    seer = StubSeer()
+    seer.get_status = AsyncMock(side_effect=SeerError("boom"))
+    ctx = make_ctx(db=db, seer=seer)
     await reconcile(ctx)
     assert any(a["action"] == "error" for a in db.recent_activity())

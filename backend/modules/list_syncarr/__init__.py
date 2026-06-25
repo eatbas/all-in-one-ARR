@@ -1,9 +1,9 @@
-"""list_syncarr module: keep a Trakt list in sync with Jellyseerr, requesting
+"""list_syncarr module: keep a Trakt list in sync with Seer, requesting
 missing items and removing them once they are available.
 
 The module registers:
-- an interval poll job (poll Trakt -> request in Jellyseerr, and remove items that
-  Jellyseerr reports as available when auto-remove is enabled) at the configured,
+- an interval poll job (poll Trakt -> request in Seer, and remove items that
+  Seer reports as available when auto-remove is enabled) at the configured,
   runtime-adjustable sync interval,
 - ``ctx.sync_now`` so the dashboard's "Sync now" button works,
 - and the manual removal/reschedule callables the dashboard's delete controls and
@@ -11,7 +11,7 @@ The module registers:
 
 Availability-driven removal happens inside the poll itself, in the same pass an
 item first becomes available, gated by the ``auto_remove_when_available`` setting.
-Removal deletes the Trakt list entry and known Jellyseerr request — the media
+Removal deletes the Trakt list entry and known Seer request — the media
 files in Radarr/Sonarr are never touched. The manual "Delete availables" action
 (``ctx.remove_available``) runs the same :func:`reconcile` sweep on demand to
 clear any backlog (e.g. items already marked available before the setting was

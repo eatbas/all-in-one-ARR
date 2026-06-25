@@ -17,7 +17,7 @@ def checker(make_context, db):
 
 
 async def test_check_once_records_ok_and_failure(checker) -> None:
-    checker._ctx.jellyseerr.test_connection = AsyncMock(
+    checker._ctx.seer.test_connection = AsyncMock(
         return_value={"ok": True, "detail": "Connected"}
     )
     checker._ctx.sonarr.test_connection = AsyncMock(
@@ -29,8 +29,8 @@ async def test_check_once_records_ok_and_failure(checker) -> None:
 
     assert result.interval_seconds == 60
     assert result.last_check_at is not None
-    assert result.services["jellyseerr"].ok is True
-    assert result.services["jellyseerr"].detail == "Connected"
+    assert result.services["seer"].ok is True
+    assert result.services["seer"].detail == "Connected"
     assert result.services["sonarr"].ok is False
     assert result.services["sonarr"].detail == "Refused"
 

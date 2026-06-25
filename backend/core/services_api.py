@@ -39,7 +39,7 @@ class ServiceTestResponse(BaseModel):
 def _client_for(ctx: "AppContext", name: str):
     """Return the reconfigurable client backing a service name."""
     return {
-        "jellyseerr": ctx.jellyseerr,
+        "seer": ctx.seer,
         "sonarr": ctx.sonarr,
         "radarr": ctx.radarr,
         "tmdb": ctx.tmdb,

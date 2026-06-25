@@ -144,17 +144,17 @@ def test_seeds_and_round_trips_services(tmp_path) -> None:
         client_id="cid",
         client_secret="sec",
         services={
-            "jellyseerr": {"url": "http://js", "api_key": "jk"},
+            "seer": {"url": "http://js", "api_key": "jk"},
             "sonarr": {"url": "http://sonarr", "api_key": ""},
         },
     )
-    assert store.service_connection("jellyseerr") == ("http://js", "jk")
+    assert store.service_connection("seer") == ("http://js", "jk")
     assert store.service_connection("sonarr") == ("http://sonarr", "")
     assert store.service_connection("radarr") == ("", "")  # absent in seed
 
     reopened = SettingsStore(str(path))
     reopened.load_or_seed(client_id="x", client_secret="x", services=None)
-    assert reopened.service_connection("jellyseerr") == ("http://js", "jk")
+    assert reopened.service_connection("seer") == ("http://js", "jk")
 
 
 def test_backfills_new_services_from_seed_on_upgrade(tmp_path) -> None:
@@ -172,14 +172,14 @@ def test_backfills_new_services_from_seed_on_upgrade(tmp_path) -> None:
     store.load_or_seed(
         client_id="x",
         client_secret="x",
-        services={"jellyseerr": {"url": "http://js", "api_key": "jk"}},
+        services={"seer": {"url": "http://js", "api_key": "jk"}},
     )
-    assert store.service_connection("jellyseerr") == ("http://js", "jk")
+    assert store.service_connection("seer") == ("http://js", "jk")
 
     # The backfill was persisted, so a later load needs no re-seed.
     reopened = SettingsStore(str(path))
     reopened.load_or_seed(client_id="x", client_secret="x", services=None)
-    assert reopened.service_connection("jellyseerr") == ("http://js", "jk")
+    assert reopened.service_connection("seer") == ("http://js", "jk")
 
 
 def test_update_service_connection_leaves_unset_fields(tmp_path) -> None:
@@ -198,12 +198,12 @@ def test_masked_services_hides_keys(tmp_path) -> None:
     store.load_or_seed(
         client_id="c",
         client_secret="s",
-        services={"jellyseerr": {"url": "http://js", "api_key": "jk"}},
+        services={"seer": {"url": "http://js", "api_key": "jk"}},
     )
     masked = store.masked_services()
-    assert masked["jellyseerr"] == {"url": "http://js", "api_key_set": True}
+    assert masked["seer"] == {"url": "http://js", "api_key_set": True}
     assert masked["radarr"] == {"url": "", "api_key_set": False}
-    assert store.masked()["services"]["jellyseerr"]["api_key_set"] is True
+    assert store.masked()["services"]["seer"]["api_key_set"] is True
 
 
 def test_seeds_and_masks_api_key_only_service(tmp_path) -> None:

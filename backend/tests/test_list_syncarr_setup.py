@@ -10,7 +10,7 @@ from fastapi import FastAPI
 
 from core.context import SyncAlreadyRunning, SyncGate
 import modules.list_syncarr as list_syncarr
-from tests.conftest import StubJellyseerr, StubSettingsStore, StubTrakt, make_ctx
+from tests.conftest import StubSeer, StubSettingsStore, StubTrakt, make_ctx
 
 
 async def test_setup_registers_poll_and_callables(db) -> None:
@@ -33,7 +33,7 @@ async def test_setup_registers_poll_and_callables(db) -> None:
 
 
 async def test_poll_job_runs_against_registered_context(db) -> None:
-    ctx = make_ctx(db=db, trakt=StubTrakt(items=[]), jellyseerr=StubJellyseerr())
+    ctx = make_ctx(db=db, trakt=StubTrakt(items=[]), seer=StubSeer())
     list_syncarr.register_context(ctx)
     # Should not raise; it resolves the module-level context.
     await list_syncarr.poll_job()
@@ -71,7 +71,7 @@ async def test_remove_available_callable_runs_reconcile(db) -> None:
     ctx = make_ctx(
         db=db,
         trakt=StubTrakt(items=[]),
-        jellyseerr=StubJellyseerr(status=5),
+        seer=StubSeer(status=5),
     )
     await list_syncarr.setup(AsyncMock(), FastAPI(), ctx)
     await ctx.remove_available()

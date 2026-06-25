@@ -40,7 +40,7 @@ def test_upsert_insert_and_update(db: Database) -> None:
     item = db.get_item(trakt_id=1, list_id="watchlist")
     assert item["title"] == "Dune: Part One"
     assert item["status"] == "requested"
-    assert item["jellyseerr_request_id"] == 42
+    assert item["seer_request_id"] == 42
 
 
 def test_set_status_rejects_unknown(db: Database) -> None:

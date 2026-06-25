@@ -6,7 +6,7 @@ from unittest.mock import AsyncMock
 
 from core.settings_store import TrackedList
 from modules.list_syncarr.removal import remove_tracked_item
-from tests.conftest import StubJellyseerr, StubSettingsStore, StubTrakt, make_ctx
+from tests.conftest import StubSeer, StubSettingsStore, StubTrakt, make_ctx
 
 _MOVIE = {
     "trakt_id": 1, "type": "movie", "title": "Dune", "year": 2021,
@@ -28,21 +28,21 @@ async def test_removes_movie_by_tmdb(db) -> None:
     trakt = StubTrakt()
     ctx = make_ctx(db=db, trakt=trakt)
     item = db.get_item(trakt_id=1, list_id="watchlist")
-    await remove_tracked_item(ctx, item, reason="available in Jellyseerr")
+    await remove_tracked_item(ctx, item, reason="available in Seer")
     assert db.get_item(trakt_id=1, list_id="watchlist")["status"] == "removed"
     trakt.remove_items.assert_awaited_once_with(
         movies=[100], list_id="watchlist", owner_user="me"
     )
-    ctx.jellyseerr.delete_request.assert_not_awaited()
-    assert any("available in Jellyseerr" in a["detail"] for a in db.recent_activity())
+    ctx.seer.delete_request.assert_not_awaited()
+    assert any("available in Seer" in a["detail"] for a in db.recent_activity())
 
 
-async def test_removes_known_jellyseerr_request_without_touching_arr_media(db) -> None:
+async def test_removes_known_seer_request_without_touching_arr_media(db) -> None:
     seed(db)
     db.set_request_id(trakt_id=1, list_id="watchlist", request_id=77)
     trakt = StubTrakt()
-    jelly = StubJellyseerr()
-    ctx = make_ctx(db=db, trakt=trakt, jellyseerr=jelly)
+    seer = StubSeer()
+    ctx = make_ctx(db=db, trakt=trakt, seer=seer)
     item = db.get_item(trakt_id=1, list_id="watchlist")
 
     await remove_tracked_item(ctx, item, reason="manual")
@@ -51,7 +51,7 @@ async def test_removes_known_jellyseerr_request_without_touching_arr_media(db) -
     trakt.remove_items.assert_awaited_once_with(
         movies=[100], list_id="watchlist", owner_user="me"
     )
-    jelly.delete_request.assert_awaited_once_with(request_id=77)
+    seer.delete_request.assert_awaited_once_with(request_id=77)
     ctx.radarr.test_connection.assert_not_awaited()
     ctx.sonarr.test_connection.assert_not_awaited()
     assert any(a["action"] == "request_deleted" for a in db.recent_activity())
@@ -61,9 +61,9 @@ async def test_request_delete_failure_leaves_item_active(db) -> None:
     seed(db)
     db.set_request_id(trakt_id=1, list_id="watchlist", request_id=77)
     trakt = StubTrakt()
-    jelly = StubJellyseerr()
-    jelly.delete_request = AsyncMock(side_effect=RuntimeError("delete failed"))
-    ctx = make_ctx(db=db, trakt=trakt, jellyseerr=jelly)
+    seer = StubSeer()
+    seer.delete_request = AsyncMock(side_effect=RuntimeError("delete failed"))
+    ctx = make_ctx(db=db, trakt=trakt, seer=seer)
     item = db.get_item(trakt_id=1, list_id="watchlist")
 
     await remove_tracked_item(ctx, item, reason="manual")
@@ -73,9 +73,27 @@ async def test_request_delete_failure_leaves_item_active(db) -> None:
         movies=[100], list_id="watchlist", owner_user="me"
     )
     assert any(
-        a["action"] == "error" and "Jellyseerr request delete failed" in a["detail"]
+        a["action"] == "error" and "Seer request delete failed" in a["detail"]
         for a in db.recent_activity()
     )
+
+
+async def test_no_stored_request_id_still_removes_trakt_entry(db) -> None:
+    # When this app did not create the request, there is no stored id and removal
+    # must still delete the Trakt list entry without calling the Seer service.
+    seed(db)
+    trakt = StubTrakt()
+    ctx = make_ctx(db=db, trakt=trakt)
+    item = db.get_item(trakt_id=1, list_id="watchlist")
+
+    await remove_tracked_item(ctx, item, reason="available in Seer")
+
+    assert db.get_item(trakt_id=1, list_id="watchlist")["status"] == "removed"
+    trakt.remove_items.assert_awaited_once_with(
+        movies=[100], list_id="watchlist", owner_user="me"
+    )
+    ctx.seer.delete_request.assert_not_awaited()
+    assert any(a["action"] == "removed" for a in db.recent_activity())
 
 
 async def test_removes_show_by_tvdb(db) -> None:
@@ -101,7 +119,7 @@ async def test_skipped_when_show_has_no_tvdb_id(db) -> None:
     trakt = StubTrakt()
     ctx = make_ctx(db=db, trakt=trakt)
     item = db.get_item(trakt_id=3, list_id="watchlist")
-    await remove_tracked_item(ctx, item, reason="available in Jellyseerr")
+    await remove_tracked_item(ctx, item, reason="available in Seer")
     trakt.remove_items.assert_not_awaited()
     assert db.get_item(trakt_id=3, list_id="watchlist")["status"] == "synced"
     assert any(a["action"] == "remove_skipped" for a in db.recent_activity())
@@ -149,7 +167,7 @@ async def test_removal_skipped_for_list_not_owned_by_me(db) -> None:
     )
     ctx = make_ctx(db=db, trakt=trakt, settings_store=store)
     item = db.get_item(trakt_id=2, list_id="shared")
-    await remove_tracked_item(ctx, item, reason="available in Jellyseerr")
+    await remove_tracked_item(ctx, item, reason="available in Seer")
     trakt.remove_items.assert_not_awaited()
     assert db.get_item(trakt_id=2, list_id="shared")["status"] == "synced"
     assert any(a["action"] == "remove_skipped" for a in db.recent_activity())

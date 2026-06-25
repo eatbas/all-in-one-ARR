@@ -152,7 +152,7 @@ class SettingsStore:
         )
         # Migration: the flag was historically persisted as ``auto_remove_on_import``
         # (remove when Radarr/Sonarr imported the title). It now means "remove from
-        # Trakt once Jellyseerr reports the item available". An existing store is read
+        # Trakt once Seer reports the item available". An existing store is read
         # under the legacy key so the user's choice carries over; when only the legacy
         # key is present the store is re-saved under the new key on load (see the
         # ``migrated_auto_remove`` save trigger below).
@@ -274,7 +274,7 @@ class SettingsStore:
     def auto_remove_when_available(self) -> bool:
         """Whether the poll removes an item from its Trakt list once available.
 
-        When ``True``, an item Jellyseerr reports as available is dropped from its
+        When ``True``, an item Seer reports as available is dropped from its
         Trakt list during the sync (the list entry only — media files are not
         touched). When ``False`` (the default), removal is fully manual — the
         dashboard's per-item and "Delete availables" controls are the only ways an
@@ -332,7 +332,7 @@ class SettingsStore:
             self._log.info("removed list owner=%s slug=%s", owner_user, slug)
             return True
 
-    # ---- service connections (jellyseerr / sonarr / radarr) ----
+    # ---- service connections (seer / sonarr / radarr) ----
 
     def service_fields(self, name: str) -> dict[str, str]:
         """Return a copy of the stored field dict for a service.
@@ -346,7 +346,7 @@ class SettingsStore:
         """Return ``(url, api_key)`` for a service (blank for absent fields).
 
         A thin wrapper over :meth:`service_fields` for callers that only need the
-        legacy URL/API-key pair (Jellyseerr/Sonarr/Radarr/SABnzbd).
+        legacy URL/API-key pair (Seer/Sonarr/Radarr/SABnzbd).
         """
         fields = self.service_fields(name)
         return (fields.get("url", ""), fields.get("api_key", ""))

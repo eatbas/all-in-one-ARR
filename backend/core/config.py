@@ -17,7 +17,7 @@ _SECRET_FIELDS = frozenset(
     {
         "TRAKT_CLIENT_ID",
         "TRAKT_CLIENT_SECRET",
-        "JELLYSEERR_API_KEY",
+        "SEER_API_KEY",
         "SONARR_API_KEY",
         "RADARR_API_KEY",
         "TMDB_API_KEY",
@@ -48,8 +48,8 @@ class Settings(BaseSettings):
     TRAKT_CLIENT_SECRET: str = ""
 
     # ---- Services (URL + API key; seed the store, then UI-managed) ----
-    JELLYSEERR_URL: str = ""
-    JELLYSEERR_API_KEY: str = ""
+    SEER_URL: str = ""
+    SEER_API_KEY: str = ""
     SONARR_URL: str = ""
     SONARR_API_KEY: str = ""
     RADARR_URL: str = ""
@@ -70,7 +70,7 @@ class Settings(BaseSettings):
     # ---- Sync behaviour ----
     SYNC_INTERVAL_MIN: int = 15
     STATUS_CHECK_INTERVAL_SECONDS: int = 60
-    # Whether the poll removes an item from its Trakt list once Jellyseerr reports
+    # Whether the poll removes an item from its Trakt list once Seer reports
     # it available (the list entry only — media files are untouched). Off by default
     # so removal is fully manual (via the dashboard); seeds the store on first run,
     # then becomes UI-managed. The legacy ``AUTO_REMOVE_ON_IMPORT`` env var is still
@@ -104,7 +104,7 @@ class Settings(BaseSettings):
         environment; they only seed the store on first run.
         """
         return {
-            "jellyseerr": {"url": self.JELLYSEERR_URL, "api_key": self.JELLYSEERR_API_KEY},
+            "seer": {"url": self.SEER_URL, "api_key": self.SEER_API_KEY},
             "sonarr": {"url": self.SONARR_URL, "api_key": self.SONARR_API_KEY},
             "radarr": {"url": self.RADARR_URL, "api_key": self.RADARR_API_KEY},
             "tmdb": {"api_key": self.TMDB_API_KEY},

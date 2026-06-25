@@ -1,4 +1,4 @@
-"""Tests for core.services_api (Jellyseerr/Sonarr/Radarr settings + test)."""
+"""Tests for core.services_api (Seer/Sonarr/Radarr settings + test)."""
 
 from __future__ import annotations
 
@@ -20,11 +20,11 @@ def build_client(ctx) -> TestClient:
 def test_get_services_masks_keys(db) -> None:
     ctx = make_ctx(db=db)
     body = build_client(ctx).get("/api/settings/services").json()
-    assert body["jellyseerr"]["url"] == "http://js:5055"
-    assert body["jellyseerr"]["api_key_set"] is True
+    assert body["seer"]["url"] == "http://js:5055"
+    assert body["seer"]["api_key_set"] is True
     assert body["sonarr"]["api_key_set"] is False
     # No raw api_key is ever returned.
-    assert "api_key" not in body["jellyseerr"]
+    assert "api_key" not in body["seer"]
 
 
 def test_put_service_updates_store_and_client(db) -> None:
@@ -59,12 +59,12 @@ def test_test_service_ok(db) -> None:
 
 
 def test_test_service_failure(db) -> None:
-    jelly = make_ctx(db=db).jellyseerr
-    jelly.test_connection = AsyncMock(
-        return_value={"ok": False, "detail": "Jellyseerr returned HTTP 403"}
+    seer = make_ctx(db=db).seer
+    seer.test_connection = AsyncMock(
+        return_value={"ok": False, "detail": "Seer returned HTTP 403"}
     )
-    ctx = make_ctx(db=db, jellyseerr=jelly)
-    body = build_client(ctx).post("/api/services/jellyseerr/test").json()
+    ctx = make_ctx(db=db, seer=seer)
+    body = build_client(ctx).post("/api/services/seer/test").json()
     assert body["ok"] is False
     assert "403" in body["detail"]
 

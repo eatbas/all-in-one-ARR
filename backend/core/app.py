@@ -19,7 +19,7 @@ from fastapi.staticfiles import StaticFiles
 from core import registry
 from core.api import create_api_router
 from core.clients.arr_client import ArrClient
-from core.clients.jellyseerr import JellyseerrClient
+from core.clients.seer import SeerClient
 from core.clients.omdb import OmdbClient
 from core.clients.qbittorrent import QbittorrentClient
 from core.clients.sabnzbd import SabnzbdClient
@@ -67,8 +67,8 @@ def build_context(settings: Settings) -> AppContext:
     )
     trakt.load_tokens()
 
-    js_url, js_key = settings_store.service_connection("jellyseerr")
-    jellyseerr = JellyseerrClient(base_url=js_url, api_key=js_key)
+    seer_url, seer_key = settings_store.service_connection("seer")
+    seer = SeerClient(base_url=seer_url, api_key=seer_key)
     sonarr_url, sonarr_key = settings_store.service_connection("sonarr")
     sonarr = ArrClient(name="sonarr", base_url=sonarr_url, api_key=sonarr_key)
     radarr_url, radarr_key = settings_store.service_connection("radarr")
@@ -87,7 +87,7 @@ def build_context(settings: Settings) -> AppContext:
         settings=settings,
         db=database,
         trakt=trakt,
-        jellyseerr=jellyseerr,
+        seer=seer,
         sonarr=sonarr,
         radarr=radarr,
         tmdb=tmdb,
@@ -166,7 +166,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         await ctx.status_checker.stop()
         await ctx.scheduler.stop()
         await ctx.trakt.aclose()
-        await ctx.jellyseerr.aclose()
+        await ctx.seer.aclose()
         await ctx.sonarr.aclose()
         await ctx.radarr.aclose()
         await ctx.tmdb.aclose()

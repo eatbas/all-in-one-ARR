@@ -231,7 +231,7 @@ def test_services_status_endpoint_returns_snapshot(db) -> None:
     assert body["interval_seconds"] == 60
     assert body["last_check_at"] is not None
     assert "trakt" in body["services"]
-    assert "jellyseerr" in body["services"]
+    assert "seer" in body["services"]
 
 
 def test_services_check_endpoint_triggers_check(db) -> None:
