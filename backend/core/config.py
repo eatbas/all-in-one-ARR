@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from pydantic import AliasChoices, Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 # Field names that must be masked whenever the configuration is logged.
@@ -69,8 +70,18 @@ class Settings(BaseSettings):
     # ---- Sync behaviour ----
     SYNC_INTERVAL_MIN: int = 15
     STATUS_CHECK_INTERVAL_SECONDS: int = 60
+    # Whether the poll removes an item from its Trakt list once Jellyseerr reports
+    # it available (the list entry only — media files are untouched). Off by default
+    # so removal is fully manual (via the dashboard); seeds the store on first run,
+    # then becomes UI-managed. The legacy ``AUTO_REMOVE_ON_IMPORT`` env var is still
+    # accepted so existing ``.env`` files keep working.
+    AUTO_REMOVE_WHEN_AVAILABLE: bool = Field(
+        default=False,
+        validation_alias=AliasChoices(
+            "AUTO_REMOVE_WHEN_AVAILABLE", "AUTO_REMOVE_ON_IMPORT"
+        ),
+    )
     WEBHOOK_PORT: int = 3223
-    DRY_RUN: bool = True
 
     # ---- Runtime ----
     TZ: str = "Europe/Istanbul"

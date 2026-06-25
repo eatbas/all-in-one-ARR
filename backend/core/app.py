@@ -26,7 +26,7 @@ from core.clients.sabnzbd import SabnzbdClient
 from core.clients.tmdb import TmdbClient
 from core.clients.trakt import TraktClient
 from core.config import Settings
-from core.context import AppContext, DryRunFlag
+from core.context import AppContext
 from core.db import Database
 from core.logging import configure_logging, get_logger
 from core.posters import PosterCache
@@ -46,8 +46,6 @@ _log = get_logger("app")
 
 def build_context(settings: Settings) -> AppContext:
     """Construct all shared services and wire them into an :class:`AppContext`."""
-    flag = DryRunFlag(settings.DRY_RUN)
-
     database = Database(settings.DB_PATH)
     database.init_db()
 
@@ -58,6 +56,7 @@ def build_context(settings: Settings) -> AppContext:
         services=settings.service_seeds,
         status_check_interval_seconds=settings.STATUS_CHECK_INTERVAL_SECONDS,
         sync_interval_minutes=settings.SYNC_INTERVAL_MIN,
+        auto_remove_when_available=settings.AUTO_REMOVE_WHEN_AVAILABLE,
     )
     client_id, client_secret = settings_store.trakt_credentials()
 
@@ -65,14 +64,11 @@ def build_context(settings: Settings) -> AppContext:
         client_id=client_id,
         client_secret=client_secret,
         token_store_path=settings.TOKEN_STORE_PATH,
-        dry_run_provider=flag,
     )
     trakt.load_tokens()
 
     js_url, js_key = settings_store.service_connection("jellyseerr")
-    jellyseerr = JellyseerrClient(
-        base_url=js_url, api_key=js_key, dry_run_provider=flag
-    )
+    jellyseerr = JellyseerrClient(base_url=js_url, api_key=js_key)
     sonarr_url, sonarr_key = settings_store.service_connection("sonarr")
     sonarr = ArrClient(name="sonarr", base_url=sonarr_url, api_key=sonarr_key)
     radarr_url, radarr_key = settings_store.service_connection("radarr")
@@ -100,7 +96,6 @@ def build_context(settings: Settings) -> AppContext:
         qbittorrent=qbittorrent,
         scheduler=SchedulerService(),
         webhooks=WebhookRegistry(),
-        dry_run_flag=flag,
         settings_store=settings_store,
     )
     ctx.status_checker = StatusChecker(ctx)

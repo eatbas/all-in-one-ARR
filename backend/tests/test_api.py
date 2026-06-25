@@ -25,9 +25,8 @@ def build_client(ctx) -> TestClient:
 
 def test_status_endpoint(db) -> None:
     db.upsert_item(**_ITEM)
-    ctx = make_ctx(db=db, trakt=StubTrakt(authenticated=True), dry_run=True)
+    ctx = make_ctx(db=db, trakt=StubTrakt(authenticated=True))
     body = build_client(ctx).get("/api/status").json()
-    assert body["dry_run"] is True
     assert body["trakt_connected"] is True
     assert body["counts"]["synced"] == 1
 
@@ -137,13 +136,6 @@ def test_sync_endpoint_without_handler(db) -> None:
     assert resp.status_code == 202
 
 
-def test_dry_run_toggle(db) -> None:
-    ctx = make_ctx(db=db, dry_run=True)
-    resp = build_client(ctx).post("/api/settings/dry-run", json={"enabled": False})
-    assert resp.json() == {"dry_run": False}
-    assert ctx.dry_run is False
-
-
 async def test_remember_task_discards_on_success() -> None:
     async def ok() -> None:
         return None
@@ -203,7 +195,11 @@ def test_put_general_settings_updates_status_interval(db) -> None:
     ctx = make_ctx(db=db)
     resp = build_client(ctx).put("/api/settings/general", json={"interval_seconds": 30})
     assert resp.status_code == 200
-    assert resp.json() == {"interval_seconds": 30, "sync_interval_minutes": 15}
+    assert resp.json() == {
+        "interval_seconds": 30,
+        "sync_interval_minutes": 15,
+        "auto_remove_when_available": True,
+    }
     assert ctx.settings_store.status_check_interval_seconds() == 30
 
 
@@ -211,7 +207,11 @@ def test_put_general_settings_rejects_invalid_status_interval(db) -> None:
     ctx = make_ctx(db=db)
     resp = build_client(ctx).put("/api/settings/general", json={"interval_seconds": 99})
     assert resp.status_code == 200
-    assert resp.json() == {"interval_seconds": 60, "sync_interval_minutes": 15}
+    assert resp.json() == {
+        "interval_seconds": 60,
+        "sync_interval_minutes": 15,
+        "auto_remove_when_available": True,
+    }
 
 
 def test_put_general_settings_updates_sync_interval_and_reschedules(db) -> None:
@@ -221,7 +221,11 @@ def test_put_general_settings_updates_sync_interval_and_reschedules(db) -> None:
         "/api/settings/general", json={"sync_interval_minutes": 30}
     )
     assert resp.status_code == 200
-    assert resp.json() == {"interval_seconds": 60, "sync_interval_minutes": 30}
+    assert resp.json() == {
+        "interval_seconds": 60,
+        "sync_interval_minutes": 30,
+        "auto_remove_when_available": True,
+    }
     assert ctx.settings_store.sync_interval_minutes() == 30
     ctx.reschedule_sync.assert_awaited_once_with(30)
 
@@ -234,7 +238,11 @@ def test_put_general_settings_rejects_invalid_sync_interval(db) -> None:
         "/api/settings/general", json={"sync_interval_minutes": 7}
     )
     assert resp.status_code == 200
-    assert resp.json() == {"interval_seconds": 60, "sync_interval_minutes": 15}
+    assert resp.json() == {
+        "interval_seconds": 60,
+        "sync_interval_minutes": 15,
+        "auto_remove_when_available": True,
+    }
 
 
 def test_get_general_settings_returns_both_intervals(db) -> None:
@@ -242,7 +250,25 @@ def test_get_general_settings_returns_both_intervals(db) -> None:
     ctx.settings_store.update_status_check_interval(45)
     ctx.settings_store.update_sync_interval(60)
     body = build_client(ctx).get("/api/settings/general").json()
-    assert body == {"interval_seconds": 45, "sync_interval_minutes": 60}
+    assert body == {
+        "interval_seconds": 45,
+        "sync_interval_minutes": 60,
+        "auto_remove_when_available": True,
+    }
+
+
+def test_put_general_settings_toggles_auto_remove_when_available(db) -> None:
+    ctx = make_ctx(db=db)  # StubSettingsStore defaults auto-remove to True
+    resp = build_client(ctx).put(
+        "/api/settings/general", json={"auto_remove_when_available": False}
+    )
+    assert resp.status_code == 200
+    assert resp.json() == {
+        "interval_seconds": 60,
+        "sync_interval_minutes": 15,
+        "auto_remove_when_available": False,
+    }
+    assert ctx.settings_store.auto_remove_when_available() is False
 
 
 def test_remove_available_endpoint_triggers_handler(db) -> None:

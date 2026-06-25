@@ -10,7 +10,7 @@ import modules.list_syncarr as list_syncarr
 from tests.conftest import StubJellyseerr, StubSettingsStore, StubTrakt, make_ctx
 
 
-async def test_setup_registers_poll_webhook_and_callables(db) -> None:
+async def test_setup_registers_poll_and_callables(db) -> None:
     scheduler = AsyncMock()
     ctx = make_ctx(db=db, settings_store=StubSettingsStore(sync_interval_minutes=30))
     await list_syncarr.setup(scheduler, FastAPI(), ctx)
@@ -21,7 +21,8 @@ async def test_setup_registers_poll_webhook_and_callables(db) -> None:
     assert scheduler.add_interval.call_args.kwargs["minutes"] == 30
     # Removal is no longer autonomous: no reconcile cron is scheduled.
     scheduler.add_cron.assert_not_awaited()
-    assert "arr" in ctx.webhooks._handlers
+    # The arr import webhook has been retired; the poll itself drives removal.
+    assert "arr" not in ctx.webhooks._handlers
     assert ctx.sync_now is not None
     assert ctx.remove_available is not None
     assert ctx.remove_item is not None
@@ -51,7 +52,6 @@ async def test_remove_available_callable_runs_reconcile(db) -> None:
     )
     ctx = make_ctx(
         db=db,
-        dry_run=False,
         trakt=StubTrakt(items=[]),
         jellyseerr=StubJellyseerr(status=5),
     )
@@ -65,7 +65,7 @@ async def test_remove_item_callable_removes_one(db) -> None:
         trakt_id=2, type="movie", title="Arrival", year=2016, tmdb=329865,
         tvdb=None, imdb=None, list_id="watchlist",
     )
-    ctx = make_ctx(db=db, dry_run=False, trakt=StubTrakt(items=[]))
+    ctx = make_ctx(db=db, trakt=StubTrakt(items=[]))
     await list_syncarr.setup(AsyncMock(), FastAPI(), ctx)
 
     assert await ctx.remove_item("watchlist", 2) is True

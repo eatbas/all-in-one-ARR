@@ -1,9 +1,9 @@
 """Single webhook router shared by all modules.
 
-Modules register a handler for a sub-path (e.g. ``list_syncarr`` registers
-``arr`` to receive ``/webhook/arr``). The router reads the raw body, logs the
-full JSON on receipt (field names vary across arr versions), then dispatches to
-the registered handler.
+Modules register a handler for a sub-path to receive ``POST /webhook/{subpath}``.
+The router reads the raw body, logs the full JSON on receipt (payload shapes vary
+across sources), then dispatches to the registered handler (404 when none is
+registered for that sub-path).
 """
 
 from __future__ import annotations

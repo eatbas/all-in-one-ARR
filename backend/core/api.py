@@ -46,7 +46,6 @@ class Counts(BaseModel):
 
 
 class StatusResponse(BaseModel):
-    dry_run: bool
     trakt_connected: bool
     counts: Counts
 
@@ -83,14 +82,6 @@ class ListSummary(BaseModel):
     interval_minutes: int
 
 
-class DryRunRequest(BaseModel):
-    enabled: bool
-
-
-class DryRunResponse(BaseModel):
-    dry_run: bool
-
-
 class SyncResponse(BaseModel):
     status: str
 
@@ -108,15 +99,17 @@ class ServicesStatusResponse(BaseModel):
 
 
 class GeneralSettingsRequest(BaseModel):
-    # Both optional so the UI can change one without re-sending the other; a
+    # All optional so the UI can change one without re-sending the others; a
     # ``None`` field is left unchanged.
     interval_seconds: int | None = None
     sync_interval_minutes: int | None = None
+    auto_remove_when_available: bool | None = None
 
 
 class GeneralSettingsResponse(BaseModel):
     interval_seconds: int
     sync_interval_minutes: int
+    auto_remove_when_available: bool
 
 
 def _next_sync_at(last_synced_at: str | None, interval_minutes: int) -> str | None:
@@ -153,7 +146,6 @@ def create_api_router(ctx: "AppContext") -> APIRouter:
     @router.get("/status", response_model=StatusResponse)
     async def get_status() -> StatusResponse:
         return StatusResponse(
-            dry_run=ctx.dry_run,
             trakt_connected=ctx.trakt.is_authenticated(),
             counts=Counts(**ctx.db.counts_by_status()),
         )
@@ -219,15 +211,11 @@ def create_api_router(ctx: "AppContext") -> APIRouter:
             log.warning("manual sync requested but no sync handler registered")
         return JSONResponse(status_code=202, content={"status": "triggered"})
 
-    @router.post("/settings/dry-run", response_model=DryRunResponse)
-    async def post_dry_run(body: DryRunRequest) -> DryRunResponse:
-        ctx.set_dry_run(body.enabled)
-        return DryRunResponse(dry_run=ctx.dry_run)
-
     def _general_settings() -> GeneralSettingsResponse:
         return GeneralSettingsResponse(
             interval_seconds=ctx.settings_store.status_check_interval_seconds(),
             sync_interval_minutes=ctx.settings_store.sync_interval_minutes(),
+            auto_remove_when_available=ctx.settings_store.auto_remove_when_available(),
         )
 
     @router.get("/settings/general", response_model=GeneralSettingsResponse)
@@ -252,6 +240,10 @@ def create_api_router(ctx: "AppContext") -> APIRouter:
             minutes = ctx.settings_store.update_sync_interval(body.sync_interval_minutes)
             if ctx.reschedule_sync is not None:
                 await ctx.reschedule_sync(minutes)
+        if body.auto_remove_when_available is not None:
+            ctx.settings_store.update_auto_remove_when_available(
+                body.auto_remove_when_available
+            )
         return _general_settings()
 
     @router.post("/items/remove-available", response_model=SyncResponse, status_code=202)

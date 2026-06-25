@@ -14,7 +14,6 @@ _VALID = {
 
 def test_valid_settings_defaults() -> None:
     settings = Settings(_env_file=None, **_VALID)
-    assert settings.DRY_RUN is True
     assert settings.SYNC_INTERVAL_MIN == 15
     assert settings.POSTER_CACHE_PATH == "data/posters"
 
@@ -81,4 +80,4 @@ def test_masked_hides_secrets() -> None:
     assert masked["SABNZBD_API_KEY"] == "***"
     assert masked["QBITTORRENT_API_KEY"] == "***"
     # A non-secret field is shown in clear.
-    assert masked["DRY_RUN"] is True
+    assert masked["WEBHOOK_PORT"] == 3223

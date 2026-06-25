@@ -32,12 +32,11 @@ _LIST_JSON = [
 ]
 
 
-def make_client(tmp_path, *, dry_run=True):
+def make_client(tmp_path):
     return TraktClient(
         client_id="cid",
         client_secret="secret",
         token_store_path=str(tmp_path / "tokens.json"),
-        dry_run_provider=lambda: dry_run,
     )
 
 
@@ -200,20 +199,12 @@ async def test_read_list_items_user_list(tmp_path) -> None:
     assert await client.read_list_items(list_id="my-list") == []
 
 
-async def test_remove_items_dry_run_no_request(tmp_path) -> None:
-    client = make_client(tmp_path, dry_run=True)
-    result = await client.remove_items(movies=[100], shows=[300], list_id="watchlist")
-    assert result["dry_run"] is True
-    assert result["would_remove"]["movies"] == [{"ids": {"tmdb": 100}}]
-    assert result["would_remove"]["shows"] == [{"ids": {"tvdb": 300}}]
-
-
 @respx.mock
 async def test_remove_items_real_movie_user_list(tmp_path) -> None:
     route = respx.post(
         f"{TRAKT_BASE_URL}/users/me/lists/my-list/items/remove"
     ).mock(return_value=httpx.Response(200, json={"deleted": {"movies": 1}}))
-    client = make_client(tmp_path, dry_run=False)
+    client = make_client(tmp_path)
     client._tokens = {"access_token": "a", "refresh_token": "r", "expires_at": 9e9}
     result = await client.remove_items(movies=[100], list_id="my-list")
     assert result == {"deleted": {"movies": 1}}
@@ -225,7 +216,7 @@ async def test_remove_items_real_show_watchlist(tmp_path) -> None:
     route = respx.post(f"{TRAKT_BASE_URL}/sync/watchlist/remove").mock(
         return_value=httpx.Response(200, json={"deleted": {"shows": 1}})
     )
-    client = make_client(tmp_path, dry_run=False)
+    client = make_client(tmp_path)
     client._tokens = {"access_token": "a", "refresh_token": "r", "expires_at": 9e9}
     result = await client.remove_items(shows=[300], list_id="watchlist")
     assert result == {"deleted": {"shows": 1}}
@@ -262,7 +253,7 @@ async def test_remove_items_explicit_owner_and_list(tmp_path) -> None:
     route = respx.post(
         f"{TRAKT_BASE_URL}/users/bob/lists/anime/items/remove"
     ).mock(return_value=httpx.Response(200, json={"deleted": {"movies": 1}}))
-    client = make_client(tmp_path, dry_run=False)
+    client = make_client(tmp_path)
     client._tokens = dict(_TOKENS)
     result = await client.remove_items(movies=[1], list_id="anime", owner_user="bob")
     assert result == {"deleted": {"movies": 1}}

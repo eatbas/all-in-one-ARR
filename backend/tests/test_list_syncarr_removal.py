@@ -1,0 +1,113 @@
+"""Tests for modules.list_syncarr.removal (the shared Trakt removal primitive)."""
+
+from __future__ import annotations
+
+from unittest.mock import AsyncMock
+
+from core.settings_store import TrackedList
+from modules.list_syncarr.removal import remove_tracked_item
+from tests.conftest import StubSettingsStore, StubTrakt, make_ctx
+
+_MOVIE = {
+    "trakt_id": 1, "type": "movie", "title": "Dune", "year": 2021,
+    "tmdb": 100, "tvdb": None, "imdb": "tt1", "list_id": "watchlist",
+}
+_SHOW = {
+    "trakt_id": 2, "type": "show", "title": "Severance", "year": 2022,
+    "tmdb": 200, "tvdb": 300, "imdb": "tt2", "list_id": "watchlist",
+}
+
+
+def seed(db) -> None:
+    db.upsert_item(**{k: _MOVIE[k] for k in _MOVIE if k != "list_id"}, list_id="watchlist")
+    db.upsert_item(**{k: _SHOW[k] for k in _SHOW if k != "list_id"}, list_id="watchlist")
+
+
+async def test_removes_movie_by_tmdb(db) -> None:
+    seed(db)
+    trakt = StubTrakt()
+    ctx = make_ctx(db=db, trakt=trakt)
+    item = db.get_item(trakt_id=1, list_id="watchlist")
+    await remove_tracked_item(ctx, item, reason="available in Jellyseerr")
+    assert db.get_item(trakt_id=1, list_id="watchlist")["status"] == "removed"
+    trakt.remove_items.assert_awaited_once_with(
+        movies=[100], list_id="watchlist", owner_user="me"
+    )
+    assert any("available in Jellyseerr" in a["detail"] for a in db.recent_activity())
+
+
+async def test_removes_show_by_tvdb(db) -> None:
+    seed(db)
+    trakt = StubTrakt()
+    ctx = make_ctx(db=db, trakt=trakt)
+    item = db.get_item(trakt_id=2, list_id="watchlist")
+    await remove_tracked_item(ctx, item, reason="manual")
+    assert db.get_item(trakt_id=2, list_id="watchlist")["status"] == "removed"
+    trakt.remove_items.assert_awaited_once_with(
+        shows=[300], list_id="watchlist", owner_user="me"
+    )
+    assert any(a["action"] == "removed" for a in db.recent_activity())
+
+
+async def test_skipped_when_show_has_no_tvdb_id(db) -> None:
+    # Trakt removes shows by TVDB id; a show carrying no TVDB id is skipped-and-
+    # recorded rather than sent as a malformed request.
+    db.upsert_item(
+        trakt_id=3, type="show", title="No TVDB", year=2020,
+        tmdb=400, tvdb=None, imdb="tt3", list_id="watchlist",
+    )
+    trakt = StubTrakt()
+    ctx = make_ctx(db=db, trakt=trakt)
+    item = db.get_item(trakt_id=3, list_id="watchlist")
+    await remove_tracked_item(ctx, item, reason="available in Jellyseerr")
+    trakt.remove_items.assert_not_awaited()
+    assert db.get_item(trakt_id=3, list_id="watchlist")["status"] == "synced"
+    assert any(a["action"] == "remove_skipped" for a in db.recent_activity())
+
+
+async def test_skipped_when_movie_has_no_tmdb_id(db) -> None:
+    # Symmetric to the show case: Trakt removes movies by TMDB id, so a movie with no
+    # TMDB id is skipped-and-recorded rather than sent as a malformed request.
+    db.upsert_item(
+        trakt_id=4, type="movie", title="No TMDB", year=2019,
+        tmdb=None, tvdb=None, imdb="tt4", list_id="watchlist",
+    )
+    trakt = StubTrakt()
+    ctx = make_ctx(db=db, trakt=trakt)
+    item = db.get_item(trakt_id=4, list_id="watchlist")
+    await remove_tracked_item(ctx, item, reason="manual")
+    trakt.remove_items.assert_not_awaited()
+    assert db.get_item(trakt_id=4, list_id="watchlist")["status"] == "synced"
+    assert any(a["action"] == "remove_skipped" for a in db.recent_activity())
+
+
+async def test_remove_failure_is_logged_and_item_left(db) -> None:
+    seed(db)
+    trakt = StubTrakt()
+    trakt.remove_items = AsyncMock(side_effect=RuntimeError("not your list"))
+    ctx = make_ctx(db=db, trakt=trakt)
+    item = db.get_item(trakt_id=2, list_id="watchlist")
+    await remove_tracked_item(ctx, item, reason="manual")
+    # The item is not marked removed, and the failure is recorded.
+    assert db.get_item(trakt_id=2, list_id="watchlist")["status"] == "synced"
+    assert any(a["action"] == "error" for a in db.recent_activity())
+
+
+async def test_removal_skipped_for_list_not_owned_by_me(db) -> None:
+    # Trakt forbids removing from a list you do not own, and the app always
+    # operates as 'me', so any list whose stored owner is not 'me' (another
+    # user's list added by URL) is skipped without a request.
+    db.upsert_item(
+        trakt_id=2, type="show", title="Severance", year=2022,
+        tmdb=200, tvdb=300, imdb="tt2", list_id="shared",
+    )
+    trakt = StubTrakt()
+    store = StubSettingsStore(
+        lists=[TrackedList(owner_user="sean", slug="shared", name="Shared")],
+    )
+    ctx = make_ctx(db=db, trakt=trakt, settings_store=store)
+    item = db.get_item(trakt_id=2, list_id="shared")
+    await remove_tracked_item(ctx, item, reason="available in Jellyseerr")
+    trakt.remove_items.assert_not_awaited()
+    assert db.get_item(trakt_id=2, list_id="shared")["status"] == "synced"
+    assert any(a["action"] == "remove_skipped" for a in db.recent_activity())

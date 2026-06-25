@@ -11,10 +11,8 @@ from core.clients.jellyseerr import AVAILABLE, JellyseerrClient, JellyseerrError
 _BASE = "http://js:5055"
 
 
-def make_client(*, dry_run=False):
-    return JellyseerrClient(
-        base_url=_BASE + "/", api_key="key", dry_run_provider=lambda: dry_run
-    )
+def make_client():
+    return JellyseerrClient(base_url=_BASE + "/", api_key="key")
 
 
 @respx.mock
@@ -56,11 +54,6 @@ async def test_get_status_network_error_raises() -> None:
     client = make_client()
     with pytest.raises(JellyseerrError):
         await client.get_status(media_type="movie", tmdb_id=500)
-
-
-async def test_create_request_dry_run_returns_none() -> None:
-    client = make_client(dry_run=True)
-    assert await client.create_request(media_type="movie", tmdb_id=100) is None
 
 
 @respx.mock

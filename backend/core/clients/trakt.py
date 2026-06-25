@@ -1,9 +1,6 @@
 """Trakt API client: device auth, token refresh, list read and list remove.
 
-Only official REST endpoints are used. Writes (list removal) honour the live
-DRY_RUN flag via the injected ``dry_run_provider`` callable: when DRY_RUN is on
-the exact payload is logged and a simulated result returned, with no request
-sent.
+Only official REST endpoints are used.
 """
 
 from __future__ import annotations
@@ -43,13 +40,11 @@ class TraktClient:
         client_id: str,
         client_secret: str,
         token_store_path: str,
-        dry_run_provider: Callable[[], bool],
         http_client: httpx.AsyncClient | None = None,
     ) -> None:
         self._client_id = client_id
         self._client_secret = client_secret
         self._token_store_path = token_store_path
-        self._dry_run_provider = dry_run_provider
         self._log = get_logger("trakt")
         self._tokens: dict[str, Any] | None = None
         self._client = http_client or httpx.AsyncClient(
@@ -325,8 +320,7 @@ class TraktClient:
         """Remove items from a Trakt list.
 
         ``movies`` are TMDB ids; ``shows`` are TVDB ids. ``owner_user`` defaults to
-        the connected account (``me``). Honours DRY_RUN: when on, the payload is
-        logged and a simulated result is returned without sending.
+        the connected account (``me``).
         """
         owner = owner_user or "me"
         movie_ids = movies or []
@@ -335,18 +329,6 @@ class TraktClient:
             "movies": [{"ids": {"tmdb": tmdb}} for tmdb in movie_ids],
             "shows": [{"ids": {"tvdb": tvdb}} for tvdb in show_ids],
         }
-        dry_run = self._dry_run_provider()
-        if dry_run:
-            log_action(
-                self._log,
-                "trakt_remove_skipped",
-                dry_run=True,
-                list_id=list_id,
-                movies=",".join(str(m) for m in movie_ids) or None,
-                shows=",".join(str(s) for s in show_ids) or None,
-            )
-            return {"dry_run": True, "would_remove": body}
-
         response = await self._client.post(
             self._list_remove_path(owner, list_id),
             headers=await self._auth_headers(),
@@ -356,7 +338,6 @@ class TraktClient:
         log_action(
             self._log,
             "trakt_remove",
-            dry_run=False,
             list_id=list_id,
             movies=",".join(str(m) for m in movie_ids) or None,
             shows=",".join(str(s) for s in show_ids) or None,

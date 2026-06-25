@@ -1,17 +1,20 @@
-"""list_syncarr module: keep a Trakt list in sync with Jellyseerr and remove items
-once Radarr/Sonarr import them.
+"""list_syncarr module: keep a Trakt list in sync with Jellyseerr, requesting
+missing items and removing them once they are available.
 
 The module registers:
-- an interval poll job (poll Trakt -> request in Jellyseerr) at the configured,
+- an interval poll job (poll Trakt -> request in Jellyseerr, and remove items that
+  Jellyseerr reports as available when auto-remove is enabled) at the configured,
   runtime-adjustable sync interval,
-- the ``/webhook/arr`` handler (remove on import),
 - ``ctx.sync_now`` so the dashboard's "Sync now" button works,
 - and the manual removal/reschedule callables the dashboard's delete controls and
   sync-interval setting drive (``ctx.remove_available``/``remove_item``/``reschedule_sync``).
 
-Removal is no longer autonomous: the nightly reconciliation cron has been retired
-in favour of the manual "Delete availables" action (``ctx.remove_available``), which
-runs the same :func:`reconcile` sweep on demand.
+Availability-driven removal happens inside the poll itself, in the same pass an
+item first becomes available, gated by the ``auto_remove_when_available`` setting.
+Removal deletes only the Trakt list entry — the media files in Radarr/Sonarr are
+never touched. The manual "Delete availables" action (``ctx.remove_available``)
+runs the same :func:`reconcile` sweep on demand to clear any backlog (e.g. items
+already marked available before the setting was enabled).
 
 ``setup`` is async because APScheduler 4's ``add_schedule`` is async; the
 registry awaits it. APScheduler 4 requires top-level importable callables for
@@ -31,7 +34,6 @@ from core.logging import get_logger
 from modules.list_syncarr.manual import remove_one
 from modules.list_syncarr.reconcile import reconcile
 from modules.list_syncarr.sync import poll_and_request
-from modules.list_syncarr.webhook import handle_arr
 
 if TYPE_CHECKING:  # pragma: no cover
     from core.context import AppContext
@@ -65,7 +67,7 @@ async def poll_job() -> None:
 async def setup(
     scheduler: "SchedulerService", app: FastAPI, ctx: "AppContext"
 ) -> None:
-    """Register the poll job, the webhook handler, and the manual callables."""
+    """Register the poll job and the manual sync/removal/reschedule callables."""
     register_context(ctx)
 
     await scheduler.add_interval(
@@ -74,7 +76,6 @@ async def setup(
         id="list_syncarr_poll",
     )
 
-    ctx.webhooks.register("arr", lambda payload: handle_arr(ctx, payload))
     ctx.sync_now = lambda: poll_and_request(ctx)
     ctx.remove_available = lambda: reconcile(ctx)
     ctx.remove_item = lambda list_id, trakt_id: remove_one(ctx, list_id, trakt_id)

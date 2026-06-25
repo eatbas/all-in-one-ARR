@@ -1,8 +1,7 @@
 """Outbound client for a Servarr application (Sonarr or Radarr).
 
-Distinct from :mod:`core.clients.arr`, which only *parses* inbound webhook
-payloads. This is the *outbound* client: it holds a base URL + API key (managed
-from the dashboard at runtime) and validates them with a connection test.
+This is the *outbound* client: it holds a base URL + API key (managed from the
+dashboard at runtime) and validates them with a connection test.
 
 Sonarr and Radarr share the Servarr API contract, so one class serves both —
 each is instantiated with its own ``name``/``base_url``/``api_key``.

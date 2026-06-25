@@ -1,14 +1,13 @@
 """Jellyseerr API client: media status checks and request creation.
 
-Request creation honours the live DRY_RUN flag via the injected
-``dry_run_provider`` callable. The base URL and API key are held as attributes
-(not baked into the HTTP client) so they can be reconfigured from the dashboard
-at runtime via :meth:`update_credentials`.
+The base URL and API key are held as attributes (not baked into the HTTP client)
+so they can be reconfigured from the dashboard at runtime via
+:meth:`update_credentials`.
 """
 
 from __future__ import annotations
 
-from typing import Any, Callable
+from typing import Any
 
 import httpx
 
@@ -34,12 +33,10 @@ class JellyseerrClient:
         *,
         base_url: str,
         api_key: str,
-        dry_run_provider: Callable[[], bool],
         http_client: httpx.AsyncClient | None = None,
     ) -> None:
         self._base_url = base_url.rstrip("/")
         self._api_key = api_key
-        self._dry_run_provider = dry_run_provider
         self._log = get_logger("jellyseerr")
         self._client = http_client or httpx.AsyncClient(timeout=30.0)
 
@@ -77,23 +74,13 @@ class JellyseerrClient:
         return media_info.get("status")
 
     async def create_request(self, *, media_type: str, tmdb_id: int) -> int | None:
-        """Create a Jellyseerr request; honours DRY_RUN.
+        """Create a Jellyseerr request.
 
-        Returns the new request id, or ``None`` in DRY_RUN mode.
+        Returns the new request id, or ``None`` when the response carries no id.
         """
         body: dict[str, Any] = {"mediaType": media_type, "mediaId": tmdb_id}
         if media_type == "tv":
             body["seasons"] = "all"
-
-        if self._dry_run_provider():
-            log_action(
-                self._log,
-                "jellyseerr_request_skipped",
-                dry_run=True,
-                media_type=media_type,
-                tmdb=tmdb_id,
-            )
-            return None
 
         try:
             response = await self._client.post(
@@ -109,7 +96,6 @@ class JellyseerrClient:
         log_action(
             self._log,
             "jellyseerr_request",
-            dry_run=False,
             media_type=media_type,
             tmdb=tmdb_id,
             request_id=request_id,

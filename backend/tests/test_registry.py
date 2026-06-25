@@ -20,8 +20,9 @@ async def test_load_real_list_syncarr(db) -> None:
     ctx = make_ctx(db=db)
     loaded = await registry.load_modules(scheduler, FastAPI(), ctx)
     assert "list_syncarr" in loaded
-    # setup wired the webhook handler and the manual-sync callable.
-    assert "arr" in ctx.webhooks._handlers
+    # setup wired the manual-sync callable; the arr import webhook is retired (the
+    # poll itself now drives availability-based removal).
+    assert "arr" not in ctx.webhooks._handlers
     assert ctx.sync_now is not None
     assert ctx.remove_available is not None
     scheduler.add_interval.assert_awaited()

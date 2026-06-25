@@ -1,8 +1,8 @@
 """Structured, one-line logging helpers.
 
 Every side-effecting decision in the service is expected to emit a single
-``key=value`` log line via :func:`log_action`, always including a ``dry_run``
-field and any relevant identifiers so the loop can be audited from the logs.
+``key=value`` log line via :func:`log_action`, including any relevant
+identifiers so the loop can be audited from the logs.
 """
 
 from __future__ import annotations
@@ -40,20 +40,18 @@ def get_logger(name: str | None = None) -> logging.Logger:
     return logging.getLogger(_LOGGER_NAME)
 
 
-def format_action(action: str, *, dry_run: bool, **ids: Any) -> str:
+def format_action(action: str, **ids: Any) -> str:
     """Render a single ``key=value`` action line.
 
     ``None`` identifiers are omitted so the line stays readable.
     """
-    parts = [f"action={action}", f"dry_run={str(dry_run).lower()}"]
+    parts = [f"action={action}"]
     for key, value in ids.items():
         if value is not None:
             parts.append(f"{key}={value}")
     return " ".join(parts)
 
 
-def log_action(
-    logger: logging.Logger, action: str, *, dry_run: bool, **ids: Any
-) -> None:
+def log_action(logger: logging.Logger, action: str, **ids: Any) -> None:
     """Emit a structured one-line INFO record for an action."""
-    logger.info(format_action(action, dry_run=dry_run, **ids))
+    logger.info(format_action(action, **ids))

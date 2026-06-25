@@ -3,7 +3,7 @@
 These back the dashboard's manual delete controls: removing a single tracked
 item, or sweeping every Available item (a manual trigger of the reconcile job
 that is no longer scheduled autonomously). Both reuse :func:`remove_tracked_item`
-so DRY_RUN and the not-owned-by-``me`` skip are honoured.
+so the not-owned-by-``me`` skip is honoured.
 """
 
 from __future__ import annotations
@@ -11,7 +11,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from core.logging import get_logger
-from modules.list_syncarr.webhook import remove_tracked_item
+from modules.list_syncarr.removal import remove_tracked_item
 
 if TYPE_CHECKING:  # pragma: no cover
     from core.context import AppContext

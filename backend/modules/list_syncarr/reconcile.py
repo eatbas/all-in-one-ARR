@@ -2,8 +2,7 @@
 
 Asks Jellyseerr which tracked items are now Available (5) and removes them from
 Trakt. This used to run on a nightly cron; it is now triggered on demand by the
-dashboard's "Delete availables" button (via ``ctx.remove_available``). Honours the
-live DRY_RUN flag.
+dashboard's "Delete availables" button (via ``ctx.remove_available``).
 """
 
 from __future__ import annotations
@@ -12,7 +11,7 @@ from typing import TYPE_CHECKING
 
 from core.clients.jellyseerr import AVAILABLE, JellyseerrError
 from core.logging import get_logger
-from modules.list_syncarr.webhook import remove_tracked_item
+from modules.list_syncarr.removal import remove_tracked_item
 
 if TYPE_CHECKING:  # pragma: no cover
     from core.context import AppContext

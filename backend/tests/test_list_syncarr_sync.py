@@ -19,30 +19,13 @@ async def test_new_item_creates_request(db) -> None:
     ctx = make_ctx(
         db=db,
         trakt=StubTrakt(items=[_MOVIE]),
-        jellyseerr=StubJellyseerr(status=None, request_id=77),
-        dry_run=False,
-    )
+        jellyseerr=StubJellyseerr(status=None, request_id=77),    )
     await poll_and_request(ctx)
     item = db.get_item(trakt_id=1, list_id="watchlist")
     assert item["status"] == "requested"
     assert item["jellyseerr_request_id"] == 77
     ctx.jellyseerr.create_request.assert_awaited_once()
     assert any(a["action"] == "requested" for a in db.recent_activity())
-
-
-async def test_dry_run_does_not_persist_requested(db) -> None:
-    ctx = make_ctx(
-        db=db,
-        trakt=StubTrakt(items=[_MOVIE]),
-        jellyseerr=StubJellyseerr(status=None),
-        dry_run=True,
-    )
-    await poll_and_request(ctx)
-    item = db.get_item(trakt_id=1, list_id="watchlist")
-    # Status must stay 'synced' so the real request happens once DRY_RUN is off.
-    assert item["status"] == "synced"
-    assert item["jellyseerr_request_id"] is None
-    assert any(a["action"] == "would_request" for a in db.recent_activity())
 
 
 async def test_item_without_trakt_id_skipped(db) -> None:
@@ -63,13 +46,45 @@ async def test_item_without_tmdb_skipped(db) -> None:
 
 
 async def test_already_available_sets_available(db) -> None:
+    # auto-remove off so the item stays 'available'; the enabled path is covered
+    # by test_available_auto_removed_when_enabled.
     ctx = make_ctx(
         db=db, trakt=StubTrakt(items=[_MOVIE]),
         jellyseerr=StubJellyseerr(status=AVAILABLE),
+        settings_store=StubSettingsStore(auto_remove_when_available=False),
     )
     await poll_and_request(ctx)
     assert db.get_item(trakt_id=1, list_id="watchlist")["status"] == "available"
     ctx.jellyseerr.create_request.assert_not_awaited()
+
+
+async def test_available_auto_removed_when_enabled(db) -> None:
+    # auto-remove enabled (StubSettingsStore default): an available item is
+    # dropped from its Trakt list in the same pass and marked 'removed'.
+    # Only the Trakt list entry is removed — no Radarr/Sonarr call is made.
+    trakt = StubTrakt(items=[_MOVIE])
+    ctx = make_ctx(
+        db=db, trakt=trakt,
+        jellyseerr=StubJellyseerr(status=AVAILABLE),    )
+    await poll_and_request(ctx)
+    assert db.get_item(trakt_id=1, list_id="watchlist")["status"] == "removed"
+    trakt.remove_items.assert_awaited_once_with(
+        movies=[100], list_id="watchlist", owner_user="me"
+    )
+
+
+async def test_available_kept_when_auto_remove_disabled(db) -> None:
+    # auto-remove disabled: an available item is marked 'available' and left on
+    # the Trakt list for manual removal.
+    trakt = StubTrakt(items=[_MOVIE])
+    store = StubSettingsStore(auto_remove_when_available=False)
+    ctx = make_ctx(
+        db=db, trakt=trakt,
+        jellyseerr=StubJellyseerr(status=AVAILABLE),        settings_store=store,
+    )
+    await poll_and_request(ctx)
+    assert db.get_item(trakt_id=1, list_id="watchlist")["status"] == "available"
+    trakt.remove_items.assert_not_awaited()
 
 
 async def test_already_requested_in_jellyseerr(db) -> None:
@@ -151,7 +166,8 @@ async def test_polls_each_selected_list(db) -> None:
         lists=[
             TrackedList(owner_user="me", slug="movies", name="Movies"),
             TrackedList(owner_user="me", slug="anime", name="Anime"),
-        ]
+        ],
+        auto_remove_when_available=False,
     )
 
     async def read(*, list_id, owner_user):
@@ -176,7 +192,8 @@ async def test_one_failing_list_does_not_abort_others(db) -> None:
         lists=[
             TrackedList(owner_user="me", slug="movies", name="Movies"),
             TrackedList(owner_user="me", slug="anime", name="Anime"),
-        ]
+        ],
+        auto_remove_when_available=False,
     )
 
     async def read(*, list_id, owner_user):

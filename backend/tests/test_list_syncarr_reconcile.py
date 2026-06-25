@@ -24,7 +24,7 @@ async def test_available_item_removed(db) -> None:
     trakt = StubTrakt()
     ctx = make_ctx(
         db=db, trakt=trakt,
-        jellyseerr=StubJellyseerr(status=AVAILABLE), dry_run=False,
+        jellyseerr=StubJellyseerr(status=AVAILABLE),
     )
     await reconcile(ctx)
     assert db.get_item(trakt_id=1, list_id="watchlist")["status"] == "removed"

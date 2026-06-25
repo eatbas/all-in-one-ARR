@@ -2,8 +2,7 @@
 
 Reads the configured Trakt list, mirrors each item into SQLite (storing both
 TMDB and TVDB ids for later reverse lookup), then ensures each not-yet-handled
-item has a Jellyseerr request. Every request honours the live DRY_RUN flag via
-the Jellyseerr client.
+item has a Jellyseerr request.
 """
 
 from __future__ import annotations
@@ -18,6 +17,7 @@ from core.clients.jellyseerr import (
     JellyseerrError,
 )
 from core.logging import get_logger, log_action
+from modules.list_syncarr.removal import remove_tracked_item
 
 if TYPE_CHECKING:  # pragma: no cover
     from core.context import AppContext
@@ -111,32 +111,32 @@ async def _process_item(ctx: "AppContext", raw: dict, list_id: str) -> None:
         return
 
     if js_status == AVAILABLE:
+        # The item is downloaded and ready to serve. Mark it available, then —
+        # when auto-remove is enabled — drop it from the Trakt list in the same
+        # pass. Removal deletes only the Trakt list entry; the media files in
+        # Radarr/Sonarr are never touched. remove_tracked_item skips lists not
+        # owned by 'me', so the item simply stays 'available' when it cannot
+        # (yet) be removed.
         ctx.db.set_status(trakt_id=trakt_id, list_id=list_id, status="available")
-        log_action(_log, "already_available", dry_run=ctx.dry_run, tmdb=tmdb, title=title)
+        log_action(_log, "already_available", tmdb=tmdb, title=title)
+        if ctx.settings_store.auto_remove_when_available():
+            await remove_tracked_item(ctx, item, reason="available in Jellyseerr")
         return
 
     if js_status in _ALREADY_REQUESTED:
         ctx.db.set_status(trakt_id=trakt_id, list_id=list_id, status="requested")
-        log_action(_log, "already_requested", dry_run=ctx.dry_run, tmdb=tmdb, title=title)
+        log_action(_log, "already_requested", tmdb=tmdb, title=title)
         return
 
     request_id = await ctx.jellyseerr.create_request(
         media_type=js_media_type, tmdb_id=tmdb
     )
-    if ctx.dry_run:
-        # Do not persist a 'requested' status in dry-run: the request was not
-        # actually created, so leaving the item 'synced' ensures the real
-        # request is made once DRY_RUN is switched off.
-        ctx.db.add_activity("would_request", f"would request {title}")
-        log_action(_log, "would_request", dry_run=True, tmdb=tmdb, title=title)
-        return
     ctx.db.set_request_id(trakt_id=trakt_id, list_id=list_id, request_id=request_id)
     ctx.db.set_status(trakt_id=trakt_id, list_id=list_id, status="requested")
     ctx.db.add_activity("requested", f"requested {title}")
     log_action(
         _log,
         "requested",
-        dry_run=False,
         tmdb=tmdb,
         title=title,
         request_id=request_id,

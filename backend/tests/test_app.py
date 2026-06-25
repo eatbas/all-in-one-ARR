@@ -48,12 +48,10 @@ async def test_build_context_real(tmp_path) -> None:
         DB_PATH=str(tmp_path / "db.sqlite"),
         TOKEN_STORE_PATH=str(tmp_path / "tok.json"),
         SETTINGS_STORE_PATH=str(tmp_path / "settings.json"),
-        DRY_RUN=False,
         **_SECRETS,
     )
     ctx = build_context(settings)
     try:
-        assert ctx.dry_run is False
         assert ctx.trakt.is_authenticated() is False  # no token file
         assert ctx.db.counts_by_status()["synced"] == 0
         # Lists are not seeded from the environment; they start empty and are

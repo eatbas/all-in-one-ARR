@@ -93,6 +93,7 @@ class SettingsStore:
         self._lists: list[TrackedList] = []
         self._status_check_interval_seconds = 60
         self._sync_interval_minutes = 15
+        self._auto_remove_when_available = False
         self._services: dict[str, dict[str, str]] = {
             desc.name: empty_values(desc) for desc in SERVICES
         }
@@ -107,6 +108,7 @@ class SettingsStore:
         services: dict[str, dict[str, str]] | None = None,
         status_check_interval_seconds: int = 60,
         sync_interval_minutes: int = 15,
+        auto_remove_when_available: bool = False,
     ) -> None:
         """Load persisted settings, or seed from the supplied defaults.
 
@@ -129,6 +131,7 @@ class SettingsStore:
                 self._sync_interval_minutes = _normalise_sync_interval(
                     sync_interval_minutes
                 )
+                self._auto_remove_when_available = bool(auto_remove_when_available)
                 for desc in SERVICES:
                     self._services[desc.name] = _service_seed(
                         desc, (services or {}).get(desc.name)
@@ -146,6 +149,22 @@ class SettingsStore:
         )
         self._sync_interval_minutes = _normalise_sync_interval(
             data.get("sync_interval_minutes", 15)
+        )
+        # Migration: the flag was historically persisted as ``auto_remove_on_import``
+        # (remove when Radarr/Sonarr imported the title). It now means "remove from
+        # Trakt once Jellyseerr reports the item available". An existing store is read
+        # under the legacy key so the user's choice carries over; when only the legacy
+        # key is present the store is re-saved under the new key on load (see the
+        # ``migrated_auto_remove`` save trigger below).
+        migrated_auto_remove = (
+            "auto_remove_when_available" not in data
+            and "auto_remove_on_import" in data
+        )
+        self._auto_remove_when_available = bool(
+            data.get(
+                "auto_remove_when_available",
+                data.get("auto_remove_on_import", False),
+            )
         )
         self._lists = [
             TrackedList(
@@ -171,9 +190,14 @@ class SettingsStore:
             else:
                 self._services[name] = _service_seed(desc, seed.get(name))
                 backfilled = True
-        if backfilled:
+        if backfilled or migrated_auto_remove:
             self._save_locked()
-            self._log.info("backfilled new service connections from environment")
+            self._log.info(
+                "persisted store migration (services_backfilled=%s "
+                "auto_remove_key_migrated=%s)",
+                backfilled,
+                migrated_auto_remove,
+            )
 
     def _save_locked(self) -> None:
         payload = {
@@ -183,6 +207,7 @@ class SettingsStore:
             },
             "status_check_interval_seconds": self._status_check_interval_seconds,
             "sync_interval_minutes": self._sync_interval_minutes,
+            "auto_remove_when_available": self._auto_remove_when_available,
             "lists": [item.to_dict() for item in self._lists],
             "services": self._services,
         }
@@ -243,6 +268,29 @@ class SettingsStore:
             self._save_locked()
             self._log.info("updated sync interval to %s minutes", minutes)
             return minutes
+
+    # ---- auto-remove when available ----
+
+    def auto_remove_when_available(self) -> bool:
+        """Whether the poll removes an item from its Trakt list once available.
+
+        When ``True``, an item Jellyseerr reports as available is dropped from its
+        Trakt list during the sync (the list entry only — media files are not
+        touched). When ``False`` (the default), removal is fully manual — the
+        dashboard's per-item and "Delete availables" controls are the only ways an
+        item leaves a Trakt list.
+        """
+        with self._lock:
+            return self._auto_remove_when_available
+
+    def update_auto_remove_when_available(self, enabled: bool) -> bool:
+        """Set whether available items are auto-removed from Trakt; returns the new value."""
+        enabled = bool(enabled)
+        with self._lock:
+            self._auto_remove_when_available = enabled
+            self._save_locked()
+            self._log.info("updated auto-remove when available to %s", enabled)
+            return enabled
 
     # ---- tracked lists ----
 
@@ -352,6 +400,7 @@ class SettingsStore:
                 "client_secret_set": bool(self._client_secret),
                 "status_check_interval_seconds": self._status_check_interval_seconds,
                 "sync_interval_minutes": self._sync_interval_minutes,
+                "auto_remove_when_available": self._auto_remove_when_available,
                 "lists": [item.to_dict() for item in self._lists],
                 "services": self.masked_services(),
             }

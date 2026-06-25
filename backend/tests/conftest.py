@@ -7,7 +7,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from core.context import AppContext, DryRunFlag
+from core.context import AppContext
 from core.db import Database
 from core.service_registry import BY_NAME, SERVICES, empty_values, masked_entry
 from core.settings_store import TrackedList
@@ -73,7 +73,12 @@ class StubSettingsStore:
         services: dict[str, dict[str, str]] | None = None,
         status_check_interval_seconds: int = 60,
         sync_interval_minutes: int = 15,
+        auto_remove_when_available: bool = True,
     ) -> None:
+        # Defaults to True (unlike the real store, which seeds False) so the
+        # availability-removal tests exercise the enabled path without having to opt
+        # in; the off path is covered explicitly by passing auto_remove_when_available.
+        self._auto_remove_when_available = auto_remove_when_available
         self._lists = (
             lists
             if lists is not None
@@ -140,6 +145,13 @@ class StubSettingsStore:
         self._sync_interval_minutes = minutes
         return minutes
 
+    def auto_remove_when_available(self) -> bool:
+        return self._auto_remove_when_available
+
+    def update_auto_remove_when_available(self, enabled: bool) -> bool:
+        self._auto_remove_when_available = bool(enabled)
+        return self._auto_remove_when_available
+
     def masked_services(self) -> dict[str, dict[str, Any]]:
         return {
             desc.name: masked_entry(desc, self._services[desc.name])
@@ -191,12 +203,10 @@ def make_ctx(
     omdb: Any | None = None,
     sabnzbd: Any | None = None,
     qbittorrent: Any | None = None,
-    dry_run: bool = True,
     settings: Any | None = None,
     settings_store: Any | None = None,
 ) -> AppContext:
     """Build an :class:`AppContext` wired with stubs for unit tests."""
-    flag = DryRunFlag(dry_run)
     scheduler = AsyncMock()
     ctx = AppContext(
         settings=settings or _StubSettings(),
@@ -211,7 +221,6 @@ def make_ctx(
         qbittorrent=qbittorrent or StubService(),
         scheduler=scheduler,
         webhooks=WebhookRegistry(),
-        dry_run_flag=flag,
         settings_store=settings_store or StubSettingsStore(),
     )
     ctx.status_checker = StatusChecker(ctx)

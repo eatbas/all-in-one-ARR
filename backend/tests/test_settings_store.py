@@ -333,3 +333,59 @@ def test_sync_interval_in_masked(tmp_path) -> None:
     _seed(store)
     store.update_sync_interval(60)
     assert store.masked()["sync_interval_minutes"] == 60
+
+
+def test_auto_remove_when_available_defaults_to_false(tmp_path) -> None:
+    store = SettingsStore(str(tmp_path / "settings.json"))
+    _seed(store)
+    assert store.auto_remove_when_available() is False
+
+
+def test_auto_remove_when_available_seed_and_reload(tmp_path) -> None:
+    path = tmp_path / "settings.json"
+    store = SettingsStore(str(path))
+    store.load_or_seed(
+        client_id="cid",
+        client_secret="sec",
+        auto_remove_when_available=True,
+    )
+    assert store.auto_remove_when_available() is True
+    assert json.loads(path.read_text())["auto_remove_when_available"] is True
+
+    reopened = SettingsStore(str(path))
+    reopened.load_or_seed(client_id="x", client_secret="x")
+    assert reopened.auto_remove_when_available() is True
+
+
+def test_auto_remove_when_available_update_and_masked(tmp_path) -> None:
+    store = SettingsStore(str(tmp_path / "settings.json"))
+    _seed(store)
+    assert store.update_auto_remove_when_available(True) is True
+    assert store.auto_remove_when_available() is True
+    assert store.masked()["auto_remove_when_available"] is True
+    assert store.update_auto_remove_when_available(False) is False
+    assert store.auto_remove_when_available() is False
+
+
+def test_legacy_auto_remove_on_import_key_migrates(tmp_path) -> None:
+    # A store persisted under the historical key (``auto_remove_on_import``) is read
+    # under the new meaning AND re-saved under the new key purely on load, so an
+    # existing install's choice carries over without a manual migration.
+    path = tmp_path / "settings.json"
+    # Seed a complete, current store first (all services present) so the load below
+    # does NOT trigger a service backfill — the re-save must come from the migration
+    # alone, not the backfill path.
+    SettingsStore(str(path)).load_or_seed(client_id="cid", client_secret="sec")
+    data = json.loads(path.read_text())
+    data.pop("auto_remove_when_available", None)
+    data["auto_remove_on_import"] = True
+    path.write_text(json.dumps(data), encoding="utf-8")
+
+    store = SettingsStore(str(path))
+    store.load_or_seed(client_id="cid", client_secret="sec")
+    assert store.auto_remove_when_available() is True
+    # The load itself rewrote the file under the new key and dropped the legacy one,
+    # without any further update() call.
+    saved = json.loads(path.read_text())
+    assert saved["auto_remove_when_available"] is True
+    assert "auto_remove_on_import" not in saved
