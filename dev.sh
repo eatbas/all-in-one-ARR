@@ -81,7 +81,7 @@ fi
 # The backend's Settings() fails fast (and the server exits) when the required
 # Trakt/Jellyseerr credentials are unset. On a first run without real
 # credentials, seed a .env from the example with placeholders so the stack
-# still comes up in DRY_RUN; the developer replaces them when ready. `.env` is
+# still comes up; the developer replaces them when ready. `.env` is
 # git-ignored, so this stays local.
 if [[ ! -f "$ROOT_DIR/.env" ]]; then
   echo "No .env found — creating one for local development."
@@ -95,11 +95,9 @@ TRAKT_CLIENT_ID=changeme
 TRAKT_CLIENT_SECRET=changeme
 JELLYSEERR_URL=http://localhost:5055
 JELLYSEERR_API_KEY=changeme
-DRY_RUN=true
 ENV_TEMPLATE
   fi
-  echo "  -> wrote .env with PLACEHOLDER credentials; DRY_RUN stays on, so no" >&2
-  echo "     real requests or removals happen. Replace TRAKT_CLIENT_ID/SECRET" >&2
+  echo "  -> wrote .env with PLACEHOLDER credentials. Replace TRAKT_CLIENT_ID/SECRET" >&2
   echo "     and JELLYSEERR_URL/API_KEY with real values to drive the sync loop" >&2
   echo "     (see the README 'Configuration' section)." >&2
 fi

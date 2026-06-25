@@ -1,16 +1,13 @@
 # All-in-One ARR
 
 A small, self-hosted service that keeps a **Trakt list in sync with Jellyseerr**
-and — the key part — **removes an item from the Trakt list once Radarr/Sonarr
-have imported it**. It uses **official REST APIs only** (no scraping).
+and — the key part — optionally **removes an item from the Trakt list once
+Jellyseerr reports it available** (off by default; only the list entry, never the
+media files in Radarr/Sonarr). It uses **official REST APIs only** (no scraping).
 
 This is the plugin **core** plus the first module, **`list_syncarr`**. Future
 modules (`bandwidtharr`, `deletearr`, `neutarr`) drop into `backend/modules/` and
 auto-load — see [Adding a module](#adding-a-module).
-
-> **DRY_RUN is ON by default.** Until you turn it off, the service only *logs*
-> what it would request in Jellyseerr and remove from Trakt. Verify the loop
-> first, then flip DRY_RUN off.
 
 ## How it works
 
@@ -19,10 +16,17 @@ auto-load — see [Adding a module](#adding-a-module).
 2. For each item not already handled, check Jellyseerr; if it is not already
    requested/available, create a request.
 3. (Your existing Jellyseerr → Radarr/Sonarr → download/import flow runs.)
-4. On the Radarr/Sonarr **On-Import** webhook, look the item up by TMDB
-   (Radarr) or TVDB (Sonarr) and **remove it from the Trakt list**.
-5. A **nightly reconciliation** job (03:00 local) removes anything the webhook
-   missed by asking Jellyseerr which tracked items are now *Available*.
+4. On a later poll, once Jellyseerr reports the item **Available** (downloaded
+   and ready to serve) and **if auto-remove when available is enabled**, remove
+   it from the Trakt list in the same pass. Only the Trakt list entry is removed
+   — the media files in Radarr/Sonarr are never touched. Auto-remove is **off by
+   default**, so removal is manual unless you switch it on
+   (**List-Syncarr → Settings**).
+5. Removal can also be triggered manually from the dashboard at any time: the
+   per-item delete control on a poster, or **Delete availables**
+   (**List-Syncarr → Lists**), which removes every tracked item Jellyseerr now
+   reports as *Available*. Removed items stay recorded and can be shown in the
+   list with the **Show removed** toggle.
 
 ## Architecture
 
@@ -34,15 +38,15 @@ backend/
     scheduler.py     # APScheduler 4 wrapper (interval + cron)
     webhooks.py      # single /webhook router; modules register handlers
     registry.py      # discovers & loads modules, calls setup()
-    context.py       # AppContext shared with modules + live DRY_RUN flag
+    context.py       # AppContext shared with modules
     api.py           # dashboard JSON endpoints (/api/*)
     app.py           # FastAPI factory + lifespan wiring + SPA serving
     clients/
       trakt.py       # device auth, token refresh, list read/remove
       jellyseerr.py  # status check, create request
-      arr.py         # defensive Radarr/Sonarr webhook parsing
+      arr_client.py  # outbound Radarr/Sonarr connection test
   modules/
-    list_syncarr/    # the first module: poll/request, webhook remove, reconcile
+    list_syncarr/    # the first module: poll/request, availability-driven removal, reconcile
   main.py            # entrypoint: `uvicorn main:app --app-dir backend`
   pyproject.toml     # packaging + pytest + coverage config
   tests/             # backend test suite (100% coverage)
@@ -82,9 +86,9 @@ cp .env.example .env
 | `SABNZBD_API_KEY` | – | SABnzbd API key (seeds the store; settable in the UI) |
 | `QBITTORRENT_URL` | – | Base URL of the qBittorrent WebUI (seeds the store; settable in the UI) |
 | `QBITTORRENT_API_KEY` | – | qBittorrent WebUI API key, requires qBittorrent ≥ 5.2.0 (seeds the store; settable in the UI) |
-| `SYNC_INTERVAL_MIN` | `15` | Poll interval in minutes |
+| `SYNC_INTERVAL_MIN` | `15` | Poll interval in minutes (seeds the store; settable in the UI) |
+| `AUTO_REMOVE_WHEN_AVAILABLE` | `false` | Auto-remove items from their Trakt list once available in Jellyseerr (seeds the store; settable in the UI). The legacy `AUTO_REMOVE_ON_IMPORT` name is still accepted. |
 | `WEBHOOK_PORT` | `3223` | Port the service listens on |
-| `DRY_RUN` | `true` | Log-only mode; no real requests/removals |
 | `TZ` | `Europe/Istanbul` | Timezone for the scheduler |
 | `LOG_LEVEL` | `INFO` | Log level |
 | `DB_PATH` | `data/aio-arr.db` | SQLite path (persist via volume) |
@@ -130,8 +134,8 @@ The dashboard **Settings** page is organised into tabs —
 **SABnzbd**, **qBittorrent** — and manages every connection without touching
 `.env`. All values are persisted server-side in `SETTINGS_STORE_PATH`.
 
-**General tab** (the default): the app-wide **DRY_RUN** toggle and the
-**light/dark/system** theme control. These mirror the controls in the header.
+**General tab** (the default): the status-check interval and the
+**light/dark/system** theme control (which mirrors the header).
 
 Notifications (toasts) appear **bottom-right** with a close (×) button and a bar
 that drains over their ~3-second lifetime.
@@ -147,8 +151,8 @@ that drains over their ~3-second lifetime.
 - **Your Trakt lists** – discovers every list on your account; tick the ones to
   sync (TV, Movies, Anime …).
 - **Add by Trakt URL** – paste a list URL such as
-  `https://trakt.tv/users/me/lists/anime` to add it. (Removal on import only
-  works for lists your connected account owns.)
+  `https://trakt.tv/users/me/lists/anime` to add it. (Removal only works for
+  lists your connected account owns.)
 
 **Jellyseerr / Sonarr / Radarr / SABnzbd tabs:** each takes a **base URL** and an
 **API key** and offers a **Test connection** button. The test validates the key
@@ -168,29 +172,6 @@ qBittorrent's Web UI settings; requires qBittorrent ≥ 5.2.0) and offers a **Te
 connection** button, which authenticates with an `Authorization: Bearer` header
 and reads the application version. The key is stored server-side and never
 returned in clear (the API only exposes whether a key is set).
-
-### Adding the Radarr/Sonarr webhook
-
-In Radarr and Sonarr: **Settings → Connect → + → Webhook**
-
-- **URL:** `http://<this-host>:3223/webhook/arr`
-- **Method:** POST
-- **Triggers:** enable **On Import** (a.k.a. *On File Import* / *On Download*)
-
-On the first webhook received, the full raw JSON payload is logged so you can
-confirm the shape; parsing is defensive across Radarr/Sonarr versions.
-
-### Turning DRY_RUN off
-
-While DRY_RUN is on, the service **persists no irreversible state**: it logs
-`would_request` / `would_remove` to the activity feed but leaves items in their
-`synced` state and never marks them `requested` or `removed`. This means you can
-verify the loop and then simply switch DRY_RUN off — the next poll/webhook will
-perform the real requests and removals; **no database reset is required**.
-
-Once the logs show the loop doing the right thing, either flip the **DRY_RUN**
-toggle in the dashboard (takes effect immediately, runtime-only) or set
-`DRY_RUN=false` in `.env` and restart for a persistent change.
 
 ## Local development
 
@@ -231,9 +212,9 @@ pip install -e "./backend[dev]"
 cd backend && pytest   # runs with --cov-fail-under=100
 ```
 
-Coverage spans Trakt list parsing, the TMDB/TVDB reverse mapping, the
-remove-on-webhook lookup (mocked HTTP clients, DRY_RUN assertions), and
-reconciliation.
+Coverage spans Trakt list parsing, the TMDB/TVDB reverse mapping, and the Trakt
+removal paths — sync availability-driven, manual, and reconcile — with mocked HTTP
+clients.
 
 The React frontend also has **100% test coverage** (Vitest + React Testing
 Library on jsdom), enforced via a `thresholds: { 100: true }` gate in
@@ -263,7 +244,7 @@ cd frontend && npm run build
 
 - `GET /health` – liveness probe.
 - `GET /status` – item counts by status.
-- `GET /api/status` – dashboard status (dry_run, trakt_connected, counts).
+- `GET /api/status` – dashboard status (trakt_connected, counts).
 - `GET /api/items[?status=&list=]` – tracked items, filterable by status and/or list.
 - `GET /api/lists` – synced lists with item counts and last/next sync times.
 - `GET /api/posters/{media_type}/{tmdb_id}[?imdb=]` – cached poster thumbnail
@@ -271,7 +252,6 @@ cd frontend && npm run build
   and stored under `POSTER_CACHE_PATH` so each is fetched only once.
 - `GET /api/activity` – recent activity feed.
 - `POST /api/sync` – trigger an immediate poll.
-- `POST /api/settings/dry-run` – `{ "enabled": bool }` toggle.
 - `GET /api/settings/trakt` – masked Trakt settings (credentials, user, lists).
 - `PUT /api/settings/trakt` – update Trakt client id/secret/user.
 - `POST /api/trakt/auth/start` – begin device authorisation; returns the code/URL.
@@ -286,7 +266,6 @@ cd frontend && npm run build
 - `PUT /api/settings/services/{name}` – update a service's fields
   `{ url?, api_key? }` (only the fields it declares apply).
 - `POST /api/services/{name}/test` – test a service connection.
-- `POST /webhook/arr` – Radarr/Sonarr On-Import webhook.
 
 ## Adding a module
 
@@ -315,6 +294,11 @@ cd frontend && npm run build
   The *next sync* time is derived from the last poll plus `SYNC_INTERVAL_MIN`
   (an approximation, since the pre-release APScheduler wrapper does not expose a
   next-fire time).
+- The dashboard **List-Syncarr → Settings** tab manages sync behaviour: the
+  **sync interval** (how often Trakt is polled) and the **remove from Trakt when
+  available** toggle (off by default — when off, items leave a Trakt list only via
+  the manual delete controls in the **Lists** tab). Both are persisted server-side
+  and applied live.
 - Single Uvicorn worker by design: the scheduler runs in-process and SQLite
   uses WAL with a process-level lock. Multi-worker deployment is out of scope.
 - APScheduler 4 is pre-release; all scheduler usage is isolated behind
