@@ -305,6 +305,44 @@ async def test_get_list_summary_not_found(tmp_path) -> None:
 
 
 @respx.mock
+async def test_get_list_summary_official_list_uses_generic_endpoint(tmp_path) -> None:
+    respx.get(f"{TRAKT_BASE_URL}/lists/the-matrix-collection").mock(
+        return_value=httpx.Response(
+            200,
+            json={
+                "name": "The Matrix Collection",
+                "ids": {"trakt": 81, "slug": "the-matrix-collection"},
+                "item_count": 4,
+            },
+        )
+    )
+    client = make_client(tmp_path)
+    client._tokens = dict(_TOKENS)
+    summary = await client.get_list_summary(
+        owner_user="official", slug="the-matrix-collection"
+    )
+    assert summary["slug"] == "81"  # numeric id used for official lists
+    assert summary["owner_user"] == "official"
+    assert summary["item_count"] == 4
+
+
+def test_list_read_path_for_official_list(tmp_path) -> None:
+    client = make_client(tmp_path)
+    assert client._list_read_path("official", "81") == "/lists/81/items/movies,shows"
+
+
+def test_list_remove_path_for_official_list(tmp_path) -> None:
+    client = make_client(tmp_path)
+    assert client._list_remove_path("official", "81") == "/lists/81/items/remove"
+
+
+def test_normalise_official_list_without_trakt_id_raises(tmp_path) -> None:
+    client = make_client(tmp_path)
+    with pytest.raises(ValueError, match="missing numeric trakt id"):
+        client._normalise_list({"name": "Bad", "ids": {"slug": "bad"}}, "official")
+
+
+@respx.mock
 async def test_test_connection_returns_username(tmp_path) -> None:
     respx.get(f"{TRAKT_BASE_URL}/users/settings").mock(
         return_value=httpx.Response(200, json={"user": {"username": "erena"}})

@@ -15,8 +15,14 @@ from typing import Any, Callable
 import httpx
 
 from core.logging import get_logger, log_action
+from core.trakt_url import OFFICIAL_OWNER
 
 TRAKT_BASE_URL = "https://api.trakt.tv"
+
+
+def _is_official(owner_user: str) -> bool:
+    """Return True when the owner is the Trakt-curated official account."""
+    return owner_user == OFFICIAL_OWNER
 _OAUTH_REDIRECT = "urn:ietf:wg:oauth:2.0:oob"
 # Refresh this many seconds before the access token actually expires.
 _REFRESH_MARGIN_SECONDS = 24 * 60 * 60
@@ -190,9 +196,19 @@ class TraktClient:
 
     @staticmethod
     def _normalise_list(entry: dict[str, Any], owner_user: str) -> dict[str, Any]:
-        """Normalise a Trakt list object into a compact dict."""
+        """Normalise a Trakt list object into a compact dict.
+
+        Official curated lists must be addressed by their numeric Trakt id on the
+        items/remove endpoints, so for official lists the numeric id is used as the
+        stored slug. User lists continue to use their slug.
+        """
         ids = entry.get("ids") or {}
-        slug = ids.get("slug") or (str(ids["trakt"]) if ids.get("trakt") else None)
+        if _is_official(owner_user):
+            if not ids.get("trakt"):
+                raise ValueError("Official list response missing numeric trakt id")
+            slug = str(ids["trakt"])
+        else:
+            slug = ids.get("slug") or (str(ids["trakt"]) if ids.get("trakt") else None)
         return {
             "name": entry.get("name"),
             "slug": slug,
@@ -217,10 +233,16 @@ class TraktClient:
     async def get_list_summary(
         self, *, owner_user: str, slug: str
     ) -> dict[str, Any] | None:
-        """Return a single list's summary, or ``None`` if it does not exist."""
-        response = await self._client.get(
-            f"/users/{owner_user}/lists/{slug}", headers=await self._auth_headers()
-        )
+        """Return a single list's summary, or ``None`` if it does not exist.
+
+        Official curated lists live under the generic ``/lists/{slug}`` endpoint,
+        whereas user lists are under ``/users/{owner_user}/lists/{slug}``.
+        """
+        if _is_official(owner_user):
+            path = f"/lists/{slug}"
+        else:
+            path = f"/users/{owner_user}/lists/{slug}"
+        response = await self._client.get(path, headers=await self._auth_headers())
         if response.status_code == 404:
             return None
         response.raise_for_status()
@@ -257,11 +279,17 @@ class TraktClient:
     def _list_read_path(self, owner_user: str, list_id: str) -> str:
         if list_id.strip().lower() == "watchlist":
             return "/sync/watchlist/movies,shows"
+        if _is_official(owner_user):
+            return f"/lists/{list_id}/items/movies,shows"
         return f"/users/{owner_user}/lists/{list_id}/items/movies,shows"
 
     def _list_remove_path(self, owner_user: str, list_id: str) -> str:
         if list_id.strip().lower() == "watchlist":
             return "/sync/watchlist/remove"
+        # Deliberate symmetry with _list_read_path; in production, removal is skipped
+        # upstream for lists not owned by "me", so this branch is currently unreachable.
+        if _is_official(owner_user):
+            return f"/lists/{list_id}/items/remove"
         return f"/users/{owner_user}/lists/{list_id}/items/remove"
 
     async def read_list_items(
