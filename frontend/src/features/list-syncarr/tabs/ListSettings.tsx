@@ -59,7 +59,7 @@ export function ListSettings() {
               <p className="text-sm font-medium">Remove from Trakt when available</p>
               <p className="text-sm text-muted-foreground">
                 When on, an item is removed from its Trakt list as soon as
-                Jellyseerr reports it available — the list entry only; the media
+                Seer reports it available — the list entry only; the media
                 files in Radarr/Sonarr are untouched. When off, removal is manual —
                 use the controls in the Lists tab.
               </p>
@@ -77,7 +77,7 @@ export function ListSettings() {
               Sync interval
             </label>
             <p className="text-sm text-muted-foreground">
-              How often the engine polls Trakt and requests in Jellyseerr.
+              How often the engine polls Trakt and requests in Seer.
             </p>
             <Select
               value={String(syncInterval)}

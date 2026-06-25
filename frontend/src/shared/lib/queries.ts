@@ -392,7 +392,7 @@ export function useUpdateAutoRemoveWhenAvailable(): UseMutationResult<
           : "Auto-remove when available disabled",
         {
           description: result.auto_remove_when_available
-            ? "Items are removed from their Trakt list once available in Jellyseerr."
+            ? "Items are removed from their Trakt list once available in Seer."
             : "Available items stay on their Trakt list until you remove them.",
         },
       )

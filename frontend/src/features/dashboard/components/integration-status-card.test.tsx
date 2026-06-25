@@ -22,13 +22,13 @@ describe("IntegrationStatusCard", () => {
   it("renders an offline card for a failing integration", () => {
     render(
       <IntegrationStatusCard
-        name="jellyseerr"
-        label="Jellyseerr"
+        name="seer"
+        label="Seer"
         status={{ ok: false, detail: "Connection refused", checked_at: sampleStatus.checked_at }}
       />,
     )
 
-    expect(screen.getByText("Jellyseerr")).toBeInTheDocument()
+    expect(screen.getByText("Seer")).toBeInTheDocument()
     expect(screen.getByText("Offline")).toBeInTheDocument()
     expect(screen.getByText("Connection refused")).toBeInTheDocument()
   })

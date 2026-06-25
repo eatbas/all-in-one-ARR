@@ -48,7 +48,7 @@ import {
   formatRelativeTime,
   formatYear,
 } from "@/shared/lib/format"
-import { jellyseerrMediaUrl } from "@/shared/lib/api"
+import { seerMediaUrl } from "@/shared/lib/api"
 import type { Item, ListSummary } from "@/shared/lib/api"
 
 /**
@@ -67,14 +67,14 @@ function useNow(): Date {
 /** One collapsible synced-list row; its items load lazily on first expand. */
 function ListRow({
   list,
-  jellyseerrUrl,
+  seerUrl,
   showRemoved,
   now,
   onDelete,
 }: {
   list: ListSummary
-  /** Jellyseerr base URL, when configured, used to deep-link each item's request page. */
-  jellyseerrUrl?: string
+  /** Seer base URL, when configured, used to deep-link each item's request page. */
+  seerUrl?: string
   /** Whether to include already-removed items in the rendered grid. */
   showRemoved: boolean
   /** The current time, ticked once per second so the sync labels count down live. */
@@ -135,7 +135,7 @@ function ListRow({
                 className="flex flex-col gap-1"
               >
                 {/* Poster overlays: a per-item delete control top-left, the
-                    Jellyseerr request link top-right, the status pill bottom-right. */}
+                    Seer request link top-right, the status pill bottom-right. */}
                 <div className="relative">
                   <PosterThumb item={item} />
                   {/* Already-removed items are no longer on the Trakt list, so they
@@ -170,13 +170,13 @@ function ListRow({
                       </AlertDialogContent>
                     </AlertDialog>
                   ) : null}
-                  {jellyseerrUrl && item.tmdb !== null ? (
+                  {seerUrl && item.tmdb !== null ? (
                     <a
-                      href={jellyseerrMediaUrl(jellyseerrUrl, item.type, item.tmdb)}
+                      href={seerMediaUrl(seerUrl, item.type, item.tmdb)}
                       target="_blank"
                       rel="noreferrer noopener"
-                      title={`Request "${displayTitle(item.title)}" in Jellyseerr`}
-                      aria-label={`Request "${displayTitle(item.title)}" in Jellyseerr`}
+                      title={`Request "${displayTitle(item.title)}" in Seer`}
+                      aria-label={`Request "${displayTitle(item.title)}" in Seer`}
                       className="absolute right-1 top-1 inline-flex items-center justify-center rounded-md bg-background/85 p-1 text-muted-foreground shadow-sm backdrop-blur-sm transition-colors hover:text-foreground"
                     >
                       <ExternalLinkIcon className="size-4" />
@@ -210,7 +210,7 @@ function ListRow({
 export function Lists() {
   const { data: lists, isLoading } = useLists()
   const { data: services } = useServiceSettings()
-  const jellyseerrUrl = services?.jellyseerr.url
+  const seerUrl = services?.seer.url
   const removeItem = useRemoveItem()
   const removeAvailable = useRemoveAvailable()
   const syncNow = useSyncNow()
@@ -278,7 +278,7 @@ export function Lists() {
                 <AlertDialogHeader>
                   <AlertDialogTitle>Delete available items?</AlertDialogTitle>
                   <AlertDialogDescription>
-                    This removes every item Jellyseerr reports as available from
+                    This removes every item Seer reports as available from
                     its Trakt list.
                   </AlertDialogDescription>
                 </AlertDialogHeader>
@@ -305,7 +305,7 @@ export function Lists() {
                 <li key={`${list.owner_user}:${list.slug}`}>
                   <ListRow
                     list={list}
-                    jellyseerrUrl={jellyseerrUrl}
+                    seerUrl={seerUrl}
                     showRemoved={showRemoved}
                     now={now}
                     onDelete={handleDelete}

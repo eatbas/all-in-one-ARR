@@ -37,7 +37,7 @@ export interface Item {
   tvdb: number | null
   imdb: string | null
   list_id: string
-  jellyseerr_request_id: number | null
+  seer_request_id: number | null
   status: ItemStatus
   created_at: string
   updated_at: string
@@ -133,7 +133,7 @@ export interface AddListPayload {
 
 /** The connection services managed from the Settings tabs. */
 export type ServiceName =
-  | "jellyseerr"
+  | "seer"
   | "sonarr"
   | "radarr"
   | "tmdb"
@@ -255,12 +255,12 @@ export function posterUrl(mediaType: ItemType, tmdbId: number): string {
 }
 
 /**
- * Deep link to an item's media page in Overseerr/Jellyseerr, where the Request
- * button lives. `baseUrl` is the configured Jellyseerr connection URL (any
+ * Deep link to an item's media page in Overseerr/Seer, where the Request
+ * button lives. `baseUrl` is the configured Seer connection URL (any
  * trailing slashes are trimmed); movies use the `/movie/{tmdb}` route and shows
- * the `/tv/{tmdb}` route, matching Overseerr's and Jellyseerr's URL scheme.
+ * the `/tv/{tmdb}` route, matching Overseerr's and Seer's URL scheme.
  */
-export function jellyseerrMediaUrl(
+export function seerMediaUrl(
   baseUrl: string,
   mediaType: ItemType,
   tmdbId: number,

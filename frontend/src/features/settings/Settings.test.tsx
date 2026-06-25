@@ -92,7 +92,7 @@ const IDLE_AUTH: TraktAuthStatus = {
 }
 
 const SERVICES: ServicesSettings = {
-  jellyseerr: { url: "http://js:5055", api_key_set: true },
+  seer: { url: "http://js:5055", api_key_set: true },
   sonarr: { url: "", api_key_set: false },
   radarr: { url: "", api_key_set: false },
   tmdb: { api_key_set: false },
@@ -469,7 +469,7 @@ describe("Settings — service tabs", () => {
   it("shows a service with a saved URL and key", async () => {
     const user = userEvent.setup()
     render(<Settings />)
-    await user.click(screen.getByRole("tab", { name: "Jellyseerr" }))
+    await user.click(screen.getByRole("tab", { name: "Seer" }))
     expect(screen.getByText("Saved: http://js:5055")).toBeInTheDocument()
     expect(screen.getByText("Key set")).toBeInTheDocument()
   })
@@ -525,9 +525,9 @@ describe("Settings — service tabs", () => {
   it("tests a service connection", async () => {
     const user = userEvent.setup()
     render(<Settings />)
-    await user.click(screen.getByRole("tab", { name: "Jellyseerr" }))
+    await user.click(screen.getByRole("tab", { name: "Seer" }))
     await user.click(screen.getByRole("button", { name: "Test connection" }))
-    expect(serviceTestMutate).toHaveBeenCalledWith("jellyseerr")
+    expect(serviceTestMutate).toHaveBeenCalledWith("seer")
   })
 
   it("shows a successful test result", async () => {

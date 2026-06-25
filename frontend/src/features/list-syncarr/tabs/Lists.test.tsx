@@ -25,7 +25,7 @@ import type { Item, ListSummary, ServicesSettings } from "@/shared/lib/api"
 import { queryResult } from "@/shared/test/mock-query"
 
 const SERVICES: ServicesSettings = {
-  jellyseerr: { url: "https://requests.example.com", api_key_set: true },
+  seer: { url: "https://requests.example.com", api_key_set: true },
   sonarr: { url: "", api_key_set: false },
   radarr: { url: "", api_key_set: false },
   tmdb: { api_key_set: false },
@@ -62,7 +62,7 @@ const lists: ListSummary[] = [
 const itemBase = {
   tvdb: null,
   imdb: null,
-  jellyseerr_request_id: null,
+  seer_request_id: null,
   created_at: "2024-01-01T00:00:00Z",
   updated_at: "2024-01-01T00:00:00Z",
 } as const
@@ -219,15 +219,15 @@ describe("Lists page", () => {
     // The availability pill is overlaid on each poster with its full status name.
     expect(screen.getByText("Available")).toBeInTheDocument()
     expect(screen.getByText("Requested")).toBeInTheDocument()
-    // The item with a TMDB id links to its Jellyseerr request page.
+    // The item with a TMDB id links to its Seer request page.
     expect(
-      screen.getByRole("link", { name: 'Request "Dune" in Jellyseerr' }),
+      screen.getByRole("link", { name: 'Request "Dune" in Seer' }),
     ).toHaveAttribute("href", "https://requests.example.com/movie/438631")
     // The item without a TMDB id cannot be deep-linked, so it shows no link.
     expect(screen.getAllByRole("link")).toHaveLength(1)
   })
 
-  it("omits the request link when Jellyseerr is not configured", async () => {
+  it("omits the request link when Seer is not configured", async () => {
     vi.mocked(useServiceSettings).mockReturnValue(
       queryResult<ServicesSettings>(undefined, false),
     )

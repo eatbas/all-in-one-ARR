@@ -13,7 +13,7 @@ export interface ServiceTab {
  * of truth used by both the Settings tabs and the Lists status dashboard.
  */
 export const SERVICE_TABS: readonly ServiceTab[] = [
-  { name: "jellyseerr", label: "Jellyseerr", fields: ["url", "apiKey"] },
+  { name: "seer", label: "Seer", fields: ["url", "apiKey"] },
   { name: "sonarr", label: "Sonarr", fields: ["url", "apiKey"] },
   { name: "radarr", label: "Radarr", fields: ["url", "apiKey"] },
   { name: "tmdb", label: "TMDB", fields: ["apiKey"] },

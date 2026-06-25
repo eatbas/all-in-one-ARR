@@ -124,7 +124,7 @@ describe("Dashboard", () => {
           last_check_at: "2026-06-23T13:22:46Z",
           services: {
             trakt: { ok: true, detail: "Connected", checked_at: "2026-06-23T13:22:46Z" },
-            jellyseerr: {
+            seer: {
               ok: false,
               detail: "Refused",
               checked_at: "2026-06-23T13:22:46Z",
@@ -138,7 +138,7 @@ describe("Dashboard", () => {
     render(<Dashboard />)
     expect(screen.getByText("Integrations")).toBeInTheDocument()
     expect(screen.getByText("Trakt")).toBeInTheDocument()
-    expect(screen.getByText("Jellyseerr")).toBeInTheDocument()
+    expect(screen.getByText("Seer")).toBeInTheDocument()
   })
 
   it("triggers a fresh check when 'Check now' is clicked", async () => {

@@ -32,7 +32,7 @@ const STAT_CARDS: ReadonlyArray<StatCard> = [
   {
     key: "requested",
     title: "Requested",
-    description: "Sent to Jellyseerr",
+    description: "Sent to Seer",
     icon: DownloadIcon,
   },
   {

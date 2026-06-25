@@ -376,7 +376,7 @@ function GeneralCard() {
 
 /**
  * Settings page: a tab per area — General, Trakt, then one per managed service
- * (Jellyseerr, Sonarr, Radarr, TMDB, OMDb, SABnzbd, qBittorrent), driven by
+ * (Seer, Sonarr, Radarr, TMDB, OMDb, SABnzbd, qBittorrent), driven by
  * {@link SERVICE_TABS}.
  */
 export function Settings() {

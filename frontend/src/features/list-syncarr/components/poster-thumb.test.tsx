@@ -13,7 +13,7 @@ const base: Item = {
   tvdb: null,
   imdb: "tt1",
   list_id: "movies",
-  jellyseerr_request_id: null,
+  seer_request_id: null,
   status: "available",
   created_at: "2024-01-01T00:00:00Z",
   updated_at: "2024-01-01T00:00:00Z",

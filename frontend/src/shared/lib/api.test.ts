@@ -14,7 +14,7 @@ import {
   getTraktAuthStatus,
   getTraktLists,
   getTraktSettings,
-  jellyseerrMediaUrl,
+  seerMediaUrl,
   posterUrl,
   removeAvailable,
   removeItem,
@@ -113,18 +113,18 @@ describe("posterUrl", () => {
   })
 })
 
-describe("jellyseerrMediaUrl", () => {
-  it("maps the media type onto Overseerr/Jellyseerr routes", () => {
-    expect(jellyseerrMediaUrl("https://req.example.com", "movie", 603)).toBe(
+describe("seerMediaUrl", () => {
+  it("maps the media type onto Overseerr/Seer routes", () => {
+    expect(seerMediaUrl("https://req.example.com", "movie", 603)).toBe(
       "https://req.example.com/movie/603",
     )
-    expect(jellyseerrMediaUrl("https://req.example.com", "show", 1399)).toBe(
+    expect(seerMediaUrl("https://req.example.com", "show", 1399)).toBe(
       "https://req.example.com/tv/1399",
     )
   })
 
   it("trims trailing slashes from the base URL", () => {
-    expect(jellyseerrMediaUrl("https://req.example.com///", "movie", 603)).toBe(
+    expect(seerMediaUrl("https://req.example.com///", "movie", 603)).toBe(
       "https://req.example.com/movie/603",
     )
   })

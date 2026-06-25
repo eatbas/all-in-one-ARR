@@ -101,7 +101,7 @@ beforeEach(() => {
   })
   vi.mocked(api.getTraktLists).mockResolvedValue([])
   vi.mocked(api.getServiceSettings).mockResolvedValue({
-    jellyseerr: { url: "http://js", api_key_set: true },
+    seer: { url: "http://js", api_key_set: true },
     sonarr: { url: "", api_key_set: false },
     radarr: { url: "", api_key_set: false },
     tmdb: { api_key_set: false },
@@ -432,12 +432,12 @@ describe("service connection hooks", () => {
     const { wrapper } = setup()
     const { result } = renderHook(() => useServiceSettings(), { wrapper })
     await waitFor(() => expect(result.current.isSuccess).toBe(true))
-    expect(result.current.data?.jellyseerr.api_key_set).toBe(true)
+    expect(result.current.data?.seer.api_key_set).toBe(true)
   })
 
   it("useUpdateServiceSettings toasts and invalidates on success", async () => {
     vi.mocked(api.updateServiceSettings).mockResolvedValue({
-      jellyseerr: { url: "http://js", api_key_set: true },
+      seer: { url: "http://js", api_key_set: true },
       sonarr: { url: "http://sonarr", api_key_set: true },
       radarr: { url: "", api_key_set: false },
       tmdb: { api_key_set: false },
@@ -512,7 +512,7 @@ describe("service connection hooks", () => {
     const { wrapper } = setup()
     const { result } = renderHook(() => useTestService(), { wrapper })
 
-    act(() => result.current.mutate("jellyseerr"))
+    act(() => result.current.mutate("seer"))
 
     await waitFor(() => expect(result.current.isError).toBe(true))
     expect(toast.error).toHaveBeenCalledWith("Could not test connection", {
