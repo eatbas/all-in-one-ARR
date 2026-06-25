@@ -53,13 +53,17 @@ def test_items_endpoint_filtered_by_list(db) -> None:
 
 def test_lists_endpoint_with_counts_and_times(db) -> None:
     db.upsert_item(**_ITEM)  # list_id="watchlist"
+    # A second item, removed, so the active/removed split is exercised.
+    db.upsert_item(**{**_ITEM, "trakt_id": 2})
+    db.set_status(trakt_id=2, list_id="watchlist", status="removed")
     db.touch_list_synced("watchlist")
     ctx = make_ctx(db=db)  # StubSettingsStore tracks the "watchlist" list
     body = build_client(ctx).get("/api/lists").json()
     assert len(body) == 1
     entry = body[0]
     assert entry["slug"] == "watchlist"
-    assert entry["item_count"] == 1
+    assert entry["item_count"] == 2
+    assert entry["removed_count"] == 1  # active = item_count - removed_count = 1
     assert entry["interval_minutes"] == 15
     assert entry["last_synced_at"] is not None
     assert entry["next_sync_at"] is not None
@@ -69,6 +73,7 @@ def test_lists_endpoint_never_synced_has_no_times(db) -> None:
     ctx = make_ctx(db=db)
     entry = build_client(ctx).get("/api/lists").json()[0]
     assert entry["item_count"] == 0
+    assert entry["removed_count"] == 0
     assert entry["last_synced_at"] is None
     assert entry["next_sync_at"] is None
 
@@ -120,20 +125,68 @@ def test_activity_endpoint(db) -> None:
     assert body[0]["detail"] == "requested Dune"
 
 
-def test_sync_endpoint_triggers_handler(db) -> None:
+def test_sync_endpoint_awaits_handler_and_returns_completed(db) -> None:
     ctx = make_ctx(db=db)
     ctx.sync_now = AsyncMock()
     resp = build_client(ctx).post("/api/sync")
-    assert resp.status_code == 202
-    assert resp.json() == {"status": "triggered"}
+    assert resp.status_code == 200
+    assert resp.json() == {"status": "completed"}
     ctx.sync_now.assert_awaited()
 
 
-def test_sync_endpoint_without_handler(db) -> None:
+def test_sync_endpoint_without_handler_returns_503(db) -> None:
     ctx = make_ctx(db=db)
     ctx.sync_now = None
     resp = build_client(ctx).post("/api/sync")
-    assert resp.status_code == 202
+    assert resp.status_code == 503
+    assert resp.json() == {"detail": "sync unavailable"}
+
+
+async def test_sync_endpoint_returns_409_while_sync_already_running(db) -> None:
+    ctx = make_ctx(db=db)
+    ctx.sync_now = AsyncMock()
+    # Hold the gate's internal lock so the endpoint sees an in-progress sync.
+    await ctx.sync_gate._get_lock().acquire()
+    try:
+        resp = build_client(ctx).post("/api/sync")
+        assert resp.status_code == 409
+        assert resp.json() == {"detail": "sync already running"}
+        ctx.sync_now.assert_not_awaited()
+    finally:
+        ctx.sync_gate._get_lock().release()
+
+
+async def test_sync_endpoint_rejects_concurrent_manual_requests(db) -> None:
+    """Two overlapping manual sync requests must produce one 200 and one 409."""
+    from httpx import ASGITransport, AsyncClient
+
+    ctx = make_ctx(db=db)
+    app = FastAPI()
+    app.include_router(create_api_router(ctx))
+
+    entered = asyncio.Event()
+    proceed = asyncio.Event()
+
+    async def slow_sync() -> None:
+        entered.set()
+        await proceed.wait()
+
+    ctx.sync_now = slow_sync
+
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client1, \
+            AsyncClient(transport=transport, base_url="http://test") as client2:
+        first = asyncio.create_task(client1.post("/api/sync"))
+        await asyncio.wait_for(entered.wait(), timeout=2)
+
+        second = await asyncio.wait_for(client2.post("/api/sync"), timeout=2)
+        assert second.status_code == 409
+        assert second.json() == {"detail": "sync already running"}
+
+        proceed.set()
+        first_resp = await asyncio.wait_for(first, timeout=2)
+        assert first_resp.status_code == 200
+        assert first_resp.json() == {"status": "completed"}
 
 
 async def test_remember_task_discards_on_success() -> None:

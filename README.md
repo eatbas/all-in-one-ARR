@@ -2,8 +2,9 @@
 
 A small, self-hosted service that keeps a **Trakt list in sync with Jellyseerr**
 and — the key part — optionally **removes an item from the Trakt list once
-Jellyseerr reports it available** (off by default; only the list entry, never the
-media files in Radarr/Sonarr). It uses **official REST APIs only** (no scraping).
+Jellyseerr reports it available** (off by default; removes the list entry and
+known Jellyseerr request, never the media files in Radarr/Sonarr). It uses
+**official REST APIs only** (no scraping).
 
 This is the plugin **core** plus the first module, **`list_syncarr`**. Future
 modules (`bandwidtharr`, `deletearr`, `neutarr`) drop into `backend/modules/` and
@@ -18,9 +19,9 @@ auto-load — see [Adding a module](#adding-a-module).
 3. (Your existing Jellyseerr → Radarr/Sonarr → download/import flow runs.)
 4. On a later poll, once Jellyseerr reports the item **Available** (downloaded
    and ready to serve) and **if auto-remove when available is enabled**, remove
-   it from the Trakt list in the same pass. Only the Trakt list entry is removed
-   — the media files in Radarr/Sonarr are never touched. Auto-remove is **off by
-   default**, so removal is manual unless you switch it on
+   it from the Trakt list in the same pass. The Trakt list entry and known
+   Jellyseerr request are removed — the media files in Radarr/Sonarr are never
+   touched. Auto-remove is **off by default**, so removal is manual unless you switch it on
    (**List-Syncarr → Settings**).
 5. Removal can also be triggered manually from the dashboard at any time: the
    per-item delete control on a poster, or **Delete availables**
@@ -251,7 +252,7 @@ cd frontend && npm run build
   (`media_type` is `movie` or `show`); resolved from TMDB, falling back to OMDb,
   and stored under `POSTER_CACHE_PATH` so each is fetched only once.
 - `GET /api/activity` – recent activity feed.
-- `POST /api/sync` – trigger an immediate poll.
+- `POST /api/sync` – trigger an immediate sync and wait for it to complete; returns `409` if a sync is already running.
 - `GET /api/settings/trakt` – masked Trakt settings (credentials, user, lists).
 - `PUT /api/settings/trakt` – update Trakt client id/secret/user.
 - `POST /api/trakt/auth/start` – begin device authorisation; returns the code/URL.

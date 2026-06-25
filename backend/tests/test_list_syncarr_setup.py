@@ -2,10 +2,13 @@
 
 from __future__ import annotations
 
+import asyncio
 from unittest.mock import AsyncMock
 
+import pytest
 from fastapi import FastAPI
 
+from core.context import SyncAlreadyRunning, SyncGate
 import modules.list_syncarr as list_syncarr
 from tests.conftest import StubJellyseerr, StubSettingsStore, StubTrakt, make_ctx
 
@@ -42,6 +45,21 @@ async def test_sync_now_callable_invokes_poll(db) -> None:
     await list_syncarr.setup(AsyncMock(), FastAPI(), ctx)
     await ctx.sync_now()
     ctx.trakt.read_list_items.assert_awaited()
+
+
+async def test_poll_job_runs_through_sync_gate(db, monkeypatch) -> None:
+    ctx = make_ctx(db=db, trakt=StubTrakt(items=[]))
+    list_syncarr.register_context(ctx)
+
+    gate_held = False
+
+    async def poll_and_request_checked(context):
+        nonlocal gate_held
+        gate_held = context.sync_gate.is_running()
+
+    monkeypatch.setattr(list_syncarr, "poll_and_request", poll_and_request_checked)
+    await list_syncarr.poll_job()
+    assert gate_held is True
 
 
 async def test_remove_available_callable_runs_reconcile(db) -> None:
@@ -84,3 +102,60 @@ async def test_reschedule_sync_callable_reschedules_poll(db) -> None:
     scheduler.reschedule_interval.assert_awaited_once()
     assert scheduler.reschedule_interval.call_args.kwargs["minutes"] == 45
     assert scheduler.reschedule_interval.call_args.kwargs["id"] == "list_syncarr_poll"
+
+
+async def test_sync_gate_run_waits_for_in_progress_sync() -> None:
+    gate = SyncGate()
+    entered = asyncio.Event()
+    proceed = asyncio.Event()
+
+    async def slow() -> None:
+        entered.set()
+        await proceed.wait()
+
+    task = asyncio.create_task(gate.run(slow))
+    await entered.wait()
+    assert gate.is_running() is True
+
+    second = asyncio.create_task(gate.run(lambda: asyncio.sleep(0)))
+    # The second run should not start until the first finishes.
+    await asyncio.sleep(0)
+    assert not second.done()
+
+    proceed.set()
+    await task
+    await second
+    assert gate.is_running() is False
+
+
+async def test_sync_gate_try_run_rejects_when_busy() -> None:
+    gate = SyncGate()
+    entered = asyncio.Event()
+    proceed = asyncio.Event()
+
+    async def slow() -> None:
+        entered.set()
+        await proceed.wait()
+
+    task = asyncio.create_task(gate.try_run(slow))
+    await entered.wait()
+
+    with pytest.raises(SyncAlreadyRunning):
+        await gate.try_run(lambda: asyncio.sleep(0))
+
+    proceed.set()
+    await task
+
+
+async def test_sync_gate_try_run_releases_lock_on_failure() -> None:
+    gate = SyncGate()
+
+    async def boom() -> None:
+        raise RuntimeError("sync failed")
+
+    with pytest.raises(RuntimeError, match="sync failed"):
+        await gate.try_run(boom)
+
+    assert gate.is_running() is False
+    # After the exception the gate is free again.
+    await gate.try_run(lambda: asyncio.sleep(0))

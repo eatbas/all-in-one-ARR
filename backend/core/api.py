@@ -14,6 +14,7 @@ from fastapi import APIRouter, Query, Response
 from fastapi.responses import FileResponse, JSONResponse
 from pydantic import BaseModel
 
+from core.context import SyncAlreadyRunning
 from core.logging import get_logger
 
 if TYPE_CHECKING:  # pragma: no cover
@@ -77,6 +78,8 @@ class ListSummary(BaseModel):
     slug: str
     name: str
     item_count: int
+    # Number of ``removed`` items; ``item_count - removed_count`` is the active count.
+    removed_count: int
     last_synced_at: str | None
     next_sync_at: str | None
     interval_minutes: int
@@ -162,6 +165,7 @@ def create_api_router(ctx: "AppContext") -> APIRouter:
     @router.get("/lists", response_model=list[ListSummary])
     async def get_lists() -> list[ListSummary]:
         counts = ctx.db.counts_by_list()
+        removed = ctx.db.removed_counts_by_list()
         last_synced = ctx.db.list_last_synced()
         interval = ctx.settings_store.sync_interval_minutes()
         summaries: list[ListSummary] = []
@@ -173,6 +177,7 @@ def create_api_router(ctx: "AppContext") -> APIRouter:
                     slug=tracked.slug,
                     name=tracked.name,
                     item_count=counts.get(tracked.slug, 0),
+                    removed_count=removed.get(tracked.slug, 0),
                     last_synced_at=last,
                     next_sync_at=_next_sync_at(last, interval),
                     interval_minutes=interval,
@@ -202,14 +207,22 @@ def create_api_router(ctx: "AppContext") -> APIRouter:
     async def get_activity() -> list[ActivityEntry]:
         return [ActivityEntry(**row) for row in ctx.db.recent_activity()]
 
-    @router.post("/sync", response_model=SyncResponse, status_code=202)
+    @router.post("/sync", response_model=SyncResponse, status_code=200)
     async def post_sync() -> JSONResponse:
-        if ctx.sync_now is not None:
-            _remember_task(asyncio.create_task(ctx.sync_now()))
-            log.info("manual sync triggered")
-        else:  # no module registered a sync callable
+        if ctx.sync_now is None:  # no module registered a sync callable
             log.warning("manual sync requested but no sync handler registered")
-        return JSONResponse(status_code=202, content={"status": "triggered"})
+            return JSONResponse(
+                status_code=503, content={"detail": "sync unavailable"}
+            )
+        try:
+            await ctx.sync_gate.try_run(ctx.sync_now)
+        except SyncAlreadyRunning:
+            log.info("manual sync rejected: a sync is already running")
+            return JSONResponse(
+                status_code=409, content={"detail": "sync already running"}
+            )
+        log.info("manual sync completed")
+        return JSONResponse(status_code=200, content={"status": "completed"})
 
     def _general_settings() -> GeneralSettingsResponse:
         return GeneralSettingsResponse(

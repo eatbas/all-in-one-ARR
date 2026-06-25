@@ -11,10 +11,11 @@ The module registers:
 
 Availability-driven removal happens inside the poll itself, in the same pass an
 item first becomes available, gated by the ``auto_remove_when_available`` setting.
-Removal deletes only the Trakt list entry — the media files in Radarr/Sonarr are
-never touched. The manual "Delete availables" action (``ctx.remove_available``)
-runs the same :func:`reconcile` sweep on demand to clear any backlog (e.g. items
-already marked available before the setting was enabled).
+Removal deletes the Trakt list entry and known Jellyseerr request — the media
+files in Radarr/Sonarr are never touched. The manual "Delete availables" action
+(``ctx.remove_available``) runs the same :func:`reconcile` sweep on demand to
+clear any backlog (e.g. items already marked available before the setting was
+enabled).
 
 ``setup`` is async because APScheduler 4's ``add_schedule`` is async; the
 registry awaits it. APScheduler 4 requires top-level importable callables for
@@ -61,7 +62,8 @@ def _require_context() -> "AppContext":
 
 async def poll_job() -> None:
     """Scheduled entrypoint for the interval poll."""
-    await poll_and_request(_require_context())
+    ctx = _require_context()
+    await ctx.sync_gate.run(lambda: poll_and_request(ctx))
 
 
 async def setup(
@@ -76,6 +78,8 @@ async def setup(
         id="list_syncarr_poll",
     )
 
+    # The gate is owned by AppContext so the API and scheduled job share the
+    # same lock; the callable itself just does the sync work.
     ctx.sync_now = lambda: poll_and_request(ctx)
     ctx.remove_available = lambda: reconcile(ctx)
     ctx.remove_item = lambda list_id, trakt_id: remove_one(ctx, list_id, trakt_id)
