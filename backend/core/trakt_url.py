@@ -3,6 +3,11 @@
 The dashboard lets a user add a list by pasting its Trakt URL, for example
 ``https://trakt.tv/users/me/lists/anime``. This module isolates the (small but
 fiddly) parsing and validation so it can be unit-tested independently.
+
+Official curated lists have a different web shape, e.g.
+``https://trakt.tv/lists/official/the-matrix-collection``. These are normalised to
+``owner_user="official"`` so the rest of the backend can treat them like any other
+user list.
 """
 
 from __future__ import annotations
@@ -10,8 +15,14 @@ from __future__ import annotations
 import re
 from urllib.parse import urlparse
 
+# Sentinel owner_user for Trakt's official curated lists.
+OFFICIAL_OWNER = "official"
+
 # /users/{user}/lists/{slug-or-id}, ignoring any trailing path/query/fragment.
 _LIST_PATH_RE = re.compile(r"^/users/(?P<user>[^/]+)/lists/(?P<slug>[^/?#]+)")
+
+# Official Trakt curated lists: /lists/official/{slug}.
+_OFFICIAL_LIST_RE = re.compile(r"^/lists/official/(?P<slug>[^/?#]+)")
 
 
 class TraktUrlError(ValueError):
@@ -22,7 +33,9 @@ def parse_trakt_list_url(url: str) -> tuple[str, str]:
     """Return ``(owner_user, slug)`` for a Trakt list URL.
 
     Accepts URLs with or without a scheme (``https://`` is assumed when absent).
-    Raises :class:`TraktUrlError` for anything that is not a ``trakt.tv`` list URL.
+    Recognises both user lists (``/users/{user}/lists/{slug}``) and official curated
+    lists (``/lists/official/{slug}``). Raises :class:`TraktUrlError` for anything
+    that is not a ``trakt.tv`` list URL.
     """
     raw = url.strip()
     if not raw:
@@ -36,7 +49,11 @@ def parse_trakt_list_url(url: str) -> tuple[str, str]:
         raise TraktUrlError(f"Not a trakt.tv URL: {url!r}")
 
     match = _LIST_PATH_RE.match(parsed.path)
-    if not match:
-        raise TraktUrlError(f"Not a Trakt list URL: {url!r}")
+    if match:
+        return match.group("user"), match.group("slug")
 
-    return match.group("user"), match.group("slug")
+    official = _OFFICIAL_LIST_RE.match(parsed.path)
+    if official:
+        return OFFICIAL_OWNER, official.group("slug")
+
+    raise TraktUrlError(f"Not a Trakt list URL: {url!r}")

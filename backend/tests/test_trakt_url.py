@@ -17,6 +17,15 @@ from core.trakt_url import TraktUrlError, parse_trakt_list_url
         ("https://www.trakt.tv/users/me/lists/anime?sort=rank", ("me", "anime")),
         ("https://trakt.tv/users/me/lists/anime/comments", ("me", "anime")),
         ("  https://trakt.tv/users/me/lists/anime  ", ("me", "anime")),  # trimmed
+        ("https://app.trakt.tv/users/josephg5/lists/matrix", ("josephg5", "matrix")),
+        (
+            "https://app.trakt.tv/lists/official/the-matrix-collection",
+            ("official", "the-matrix-collection"),
+        ),
+        (
+            "https://trakt.tv/lists/official/the-matrix-collection/items",
+            ("official", "the-matrix-collection"),
+        ),
     ],
 )
 def test_parse_valid_urls(url, expected) -> None:
@@ -31,6 +40,8 @@ def test_parse_valid_urls(url, expected) -> None:
         "https://example.com/users/me/lists/anime",  # wrong host
         "https://trakt.tv/movies/popular",  # not a list path
         "https://trakt.tv/users/me",  # missing /lists/
+        "https://trakt.tv/lists/12345",  # bare numeric/global list id is out of scope
+        "https://trakt.tv/lists/trending",  # trending is not an official list path
     ],
 )
 def test_parse_invalid_urls(url) -> None:
