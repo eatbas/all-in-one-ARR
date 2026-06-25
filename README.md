@@ -1,9 +1,9 @@
 # All-in-One ARR
 
-A small, self-hosted service that keeps a **Trakt list in sync with Jellyseerr**
+A small, self-hosted service that keeps a **Trakt list in sync with Seer**
 and — the key part — optionally **removes an item from the Trakt list once
-Jellyseerr reports it available** (off by default; removes the list entry and
-known Jellyseerr request, never the media files in Radarr/Sonarr). It uses
+Seer reports it available** (off by default; removes the list entry and
+known Seer request, never the media files in Radarr/Sonarr). It uses
 **official REST APIs only** (no scraping).
 
 This is the plugin **core** plus the first module, **`list_syncarr`**. Future
@@ -14,18 +14,18 @@ auto-load — see [Adding a module](#adding-a-module).
 
 1. Poll the configured Trakt list every `SYNC_INTERVAL_MIN` minutes and mirror
    each item into SQLite (storing **both** TMDB and TVDB ids).
-2. For each item not already handled, check Jellyseerr; if it is not already
+2. For each item not already handled, check Seer; if it is not already
    requested/available, create a request.
-3. (Your existing Jellyseerr → Radarr/Sonarr → download/import flow runs.)
-4. On a later poll, once Jellyseerr reports the item **Available** (downloaded
+3. (Your existing Seer → Radarr/Sonarr → download/import flow runs.)
+4. On a later poll, once Seer reports the item **Available** (downloaded
    and ready to serve) and **if auto-remove when available is enabled**, remove
    it from the Trakt list in the same pass. The Trakt list entry and known
-   Jellyseerr request are removed — the media files in Radarr/Sonarr are never
+   Seer request are removed — the media files in Radarr/Sonarr are never
    touched. Auto-remove is **off by default**, so removal is manual unless you switch it on
    (**List-Syncarr → Settings**).
 5. Removal can also be triggered manually from the dashboard at any time: the
    per-item delete control on a poster, or **Delete availables**
-   (**List-Syncarr → Lists**), which removes every tracked item Jellyseerr now
+   (**List-Syncarr → Lists**), which removes every tracked item Seer now
    reports as *Available*. Removed items stay recorded and can be shown in the
    list with the **Show removed** toggle.
 
@@ -44,7 +44,7 @@ backend/
     app.py           # FastAPI factory + lifespan wiring + SPA serving
     clients/
       trakt.py       # device auth, token refresh, list read/remove
-      jellyseerr.py  # status check, create request
+      seer.py        # status check, create request
       arr_client.py  # outbound Radarr/Sonarr connection test
   modules/
     list_syncarr/    # the first module: poll/request, availability-driven removal, reconcile
@@ -75,8 +75,8 @@ cp .env.example .env
 | --- | --- | --- |
 | `TRAKT_CLIENT_ID` | – | Trakt application client id (**required**) |
 | `TRAKT_CLIENT_SECRET` | – | Trakt application client secret (**required**) |
-| `JELLYSEERR_URL` | – | Base URL of Jellyseerr (seeds the store; settable in the UI) |
-| `JELLYSEERR_API_KEY` | – | Jellyseerr API key (seeds the store; settable in the UI) |
+| `SEER_URL` | – | Base URL of Seer (seeds the store; settable in the UI) |
+| `SEER_API_KEY` | – | Seer API key (seeds the store; settable in the UI) |
 | `SONARR_URL` | – | Base URL of Sonarr (seeds the store; settable in the UI) |
 | `SONARR_API_KEY` | – | Sonarr API key (seeds the store; settable in the UI) |
 | `RADARR_URL` | – | Base URL of Radarr (seeds the store; settable in the UI) |
@@ -88,7 +88,7 @@ cp .env.example .env
 | `QBITTORRENT_URL` | – | Base URL of the qBittorrent WebUI (seeds the store; settable in the UI) |
 | `QBITTORRENT_API_KEY` | – | qBittorrent WebUI API key, requires qBittorrent ≥ 5.2.0 (seeds the store; settable in the UI) |
 | `SYNC_INTERVAL_MIN` | `15` | Poll interval in minutes (seeds the store; settable in the UI) |
-| `AUTO_REMOVE_WHEN_AVAILABLE` | `false` | Auto-remove items from their Trakt list once available in Jellyseerr (seeds the store; settable in the UI). The legacy `AUTO_REMOVE_ON_IMPORT` name is still accepted. |
+| `AUTO_REMOVE_WHEN_AVAILABLE` | `false` | Auto-remove items from their Trakt list once available in Seer (seeds the store; settable in the UI). The legacy `AUTO_REMOVE_ON_IMPORT` name is still accepted. |
 | `WEBHOOK_PORT` | `3223` | Port the service listens on |
 | `TZ` | `Europe/Istanbul` | Timezone for the scheduler |
 | `LOG_LEVEL` | `INFO` | Log level |
@@ -131,7 +131,7 @@ you will not need to re-authorise on restart. The dashboard header shows
 ### Settings page (recommended)
 
 The dashboard **Settings** page is organised into tabs —
-**General**, **Trakt**, **Jellyseerr**, **Sonarr**, **Radarr**, **TMDB**, **OMDb**,
+**General**, **Trakt**, **Seer**, **Sonarr**, **Radarr**, **TMDB**, **OMDb**,
 **SABnzbd**, **qBittorrent** — and manages every connection without touching
 `.env`. All values are persisted server-side in `SETTINGS_STORE_PATH`.
 
@@ -155,9 +155,9 @@ that drains over their ~3-second lifetime.
   `https://trakt.tv/users/me/lists/anime` to add it. (Removal only works for
   lists your connected account owns.)
 
-**Jellyseerr / Sonarr / Radarr / SABnzbd tabs:** each takes a **base URL** and an
+**Seer / Sonarr / Radarr / SABnzbd tabs:** each takes a **base URL** and an
 **API key** and offers a **Test connection** button. The test validates the key
-against the service's own endpoint (`/api/v1/auth/me` for Jellyseerr,
+against the service's own endpoint (`/api/v1/auth/me` for Seer,
 `/api/v3/system/status` for Sonarr/Radarr, and `mode=queue` for SABnzbd). The key
 is stored server-side and is never returned in clear (the API only exposes whether
 a key is set).
@@ -173,6 +173,16 @@ qBittorrent's Web UI settings; requires qBittorrent ≥ 5.2.0) and offers a **Te
 connection** button, which authenticates with an `Authorization: Bearer` header
 and reads the application version. The key is stored server-side and never
 returned in clear (the API only exposes whether a key is set).
+
+### Upgrading from the previous release
+
+This release renames the connection service to **Seer** (environment variables
+`SEER_URL`/`SEER_API_KEY`, database column `seer_request_id`). There are **no
+migration shims**: databases and settings files created by the previous release
+still use the old request-id column and service key. On upgrade, stop the
+container and remove the `data/` volume (or at least `data/aio-arr.db` and
+`data/app_settings.json`), then start fresh and re-enter the Seer URL and API
+key in **Settings → Seer**. Fresh installs are unaffected.
 
 ## Local development
 
@@ -262,7 +272,7 @@ cd frontend && npm run build
 - `POST /api/trakt/lists` – add a list by `{ "url": … }` or `{ owner_user, slug }`.
 - `DELETE /api/trakt/lists/{owner_user}/{slug}` – stop syncing a list.
 - `GET /api/settings/services` – masked connection state for every service
-  (jellyseerr, sonarr, radarr, tmdb, omdb, sabnzbd, qbittorrent); each emits only
+  (seer, sonarr, radarr, tmdb, omdb, sabnzbd, qbittorrent); each emits only
   its own fields, with secrets reduced to `<field>_set` booleans.
 - `PUT /api/settings/services/{name}` – update a service's fields
   `{ url?, api_key? }` (only the fields it declares apply).

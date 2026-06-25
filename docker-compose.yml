@@ -10,7 +10,7 @@ services:
       # device authorisation survives restarts.
       - ./data:/app/data
     restart: unless-stopped
-    # To reach Radarr/Sonarr/Jellyseerr on the same Docker network, either set
+    # To reach Radarr/Sonarr/Seer on the same Docker network, either set
     # the *arr URLs to host-reachable addresses, or attach this service to your
     # existing media network, e.g.:
     #

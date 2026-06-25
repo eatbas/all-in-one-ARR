@@ -79,7 +79,7 @@ elif [[ "$FRONTEND_DIR/package.json" -nt "$NODE_MODULES_MARKER" \
 fi
 
 # The backend's Settings() fails fast (and the server exits) when the required
-# Trakt/Jellyseerr credentials are unset. On a first run without real
+# Trakt/Seer credentials are unset. On a first run without real
 # credentials, seed a .env from the example with placeholders so the stack
 # still comes up; the developer replaces them when ready. `.env` is
 # git-ignored, so this stays local.
@@ -87,18 +87,18 @@ if [[ ! -f "$ROOT_DIR/.env" ]]; then
   echo "No .env found — creating one for local development."
   if [[ -f "$ROOT_DIR/.env.example" ]]; then
     # Fill only the empty required secrets with a placeholder; keep the rest.
-    sed -E 's/^(TRAKT_CLIENT_ID|TRAKT_CLIENT_SECRET|JELLYSEERR_API_KEY)=[[:space:]]*$/\1=changeme/' \
+    sed -E 's/^(TRAKT_CLIENT_ID|TRAKT_CLIENT_SECRET|SEER_API_KEY)=[[:space:]]*$/\1=changeme/' \
       "$ROOT_DIR/.env.example" > "$ROOT_DIR/.env"
   else
     cat > "$ROOT_DIR/.env" <<'ENV_TEMPLATE'
 TRAKT_CLIENT_ID=changeme
 TRAKT_CLIENT_SECRET=changeme
-JELLYSEERR_URL=http://localhost:5055
-JELLYSEERR_API_KEY=changeme
+SEER_URL=http://localhost:5055
+SEER_API_KEY=changeme
 ENV_TEMPLATE
   fi
   echo "  -> wrote .env with PLACEHOLDER credentials. Replace TRAKT_CLIENT_ID/SECRET" >&2
-  echo "     and JELLYSEERR_URL/API_KEY with real values to drive the sync loop" >&2
+  echo "     and SEER_URL/API_KEY with real values to drive the sync loop" >&2
   echo "     (see the README 'Configuration' section)." >&2
 fi
 
