@@ -16,7 +16,6 @@ vi.mock("@/shared/lib/queries", () => ({
   })),
   useCheckServiceStatuses: vi.fn(() => ({ mutate: vi.fn(), isPending: false })),
   useSyncNow: vi.fn(() => ({ mutate: vi.fn(), isPending: false })),
-  useSetDryRun: vi.fn(() => ({ mutate: vi.fn(), isPending: false })),
   useTraktSettings: vi.fn(() => ({ data: undefined, isLoading: false })),
   useTraktAuthStatus: vi.fn(() => ({ data: undefined })),
   useTraktLists: vi.fn(() => ({ data: [], isLoading: false })),
@@ -75,7 +74,7 @@ describe("App routing", () => {
   it("renders the settings page at /settings", () => {
     renderAt("/settings")
     // The General tab is the default landing tab.
-    expect(screen.getByText("Dry-run mode")).toBeInTheDocument()
+    expect(screen.getByText("Status check interval")).toBeInTheDocument()
   })
 
   it("redirects unknown routes back to the dashboard", () => {

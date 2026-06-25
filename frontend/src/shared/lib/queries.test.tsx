@@ -9,7 +9,6 @@ vi.mock("@/shared/lib/api", () => ({
   getLists: vi.fn(),
   getActivity: vi.fn(),
   triggerSync: vi.fn(),
-  setDryRun: vi.fn(),
   getTraktSettings: vi.fn(),
   getTraktAuthStatus: vi.fn(),
   getTraktLists: vi.fn(),
@@ -47,7 +46,6 @@ import {
   useRemoveTraktList,
   useServiceSettings,
   useServiceStatuses,
-  useSetDryRun,
   useStartTraktAuth,
   useStatus,
   useSyncNow,
@@ -58,6 +56,7 @@ import {
   useTraktAuthStatus,
   useTraktLists,
   useTraktSettings,
+  useUpdateAutoRemoveWhenAvailable,
   useUpdateServiceSettings,
   useUpdateStatusInterval,
   useUpdateSyncInterval,
@@ -86,7 +85,6 @@ const sampleSettings = {
 
 beforeEach(() => {
   vi.mocked(api.getStatus).mockResolvedValue({
-    dry_run: true,
     trakt_connected: false,
     counts: { synced: 0, requested: 0, available: 0, removed: 0 },
   })
@@ -121,17 +119,21 @@ beforeEach(() => {
     last_check_at: "2026-06-23T13:22:46Z",
     services: {},
   })
-  vi.mocked(api.getGeneralSettings).mockResolvedValue({ interval_seconds: 60 })
+  vi.mocked(api.getGeneralSettings).mockResolvedValue({
+    interval_seconds: 60,
+    sync_interval_minutes: 15,
+    auto_remove_when_available: false,
+  })
 })
 
 describe("query hooks", () => {
-  it("useStatus fetches the app status (dry-run flag and counts)", async () => {
+  it("useStatus fetches the app status (counts)", async () => {
     const { wrapper } = setup()
     const { result } = renderHook(() => useStatus(), { wrapper })
 
     await waitFor(() => expect(result.current.isSuccess).toBe(true))
     expect(api.getStatus).toHaveBeenCalled()
-    expect(result.current.data?.dry_run).toBe(true)
+    expect(result.current.data?.trakt_connected).toBe(false)
   })
 
   it("useActivity fetches the activity feed", async () => {
@@ -196,55 +198,6 @@ describe("useSyncNow", () => {
     await waitFor(() => expect(result.current.isError).toBe(true))
     expect(toast.error).toHaveBeenCalledWith("Could not trigger sync", {
       description: "backend down",
-    })
-  })
-})
-
-describe("useSetDryRun", () => {
-  it("announces dry-run enabled and invalidates status", async () => {
-    vi.mocked(api.setDryRun).mockResolvedValue({ dry_run: true })
-    const { queryClient, wrapper } = setup()
-    const invalidate = vi.spyOn(queryClient, "invalidateQueries")
-    const { result } = renderHook(() => useSetDryRun(), { wrapper })
-
-    act(() => result.current.mutate(true))
-
-    await waitFor(() => expect(result.current.isSuccess).toBe(true))
-    expect(toast.success).toHaveBeenCalledWith(
-      "Dry-run mode enabled",
-      expect.objectContaining({
-        description: "Side-effecting actions are only logged, not executed.",
-      }),
-    )
-    expect(invalidate).toHaveBeenCalledWith({ queryKey: queryKeys.status })
-  })
-
-  it("announces dry-run disabled on the false branch", async () => {
-    vi.mocked(api.setDryRun).mockResolvedValue({ dry_run: false })
-    const { wrapper } = setup()
-    const { result } = renderHook(() => useSetDryRun(), { wrapper })
-
-    act(() => result.current.mutate(false))
-
-    await waitFor(() => expect(result.current.isSuccess).toBe(true))
-    expect(toast.success).toHaveBeenCalledWith(
-      "Dry-run mode disabled",
-      expect.objectContaining({
-        description: "Live mode: requests and removals will be executed.",
-      }),
-    )
-  })
-
-  it("toasts the error message when the toggle fails", async () => {
-    vi.mocked(api.setDryRun).mockRejectedValue(new Error("nope"))
-    const { wrapper } = setup()
-    const { result } = renderHook(() => useSetDryRun(), { wrapper })
-
-    act(() => result.current.mutate(true))
-
-    await waitFor(() => expect(result.current.isError).toBe(true))
-    expect(toast.error).toHaveBeenCalledWith("Could not change dry-run mode", {
-      description: "nope",
     })
   })
 })
@@ -629,6 +582,7 @@ describe("general settings hooks", () => {
     vi.mocked(api.updateGeneralSettings).mockResolvedValue({
       interval_seconds: 30,
       sync_interval_minutes: 15,
+      auto_remove_when_available: false,
     })
     const { queryClient, wrapper } = setup()
     const invalidate = vi.spyOn(queryClient, "invalidateQueries")
@@ -662,6 +616,7 @@ describe("general settings hooks", () => {
     vi.mocked(api.updateGeneralSettings).mockResolvedValue({
       interval_seconds: 60,
       sync_interval_minutes: 30,
+      auto_remove_when_available: false,
     })
     const { queryClient, wrapper } = setup()
     const invalidate = vi.spyOn(queryClient, "invalidateQueries")
@@ -686,6 +641,62 @@ describe("general settings hooks", () => {
 
     await waitFor(() => expect(result.current.isError).toBe(true))
     expect(toast.error).toHaveBeenCalledWith("Could not update sync interval", {
+      description: "boom",
+    })
+  })
+
+  it("useUpdateAutoRemoveWhenAvailable announces enabled and invalidates general settings", async () => {
+    vi.mocked(api.updateGeneralSettings).mockResolvedValue({
+      interval_seconds: 60,
+      sync_interval_minutes: 15,
+      auto_remove_when_available: true,
+    })
+    const { queryClient, wrapper } = setup()
+    const invalidate = vi.spyOn(queryClient, "invalidateQueries")
+    const { result } = renderHook(() => useUpdateAutoRemoveWhenAvailable(), { wrapper })
+
+    act(() => result.current.mutate(true))
+
+    await waitFor(() => expect(result.current.isSuccess).toBe(true))
+    expect(api.updateGeneralSettings).toHaveBeenCalledWith({
+      auto_remove_when_available: true,
+    })
+    expect(toast.success).toHaveBeenCalledWith(
+      "Auto-remove when available enabled",
+      expect.objectContaining({ description: expect.any(String) }),
+    )
+    expect(invalidate).toHaveBeenCalledWith({
+      queryKey: queryKeys.generalSettings,
+    })
+  })
+
+  it("useUpdateAutoRemoveWhenAvailable announces disabled on the false branch", async () => {
+    vi.mocked(api.updateGeneralSettings).mockResolvedValue({
+      interval_seconds: 60,
+      sync_interval_minutes: 15,
+      auto_remove_when_available: false,
+    })
+    const { wrapper } = setup()
+    const { result } = renderHook(() => useUpdateAutoRemoveWhenAvailable(), { wrapper })
+
+    act(() => result.current.mutate(false))
+
+    await waitFor(() => expect(result.current.isSuccess).toBe(true))
+    expect(toast.success).toHaveBeenCalledWith(
+      "Auto-remove when available disabled",
+      expect.objectContaining({ description: expect.any(String) }),
+    )
+  })
+
+  it("useUpdateAutoRemoveWhenAvailable toasts on error", async () => {
+    vi.mocked(api.updateGeneralSettings).mockRejectedValue(new Error("boom"))
+    const { wrapper } = setup()
+    const { result } = renderHook(() => useUpdateAutoRemoveWhenAvailable(), { wrapper })
+
+    act(() => result.current.mutate(true))
+
+    await waitFor(() => expect(result.current.isError).toBe(true))
+    expect(toast.error).toHaveBeenCalledWith("Could not update auto-remove", {
       description: "boom",
     })
   })

@@ -7,16 +7,26 @@ vi.mock("@/shared/lib/queries", () => ({
   useTraktLists: vi.fn(),
   useAddTraktList: vi.fn(),
   useRemoveTraktList: vi.fn(),
+  useGeneralSettings: vi.fn(),
+  useUpdateSyncInterval: vi.fn(),
+  useUpdateAutoRemoveWhenAvailable: vi.fn(),
 }))
 
 import {
   useAddTraktList,
+  useGeneralSettings,
   useRemoveTraktList,
   useTraktLists,
   useTraktSettings,
+  useUpdateAutoRemoveWhenAvailable,
+  useUpdateSyncInterval,
 } from "@/shared/lib/queries"
 import { ListSettings } from "@/features/list-syncarr/tabs/ListSettings"
-import type { TraktListEntry, TraktSettings } from "@/shared/lib/api"
+import type {
+  GeneralSettings,
+  TraktListEntry,
+  TraktSettings,
+} from "@/shared/lib/api"
 import { queryResult } from "@/shared/test/mock-query"
 
 /** Build a mutation-shaped stub; typed loosely as these are test doubles. */
@@ -37,16 +47,31 @@ const DISCOVERED: TraktListEntry[] = [
   { name: null, slug: "anime", owner_user: "me", item_count: null, selected: true },
 ]
 
+const GENERAL: GeneralSettings = {
+  interval_seconds: 60,
+  sync_interval_minutes: 15,
+  auto_remove_when_available: false,
+}
+
 let addMutate: ReturnType<typeof vi.fn>
 let removeMutate: ReturnType<typeof vi.fn>
+let syncIntervalMutate: ReturnType<typeof vi.fn>
+let autoRemoveMutate: ReturnType<typeof vi.fn>
 
 beforeEach(() => {
   addMutate = vi.fn()
   removeMutate = vi.fn()
+  syncIntervalMutate = vi.fn()
+  autoRemoveMutate = vi.fn()
   vi.mocked(useTraktSettings).mockReturnValue(queryResult(SETTINGS))
   vi.mocked(useTraktLists).mockReturnValue(queryResult<TraktListEntry[]>([]))
   vi.mocked(useAddTraktList).mockReturnValue(mutation(addMutate))
   vi.mocked(useRemoveTraktList).mockReturnValue(mutation(removeMutate))
+  vi.mocked(useGeneralSettings).mockReturnValue(queryResult(GENERAL))
+  vi.mocked(useUpdateSyncInterval).mockReturnValue(mutation(syncIntervalMutate))
+  vi.mocked(useUpdateAutoRemoveWhenAvailable).mockReturnValue(
+    mutation(autoRemoveMutate),
+  )
 })
 
 describe("ListSettings", () => {
@@ -148,5 +173,58 @@ describe("ListSettings", () => {
     render(<ListSettings />)
     expect(screen.getByRole("button", { name: "Add" })).toBeDisabled()
     expect(screen.getByRole("switch", { name: "Sync tv" })).toBeDisabled()
+  })
+})
+
+describe("ListSettings — sync behaviour", () => {
+  it("toggles remove-from-Trakt-when-available on", async () => {
+    const user = userEvent.setup()
+    render(<ListSettings />)
+    const toggle = screen.getByRole("switch", {
+      name: "Toggle remove from Trakt when available",
+    })
+    expect(toggle).not.toBeChecked() // GENERAL has it off
+    await user.click(toggle)
+    expect(autoRemoveMutate).toHaveBeenCalledWith(true)
+  })
+
+  it("reflects the configured auto-remove state", () => {
+    vi.mocked(useGeneralSettings).mockReturnValue(
+      queryResult({ ...GENERAL, auto_remove_when_available: true }),
+    )
+    render(<ListSettings />)
+    expect(
+      screen.getByRole("switch", {
+        name: "Toggle remove from Trakt when available",
+      }),
+    ).toBeChecked()
+  })
+
+  it("shows and updates the sync interval", async () => {
+    vi.mocked(useGeneralSettings).mockReturnValue(
+      queryResult({ ...GENERAL, sync_interval_minutes: 45 }),
+    )
+    const user = userEvent.setup()
+    render(<ListSettings />)
+    const combobox = screen.getByRole("combobox", { name: "Sync interval" })
+    expect(combobox).toHaveTextContent("45 minutes")
+    await user.click(combobox)
+    await user.click(screen.getByRole("option", { name: "30 minutes" }))
+    expect(syncIntervalMutate).toHaveBeenCalledWith(30)
+  })
+
+  it("falls back to defaults when general settings are unset", () => {
+    vi.mocked(useGeneralSettings).mockReturnValue(
+      queryResult<GeneralSettings>(undefined),
+    )
+    render(<ListSettings />)
+    expect(
+      screen.getByRole("switch", {
+        name: "Toggle remove from Trakt when available",
+      }),
+    ).not.toBeChecked()
+    expect(
+      screen.getByRole("combobox", { name: "Sync interval" }),
+    ).toHaveTextContent("15 minutes")
   })
 })

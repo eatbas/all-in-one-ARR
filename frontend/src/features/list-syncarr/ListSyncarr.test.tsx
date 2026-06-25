@@ -13,10 +13,14 @@ vi.mock("@/shared/lib/queries", () => ({
   useTraktLists: vi.fn(),
   useAddTraktList: vi.fn(),
   useRemoveTraktList: vi.fn(),
+  useGeneralSettings: vi.fn(),
+  useUpdateSyncInterval: vi.fn(),
+  useUpdateAutoRemoveWhenAvailable: vi.fn(),
 }))
 
 import {
   useAddTraktList,
+  useGeneralSettings,
   useListItems,
   useLists,
   useRemoveAvailable,
@@ -26,10 +30,18 @@ import {
   useStatus,
   useTraktLists,
   useTraktSettings,
+  useUpdateAutoRemoveWhenAvailable,
+  useUpdateSyncInterval,
 } from "@/shared/lib/queries"
 import { ListSyncarr } from "@/features/list-syncarr/ListSyncarr"
 import { LIST_SYNCARR_TAB_STORAGE_KEY } from "@/features/list-syncarr/list-syncarr-tab"
-import type { Item, ListSummary, Status, TraktSettings } from "@/shared/lib/api"
+import type {
+  Item,
+  ListSummary,
+  ServicesSettings,
+  Status,
+  TraktSettings,
+} from "@/shared/lib/api"
 import { queryResult } from "@/shared/test/mock-query"
 
 /** Build a mutation-shaped stub; typed loosely as these are test doubles. */
@@ -50,13 +62,24 @@ beforeEach(() => {
   vi.mocked(useStatus).mockReturnValue(queryResult<Status>(undefined, false))
   vi.mocked(useLists).mockReturnValue(queryResult<ListSummary[]>([], false))
   vi.mocked(useListItems).mockReturnValue(queryResult<Item[]>([], false))
-  vi.mocked(useServiceSettings).mockReturnValue(queryResult(undefined, false))
+  vi.mocked(useServiceSettings).mockReturnValue(
+    queryResult<ServicesSettings>(undefined, false),
+  )
   vi.mocked(useRemoveItem).mockReturnValue(mutation(vi.fn()))
   vi.mocked(useRemoveAvailable).mockReturnValue(mutation(vi.fn()))
   vi.mocked(useTraktSettings).mockReturnValue(queryResult(TRAKT_SETTINGS))
   vi.mocked(useTraktLists).mockReturnValue(queryResult([], false))
   vi.mocked(useAddTraktList).mockReturnValue(mutation(vi.fn()))
   vi.mocked(useRemoveTraktList).mockReturnValue(mutation(vi.fn()))
+  vi.mocked(useGeneralSettings).mockReturnValue(
+    queryResult({
+      interval_seconds: 60,
+      sync_interval_minutes: 15,
+      auto_remove_when_available: false,
+    }),
+  )
+  vi.mocked(useUpdateSyncInterval).mockReturnValue(mutation(vi.fn()))
+  vi.mocked(useUpdateAutoRemoveWhenAvailable).mockReturnValue(mutation(vi.fn()))
 })
 
 afterEach(() => {
@@ -81,7 +104,9 @@ describe("ListSyncarr", () => {
     await user.click(screen.getByRole("tab", { name: "Settings" }))
     expect(localStorage.getItem(LIST_SYNCARR_TAB_STORAGE_KEY)).toBe("settings")
     expect(
-      screen.getByText("Choose which Trakt lists the engine keeps in sync."),
+      screen.getByText(
+        "Choose which Trakt lists the engine keeps in sync, and how it polls and removes them.",
+      ),
     ).toBeInTheDocument()
   })
 
@@ -93,7 +118,9 @@ describe("ListSyncarr", () => {
       "true",
     )
     expect(
-      screen.getByText("Choose which Trakt lists the engine keeps in sync."),
+      screen.getByText(
+        "Choose which Trakt lists the engine keeps in sync, and how it polls and removes them.",
+      ),
     ).toBeInTheDocument()
   })
 
@@ -118,7 +145,9 @@ describe("ListSyncarr", () => {
     // Switching still works; the persistence write is safely skipped.
     await user.click(screen.getByRole("tab", { name: "Settings" }))
     expect(
-      screen.getByText("Choose which Trakt lists the engine keeps in sync."),
+      screen.getByText(
+        "Choose which Trakt lists the engine keeps in sync, and how it polls and removes them.",
+      ),
     ).toBeInTheDocument()
   })
 })

@@ -11,11 +11,8 @@ vi.mock("@/shared/lib/queries", () => ({
   useServiceSettings: vi.fn(),
   useUpdateServiceSettings: vi.fn(),
   useTestService: vi.fn(),
-  useStatus: vi.fn(),
-  useSetDryRun: vi.fn(),
   useGeneralSettings: vi.fn(),
   useUpdateStatusInterval: vi.fn(),
-  useUpdateSyncInterval: vi.fn(),
 }))
 
 const { setThemeMock } = vi.hoisted(() => ({ setThemeMock: vi.fn() }))
@@ -26,23 +23,19 @@ vi.mock("@/shared/components/theme-context", () => ({
 import {
   useGeneralSettings,
   useServiceSettings,
-  useSetDryRun,
   useStartTraktAuth,
-  useStatus,
   useTestService,
   useTestTrakt,
   useTraktAuthStatus,
   useTraktSettings,
   useUpdateServiceSettings,
   useUpdateStatusInterval,
-  useUpdateSyncInterval,
   useUpdateTraktSettings,
 } from "@/shared/lib/queries"
 import { Settings } from "@/features/settings/Settings"
 import type {
   GeneralSettings,
   ServicesSettings,
-  Status,
   TraktAuthStatus,
   TraktSettings,
   TraktTestResult,
@@ -81,20 +74,12 @@ const SERVICES: ServicesSettings = {
   qbittorrent: { url: "", api_key_set: false },
 }
 
-const STATUS: Status = {
-  dry_run: true,
-  trakt_connected: false,
-  counts: { synced: 0, requested: 0, available: 0, removed: 0 },
-}
-
 let updateMutate: ReturnType<typeof vi.fn>
 let startMutate: ReturnType<typeof vi.fn>
 let testMutate: ReturnType<typeof vi.fn>
 let serviceUpdateMutate: ReturnType<typeof vi.fn>
 let serviceTestMutate: ReturnType<typeof vi.fn>
-let setDryRunMutate: ReturnType<typeof vi.fn>
 let updateStatusIntervalMutate: ReturnType<typeof vi.fn>
-let updateSyncIntervalMutate: ReturnType<typeof vi.fn>
 
 beforeEach(() => {
   localStorage.removeItem(SETTINGS_TAB_STORAGE_KEY)
@@ -104,9 +89,7 @@ beforeEach(() => {
   testMutate = vi.fn()
   serviceUpdateMutate = vi.fn()
   serviceTestMutate = vi.fn()
-  setDryRunMutate = vi.fn()
   updateStatusIntervalMutate = vi.fn()
-  updateSyncIntervalMutate = vi.fn()
 
   vi.mocked(useTraktSettings).mockReturnValue(queryResult(SETTINGS))
   vi.mocked(useTraktAuthStatus).mockReturnValue(queryResult(IDLE_AUTH))
@@ -116,16 +99,15 @@ beforeEach(() => {
   vi.mocked(useServiceSettings).mockReturnValue(queryResult(SERVICES))
   vi.mocked(useUpdateServiceSettings).mockReturnValue(mutation(serviceUpdateMutate))
   vi.mocked(useTestService).mockReturnValue(mutation(serviceTestMutate))
-  vi.mocked(useStatus).mockReturnValue(queryResult(STATUS))
-  vi.mocked(useSetDryRun).mockReturnValue(mutation(setDryRunMutate))
   vi.mocked(useGeneralSettings).mockReturnValue(
-    queryResult({ interval_seconds: 60, sync_interval_minutes: 15 }),
+    queryResult({
+      interval_seconds: 60,
+      sync_interval_minutes: 15,
+      auto_remove_when_available: false,
+    }),
   )
   vi.mocked(useUpdateStatusInterval).mockReturnValue(
     mutation(updateStatusIntervalMutate),
-  )
-  vi.mocked(useUpdateSyncInterval).mockReturnValue(
-    mutation(updateSyncIntervalMutate),
   )
 })
 
@@ -300,40 +282,13 @@ describe("Settings — connection", () => {
 })
 
 describe("Settings — general", () => {
-  it("is the default tab and shows dry-run on", () => {
-    render(<Settings />)
-    expect(screen.getByText("Dry-run mode")).toBeInTheDocument()
-    expect(
-      screen.getByRole("switch", { name: "Toggle dry-run mode" }),
-    ).toBeChecked()
-  })
-
-  it("toggles dry-run mode", async () => {
-    const user = userEvent.setup()
-    render(<Settings />)
-    await user.click(screen.getByRole("switch", { name: "Toggle dry-run mode" }))
-    expect(setDryRunMutate).toHaveBeenCalledWith(false)
-  })
-
-  it("disables the dry-run switch while the status is pending", () => {
-    vi.mocked(useSetDryRun).mockReturnValue(mutation(setDryRunMutate, true))
-    render(<Settings />)
-    expect(
-      screen.getByRole("switch", { name: "Toggle dry-run mode" }),
-    ).toBeDisabled()
-  })
-
-  it("disables the dry-run switch until the status loads", () => {
-    vi.mocked(useStatus).mockReturnValue(queryResult<Status>(undefined))
-    render(<Settings />)
-    expect(
-      screen.getByRole("switch", { name: "Toggle dry-run mode" }),
-    ).toBeDisabled()
-  })
-
   it("shows the configured status-check interval", () => {
     vi.mocked(useGeneralSettings).mockReturnValue(
-      queryResult({ interval_seconds: 45, sync_interval_minutes: 15 }),
+      queryResult({
+        interval_seconds: 45,
+        sync_interval_minutes: 15,
+        auto_remove_when_available: false,
+      }),
     )
     render(<Settings />)
     expect(screen.getByText("Status check interval")).toBeInTheDocument()
@@ -342,7 +297,7 @@ describe("Settings — general", () => {
     ).toHaveTextContent("45 seconds")
   })
 
-  it("falls back to default intervals when general settings are unset", () => {
+  it("falls back to the default status interval when general settings are unset", () => {
     vi.mocked(useGeneralSettings).mockReturnValue(
       queryResult<GeneralSettings>(undefined),
     )
@@ -350,9 +305,6 @@ describe("Settings — general", () => {
     expect(
       screen.getByRole("combobox", { name: "Status check interval" }),
     ).toHaveTextContent("60 seconds")
-    expect(
-      screen.getByRole("combobox", { name: "Sync interval" }),
-    ).toHaveTextContent("15 minutes")
   })
 
   it("updates the status-check interval", async () => {
@@ -367,23 +319,11 @@ describe("Settings — general", () => {
     })
   })
 
-  it("shows the configured sync interval", () => {
-    vi.mocked(useGeneralSettings).mockReturnValue(
-      queryResult({ interval_seconds: 60, sync_interval_minutes: 45 }),
-    )
+  it("no longer renders the sync interval (moved to List-Syncarr settings)", () => {
     render(<Settings />)
-    expect(screen.getByText("Sync interval")).toBeInTheDocument()
     expect(
-      screen.getByRole("combobox", { name: "Sync interval" }),
-    ).toHaveTextContent("45 minutes")
-  })
-
-  it("updates the sync interval", async () => {
-    const user = userEvent.setup()
-    render(<Settings />)
-    await user.click(screen.getByRole("combobox", { name: "Sync interval" }))
-    await user.click(screen.getByRole("option", { name: "30 minutes" }))
-    expect(updateSyncIntervalMutate).toHaveBeenCalledWith(30)
+      screen.queryByRole("combobox", { name: "Sync interval" }),
+    ).not.toBeInTheDocument()
   })
 
   it("changes the colour theme", async () => {

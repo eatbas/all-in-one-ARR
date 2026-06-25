@@ -19,7 +19,6 @@ import {
   removeAvailable,
   removeItem,
   removeTraktList,
-  setDryRun,
   startTraktAuth,
   testService,
   testTrakt,
@@ -44,7 +43,6 @@ function jsonResponse(body: unknown, init?: ResponseInit): Response {
 }
 
 const sampleStatus: Status = {
-  dry_run: true,
   trakt_connected: false,
   counts: { synced: 1, requested: 2, available: 3, removed: 4 },
 }
@@ -177,25 +175,6 @@ describe("triggerSync", () => {
           "Content-Type": "application/json",
         }),
         body: JSON.stringify({}),
-      }),
-    )
-  })
-})
-
-describe("setDryRun", () => {
-  it("POSTs the enabled flag to /api/settings/dry-run", async () => {
-    const fetchSpy = mockFetch(jsonResponse({ dry_run: false }))
-
-    await expect(setDryRun(false)).resolves.toEqual({ dry_run: false })
-    expect(fetchSpy).toHaveBeenCalledWith(
-      "/api/settings/dry-run",
-      expect.objectContaining({
-        method: "POST",
-        headers: expect.objectContaining({
-          Accept: "application/json",
-          "Content-Type": "application/json",
-        }),
-        body: JSON.stringify({ enabled: false }),
       }),
     )
   })

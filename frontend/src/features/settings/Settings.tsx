@@ -18,7 +18,6 @@ import {
   SelectValue,
 } from "@/shared/components/ui/select"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/shared/components/ui/tabs"
-import { DryRunSwitch } from "@/shared/components/dry-run-switch"
 import { useTheme } from "@/shared/components/theme-context"
 import { cn } from "@/shared/lib/utils"
 import { SERVICE_TABS, VALID_TAB_VALUES, type ServiceTab } from "@/shared/lib/services"
@@ -34,7 +33,6 @@ import {
   useTraktSettings,
   useUpdateServiceSettings,
   useUpdateStatusInterval,
-  useUpdateSyncInterval,
   useUpdateTraktSettings,
 } from "@/shared/lib/queries"
 import type {
@@ -291,37 +289,24 @@ function ServiceConnectionCard({ name, label, fields }: ServiceTab) {
 }
 
 const STATUS_INTERVAL_OPTIONS = [30, 45, 60] as const
-const SYNC_INTERVAL_OPTIONS = [15, 30, 45, 60] as const
 
-/** App-wide settings: dry-run, status-check interval, and appearance. */
+/** App-wide settings: status-check interval and appearance. */
 function GeneralCard() {
   const { theme, setTheme } = useTheme()
   const { data: general } = useGeneralSettings()
   const updateInterval = useUpdateStatusInterval()
-  const updateSyncInterval = useUpdateSyncInterval()
 
   const interval = general?.interval_seconds ?? 60
-  const syncInterval = general?.sync_interval_minutes ?? 15
 
   return (
     <Card>
       <CardHeader>
         <CardTitle>General</CardTitle>
         <CardDescription>
-          App-wide settings. These mirror the controls in the header.
+          App-wide settings. The theme control mirrors the header.
         </CardDescription>
       </CardHeader>
       <CardContent className="flex flex-col gap-6">
-        <div className="flex items-center justify-between gap-4">
-          <div>
-            <p className="text-sm font-medium">Dry-run mode</p>
-            <p className="text-sm text-muted-foreground">
-              When on, requests and removals are only logged, never executed.
-            </p>
-          </div>
-          <DryRunSwitch />
-        </div>
-
         <div className="flex flex-col gap-2">
           <label htmlFor="status-interval" className="text-sm font-medium">
             Status check interval
@@ -343,31 +328,6 @@ function GeneralCard() {
               {STATUS_INTERVAL_OPTIONS.map((seconds) => (
                 <SelectItem key={seconds} value={String(seconds)}>
                   {seconds} seconds
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-
-        <div className="flex flex-col gap-2">
-          <label htmlFor="sync-interval" className="text-sm font-medium">
-            Sync interval
-          </label>
-          <p className="text-sm text-muted-foreground">
-            How often the engine polls Trakt and requests in Jellyseerr.
-          </p>
-          <Select
-            value={String(syncInterval)}
-            onValueChange={(value) => updateSyncInterval.mutate(Number(value))}
-            disabled={updateSyncInterval.isPending}
-          >
-            <SelectTrigger id="sync-interval" className="w-40">
-              <SelectValue placeholder="Select interval" />
-            </SelectTrigger>
-            <SelectContent>
-              {SYNC_INTERVAL_OPTIONS.map((minutes) => (
-                <SelectItem key={minutes} value={String(minutes)}>
-                  {minutes} minutes
                 </SelectItem>
               ))}
             </SelectContent>

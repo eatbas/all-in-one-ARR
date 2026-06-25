@@ -25,6 +25,7 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from "@/shared/components/ui/collapsible"
+import { Switch } from "@/shared/components/ui/switch"
 import { PosterThumb } from "@/features/list-syncarr/components/poster-thumb"
 import { StatusBadge } from "@/features/list-syncarr/components/status-badge"
 import { cn } from "@/shared/lib/utils"
@@ -48,16 +49,23 @@ import type { Item, ListSummary } from "@/shared/lib/api"
 function ListRow({
   list,
   jellyseerrUrl,
+  showRemoved,
   onDelete,
 }: {
   list: ListSummary
   /** Jellyseerr base URL, when configured, used to deep-link each item's request page. */
   jellyseerrUrl?: string
+  /** Whether to include already-removed items in the rendered grid. */
+  showRemoved: boolean
   /** Remove a single item from its Trakt list (already user-confirmed). */
   onDelete: (item: Item) => void
 }) {
   const [open, setOpen] = useState(false)
   const { data: items, isLoading } = useListItems(list.slug, open)
+  // Removed items are hidden by default; the "Show removed" toggle reveals them.
+  const visibleItems = showRemoved
+    ? items
+    : items?.filter((item) => item.status !== "removed")
 
   return (
     <Collapsible open={open} onOpenChange={setOpen}>
@@ -87,13 +95,13 @@ function ListRow({
           <p className="px-7 py-3 text-sm text-muted-foreground">
             Loading items…
           </p>
-        ) : (items?.length ?? 0) === 0 ? (
+        ) : (visibleItems?.length ?? 0) === 0 ? (
           <p className="px-7 py-3 text-sm text-muted-foreground">
             This list has no items yet.
           </p>
         ) : (
           <ul className="grid grid-cols-3 gap-4 px-7 py-3 sm:grid-cols-4 md:grid-cols-5">
-            {items?.map((item) => (
+            {visibleItems?.map((item) => (
               <li
                 key={`${item.list_id}:${item.trakt_id}`}
                 className="flex flex-col gap-1"
@@ -122,8 +130,7 @@ function ListRow({
                             Remove "{displayTitle(item.title)}"?
                           </AlertDialogTitle>
                           <AlertDialogDescription>
-                            It will be removed from its Trakt list. With dry-run on,
-                            the removal is only logged, not sent to Trakt.
+                            It will be removed from its Trakt list.
                           </AlertDialogDescription>
                         </AlertDialogHeader>
                         <AlertDialogFooter>
@@ -178,6 +185,7 @@ export function Lists() {
   const jellyseerrUrl = services?.jellyseerr.url
   const removeItem = useRemoveItem()
   const removeAvailable = useRemoveAvailable()
+  const [showRemoved, setShowRemoved] = useState(false)
 
   function handleDelete(item: Item) {
     removeItem.mutate({ list_id: item.list_id, trakt_id: item.trakt_id })
@@ -200,34 +208,43 @@ export function Lists() {
               Manage these from the Settings tab.
             </CardDescription>
           </div>
-          <AlertDialog>
-            <AlertDialogTrigger asChild>
-              <Button
-                variant="outline"
-                size="sm"
-                disabled={removeAvailable.isPending}
-              >
-                <Trash2Icon className="size-4" />
-                Delete availables
-              </Button>
-            </AlertDialogTrigger>
-            <AlertDialogContent>
-              <AlertDialogHeader>
-                <AlertDialogTitle>Delete available items?</AlertDialogTitle>
-                <AlertDialogDescription>
-                  This removes every item Jellyseerr reports as available from its
-                  Trakt list. With dry-run on, the removals are only logged, not
-                  sent to Trakt.
-                </AlertDialogDescription>
-              </AlertDialogHeader>
-              <AlertDialogFooter>
-                <AlertDialogCancel>Cancel</AlertDialogCancel>
-                <AlertDialogAction onClick={() => removeAvailable.mutate()}>
-                  Delete
-                </AlertDialogAction>
-              </AlertDialogFooter>
-            </AlertDialogContent>
-          </AlertDialog>
+          <div className="flex items-center gap-4">
+            <div className="flex items-center gap-2">
+              <Switch
+                aria-label="Show removed items"
+                checked={showRemoved}
+                onCheckedChange={setShowRemoved}
+              />
+              <span className="text-sm text-muted-foreground">Show removed</span>
+            </div>
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={removeAvailable.isPending}
+                >
+                  <Trash2Icon className="size-4" />
+                  Delete availables
+                </Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Delete available items?</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    This removes every item Jellyseerr reports as available from
+                    its Trakt list.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                  <AlertDialogAction onClick={() => removeAvailable.mutate()}>
+                    Delete
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+          </div>
         </CardHeader>
         <CardContent>
           {isLoading ? (
@@ -243,6 +260,7 @@ export function Lists() {
                   <ListRow
                     list={list}
                     jellyseerrUrl={jellyseerrUrl}
+                    showRemoved={showRemoved}
                     onDelete={handleDelete}
                   />
                 </li>

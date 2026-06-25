@@ -22,7 +22,6 @@ export interface StatusCounts {
 
 /** Response of `GET /api/status`. */
 export interface Status {
-  dry_run: boolean
   trakt_connected: boolean
   counts: StatusCounts
 }
@@ -55,11 +54,6 @@ export interface ActivityEntry {
 /** Response of `POST /api/sync`. */
 export interface SyncResult {
   status: "triggered"
-}
-
-/** Response of `POST /api/settings/dry-run`. */
-export interface DryRunResult {
-  dry_run: boolean
 }
 
 /** A Trakt list selected for syncing. */
@@ -184,12 +178,14 @@ export interface ServicesStatusResponse {
 export interface UpdateGeneralSettings {
   interval_seconds?: number
   sync_interval_minutes?: number
+  auto_remove_when_available?: boolean
 }
 
 /** Response of `GET`/`PUT /api/settings/general`. */
 export interface GeneralSettings {
   interval_seconds: number
   sync_interval_minutes: number
+  auto_remove_when_available: boolean
 }
 
 /** Error raised when the backend returns a non-2xx response. */
@@ -274,10 +270,6 @@ export function getActivity(): Promise<ActivityEntry[]> {
 
 export function triggerSync(): Promise<SyncResult> {
   return postJson<SyncResult>("/api/sync", {})
-}
-
-export function setDryRun(enabled: boolean): Promise<DryRunResult> {
-  return postJson<DryRunResult>("/api/settings/dry-run", { enabled })
 }
 
 export function getTraktSettings(): Promise<TraktSettings> {

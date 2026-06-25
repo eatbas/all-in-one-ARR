@@ -232,26 +232,36 @@ describe("Lists page", () => {
     })
   })
 
-  it("omits the delete control for already-removed items", async () => {
-    vi.mocked(useListItems).mockReturnValue(
-      queryResult<Item[]>([
-        {
-          ...itemBase,
-          trakt_id: 9,
-          list_id: "movies",
-          title: "Gone",
-          year: 2000,
-          type: "movie",
-          tmdb: 111,
-          status: "removed",
-        },
-      ]),
-    )
+  const removedItem: Item = {
+    ...itemBase,
+    trakt_id: 9,
+    list_id: "movies",
+    title: "Gone",
+    year: 2000,
+    type: "movie",
+    tmdb: 111,
+    status: "removed",
+  }
+
+  it("hides already-removed items until 'Show removed' is enabled", async () => {
+    vi.mocked(useListItems).mockReturnValue(queryResult<Item[]>([removedItem]))
     const user = userEvent.setup()
     render(<Lists />)
 
+    // By default the removed item is hidden, so the expanded list looks empty.
     await user.click(screen.getByRole("button", { name: /Movies/ }))
-    // The removed item still renders (with its status pill) but offers no delete.
+    expect(screen.queryByText("Removed")).not.toBeInTheDocument()
+    expect(screen.getByText("This list has no items yet.")).toBeInTheDocument()
+  })
+
+  it("reveals removed items (without a delete control) when 'Show removed' is on", async () => {
+    vi.mocked(useListItems).mockReturnValue(queryResult<Item[]>([removedItem]))
+    const user = userEvent.setup()
+    render(<Lists />)
+
+    await user.click(screen.getByRole("switch", { name: "Show removed items" }))
+    await user.click(screen.getByRole("button", { name: /Movies/ }))
+    // The removed item now renders (with its status pill) but offers no delete.
     expect(screen.getByText("Removed")).toBeInTheDocument()
     expect(
       screen.queryByRole("button", { name: 'Remove "Gone" from the list' }),

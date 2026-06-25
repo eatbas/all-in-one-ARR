@@ -11,7 +11,6 @@ import type { Status } from "@/shared/lib/api"
 import { queryResult } from "@/shared/test/mock-query"
 
 const loadedStatus: Status = {
-  dry_run: false,
   trakt_connected: true,
   counts: { synced: 5, requested: 4, available: 3, removed: 2 },
 }

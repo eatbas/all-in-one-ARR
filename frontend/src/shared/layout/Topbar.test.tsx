@@ -18,10 +18,8 @@ describe("Topbar", () => {
     expect(screen.getByTestId("mode-toggle")).toBeInTheDocument()
   })
 
-  it("no longer renders the dry-run or sync controls", () => {
+  it("renders no toggle or sync controls", () => {
     render(<Topbar />)
-    expect(screen.queryByText("DRY_RUN ON")).not.toBeInTheDocument()
-    expect(screen.queryByText("LIVE")).not.toBeInTheDocument()
     expect(screen.queryByRole("switch")).not.toBeInTheDocument()
     expect(
       screen.queryByRole("button", { name: /sync now/i }),

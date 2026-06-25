@@ -23,7 +23,6 @@ import {
   removeAvailable,
   removeItem,
   removeTraktList,
-  setDryRun,
   startTraktAuth,
   testService,
   testTrakt,
@@ -33,7 +32,6 @@ import {
   updateTraktSettings,
   type ActivityEntry,
   type AddListPayload,
-  type DryRunResult,
   type GeneralSettings,
   type Item,
   type ListSummary,
@@ -125,30 +123,6 @@ export function useSyncNow(): UseMutationResult<SyncResult, Error, void> {
     },
     onError: (error) => {
       toast.error("Could not trigger sync", { description: error.message })
-    },
-  })
-}
-
-export function useSetDryRun(): UseMutationResult<DryRunResult, Error, boolean> {
-  const queryClient = useQueryClient()
-
-  return useMutation({
-    mutationFn: setDryRun,
-    onSuccess: (result) => {
-      toast.success(
-        result.dry_run ? "Dry-run mode enabled" : "Dry-run mode disabled",
-        {
-          description: result.dry_run
-            ? "Side-effecting actions are only logged, not executed."
-            : "Live mode: requests and removals will be executed.",
-        },
-      )
-      void queryClient.invalidateQueries({ queryKey: queryKeys.status })
-    },
-    onError: (error) => {
-      toast.error("Could not change dry-run mode", {
-        description: error.message,
-      })
     },
   })
 }
@@ -394,6 +368,35 @@ export function useUpdateSyncInterval(): UseMutationResult<
     },
     onError: (error) => {
       toast.error("Could not update sync interval", { description: error.message })
+    },
+  })
+}
+
+export function useUpdateAutoRemoveWhenAvailable(): UseMutationResult<
+  GeneralSettings,
+  Error,
+  boolean
+> {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: (enabled) =>
+      updateGeneralSettings({ auto_remove_when_available: enabled }),
+    onSuccess: (result) => {
+      toast.success(
+        result.auto_remove_when_available
+          ? "Auto-remove when available enabled"
+          : "Auto-remove when available disabled",
+        {
+          description: result.auto_remove_when_available
+            ? "Items are removed from their Trakt list once available in Jellyseerr."
+            : "Available items stay on their Trakt list until you remove them.",
+        },
+      )
+      void queryClient.invalidateQueries({ queryKey: queryKeys.generalSettings })
+    },
+    onError: (error) => {
+      toast.error("Could not update auto-remove", { description: error.message })
     },
   })
 }

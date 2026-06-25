@@ -114,12 +114,19 @@
   * {
     @apply border-border outline-ring/50;
   }
-  /* Reserve the scrollbar gutter on the document scroll container so a page
-     taller than the viewport does not shift the layout horizontally when the
-     vertical scrollbar appears or disappears between routes. Equivalent to
-     Tailwind v4's `scrollbar-gutter-stable` utility, kept here beside the other
-     base rules. */
+  /* Keep one always-present vertical scrollbar on the document so neither a
+     route change nor opening an overlay can make it appear/disappear (which
+     shifts the layout). `overflow-y: scroll` forces <html> to stay the viewport
+     scroll container: Radix overlays lock scroll via react-remove-scroll, which
+     hides the bar by setting `overflow: hidden` on <body> — but that only reaches
+     the viewport while <html> is `overflow: visible` (CSS overflow propagation).
+     Pinning <html> to `scroll` keeps it the scroller, so the body lock can no
+     longer hide the bar. `scrollbar-gutter: stable` reserves the gutter on
+     platforms with overlay scrollbars (e.g. macOS). The companion
+     `body[data-scroll-locked]` rule below cancels react-remove-scroll's
+     now-redundant right-margin compensation so the layout never moves. */
   html {
+    overflow-y: scroll;
     scrollbar-gutter: stable;
   }
   body {
@@ -132,6 +139,22 @@
   [role="button"]:not(:disabled) {
     cursor: pointer;
   }
+}
+
+/* Radix overlays (Select, DropdownMenu, Dialog, AlertDialog) lock the page via
+   react-remove-scroll, which — while an overlay is open — sets
+   `data-scroll-locked` on <body> and adds `margin-right: <scrollbar-width>` to
+   compensate for the scrollbar it hides. We already reserve that space
+   permanently with `scrollbar-gutter: stable` (base layer above), so that extra
+   margin double-counts and shoves the whole layout — including the sticky
+   Topbar — sideways every time an overlay opens or closes. That horizontal jump
+   is the flicker. Pin the compensation to zero so the reserved gutter alone
+   holds the space; the overlay's own `overflow: hidden`/JS scroll lock is left
+   intact. The `html` prefix lifts specificity above react-remove-scroll's own
+   injected `!important` rule (`body[data-scroll-locked]`), and this rule is kept
+   unlayered so it cascades on equal footing with that runtime <style>. */
+html body[data-scroll-locked] {
+  margin-right: 0 !important;
 }
 
 /* Countdown bar across the bottom of every toast, draining over its 3 s life.
