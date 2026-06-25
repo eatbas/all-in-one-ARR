@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from "react"
+import { useEffect, useRef, useState, type ReactNode } from "react"
 
 import { Badge } from "@/shared/components/ui/badge"
 import { Button } from "@/shared/components/ui/button"
@@ -23,7 +23,9 @@ import { cn } from "@/shared/lib/utils"
 import { SERVICE_TABS, VALID_TAB_VALUES, type ServiceTab } from "@/shared/lib/services"
 import { SETTINGS_TAB_STORAGE_KEY } from "@/features/settings/settings-tab"
 import { THEME_OPTIONS } from "@/shared/lib/theme-options"
+import { TraktListSelector } from "@/features/list-syncarr/components/trakt-list-selector"
 import {
+  queryKeys,
   useGeneralSettings,
   useServiceSettings,
   useStartTraktAuth,
@@ -39,6 +41,7 @@ import type {
   UpdateServicePayload,
   UpdateTraktSettings,
 } from "@/shared/lib/api"
+import { useQueryClient } from "@tanstack/react-query"
 
 /** A labelled form row with a saved/state hint. */
 function Field({
@@ -68,6 +71,7 @@ function CredentialsCard() {
   const update = useUpdateTraktSettings()
   const startAuth = useStartTraktAuth()
   const test = useTestTrakt()
+  const queryClient = useQueryClient()
   const [clientId, setClientId] = useState("")
   const [clientSecret, setClientSecret] = useState("")
 
@@ -75,6 +79,22 @@ function CredentialsCard() {
   const pending = auth && auth.state === "pending" ? auth : undefined
   const failedMessage =
     auth && auth.state === "failed" ? auth.message : undefined
+
+  // Once device auth reports connected, refresh Trakt settings and the
+  // discovered lists so the list selector populates immediately. The whole
+  // `auth` object is watched (rather than just `auth.connected`) so a transition
+  // from pending to connected always fires the effect even if the boolean value
+  // were already true from a stale cache.
+  const wasConnectedRef = useRef(false)
+  useEffect(() => {
+    if (auth?.connected && !wasConnectedRef.current) {
+      wasConnectedRef.current = true
+      void queryClient.invalidateQueries({ queryKey: queryKeys.traktSettings })
+      void queryClient.invalidateQueries({ queryKey: queryKeys.traktLists })
+    } else if (!auth?.connected) {
+      wasConnectedRef.current = false
+    }
+  }, [auth, queryClient])
 
   function save() {
     const body: UpdateTraktSettings = {}
@@ -388,7 +408,10 @@ export function Settings() {
         <GeneralCard />
       </TabsContent>
       <TabsContent value="trakt">
-        <CredentialsCard />
+        <div className="flex flex-col gap-6">
+          <CredentialsCard />
+          <TraktListSelector />
+        </div>
       </TabsContent>
       {SERVICE_TABS.map((tab) => (
         <TabsContent key={tab.name} value={tab.name}>
