@@ -162,10 +162,10 @@ describe("getActivity", () => {
 })
 
 describe("triggerSync", () => {
-  it("POSTs an empty JSON body to /api/sync", async () => {
-    const fetchSpy = mockFetch(jsonResponse({ status: "triggered" }))
+  it("POSTs an empty JSON body to /api/sync and returns completed", async () => {
+    const fetchSpy = mockFetch(jsonResponse({ status: "completed" }))
 
-    await expect(triggerSync()).resolves.toEqual({ status: "triggered" })
+    await expect(triggerSync()).resolves.toEqual({ status: "completed" })
     expect(fetchSpy).toHaveBeenCalledWith(
       "/api/sync",
       expect.objectContaining({

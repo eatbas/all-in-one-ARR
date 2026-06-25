@@ -51,9 +51,13 @@ export interface ActivityEntry {
   detail: string
 }
 
-/** Response of `POST /api/sync`. */
+/**
+ * Response of synchronous actions that queue or await backend work.
+ * `POST /api/sync` now waits for the run to finish; `POST /api/items/remove-available`
+ * still accepts the job and returns `"triggered"`.
+ */
 export interface SyncResult {
-  status: "triggered"
+  status: "completed" | "triggered"
 }
 
 /** A Trakt list selected for syncing. */
@@ -69,6 +73,8 @@ export interface ListSummary {
   slug: string
   name: string
   item_count: number
+  /** Number of removed items; `item_count - removed_count` is the active count. */
+  removed_count: number
   last_synced_at: string | null
   next_sync_at: string | null
   interval_minutes: number

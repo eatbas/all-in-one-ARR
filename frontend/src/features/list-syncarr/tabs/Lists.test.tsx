@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react"
+import { act, render, screen } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { beforeEach, describe, expect, it, vi } from "vitest"
 
@@ -8,6 +8,7 @@ vi.mock("@/shared/lib/queries", () => ({
   useServiceSettings: vi.fn(),
   useRemoveItem: vi.fn(),
   useRemoveAvailable: vi.fn(),
+  useSyncNow: vi.fn(),
 }))
 
 import {
@@ -16,6 +17,7 @@ import {
   useRemoveAvailable,
   useRemoveItem,
   useServiceSettings,
+  useSyncNow,
 } from "@/shared/lib/queries"
 
 import { Lists } from "@/features/list-syncarr/tabs/Lists"
@@ -38,6 +40,7 @@ const lists: ListSummary[] = [
     slug: "movies",
     name: "Movies",
     item_count: 19,
+    removed_count: 0,
     // Far in the past relative to any test run, so the derived strings are stable.
     last_synced_at: "2024-06-01T11:15:00Z",
     next_sync_at: "2024-06-01T12:30:00Z",
@@ -47,7 +50,9 @@ const lists: ListSummary[] = [
     owner_user: "me",
     slug: "tv",
     name: "TV",
-    item_count: 0,
+    // All six items are removed, so the active count is zero: "(0)" / "(0 + 6)".
+    item_count: 6,
+    removed_count: 6,
     last_synced_at: null,
     next_sync_at: null,
     interval_minutes: 15,
@@ -93,15 +98,18 @@ function mutation(mutate: unknown, isPending = false) {
 describe("Lists page", () => {
   let removeItemMutate: ReturnType<typeof vi.fn>
   let removeAvailableMutate: ReturnType<typeof vi.fn>
+  let syncNowMutate: ReturnType<typeof vi.fn>
 
   beforeEach(() => {
     removeItemMutate = vi.fn()
     removeAvailableMutate = vi.fn()
+    syncNowMutate = vi.fn()
     vi.mocked(useLists).mockReturnValue(queryResult(lists))
     vi.mocked(useListItems).mockReturnValue(queryResult(items))
     vi.mocked(useServiceSettings).mockReturnValue(queryResult(SERVICES))
     vi.mocked(useRemoveItem).mockReturnValue(mutation(removeItemMutate))
     vi.mocked(useRemoveAvailable).mockReturnValue(mutation(removeAvailableMutate))
+    vi.mocked(useSyncNow).mockReturnValue(mutation(syncNowMutate))
   })
 
   it("shows a loading message while the lists query is pending", () => {
@@ -133,6 +141,60 @@ describe("Lists page", () => {
     // The never-synced list shows fallbacks for both timestamps.
     expect(screen.getByText(/last synced: never/)).toBeInTheDocument()
     expect(screen.getByText(/next sync —/)).toBeInTheDocument()
+  })
+
+  it("shows the active+removed split once 'Show removed' is enabled", async () => {
+    const user = userEvent.setup()
+    render(<Lists />)
+
+    // Default view counts only active items.
+    expect(screen.getByText("(19)")).toBeInTheDocument()
+    expect(screen.getByText("(0)")).toBeInTheDocument()
+
+    await user.click(screen.getByRole("switch", { name: "Show removed items" }))
+
+    // The header now spells out "active + removed" for each list.
+    expect(screen.getByText("(19 + 0)")).toBeInTheDocument()
+    expect(screen.getByText("(0 + 6)")).toBeInTheDocument()
+  })
+
+  it("triggers a manual sync when 'Sync now' is clicked", async () => {
+    const user = userEvent.setup()
+    render(<Lists />)
+
+    await user.click(screen.getByRole("button", { name: "Sync now" }))
+    expect(syncNowMutate).toHaveBeenCalled()
+  })
+
+  it("disables 'Sync now' and spins its icon while a sync is in flight", () => {
+    vi.mocked(useSyncNow).mockReturnValue(mutation(syncNowMutate, true))
+    render(<Lists />)
+
+    const button = screen.getByRole("button", { name: "Sync now" })
+    expect(button).toBeDisabled()
+    expect(button.querySelector("svg")).toHaveClass("animate-spin")
+  })
+
+  it("counts the next sync down each minute without a page refresh", () => {
+    vi.useFakeTimers()
+    try {
+      vi.setSystemTime(new Date("2024-06-01T12:00:00Z"))
+      vi.mocked(useLists).mockReturnValue(
+        queryResult<ListSummary[]>([
+          { ...lists[0], next_sync_at: "2024-06-01T12:03:00Z" },
+        ]),
+      )
+      render(<Lists />)
+      expect(screen.getByText(/next sync in 3 min/)).toBeInTheDocument()
+
+      // One minute later the label has ticked down on its own.
+      act(() => {
+        vi.advanceTimersByTime(60_000)
+      })
+      expect(screen.getByText(/next sync in 2 min/)).toBeInTheDocument()
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it("expands a row to reveal posters, titles, meta and statuses", async () => {

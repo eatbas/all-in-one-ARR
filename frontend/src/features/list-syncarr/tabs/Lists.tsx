@@ -1,5 +1,10 @@
-import { useState } from "react"
-import { ChevronDownIcon, ExternalLinkIcon, Trash2Icon } from "lucide-react"
+import { useEffect, useState } from "react"
+import {
+  ChevronDownIcon,
+  ExternalLinkIcon,
+  RefreshCwIcon,
+  Trash2Icon,
+} from "lucide-react"
 
 import {
   AlertDialog,
@@ -35,6 +40,7 @@ import {
   useRemoveAvailable,
   useRemoveItem,
   useServiceSettings,
+  useSyncNow,
 } from "@/shared/lib/queries"
 import {
   displayTitle,
@@ -45,11 +51,25 @@ import {
 import { jellyseerrMediaUrl } from "@/shared/lib/api"
 import type { Item, ListSummary } from "@/shared/lib/api"
 
+/**
+ * A `Date` that advances once per second, letting relative-time labels (the
+ * next-sync countdown, "last synced" text) tick live without a page refresh.
+ */
+function useNow(): Date {
+  const [now, setNow] = useState(() => new Date())
+  useEffect(() => {
+    const id = setInterval(() => setNow(new Date()), 1000)
+    return () => clearInterval(id)
+  }, [])
+  return now
+}
+
 /** One collapsible synced-list row; its items load lazily on first expand. */
 function ListRow({
   list,
   jellyseerrUrl,
   showRemoved,
+  now,
   onDelete,
 }: {
   list: ListSummary
@@ -57,6 +77,8 @@ function ListRow({
   jellyseerrUrl?: string
   /** Whether to include already-removed items in the rendered grid. */
   showRemoved: boolean
+  /** The current time, ticked once per second so the sync labels count down live. */
+  now: Date
   /** Remove a single item from its Trakt list (already user-confirmed). */
   onDelete: (item: Item) => void
 }) {
@@ -66,6 +88,10 @@ function ListRow({
   const visibleItems = showRemoved
     ? items
     : items?.filter((item) => item.status !== "removed")
+  // The header count mirrors the toggle: active-only by default, and
+  // "active + removed" (e.g. "0 + 6") once removed items are revealed.
+  const removedCount = list.removed_count
+  const activeCount = list.item_count - removedCount
 
   return (
     <Collapsible open={open} onOpenChange={setOpen}>
@@ -78,16 +104,18 @@ function ListRow({
         />
         <span className="flex-1 text-base font-medium">
           {list.name}{" "}
-          <span className="text-muted-foreground">({list.item_count})</span>
+          <span className="text-muted-foreground">
+            {showRemoved ? `(${activeCount} + ${removedCount})` : `(${activeCount})`}
+          </span>
         </span>
         <span className="hidden text-xs text-muted-foreground sm:inline">
           last synced:{" "}
           {list.last_synced_at
-            ? formatRelativeTime(list.last_synced_at)
+            ? formatRelativeTime(list.last_synced_at, now)
             : "never"}
         </span>
         <span className="text-xs text-muted-foreground">
-          next sync {formatNextSync(list.next_sync_at)}
+          next sync {formatNextSync(list.next_sync_at, now)}
         </span>
       </CollapsibleTrigger>
       <CollapsibleContent>
@@ -185,7 +213,13 @@ export function Lists() {
   const jellyseerrUrl = services?.jellyseerr.url
   const removeItem = useRemoveItem()
   const removeAvailable = useRemoveAvailable()
+  const syncNow = useSyncNow()
+  const now = useNow()
   const [showRemoved, setShowRemoved] = useState(false)
+
+  function handleSync() {
+    syncNow.mutate()
+  }
 
   function handleDelete(item: Item) {
     removeItem.mutate({ list_id: item.list_id, trakt_id: item.trakt_id })
@@ -209,6 +243,18 @@ export function Lists() {
             </CardDescription>
           </div>
           <div className="flex items-center gap-4">
+            <Button
+              size="sm"
+              onClick={handleSync}
+              disabled={syncNow.isPending}
+            >
+              {/* The icon spins while a sync is in flight so the disabled state
+                  reads as "working" rather than simply inert. */}
+              <RefreshCwIcon
+                className={cn("size-4", syncNow.isPending && "animate-spin")}
+              />
+              Sync now
+            </Button>
             <div className="flex items-center gap-2">
               <Switch
                 aria-label="Show removed items"
@@ -261,6 +307,7 @@ export function Lists() {
                     list={list}
                     jellyseerrUrl={jellyseerrUrl}
                     showRemoved={showRemoved}
+                    now={now}
                     onDelete={handleDelete}
                   />
                 </li>

@@ -113,13 +113,16 @@ export function useSyncNow(): UseMutationResult<SyncResult, Error, void> {
 
   return useMutation({
     mutationFn: triggerSync,
-    onSuccess: () => {
-      toast.success("Sync triggered", {
-        description: "A sync run has been queued on the backend.",
+    onSuccess: async () => {
+      toast.success("Sync complete", {
+        description: "The latest sync run has finished.",
       })
-      void queryClient.invalidateQueries({ queryKey: queryKeys.status })
-      void queryClient.invalidateQueries({ queryKey: ["items"] })
-      void queryClient.invalidateQueries({ queryKey: queryKeys.activity })
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: queryKeys.status }),
+        queryClient.invalidateQueries({ queryKey: ["items"] }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.lists }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.activity }),
+      ])
     },
     onError: (error) => {
       toast.error("Could not trigger sync", { description: error.message })

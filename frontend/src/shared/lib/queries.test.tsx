@@ -170,21 +170,24 @@ describe("query hooks", () => {
 })
 
 describe("useSyncNow", () => {
-  it("toasts success and invalidates the affected queries", async () => {
-    vi.mocked(api.triggerSync).mockResolvedValue({ status: "triggered" })
+  it("toasts success and awaits invalidation of the affected queries", async () => {
+    vi.mocked(api.triggerSync).mockResolvedValue({ status: "completed" })
     const { queryClient, wrapper } = setup()
-    const invalidate = vi.spyOn(queryClient, "invalidateQueries")
+    const invalidate = vi
+      .spyOn(queryClient, "invalidateQueries")
+      .mockResolvedValue(undefined)
     const { result } = renderHook(() => useSyncNow(), { wrapper })
 
     act(() => result.current.mutate())
 
     await waitFor(() => expect(result.current.isSuccess).toBe(true))
     expect(toast.success).toHaveBeenCalledWith(
-      "Sync triggered",
+      "Sync complete",
       expect.objectContaining({ description: expect.any(String) }),
     )
     expect(invalidate).toHaveBeenCalledWith({ queryKey: queryKeys.status })
     expect(invalidate).toHaveBeenCalledWith({ queryKey: ["items"] })
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: queryKeys.lists })
     expect(invalidate).toHaveBeenCalledWith({ queryKey: queryKeys.activity })
   })
 
