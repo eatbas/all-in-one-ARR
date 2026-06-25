@@ -24,8 +24,7 @@ const SYNC_INTERVAL_OPTIONS = [15, 30, 45, 60] as const
 
 /**
  * List-Syncarr Settings tab: choose which Trakt lists to keep in sync and
- * configure sync behaviour. The list-selection controls are shared with the
- * main Settings Trakt tab via {@link TraktListSelector}.
+ * configure sync behaviour.
  */
 export function ListSettings() {
   const { data: general } = useGeneralSettings()

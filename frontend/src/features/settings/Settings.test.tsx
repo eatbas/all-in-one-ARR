@@ -19,9 +19,6 @@ vi.mock("@/shared/lib/queries", () => ({
   useTestService: vi.fn(),
   useGeneralSettings: vi.fn(),
   useUpdateStatusInterval: vi.fn(),
-  useTraktLists: vi.fn(),
-  useAddTraktList: vi.fn(),
-  useRemoveTraktList: vi.fn(),
 }))
 
 const { setThemeMock } = vi.hoisted(() => ({ setThemeMock: vi.fn() }))
@@ -30,15 +27,12 @@ vi.mock("@/shared/components/theme-context", () => ({
 }))
 
 import {
-  useAddTraktList,
   useGeneralSettings,
-  useRemoveTraktList,
   useServiceSettings,
   useStartTraktAuth,
   useTestService,
   useTestTrakt,
   useTraktAuthStatus,
-  useTraktLists,
   useTraktSettings,
   useUpdateServiceSettings,
   useUpdateStatusInterval,
@@ -49,7 +43,6 @@ import type {
   GeneralSettings,
   ServicesSettings,
   TraktAuthStatus,
-  TraktListEntry,
   TraktSettings,
   TraktTestResult,
 } from "@/shared/lib/api"
@@ -107,13 +100,6 @@ let testMutate: ReturnType<typeof vi.fn>
 let serviceUpdateMutate: ReturnType<typeof vi.fn>
 let serviceTestMutate: ReturnType<typeof vi.fn>
 let updateStatusIntervalMutate: ReturnType<typeof vi.fn>
-let addListMutate: ReturnType<typeof vi.fn>
-let removeListMutate: ReturnType<typeof vi.fn>
-
-const DISCOVERED: TraktListEntry[] = [
-  { name: "TV", slug: "tv", owner_user: "me", item_count: 6, selected: false },
-  { name: "Anime", slug: "anime", owner_user: "me", item_count: 12, selected: true },
-]
 
 beforeEach(() => {
   localStorage.removeItem(SETTINGS_TAB_STORAGE_KEY)
@@ -124,8 +110,6 @@ beforeEach(() => {
   serviceUpdateMutate = vi.fn()
   serviceTestMutate = vi.fn()
   updateStatusIntervalMutate = vi.fn()
-  addListMutate = vi.fn()
-  removeListMutate = vi.fn()
 
   vi.mocked(useTraktSettings).mockReturnValue(queryResult(SETTINGS))
   vi.mocked(useTraktAuthStatus).mockReturnValue(queryResult(IDLE_AUTH))
@@ -145,9 +129,6 @@ beforeEach(() => {
   vi.mocked(useUpdateStatusInterval).mockReturnValue(
     mutation(updateStatusIntervalMutate),
   )
-  vi.mocked(useTraktLists).mockReturnValue(queryResult<TraktListEntry[]>(DISCOVERED))
-  vi.mocked(useAddTraktList).mockReturnValue(mutation(addListMutate))
-  vi.mocked(useRemoveTraktList).mockReturnValue(mutation(removeListMutate))
 })
 
 afterEach(() => {
@@ -185,6 +166,15 @@ describe("Settings — credentials", () => {
     expect(
       screen.getByRole("button", { name: "Re-connect Trakt" }),
     ).toBeInTheDocument()
+  })
+
+  it("does not render the list-management selector on the Trakt tab", async () => {
+    await renderTrakt()
+    expect(screen.getByText("Trakt credentials")).toBeInTheDocument()
+    expect(
+      screen.queryByRole("tab", { name: "Your Trakt lists" }),
+    ).not.toBeInTheDocument()
+    expect(screen.queryByText("Add by Trakt URL")).not.toBeInTheDocument()
   })
 
   it("shows 'Not set' hints and disconnected state without settings", async () => {
@@ -366,52 +356,6 @@ describe("Settings — connection", () => {
     )
     rerender(<Settings />)
     expect(invalidate).not.toHaveBeenCalled()
-  })
-})
-
-describe("Settings — Trakt lists", () => {
-  it("shows discovered Trakt lists with their selection state", async () => {
-    const user = await renderTrakt()
-    await user.click(screen.getByRole("tab", { name: "Your Trakt lists" }))
-
-    expect(screen.getByText("TV")).toBeInTheDocument()
-    expect(screen.getByText("Anime")).toBeInTheDocument()
-    expect(screen.getByText("(6 items)")).toBeInTheDocument()
-    expect(screen.getByText("(12 items)")).toBeInTheDocument()
-    expect(screen.getByRole("switch", { name: "Sync tv" })).not.toBeChecked()
-    expect(screen.getByRole("switch", { name: "Sync anime" })).toBeChecked()
-
-    await user.click(screen.getByRole("switch", { name: "Sync tv" }))
-    expect(addListMutate).toHaveBeenCalledWith({ owner_user: "me", slug: "tv" })
-
-    await user.click(screen.getByRole("switch", { name: "Sync anime" }))
-    expect(removeListMutate).toHaveBeenCalledWith({
-      owner_user: "me",
-      slug: "anime",
-    })
-  })
-
-  it("prompts to connect when Trakt is not connected", async () => {
-    vi.mocked(useTraktSettings).mockReturnValue(
-      queryResult<TraktSettings>({ ...SETTINGS, connected: false }),
-    )
-    const user = await renderTrakt()
-    await user.click(screen.getByRole("tab", { name: "Your Trakt lists" }))
-    expect(
-      screen.getByText("Connect Trakt to discover your lists."),
-    ).toBeInTheDocument()
-  })
-
-  it("adds a list by URL", async () => {
-    const user = await renderTrakt()
-    const input = screen.getByPlaceholderText(
-      "https://trakt.tv/users/me/lists/anime",
-    )
-    await user.type(input, "https://trakt.tv/users/me/lists/anime")
-    await user.click(screen.getByRole("button", { name: "Add" }))
-    expect(addListMutate).toHaveBeenCalledWith({
-      url: "https://trakt.tv/users/me/lists/anime",
-    })
   })
 })
 

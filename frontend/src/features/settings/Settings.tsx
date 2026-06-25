@@ -23,7 +23,6 @@ import { cn } from "@/shared/lib/utils"
 import { SERVICE_TABS, VALID_TAB_VALUES, type ServiceTab } from "@/shared/lib/services"
 import { SETTINGS_TAB_STORAGE_KEY } from "@/features/settings/settings-tab"
 import { THEME_OPTIONS } from "@/shared/lib/theme-options"
-import { TraktListSelector } from "@/features/list-syncarr/components/trakt-list-selector"
 import {
   queryKeys,
   useGeneralSettings,
@@ -408,10 +407,7 @@ export function Settings() {
         <GeneralCard />
       </TabsContent>
       <TabsContent value="trakt">
-        <div className="flex flex-col gap-6">
-          <CredentialsCard />
-          <TraktListSelector />
-        </div>
+        <CredentialsCard />
       </TabsContent>
       {SERVICE_TABS.map((tab) => (
         <TabsContent key={tab.name} value={tab.name}>

@@ -27,8 +27,7 @@ import {
  * Reusable Trakt list selector: the "Add by Trakt URL" input sits at the top of
  * the card, followed by two sub-tabs — **Syncing** (the currently synced lists)
  * and **Your Trakt lists** (lists discovered on the connected Trakt account).
- * Used by both the List-Syncarr settings tab and the main Settings Trakt tab so
- * the selection UI stays consistent.
+ * Used by the List-Syncarr settings tab so the selection UI stays consistent.
  */
 export function TraktListSelector() {
   const { data: settings } = useTraktSettings()
