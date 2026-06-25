@@ -11,6 +11,12 @@ import {
 import { Input } from "@/shared/components/ui/input"
 import { Switch } from "@/shared/components/ui/switch"
 import {
+  Tabs,
+  TabsContent,
+  TabsList,
+  TabsTrigger,
+} from "@/shared/components/ui/tabs"
+import {
   useAddTraktList,
   useRemoveTraktList,
   useTraktLists,
@@ -18,10 +24,11 @@ import {
 } from "@/shared/lib/queries"
 
 /**
- * Reusable Trakt list selector: shows the currently synced lists, lets the user
- * add a list by URL, and toggles the lists discovered on the connected Trakt
- * account. Used by both the List-Syncarr settings tab and the main Settings
- * Trakt tab so the selection UI stays consistent.
+ * Reusable Trakt list selector: the "Add by Trakt URL" input sits at the top of
+ * the card, followed by two sub-tabs — **Syncing** (the currently synced lists)
+ * and **Your Trakt lists** (lists discovered on the connected Trakt account).
+ * Used by both the List-Syncarr settings tab and the main Settings Trakt tab so
+ * the selection UI stays consistent.
  */
 export function TraktListSelector() {
   const { data: settings } = useTraktSettings()
@@ -46,44 +53,6 @@ export function TraktListSelector() {
       </CardHeader>
       <CardContent className="flex flex-col gap-6">
         <div className="flex flex-col gap-2">
-          <p className="text-sm font-medium">Syncing</p>
-          {(settings?.lists.length ?? 0) === 0 ? (
-            <p className="text-sm text-muted-foreground">
-              No lists selected yet.
-            </p>
-          ) : (
-            <ul className="divide-y">
-              {settings?.lists.map((item) => (
-                <li
-                  key={`${item.owner_user}:${item.slug}`}
-                  className="flex items-center justify-between py-2"
-                >
-                  <span className="text-sm">
-                    <span className="font-medium">{item.name}</span>{" "}
-                    <span className="text-muted-foreground">
-                      ({item.owner_user}/{item.slug})
-                    </span>
-                  </span>
-                  <Button
-                    size="xs"
-                    variant="ghost"
-                    onClick={() =>
-                      remove.mutate({
-                        owner_user: item.owner_user,
-                        slug: item.slug,
-                      })
-                    }
-                    disabled={remove.isPending}
-                  >
-                    Remove
-                  </Button>
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
-
-        <div className="flex flex-col gap-2">
           <p className="text-sm font-medium">Add by Trakt URL</p>
           <div className="flex gap-2">
             <Input
@@ -97,54 +66,99 @@ export function TraktListSelector() {
           </div>
         </div>
 
-        <div className="flex flex-col gap-2">
-          <p className="text-sm font-medium">Your Trakt lists</p>
-          {!connected ? (
-            <p className="text-sm text-muted-foreground">
-              Connect Trakt to discover your lists.
-            </p>
-          ) : lists.isLoading ? (
-            <p className="text-sm text-muted-foreground">Loading lists…</p>
-          ) : (lists.data?.length ?? 0) === 0 ? (
-            <p className="text-sm text-muted-foreground">
-              No lists found on your account.
-            </p>
-          ) : (
-            <ul className="divide-y">
-              {lists.data?.map((entry) => (
-                <li
-                  key={`${entry.owner_user}:${entry.slug}`}
-                  className="flex items-center justify-between py-2"
-                >
-                  <span className="text-sm">
-                    <span className="font-medium">
-                      {entry.name ?? entry.slug}
-                    </span>{" "}
-                    <span className="text-muted-foreground">
-                      ({entry.item_count ?? 0} items)
-                    </span>
-                  </span>
-                  <Switch
-                    checked={entry.selected}
-                    disabled={add.isPending || remove.isPending}
-                    onCheckedChange={(checked) =>
-                      checked
-                        ? add.mutate({
-                            owner_user: entry.owner_user,
-                            slug: entry.slug,
+        <Tabs defaultValue="syncing">
+          <TabsList>
+            <TabsTrigger value="syncing">Syncing</TabsTrigger>
+            <TabsTrigger value="discovered">Your Trakt lists</TabsTrigger>
+          </TabsList>
+          <TabsContent value="syncing">
+            <div className="flex flex-col gap-2">
+              {(settings?.lists.length ?? 0) === 0 ? (
+                <p className="text-sm text-muted-foreground">
+                  No lists selected yet.
+                </p>
+              ) : (
+                <ul className="divide-y">
+                  {settings?.lists.map((item) => (
+                    <li
+                      key={`${item.owner_user}:${item.slug}`}
+                      className="flex items-center justify-between py-2"
+                    >
+                      <span className="text-sm">
+                        <span className="font-medium">{item.name}</span>{" "}
+                        <span className="text-muted-foreground">
+                          ({item.owner_user}/{item.slug})
+                        </span>
+                      </span>
+                      <Button
+                        size="xs"
+                        variant="ghost"
+                        onClick={() =>
+                          remove.mutate({
+                            owner_user: item.owner_user,
+                            slug: item.slug,
                           })
-                        : remove.mutate({
-                            owner_user: entry.owner_user,
-                            slug: entry.slug,
-                          })
-                    }
-                    aria-label={`Sync ${entry.slug}`}
-                  />
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
+                        }
+                        disabled={remove.isPending}
+                      >
+                        Remove
+                      </Button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          </TabsContent>
+          <TabsContent value="discovered">
+            <div className="flex flex-col gap-2">
+              {!connected ? (
+                <p className="text-sm text-muted-foreground">
+                  Connect Trakt to discover your lists.
+                </p>
+              ) : lists.isLoading ? (
+                <p className="text-sm text-muted-foreground">Loading lists…</p>
+              ) : (lists.data?.length ?? 0) === 0 ? (
+                <p className="text-sm text-muted-foreground">
+                  No lists found on your account.
+                </p>
+              ) : (
+                <ul className="divide-y">
+                  {lists.data?.map((entry) => (
+                    <li
+                      key={`${entry.owner_user}:${entry.slug}`}
+                      className="flex items-center justify-between py-2"
+                    >
+                      <span className="text-sm">
+                        <span className="font-medium">
+                          {entry.name ?? entry.slug}
+                        </span>{" "}
+                        <span className="text-muted-foreground">
+                          ({entry.item_count ?? 0} items)
+                        </span>
+                      </span>
+                      <Switch
+                        checked={entry.selected}
+                        disabled={add.isPending || remove.isPending}
+                        onCheckedChange={(checked) =>
+                          checked
+                            ? add.mutate({
+                                owner_user: entry.owner_user,
+                                slug: entry.slug,
+                              })
+                            : remove.mutate({
+                                owner_user: entry.owner_user,
+                                slug: entry.slug,
+                              })
+                        }
+                        aria-label={`Sync ${entry.slug}`}
+                      />
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          </TabsContent>
+        </Tabs>
       </CardContent>
     </Card>
   )

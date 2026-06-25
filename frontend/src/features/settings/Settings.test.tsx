@@ -372,6 +372,8 @@ describe("Settings — connection", () => {
 describe("Settings — Trakt lists", () => {
   it("shows discovered Trakt lists with their selection state", async () => {
     const user = await renderTrakt()
+    await user.click(screen.getByRole("tab", { name: "Your Trakt lists" }))
+
     expect(screen.getByText("TV")).toBeInTheDocument()
     expect(screen.getByText("Anime")).toBeInTheDocument()
     expect(screen.getByText("(6 items)")).toBeInTheDocument()
@@ -393,7 +395,8 @@ describe("Settings — Trakt lists", () => {
     vi.mocked(useTraktSettings).mockReturnValue(
       queryResult<TraktSettings>({ ...SETTINGS, connected: false }),
     )
-    await renderTrakt()
+    const user = await renderTrakt()
+    await user.click(screen.getByRole("tab", { name: "Your Trakt lists" }))
     expect(
       screen.getByText("Connect Trakt to discover your lists."),
     ).toBeInTheDocument()
