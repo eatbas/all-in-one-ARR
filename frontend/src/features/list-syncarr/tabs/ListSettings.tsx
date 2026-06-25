@@ -44,6 +44,8 @@ export function ListSettings() {
         </p>
       </div>
 
+      <TraktListSelector />
+
       <Card>
         <CardHeader>
           <CardTitle>Sync behaviour</CardTitle>
@@ -97,8 +99,6 @@ export function ListSettings() {
           </div>
         </CardContent>
       </Card>
-
-      <TraktListSelector />
     </div>
   )
 }
