@@ -25,6 +25,7 @@ export const SERVICE_TABS: readonly ServiceTab[] = [
 /** Every tab value that can be persisted in the settings active-tab store. */
 export const VALID_TAB_VALUES: readonly string[] = [
   "general",
+  "database",
   "trakt",
   ...SERVICE_TABS.map((tab) => tab.name),
 ]

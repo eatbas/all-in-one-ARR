@@ -1,5 +1,16 @@
 import { useEffect, useRef, useState, type ReactNode } from "react"
 
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/shared/components/ui/alert-dialog"
 import { Badge } from "@/shared/components/ui/badge"
 import { Button } from "@/shared/components/ui/button"
 import {
@@ -23,8 +34,13 @@ import { cn } from "@/shared/lib/utils"
 import { SERVICE_TABS, VALID_TAB_VALUES, type ServiceTab } from "@/shared/lib/services"
 import { SETTINGS_TAB_STORAGE_KEY } from "@/features/settings/settings-tab"
 import { THEME_OPTIONS } from "@/shared/lib/theme-options"
+import { formatBytes } from "@/shared/lib/format"
 import {
   queryKeys,
+  useClearActivity,
+  useClearItems,
+  useClearPosters,
+  useDatabaseStats,
   useGeneralSettings,
   useServiceSettings,
   useStartTraktAuth,
@@ -309,6 +325,142 @@ function ServiceConnectionCard({ name, label, fields }: ServiceTab) {
 
 const STATUS_INTERVAL_OPTIONS = [30, 45, 60] as const
 
+/** Danger-zone action with a confirmation dialog. */
+function ClearAction({
+  label,
+  description,
+  confirmLabel,
+  disabled,
+  onConfirm,
+}: {
+  label: string
+  description: string
+  confirmLabel: string
+  disabled: boolean
+  onConfirm: () => void
+}) {
+  return (
+    <AlertDialog>
+      <AlertDialogTrigger asChild>
+        <Button variant="outline" disabled={disabled}>
+          {label}
+        </Button>
+      </AlertDialogTrigger>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>{label}?</AlertDialogTitle>
+          <AlertDialogDescription>{description}</AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel>Cancel</AlertDialogCancel>
+          <AlertDialogAction onClick={onConfirm}>{confirmLabel}</AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+  )
+}
+
+/** Storage overview and destructive clear actions for the local database. */
+function DatabaseCard() {
+  const { data: stats, isLoading } = useDatabaseStats()
+  const clearActivity = useClearActivity()
+  const clearItems = useClearItems()
+  const clearPosters = useClearPosters()
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Database</CardTitle>
+        <CardDescription>
+          Storage used by the local SQLite database and cached poster thumbnails.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="flex flex-col gap-6">
+        {isLoading || !stats ? (
+          <p className="text-sm text-muted-foreground">Loading…</p>
+        ) : (
+          <>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="flex flex-col gap-1">
+                <span className="text-sm font-medium">Database size</span>
+                <span className="text-2xl font-semibold">
+                  {formatBytes(stats.db_size_bytes)}
+                </span>
+                <span className="text-xs text-muted-foreground">
+                  Includes the main file, WAL, and SHM sidecars.
+                </span>
+              </div>
+              <div className="flex flex-col gap-1">
+                <span className="text-sm font-medium">Poster cache</span>
+                <span className="text-2xl font-semibold">
+                  {formatBytes(stats.poster_cache_bytes)}
+                </span>
+                <span className="text-xs text-muted-foreground">
+                  Cached *.jpg thumbnails fetched on demand.
+                </span>
+              </div>
+            </div>
+
+            <div className="grid gap-3 sm:grid-cols-3">
+              <div className="flex flex-col gap-0.5 rounded-md border p-3">
+                <span className="text-xs text-muted-foreground">Tracked items</span>
+                <span className="text-lg font-semibold">{stats.item_count}</span>
+              </div>
+              <div className="flex flex-col gap-0.5 rounded-md border p-3">
+                <span className="text-xs text-muted-foreground">Activity entries</span>
+                <span className="text-lg font-semibold">{stats.activity_count}</span>
+              </div>
+              <div className="flex flex-col gap-0.5 rounded-md border p-3">
+                <span className="text-xs text-muted-foreground">Synced lists</span>
+                <span className="text-lg font-semibold">{stats.list_state_count}</span>
+              </div>
+            </div>
+
+            <div className="flex flex-col gap-3 rounded-md border border-destructive/50 p-4">
+              <div>
+                <p className="text-sm font-medium text-destructive">Danger zone</p>
+                <p className="text-xs text-muted-foreground">
+                  These actions are destructive and cannot be undone. Credentials,
+                  Trakt tokens, and tracked-list configuration are never deleted.
+                </p>
+              </div>
+              <div className="flex flex-wrap gap-3">
+                <ClearAction
+                  label="Clear activity log"
+                  description="Empty the entire activity log. A single audit entry will remain."
+                  confirmLabel="Clear"
+                  disabled={clearActivity.isPending}
+                  onConfirm={() => clearActivity.mutate()}
+                />
+                <ClearAction
+                  label="Clear synced items & sync state"
+                  description="Delete every tracked item and list sync state. Your tracked-list configuration is preserved and the next sync rebuilds the data."
+                  confirmLabel="Clear"
+                  disabled={clearItems.isPending}
+                  onConfirm={() => clearItems.mutate()}
+                />
+                <ClearAction
+                  label="Clear poster cache"
+                  description="Delete all cached poster thumbnails. They will be re-fetched on demand."
+                  confirmLabel="Clear"
+                  disabled={clearPosters.isPending}
+                  onConfirm={() => clearPosters.mutate()}
+                />
+              </div>
+            </div>
+
+            <p className="text-xs text-muted-foreground">
+              Note: SQLite does not shrink the database file immediately after rows
+              are deleted, so the reported size may not drop right away. There is no
+              compact action.
+            </p>
+          </>
+        )}
+      </CardContent>
+    </Card>
+  )
+}
+
 /** App-wide settings: status-check interval and appearance. */
 function GeneralCard() {
   const { theme, setTheme } = useTheme()
@@ -396,6 +548,7 @@ export function Settings() {
     <Tabs value={activeTab} onValueChange={handleTabChange}>
       <TabsList>
         <TabsTrigger value="general">General</TabsTrigger>
+        <TabsTrigger value="database">Database</TabsTrigger>
         <TabsTrigger value="trakt">Trakt</TabsTrigger>
         {SERVICE_TABS.map((tab) => (
           <TabsTrigger key={tab.name} value={tab.name}>
@@ -405,6 +558,9 @@ export function Settings() {
       </TabsList>
       <TabsContent value="general">
         <GeneralCard />
+      </TabsContent>
+      <TabsContent value="database">
+        <DatabaseCard />
       </TabsContent>
       <TabsContent value="trakt">
         <CredentialsCard />

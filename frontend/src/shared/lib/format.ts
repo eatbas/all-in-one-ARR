@@ -68,6 +68,20 @@ export function formatRelativeTime(iso: string, now: Date = new Date()): string 
   return `${weeks} ${weeks === 1 ? "week" : "weeks"} ago`
 }
 
+/** Format a byte count as a human-readable size (B, KB, or MB). */
+export function formatBytes(bytes: number): string {
+  if (bytes === 0) {
+    return "0 B"
+  }
+  if (bytes < 1024) {
+    return `${bytes} B`
+  }
+  if (bytes < 1024 * 1024) {
+    return `${(bytes / 1024).toFixed(1)} KB`
+  }
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
+}
+
 /**
  * Format the next-sync ISO timestamp as a short, minute-granular countdown
  * ("in 12 min", "in 2 hours", "due now" when overdue, "—" when unknown).

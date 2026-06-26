@@ -10,7 +10,11 @@ import { toast } from "sonner"
 import {
   addTraktList,
   checkServiceStatuses,
+  clearActivity,
+  clearItems,
+  clearPosters,
   getActivity,
+  getDatabaseStats,
   getGeneralSettings,
   getItems,
   getLists,
@@ -32,6 +36,7 @@ import {
   updateTraktSettings,
   type ActivityEntry,
   type AddListPayload,
+  type DatabaseStats,
   type GeneralSettings,
   type Item,
   type ListSummary,
@@ -69,6 +74,7 @@ export const queryKeys = {
   services: ["services"] as const,
   serviceStatuses: ["service-statuses"] as const,
   generalSettings: ["general", "settings"] as const,
+  database: ["database", "stats"] as const,
 }
 
 export function useStatus(): UseQueryResult<Status> {
@@ -459,6 +465,68 @@ export function useRemoveAvailable(): UseMutationResult<SyncResult, Error, void>
       toast.error("Could not remove available items", {
         description: error.message,
       })
+    },
+  })
+}
+
+export function useDatabaseStats(): UseQueryResult<DatabaseStats> {
+  return useQuery({
+    queryKey: queryKeys.database,
+    queryFn: getDatabaseStats,
+  })
+}
+
+function invalidateDatabase(queryClient: ReturnType<typeof useQueryClient>) {
+  void queryClient.invalidateQueries({ queryKey: queryKeys.database })
+  void queryClient.invalidateQueries({ queryKey: queryKeys.activity })
+}
+
+export function useClearActivity(): UseMutationResult<DatabaseStats, Error, void> {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: clearActivity,
+    onSuccess: () => {
+      toast.success("Activity log cleared")
+      invalidateDatabase(queryClient)
+    },
+    onError: (error) => {
+      toast.error("Could not clear activity log", { description: error.message })
+    },
+  })
+}
+
+export function useClearItems(): UseMutationResult<DatabaseStats, Error, void> {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: clearItems,
+    onSuccess: () => {
+      toast.success("Synced items cleared", {
+        description: "Tracked items and sync state were removed.",
+      })
+      invalidateDatabase(queryClient)
+      void queryClient.invalidateQueries({ queryKey: queryKeys.lists })
+      void queryClient.invalidateQueries({ queryKey: queryKeys.status })
+      void queryClient.invalidateQueries({ queryKey: ["items"] })
+    },
+    onError: (error) => {
+      toast.error("Could not clear synced items", { description: error.message })
+    },
+  })
+}
+
+export function useClearPosters(): UseMutationResult<DatabaseStats, Error, void> {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: clearPosters,
+    onSuccess: () => {
+      toast.success("Poster cache cleared")
+      invalidateDatabase(queryClient)
+    },
+    onError: (error) => {
+      toast.error("Could not clear poster cache", { description: error.message })
     },
   })
 }

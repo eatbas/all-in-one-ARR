@@ -8,6 +8,10 @@ vi.mock("@/shared/lib/queries", () => ({
   queryKeys: {
     traktSettings: ["trakt", "settings"],
     traktLists: ["trakt", "lists"],
+    database: ["database", "stats"],
+    activity: ["activity"],
+    lists: ["lists"],
+    status: ["status"],
   },
   useTraktSettings: vi.fn(),
   useTraktAuthStatus: vi.fn(),
@@ -19,6 +23,10 @@ vi.mock("@/shared/lib/queries", () => ({
   useTestService: vi.fn(),
   useGeneralSettings: vi.fn(),
   useUpdateStatusInterval: vi.fn(),
+  useDatabaseStats: vi.fn(),
+  useClearActivity: vi.fn(),
+  useClearItems: vi.fn(),
+  useClearPosters: vi.fn(),
 }))
 
 const { setThemeMock } = vi.hoisted(() => ({ setThemeMock: vi.fn() }))
@@ -27,6 +35,10 @@ vi.mock("@/shared/components/theme-context", () => ({
 }))
 
 import {
+  useClearActivity,
+  useClearItems,
+  useClearPosters,
+  useDatabaseStats,
   useGeneralSettings,
   useServiceSettings,
   useStartTraktAuth,
@@ -100,6 +112,17 @@ let testMutate: ReturnType<typeof vi.fn>
 let serviceUpdateMutate: ReturnType<typeof vi.fn>
 let serviceTestMutate: ReturnType<typeof vi.fn>
 let updateStatusIntervalMutate: ReturnType<typeof vi.fn>
+let clearActivityMutate: ReturnType<typeof vi.fn>
+let clearItemsMutate: ReturnType<typeof vi.fn>
+let clearPostersMutate: ReturnType<typeof vi.fn>
+
+const DATABASE_STATS = {
+  db_size_bytes: 1024,
+  poster_cache_bytes: 2048,
+  item_count: 5,
+  activity_count: 12,
+  list_state_count: 2,
+}
 
 beforeEach(() => {
   localStorage.removeItem(SETTINGS_TAB_STORAGE_KEY)
@@ -110,6 +133,9 @@ beforeEach(() => {
   serviceUpdateMutate = vi.fn()
   serviceTestMutate = vi.fn()
   updateStatusIntervalMutate = vi.fn()
+  clearActivityMutate = vi.fn()
+  clearItemsMutate = vi.fn()
+  clearPostersMutate = vi.fn()
 
   vi.mocked(useTraktSettings).mockReturnValue(queryResult(SETTINGS))
   vi.mocked(useTraktAuthStatus).mockReturnValue(queryResult(IDLE_AUTH))
@@ -129,6 +155,10 @@ beforeEach(() => {
   vi.mocked(useUpdateStatusInterval).mockReturnValue(
     mutation(updateStatusIntervalMutate),
   )
+  vi.mocked(useDatabaseStats).mockReturnValue(queryResult(DATABASE_STATS))
+  vi.mocked(useClearActivity).mockReturnValue(mutation(clearActivityMutate))
+  vi.mocked(useClearItems).mockReturnValue(mutation(clearItemsMutate))
+  vi.mocked(useClearPosters).mockReturnValue(mutation(clearPostersMutate))
 })
 
 afterEach(() => {
@@ -146,6 +176,14 @@ async function renderTrakt() {
   const user = userEvent.setup()
   render(<Settings />)
   await user.click(screen.getByRole("tab", { name: "Trakt" }))
+  return user
+}
+
+/** Render Settings and activate the Database tab. */
+async function renderDatabase() {
+  const user = userEvent.setup()
+  render(<Settings />)
+  await user.click(screen.getByRole("tab", { name: "Database" }))
   return user
 }
 
@@ -649,5 +687,62 @@ describe("Settings — tab persistence", () => {
     // Switching still works; the persistence write is safely skipped.
     await user.click(screen.getByRole("tab", { name: "Trakt" }))
     expect(screen.getByText("Trakt credentials")).toBeInTheDocument()
+  })
+})
+
+describe("Settings — database", () => {
+  it("renders the database tab and shows stats", async () => {
+    await renderDatabase()
+    expect(screen.getByRole("tab", { name: "Database" })).toHaveAttribute(
+      "aria-selected",
+      "true",
+    )
+    expect(screen.getByText("1.0 KB")).toBeInTheDocument()
+    expect(screen.getByText("2.0 KB")).toBeInTheDocument()
+    expect(screen.getByText("5")).toBeInTheDocument()
+    expect(screen.getByText("12")).toBeInTheDocument()
+    expect(screen.getByText("2")).toBeInTheDocument()
+  })
+
+  it("shows a loading state while stats load", async () => {
+    vi.mocked(useDatabaseStats).mockReturnValue(
+      queryResult<typeof DATABASE_STATS>(undefined, true),
+    )
+    await renderDatabase()
+    expect(screen.getByText("Loading…")).toBeInTheDocument()
+  })
+
+  async function confirmClearAction(user: ReturnType<typeof userEvent.setup>, buttonName: string) {
+    await user.click(screen.getByRole("button", { name: buttonName }))
+    await user.click(screen.getByRole("button", { name: "Clear" }))
+  }
+
+  it("confirms and clears the activity log", async () => {
+    const user = await renderDatabase()
+    await confirmClearAction(user, "Clear activity log")
+    expect(clearActivityMutate).toHaveBeenCalledTimes(1)
+  })
+
+  it("confirms and clears synced items & sync state", async () => {
+    const user = await renderDatabase()
+    await confirmClearAction(user, "Clear synced items & sync state")
+    expect(clearItemsMutate).toHaveBeenCalledTimes(1)
+  })
+
+  it("confirms and clears the poster cache", async () => {
+    const user = await renderDatabase()
+    await confirmClearAction(user, "Clear poster cache")
+    expect(clearPostersMutate).toHaveBeenCalledTimes(1)
+  })
+
+  it("disables a clear button while its mutation is pending", async () => {
+    vi.mocked(useClearActivity).mockReturnValue(mutation(clearActivityMutate, true))
+    await renderDatabase()
+    expect(screen.getByRole("button", { name: "Clear activity log" })).toBeDisabled()
+  })
+
+  it("persists the Database tab to localStorage", async () => {
+    await renderDatabase()
+    expect(localStorage.getItem(SETTINGS_TAB_STORAGE_KEY)).toBe("database")
   })
 })

@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest"
 
 import {
   displayTitle,
+  formatBytes,
   formatNextSync,
   formatRelativeTime,
   formatTimestamp,
@@ -25,6 +26,24 @@ describe("formatYear", () => {
 
   it("falls back to an em dash when the year is null", () => {
     expect(formatYear(null)).toBe("—")
+  })
+})
+
+describe("formatBytes", () => {
+  it("renders zero bytes explicitly", () => {
+    expect(formatBytes(0)).toBe("0 B")
+  })
+
+  it("renders bytes below the KB threshold", () => {
+    expect(formatBytes(512)).toBe("512 B")
+  })
+
+  it("renders kilobytes with one decimal", () => {
+    expect(formatBytes(1536)).toBe("1.5 KB")
+  })
+
+  it("renders megabytes with one decimal", () => {
+    expect(formatBytes(2 * 1024 * 1024)).toBe("2.0 MB")
   })
 })
 

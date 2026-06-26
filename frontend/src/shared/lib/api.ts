@@ -194,6 +194,15 @@ export interface GeneralSettings {
   auto_remove_when_available: boolean
 }
 
+/** Storage overview returned by `GET /api/settings/database`. */
+export interface DatabaseStats {
+  db_size_bytes: number
+  poster_cache_bytes: number
+  item_count: number
+  activity_count: number
+  list_state_count: number
+}
+
 /** Error raised when the backend returns a non-2xx response. */
 export class ApiError extends Error {
   readonly status: number
@@ -361,6 +370,22 @@ export function updateGeneralSettings(
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
   })
+}
+
+export function getDatabaseStats(): Promise<DatabaseStats> {
+  return request<DatabaseStats>("/api/settings/database")
+}
+
+export function clearActivity(): Promise<DatabaseStats> {
+  return postJson<DatabaseStats>("/api/settings/database/clear-activity", {})
+}
+
+export function clearItems(): Promise<DatabaseStats> {
+  return postJson<DatabaseStats>("/api/settings/database/clear-items", {})
+}
+
+export function clearPosters(): Promise<DatabaseStats> {
+  return postJson<DatabaseStats>("/api/settings/database/clear-posters", {})
 }
 
 /** Remove a single tracked item from its Trakt list. */

@@ -4,7 +4,11 @@ import {
   addTraktList,
   ApiError,
   checkServiceStatuses,
+  clearActivity,
+  clearItems,
+  clearPosters,
   getActivity,
+  getDatabaseStats,
   getGeneralSettings,
   getItems,
   getLists,
@@ -26,6 +30,7 @@ import {
   updateGeneralSettings,
   updateServiceSettings,
   updateTraktSettings,
+  type DatabaseStats,
   type Status,
 } from "@/shared/lib/api"
 
@@ -331,6 +336,49 @@ describe("general settings", () => {
         method: "PUT",
         body: JSON.stringify({ interval_seconds: 30 }),
       }),
+    )
+  })
+})
+
+const sampleDatabaseStats: DatabaseStats = {
+  db_size_bytes: 1024,
+  poster_cache_bytes: 2048,
+  item_count: 5,
+  activity_count: 12,
+  list_state_count: 2,
+}
+
+describe("database settings", () => {
+  it("GETs the database stats", async () => {
+    const fetchSpy = mockFetch(jsonResponse(sampleDatabaseStats))
+    await expect(getDatabaseStats()).resolves.toEqual(sampleDatabaseStats)
+    expect(fetchSpy).toHaveBeenCalledWith("/api/settings/database", expect.anything())
+  })
+
+  it("POSTs to clear the activity log", async () => {
+    const fetchSpy = mockFetch(jsonResponse(sampleDatabaseStats))
+    await expect(clearActivity()).resolves.toEqual(sampleDatabaseStats)
+    expect(fetchSpy).toHaveBeenCalledWith(
+      "/api/settings/database/clear-activity",
+      expect.objectContaining({ method: "POST" }),
+    )
+  })
+
+  it("POSTs to clear synced items and sync state", async () => {
+    const fetchSpy = mockFetch(jsonResponse(sampleDatabaseStats))
+    await expect(clearItems()).resolves.toEqual(sampleDatabaseStats)
+    expect(fetchSpy).toHaveBeenCalledWith(
+      "/api/settings/database/clear-items",
+      expect.objectContaining({ method: "POST" }),
+    )
+  })
+
+  it("POSTs to clear the poster cache", async () => {
+    const fetchSpy = mockFetch(jsonResponse(sampleDatabaseStats))
+    await expect(clearPosters()).resolves.toEqual(sampleDatabaseStats)
+    expect(fetchSpy).toHaveBeenCalledWith(
+      "/api/settings/database/clear-posters",
+      expect.objectContaining({ method: "POST" }),
     )
   })
 })
