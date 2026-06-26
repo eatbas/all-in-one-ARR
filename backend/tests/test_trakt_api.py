@@ -44,6 +44,10 @@ def _ctx(db, tmp_path, *, trakt=None, **store_kw):
     )
 
 
+def _activity_actions(ctx) -> list[str]:
+    return [entry["action"] for entry in ctx.db.recent_activity()]
+
+
 # ---- settings ----
 
 
@@ -77,6 +81,14 @@ def test_put_settings_updates_store_and_client(db, tmp_path) -> None:
     trakt.update_credentials.assert_called_once_with(
         client_id="newid1234", client_secret="newsec"
     )
+    assert "Trakt credentials updated" in _activity_actions(ctx)
+
+
+def test_put_settings_without_change_does_not_record_activity(db, tmp_path) -> None:
+    ctx = _ctx(db, tmp_path)
+    resp = _client(ctx).put("/api/settings/trakt", json={})
+    assert resp.status_code == 200
+    assert "Trakt credentials updated" not in _activity_actions(ctx)
 
 
 # ---- device auth ----
@@ -102,6 +114,7 @@ def test_auth_start_returns_code(db, tmp_path, monkeypatch) -> None:
     resp = _client(ctx).post("/api/trakt/auth/start")
     assert resp.status_code == 200
     assert resp.json()["user_code"] == "XYZ-987"
+    assert "Trakt authorisation started" in _activity_actions(ctx)
 
 
 def test_auth_start_handles_failure(db, tmp_path, monkeypatch) -> None:
@@ -113,6 +126,7 @@ def test_auth_start_handles_failure(db, tmp_path, monkeypatch) -> None:
     )
     resp = _client(ctx).post("/api/trakt/auth/start")
     assert resp.status_code == 502
+    assert "Trakt authorisation failed" in _activity_actions(ctx)
 
 
 def test_auth_status_reports_session(db, tmp_path) -> None:
@@ -136,6 +150,7 @@ def test_test_connection_ok(db, tmp_path) -> None:
     ctx = _ctx(db, tmp_path, trakt=trakt)
     body = _client(ctx).post("/api/trakt/test").json()
     assert body == {"ok": True, "user": "erena", "message": "Connected as erena"}
+    assert "Trakt connection test passed" in _activity_actions(ctx)
 
 
 def test_test_connection_failure(db, tmp_path) -> None:
@@ -147,6 +162,7 @@ def test_test_connection_failure(db, tmp_path) -> None:
     body = _client(ctx).post("/api/trakt/test").json()
     assert body["ok"] is False
     assert "no token" in body["message"]
+    assert "Trakt connection test failed" in _activity_actions(ctx)
 
 
 # ---- list discovery ----
@@ -189,6 +205,7 @@ def test_add_list_by_url(db, tmp_path) -> None:
     assert resp.status_code == 200
     slugs = {entry["slug"] for entry in resp.json()["lists"]}
     assert "anime" in slugs
+    assert "Trakt list added" in _activity_actions(ctx)
 
 
 def test_add_list_by_owner_and_slug(db, tmp_path) -> None:
@@ -307,3 +324,4 @@ def test_remove_list(db, tmp_path) -> None:
     resp = _client(ctx).delete("/api/trakt/lists/me/movies")
     assert resp.status_code == 200
     assert resp.json()["lists"] == []
+    assert "Trakt list removed" in _activity_actions(ctx)

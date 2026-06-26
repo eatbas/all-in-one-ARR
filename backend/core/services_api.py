@@ -94,10 +94,24 @@ def create_services_router(ctx: "AppContext") -> APIRouter:
     ) -> JSONResponse | dict[str, dict[str, Any]]:
         if name not in SERVICE_NAMES:
             return _unknown_service(name)
+        desc = BY_NAME[name]
+        before = ctx.settings_store.service_fields(name)
         ctx.settings_store.update_service_fields(
             name, url=body.url, api_key=body.api_key
         )
         _apply_credentials(ctx, name)
+        changed = any(
+            field in desc.fields
+            and getattr(body, field) is not None
+            and getattr(body, field).strip() != before[field]
+            for field in ("url", "api_key")
+        )
+        if changed:
+            label = desc.label
+            ctx.db.add_activity(
+                f"{label} connection saved",
+                f"{label} connection settings saved",
+            )
         log.info("updated %s connection", name)
         return _services_response(ctx)
 
@@ -106,6 +120,17 @@ def create_services_router(ctx: "AppContext") -> APIRouter:
         if name not in SERVICE_NAMES:
             return _unknown_service(name)
         result = await _client_for(ctx, name).test_connection()
+        label = BY_NAME[name].label
+        if result["ok"]:
+            ctx.db.add_activity(
+                f"{label} connection test passed",
+                f"{label} connection test passed",
+            )
+        else:
+            ctx.db.add_activity(
+                f"{label} connection test failed",
+                f"{label} connection test failed",
+            )
         return ServiceTestResponse(ok=result["ok"], detail=result["detail"])
 
     return router

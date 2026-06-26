@@ -108,6 +108,7 @@ def create_trakt_router(ctx: "AppContext") -> APIRouter:
     async def put_trakt_settings(
         body: UpdateTraktSettingsRequest,
     ) -> TraktSettingsResponse:
+        old_id, old_secret = ctx.settings_store.trakt_credentials()
         ctx.settings_store.update_trakt_credentials(
             client_id=body.client_id,
             client_secret=body.client_secret,
@@ -116,6 +117,14 @@ def create_trakt_router(ctx: "AppContext") -> APIRouter:
         ctx.trakt.update_credentials(
             client_id=client_id, client_secret=client_secret
         )
+        if (
+            (body.client_id is not None and body.client_id.strip() and body.client_id.strip() != old_id)
+            or (body.client_secret is not None and body.client_secret.strip() and body.client_secret.strip() != old_secret)
+        ):
+            ctx.db.add_activity(
+                "Trakt credentials updated",
+                "Trakt client credentials were updated",
+            )
         log.info("Trakt settings updated")
         return _settings_response(ctx)
 
@@ -130,10 +139,18 @@ def create_trakt_router(ctx: "AppContext") -> APIRouter:
         try:
             session = await start_device_auth(ctx)
         except Exception as exc:  # network/Trakt error starting the flow
+            ctx.db.add_activity(
+                "Trakt authorisation failed",
+                "Could not start Trakt device authorisation",
+            )
             return JSONResponse(
                 status_code=502,
                 content={"detail": f"Could not start authorisation: {exc}"},
             )
+        ctx.db.add_activity(
+            "Trakt authorisation started",
+            "Device authorisation started; enter the code at trakt.tv/activate",
+        )
         return TraktAuthStartResponse(
             state=session.state,
             user_code=session.user_code,
@@ -155,6 +172,16 @@ def create_trakt_router(ctx: "AppContext") -> APIRouter:
     @router.post("/trakt/test", response_model=TraktTestResponse)
     async def post_trakt_test() -> TraktTestResponse:
         result = await ctx.trakt.test_connection()
+        if result["ok"]:
+            ctx.db.add_activity(
+                "Trakt connection test passed",
+                "Trakt connection test passed",
+            )
+        else:
+            ctx.db.add_activity(
+                "Trakt connection test failed",
+                "Trakt connection test failed",
+            )
         return TraktTestResponse(
             ok=result["ok"],
             user=result.get("username"),
@@ -220,6 +247,11 @@ def create_trakt_router(ctx: "AppContext") -> APIRouter:
             slug=summary["slug"],
             name=summary["name"] or summary["slug"],
         )
+        list_name = summary["name"] or summary["slug"]
+        ctx.db.add_activity(
+            "Trakt list added",
+            f"Trakt list added: {list_name} ({summary['owner_user']}/{summary['slug']})",
+        )
         log.info("added Trakt list %s/%s", summary["owner_user"], summary["slug"])
         return _settings_response(ctx)
 
@@ -228,6 +260,10 @@ def create_trakt_router(ctx: "AppContext") -> APIRouter:
     )
     async def delete_trakt_list(owner_user: str, slug: str) -> TraktSettingsResponse:
         ctx.settings_store.remove_list(owner_user=owner_user, slug=slug)
+        ctx.db.add_activity(
+            "Trakt list removed",
+            f"Trakt list removed: {owner_user}/{slug}",
+        )
         log.info("removed Trakt list %s/%s", owner_user, slug)
         return _settings_response(ctx)
 

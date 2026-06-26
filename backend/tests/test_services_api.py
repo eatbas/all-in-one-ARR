@@ -17,6 +17,10 @@ def build_client(ctx) -> TestClient:
     return TestClient(app)
 
 
+def _activity_actions(ctx) -> list[str]:
+    return [entry["action"] for entry in ctx.db.recent_activity()]
+
+
 def test_get_services_masks_keys(db) -> None:
     ctx = make_ctx(db=db)
     body = build_client(ctx).get("/api/settings/services").json()
@@ -40,6 +44,20 @@ def test_put_service_updates_store_and_client(db) -> None:
     sonarr.update_credentials.assert_called_once_with(
         base_url="http://sonarr:8989", api_key="sk"
     )
+    assert any(
+        a["action"] == "Sonarr connection saved" for a in db.recent_activity()
+    )
+
+
+def test_put_service_without_change_does_not_record_activity(db) -> None:
+    ctx = make_ctx(db=db)
+    resp = build_client(ctx).put(
+        "/api/settings/services/seer",
+        json={"url": "http://js:5055"},
+    )
+    assert resp.status_code == 200
+    assert resp.json()["seer"]["url"] == "http://js:5055"
+    assert not any("connection saved" in a for a in _activity_actions(ctx))
 
 
 def test_put_unknown_service_is_404(db) -> None:
@@ -56,6 +74,7 @@ def test_test_service_ok(db) -> None:
     ctx = make_ctx(db=db, radarr=radarr)
     body = build_client(ctx).post("/api/services/radarr/test").json()
     assert body == {"ok": True, "detail": "Connected to Radarr 5.0"}
+    assert "Radarr connection test passed" in _activity_actions(ctx)
 
 
 def test_test_service_failure(db) -> None:
@@ -67,6 +86,7 @@ def test_test_service_failure(db) -> None:
     body = build_client(ctx).post("/api/services/seer/test").json()
     assert body["ok"] is False
     assert "403" in body["detail"]
+    assert "Seer connection test failed" in _activity_actions(ctx)
 
 
 def test_test_unknown_service_is_404(db) -> None:
@@ -95,6 +115,7 @@ def test_put_api_key_only_service_applies_just_the_key(db) -> None:
     assert resp.status_code == 200
     assert resp.json()["tmdb"] == {"api_key_set": True}
     tmdb.update_credentials.assert_called_once_with(api_key="tk")
+    assert "TMDB connection saved" in _activity_actions(ctx)
 
 
 def test_put_qbittorrent_service_applies_url_and_api_key(db) -> None:
