@@ -261,7 +261,7 @@ cd frontend && npm run build
 - `GET /api/posters/{media_type}/{tmdb_id}[?imdb=]` – cached poster thumbnail
   (`media_type` is `movie` or `show`); resolved from TMDB, falling back to OMDb,
   and stored under `POSTER_CACHE_PATH` so each is fetched only once.
-- `GET /api/activity` – recent activity feed.
+- `GET /api/activity` – recent meaningful app activity and sync outcomes from the last 15 days (a concise, human-friendly feed, not every read-only API call).
 - `POST /api/sync` – trigger an immediate sync and wait for it to complete; returns `409` if a sync is already running.
 - `GET /api/settings/trakt` – masked Trakt settings (credentials, user, lists).
 - `PUT /api/settings/trakt` – update Trakt client id/secret/user.
@@ -285,7 +285,10 @@ cd frontend && npm run build
 2. Use `ctx` for the shared clients, database and config; register scheduled
    jobs via `scheduler.add_interval` / `scheduler.add_cron`, and webhook
    handlers via `ctx.webhooks.register(subpath, handler)`.
-3. Drop the folder in `backend/modules/` — `backend/core/registry.py` auto-loads
+3. Call `ctx.db.add_activity(action, detail)` for meaningful user-visible state
+   changes and failures, using concise human-friendly text. Avoid secrets, raw
+   credential values, full API response dumps, and low-signal polling noise.
+4. Drop the folder in `backend/modules/` — `backend/core/registry.py` auto-loads
    it on start-up.
 
 ### Frontend: adding a menu or component
