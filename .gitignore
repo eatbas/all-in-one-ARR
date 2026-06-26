@@ -12,6 +12,7 @@ tokens.json
 plan_request_*.md
 plan_review_*.md
 review_request_*.md
+commit_plan.md
 
 # Python
 __pycache__/
