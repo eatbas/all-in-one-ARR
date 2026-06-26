@@ -143,9 +143,17 @@ async def _process_item(ctx: "AppContext", raw: dict, list_id: str) -> None:
         log_action(_log, "already_requested", tmdb=tmdb, title=title)
         return
 
-    request_id = await ctx.seer.create_request(
-        media_type=seer_media_type, tmdb_id=tmdb
-    )
+    try:
+        request_id = await ctx.seer.create_request(
+            media_type=seer_media_type, tmdb_id=tmdb
+        )
+    except SeerError as exc:
+        _log.error("Seer request create failed for %s: %s", title, exc)
+        ctx.db.add_activity(
+            "List sync failed",
+            f'Could not request "{title}" in Seer; it will be retried on the next sync.',
+        )
+        return
     ctx.db.set_request_id(trakt_id=trakt_id, list_id=list_id, request_id=request_id)
     ctx.db.set_status(trakt_id=trakt_id, list_id=list_id, status="requested")
     ctx.db.add_activity("Request created", f'Requested "{title}" in Seer.')

@@ -193,6 +193,17 @@ async def test_seer_status_error_recorded(db) -> None:
     assert not any("boom" in a["detail"] for a in db.recent_activity())
 
 
+async def test_seer_request_error_recorded(db) -> None:
+    seer = StubSeer(status=None)
+    seer.create_request = AsyncMock(side_effect=SeerError("returned 500"))
+    ctx = make_ctx(db=db, trakt=StubTrakt(items=[_MOVIE]), seer=seer)
+    await poll_and_request(ctx)
+    assert db.get_item(trakt_id=1, list_id="watchlist")["status"] == "synced"
+    assert any(a["action"] == "List sync failed" for a in db.recent_activity())
+    assert any("Could not request" in a["detail"] for a in db.recent_activity())
+    assert not any("returned 500" in a["detail"] for a in db.recent_activity())
+
+
 async def test_list_read_failure_recorded(db) -> None:
     trakt = StubTrakt(items=[])
     trakt.read_list_items = AsyncMock(side_effect=RuntimeError("not authorised"))

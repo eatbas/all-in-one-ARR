@@ -78,6 +78,22 @@ async def test_create_request_tv_includes_seasons() -> None:
 
 
 @respx.mock
+async def test_create_request_accepts_accepted_response() -> None:
+    respx.post(f"{_BASE}/api/v1/request").mock(
+        return_value=httpx.Response(202, json={"id": 9})
+    )
+    client = make_client()
+    assert await client.create_request(media_type="movie", tmdb_id=100) == 9
+
+
+@respx.mock
+async def test_create_request_accepted_without_body_returns_none() -> None:
+    respx.post(f"{_BASE}/api/v1/request").mock(return_value=httpx.Response(202))
+    client = make_client()
+    assert await client.create_request(media_type="movie", tmdb_id=100) is None
+
+
+@respx.mock
 async def test_create_request_error_status_raises() -> None:
     respx.post(f"{_BASE}/api/v1/request").mock(return_value=httpx.Response(409))
     client = make_client()

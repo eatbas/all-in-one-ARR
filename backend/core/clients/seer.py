@@ -88,11 +88,11 @@ class SeerClient:
             )
         except httpx.HTTPError as exc:
             raise SeerError(f"Seer request failed: {exc}") from exc
-        if response.status_code not in (200, 201):
+        if response.status_code not in (200, 201, 202):
             raise SeerError(
                 f"Seer request returned {response.status_code} for {tmdb_id}"
             )
-        request_id = response.json().get("id")
+        request_id = response.json().get("id") if response.content else None
         log_action(
             self._log,
             "seer_request",
