@@ -131,12 +131,21 @@ you will not need to re-authorise on restart. The dashboard header shows
 ### Settings page (recommended)
 
 The dashboard **Settings** page is organised into tabs —
-**General**, **Trakt**, **Seer**, **Sonarr**, **Radarr**, **TMDB**, **OMDb**,
-**SABnzbd**, **qBittorrent** — and manages every connection without touching
-`.env`. All values are persisted server-side in `SETTINGS_STORE_PATH`.
+**General**, **Database**, **Trakt**, **Seer**, **Sonarr**, **Radarr**, **TMDB**,
+**OMDb**, **SABnzbd**, **qBittorrent** — and manages every connection without
+touching `.env`. All values are persisted server-side in `SETTINGS_STORE_PATH`.
 
 **General tab** (the default): the status-check interval and the
 **light/dark/system** theme control (which mirrors the header).
+
+**Database tab:** shows the on-disk size of the SQLite database (main file plus
+WAL/SHM sidecars) and the poster cache, plus row counts for tracked items,
+activity entries, and synced lists. It also provides danger-zone actions to
+**clear the activity log**, **clear synced items & sync state**, or **clear the
+poster cache**. Credentials, Trakt tokens, and tracked-list configuration are
+never deleted; clearing items only removes the mirrored rows — the next poll
+rebuilds them. SQLite does not shrink the database file immediately after a
+delete, so the reported size may not drop right away.
 
 Notifications (toasts) appear **bottom-right** with a close (×) button and a bar
 that drains over their ~3-second lifetime.
@@ -277,6 +286,14 @@ cd frontend && npm run build
 - `PUT /api/settings/services/{name}` – update a service's fields
   `{ url?, api_key? }` (only the fields it declares apply).
 - `POST /api/services/{name}/test` – test a service connection.
+- `GET /api/settings/database` – storage overview: DB size, poster cache size,
+  and row counts for `items`, `activity`, and `list_state`.
+- `POST /api/settings/database/clear-activity` – empty the activity log and
+  return refreshed stats.
+- `POST /api/settings/database/clear-items` – delete every tracked item and list
+  sync state, preserving tracked-list configuration; returns refreshed stats.
+- `POST /api/settings/database/clear-posters` – delete cached poster thumbnails;
+  returns refreshed stats.
 
 ## Adding a module
 
