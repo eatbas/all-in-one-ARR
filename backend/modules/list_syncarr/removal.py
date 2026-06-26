@@ -38,11 +38,12 @@ async def remove_tracked_item(ctx: "AppContext", item: dict[str, Any], *, reason
     crashing the caller.
     """
     list_id = item["list_id"]
+    title = item["title"]
     owner = ctx.settings_store.owner_for(list_id)
     if owner != "me":
         ctx.db.add_activity(
-            "remove_skipped",
-            f"cannot remove {item['title']} from {owner}'s list {list_id}",
+            "Removal skipped",
+            f'Cannot remove "{title}" from {owner}\'s list "{list_id}".',
         )
         log_action(
             _log,
@@ -60,10 +61,10 @@ async def remove_tracked_item(ctx: "AppContext", item: dict[str, Any], *, reason
     is_movie = item["type"] == "movie"
     removal_id = item["tmdb"] if is_movie else item["tvdb"]
     if removal_id is None:
-        id_kind = "tmdb" if is_movie else "tvdb"
+        id_kind = "TMDB" if is_movie else "TVDB"
         ctx.db.add_activity(
-            "remove_skipped",
-            f"cannot remove {item['title']} from {list_id}: no {id_kind} id",
+            "Removal skipped",
+            f'Cannot remove "{title}" from "{list_id}": no {id_kind} id.',
         )
         log_action(
             _log,
@@ -84,8 +85,11 @@ async def remove_tracked_item(ctx: "AppContext", item: dict[str, Any], *, reason
                 shows=[removal_id], list_id=list_id, owner_user=owner
             )
     except Exception as exc:
-        _log.error("Trakt remove failed for %s: %s", item["title"], exc)
-        ctx.db.add_activity("error", f"Trakt remove failed for {item['title']}: {exc}")
+        _log.error("Trakt remove failed for %s: %s", title, exc)
+        ctx.db.add_activity(
+            "Removal failed",
+            f'Could not remove "{title}" from Trakt.',
+        )
         return
 
     request_deleted = await _delete_seer_request(ctx, item)
@@ -95,7 +99,10 @@ async def remove_tracked_item(ctx: "AppContext", item: dict[str, Any], *, reason
     ctx.db.set_status(
         trakt_id=item["trakt_id"], list_id=item["list_id"], status="removed"
     )
-    ctx.db.add_activity("removed", f"removed {item['title']} from Trakt ({reason})")
+    ctx.db.add_activity(
+        "Item removed from Trakt",
+        f'Removed "{title}" from the Trakt list.',
+    )
     log_action(
         _log,
         "removed",
@@ -111,20 +118,21 @@ async def _delete_seer_request(
     ctx: "AppContext", item: dict[str, Any]
 ) -> bool:
     """Delete the stored Seer request, if this app knows its id."""
+    title = item["title"]
     request_id = item.get("seer_request_id")
     if request_id is None:
         return True
     try:
         await ctx.seer.delete_request(request_id=request_id)
     except Exception as exc:
-        _log.error("Seer request delete failed for %s: %s", item["title"], exc)
+        _log.error("Seer request delete failed for %s: %s", title, exc)
         ctx.db.add_activity(
-            "error",
-            f"Seer request delete failed for {item['title']}: {exc}",
+            "Removal failed",
+            f'Could not remove the Seer request for "{title}".',
         )
         return False
     ctx.db.add_activity(
-        "request_deleted",
-        f"deleted Seer request {request_id} for {item['title']}",
+        "Seer request removed",
+        f'Removed the Seer request for "{title}".',
     )
     return True

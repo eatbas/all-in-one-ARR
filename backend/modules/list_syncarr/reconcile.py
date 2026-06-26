@@ -36,7 +36,9 @@ async def reconcile(ctx: "AppContext") -> None:
             if seer_status == AVAILABLE:
                 await remove_tracked_item(ctx, item, reason="reconciled (webhook missed)")
         except SeerError as exc:
-            _log.error("reconcile failed for %s: %s", item.get("title"), exc)
+            title = item.get("title") or "unknown item"
+            _log.error("reconcile failed for %s: %s", title, exc)
             ctx.db.add_activity(
-                "error", f"reconcile failed for {item.get('title')}: {exc}"
+                "Availability check failed",
+                f'Could not check availability for "{title}".',
             )

@@ -25,7 +25,8 @@ async def test_new_item_creates_request(db) -> None:
     assert item["status"] == "requested"
     assert item["seer_request_id"] == 77
     ctx.seer.create_request.assert_awaited_once()
-    assert any(a["action"] == "requested" for a in db.recent_activity())
+    assert any(a["action"] == "Request created" for a in db.recent_activity())
+    assert any('Requested "Dune" in Seer.' in a["detail"] for a in db.recent_activity())
 
 
 async def test_item_without_trakt_id_skipped(db) -> None:
@@ -42,7 +43,8 @@ async def test_item_without_tmdb_skipped(db) -> None:
     item = db.get_item(trakt_id=1, list_id="watchlist")
     assert item["status"] == "synced"
     ctx.seer.get_status.assert_not_awaited()
-    assert any(a["action"] == "skipped" for a in db.recent_activity())
+    assert any(a["action"] == "Item skipped" for a in db.recent_activity())
+    assert any("no TMDB id" in a["detail"] for a in db.recent_activity())
 
 
 async def test_already_available_sets_available(db) -> None:
@@ -186,7 +188,9 @@ async def test_seer_status_error_recorded(db) -> None:
     ctx = make_ctx(db=db, trakt=StubTrakt(items=[_MOVIE]), seer=seer)
     await poll_and_request(ctx)
     assert db.get_item(trakt_id=1, list_id="watchlist")["status"] == "synced"
-    assert any(a["action"] == "error" for a in db.recent_activity())
+    assert any(a["action"] == "List sync failed" for a in db.recent_activity())
+    assert any("Could not check Seer status" in a["detail"] for a in db.recent_activity())
+    assert not any("boom" in a["detail"] for a in db.recent_activity())
 
 
 async def test_list_read_failure_recorded(db) -> None:
@@ -195,9 +199,10 @@ async def test_list_read_failure_recorded(db) -> None:
     ctx = make_ctx(db=db, trakt=trakt)
     await poll_and_request(ctx)  # must not raise
     assert any(
-        a["action"] == "error" and "Trakt list read failed" in a["detail"]
+        a["action"] == "List sync failed" and "Could not read the Trakt list" in a["detail"]
         for a in db.recent_activity()
     )
+    assert not any("not authorised" in a["detail"] for a in db.recent_activity())
 
 
 async def test_per_item_exception_isolated(db, monkeypatch) -> None:
@@ -209,9 +214,10 @@ async def test_per_item_exception_isolated(db, monkeypatch) -> None:
     monkeypatch.setattr(ctx.db, "upsert_item", boom)
     await poll_and_request(ctx)  # must not raise
     assert any(
-        a["action"] == "error" and "sync failed" in a["detail"]
+        a["action"] == "List sync failed" and "Could not process" in a["detail"]
         for a in db.recent_activity()
     )
+    assert not any("db down" in a["detail"] for a in db.recent_activity())
 
 
 async def test_successful_poll_records_last_synced(db) -> None:
@@ -285,6 +291,7 @@ async def test_one_failing_list_does_not_abort_others(db) -> None:
     # The anime list was still processed despite the movies list failing.
     assert db.get_item(trakt_id=2, list_id="anime")["status"] == "available"
     assert any(
-        a["action"] == "error" and "Trakt list read failed for movies" in a["detail"]
+        a["action"] == "List sync failed" and "Could not read the Trakt list \"movies\"" in a["detail"]
         for a in db.recent_activity()
     )
+    assert not any("not authorised" in a["detail"] for a in db.recent_activity())

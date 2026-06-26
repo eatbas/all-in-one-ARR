@@ -34,7 +34,8 @@ async def test_removes_movie_by_tmdb(db) -> None:
         movies=[100], list_id="watchlist", owner_user="me"
     )
     ctx.seer.delete_request.assert_not_awaited()
-    assert any("available in Seer" in a["detail"] for a in db.recent_activity())
+    assert any(a["action"] == "Item removed from Trakt" for a in db.recent_activity())
+    assert any('Removed "Dune" from the Trakt list.' in a["detail"] for a in db.recent_activity())
 
 
 async def test_removes_known_seer_request_without_touching_arr_media(db) -> None:
@@ -54,7 +55,8 @@ async def test_removes_known_seer_request_without_touching_arr_media(db) -> None
     seer.delete_request.assert_awaited_once_with(request_id=77)
     ctx.radarr.test_connection.assert_not_awaited()
     ctx.sonarr.test_connection.assert_not_awaited()
-    assert any(a["action"] == "request_deleted" for a in db.recent_activity())
+    assert any(a["action"] == "Seer request removed" for a in db.recent_activity())
+    assert any('Removed the Seer request for "Dune".' in a["detail"] for a in db.recent_activity())
 
 
 async def test_request_delete_failure_leaves_item_active(db) -> None:
@@ -73,9 +75,10 @@ async def test_request_delete_failure_leaves_item_active(db) -> None:
         movies=[100], list_id="watchlist", owner_user="me"
     )
     assert any(
-        a["action"] == "error" and "Seer request delete failed" in a["detail"]
+        a["action"] == "Removal failed" and "Could not remove the Seer request" in a["detail"]
         for a in db.recent_activity()
     )
+    assert not any("delete failed" in a["detail"] for a in db.recent_activity())
 
 
 async def test_no_stored_request_id_still_removes_trakt_entry(db) -> None:
@@ -93,7 +96,7 @@ async def test_no_stored_request_id_still_removes_trakt_entry(db) -> None:
         movies=[100], list_id="watchlist", owner_user="me"
     )
     ctx.seer.delete_request.assert_not_awaited()
-    assert any(a["action"] == "removed" for a in db.recent_activity())
+    assert any(a["action"] == "Item removed from Trakt" for a in db.recent_activity())
 
 
 async def test_removes_show_by_tvdb(db) -> None:
@@ -106,7 +109,7 @@ async def test_removes_show_by_tvdb(db) -> None:
     trakt.remove_items.assert_awaited_once_with(
         shows=[300], list_id="watchlist", owner_user="me"
     )
-    assert any(a["action"] == "removed" for a in db.recent_activity())
+    assert any(a["action"] == "Item removed from Trakt" for a in db.recent_activity())
 
 
 async def test_skipped_when_show_has_no_tvdb_id(db) -> None:
@@ -122,7 +125,8 @@ async def test_skipped_when_show_has_no_tvdb_id(db) -> None:
     await remove_tracked_item(ctx, item, reason="available in Seer")
     trakt.remove_items.assert_not_awaited()
     assert db.get_item(trakt_id=3, list_id="watchlist")["status"] == "synced"
-    assert any(a["action"] == "remove_skipped" for a in db.recent_activity())
+    assert any(a["action"] == "Removal skipped" for a in db.recent_activity())
+    assert any("no TVDB id" in a["detail"] for a in db.recent_activity())
 
 
 async def test_skipped_when_movie_has_no_tmdb_id(db) -> None:
@@ -138,7 +142,8 @@ async def test_skipped_when_movie_has_no_tmdb_id(db) -> None:
     await remove_tracked_item(ctx, item, reason="manual")
     trakt.remove_items.assert_not_awaited()
     assert db.get_item(trakt_id=4, list_id="watchlist")["status"] == "synced"
-    assert any(a["action"] == "remove_skipped" for a in db.recent_activity())
+    assert any(a["action"] == "Removal skipped" for a in db.recent_activity())
+    assert any("no TMDB id" in a["detail"] for a in db.recent_activity())
 
 
 async def test_remove_failure_is_logged_and_item_left(db) -> None:
@@ -150,7 +155,9 @@ async def test_remove_failure_is_logged_and_item_left(db) -> None:
     await remove_tracked_item(ctx, item, reason="manual")
     # The item is not marked removed, and the failure is recorded.
     assert db.get_item(trakt_id=2, list_id="watchlist")["status"] == "synced"
-    assert any(a["action"] == "error" for a in db.recent_activity())
+    assert any(a["action"] == "Removal failed" for a in db.recent_activity())
+    assert any("Could not remove" in a["detail"] for a in db.recent_activity())
+    assert not any("not your list" in a["detail"] for a in db.recent_activity())
 
 
 async def test_removal_skipped_for_list_not_owned_by_me(db) -> None:
@@ -170,4 +177,5 @@ async def test_removal_skipped_for_list_not_owned_by_me(db) -> None:
     await remove_tracked_item(ctx, item, reason="available in Seer")
     trakt.remove_items.assert_not_awaited()
     assert db.get_item(trakt_id=2, list_id="shared")["status"] == "synced"
-    assert any(a["action"] == "remove_skipped" for a in db.recent_activity())
+    assert any(a["action"] == "Removal skipped" for a in db.recent_activity())
+    assert any("sean" in a["detail"] for a in db.recent_activity())

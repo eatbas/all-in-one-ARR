@@ -56,4 +56,6 @@ async def test_error_recorded(db) -> None:
     seer.get_status = AsyncMock(side_effect=SeerError("boom"))
     ctx = make_ctx(db=db, seer=seer)
     await reconcile(ctx)
-    assert any(a["action"] == "error" for a in db.recent_activity())
+    assert any(a["action"] == "Availability check failed" for a in db.recent_activity())
+    assert any("Could not check availability" in a["detail"] for a in db.recent_activity())
+    assert not any("boom" in a["detail"] for a in db.recent_activity())

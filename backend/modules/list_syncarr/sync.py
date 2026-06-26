@@ -49,7 +49,10 @@ async def _poll_one_list(ctx: "AppContext", tracked: "TrackedList") -> None:
     except Exception as exc:
         # e.g. Trakt not yet authorised, or a transient API error.
         _log.error("Trakt list read failed for %s: %s", list_id, exc)
-        ctx.db.add_activity("error", f"Trakt list read failed for {list_id}: {exc}")
+        ctx.db.add_activity(
+            "List sync failed",
+            f'Could not read the Trakt list "{list_id}"; check the Trakt connection.',
+        )
         return
     _log.info("polled Trakt list id=%s items=%d", list_id, len(items))
 
@@ -61,8 +64,12 @@ async def _poll_one_list(ctx: "AppContext", tracked: "TrackedList") -> None:
         try:
             await _process_item(ctx, raw, list_id)
         except Exception as exc:  # isolate per-item failures
-            _log.exception("failed to process item %s: %s", raw.get("title"), exc)
-            ctx.db.add_activity("error", f"sync failed for {raw.get('title')}: {exc}")
+            title = raw.get("title") or "unknown item"
+            _log.exception("failed to process item %s: %s", title, exc)
+            ctx.db.add_activity(
+                "List sync failed",
+                f'Could not process "{title}" during the sync.',
+            )
 
     # The list was read successfully; record the poll time so the dashboard can
     # show "last synced" and derive the next poll (per-item failures above are
@@ -99,7 +106,10 @@ async def _process_item(ctx: "AppContext", raw: dict, list_id: str) -> None:
 
     if tmdb is None:
         _log.warning("cannot request %s: no TMDB id", title)
-        ctx.db.add_activity("skipped", f"no TMDB id for {title}")
+        ctx.db.add_activity(
+            "Item skipped",
+            f'"{title}" has no TMDB id, so it cannot be requested.',
+        )
         return
 
     seer_media_type = "movie" if media_type == "movie" else "tv"
@@ -109,7 +119,10 @@ async def _process_item(ctx: "AppContext", raw: dict, list_id: str) -> None:
         )
     except SeerError as exc:
         _log.error("Seer status check failed for %s: %s", title, exc)
-        ctx.db.add_activity("error", f"status check failed for {title}: {exc}")
+        ctx.db.add_activity(
+            "List sync failed",
+            f'Could not check Seer status for "{title}".',
+        )
         return
 
     if seer_status == AVAILABLE:
@@ -135,7 +148,7 @@ async def _process_item(ctx: "AppContext", raw: dict, list_id: str) -> None:
     )
     ctx.db.set_request_id(trakt_id=trakt_id, list_id=list_id, request_id=request_id)
     ctx.db.set_status(trakt_id=trakt_id, list_id=list_id, status="requested")
-    ctx.db.add_activity("requested", f"requested {title}")
+    ctx.db.add_activity("Request created", f'Requested "{title}" in Seer.')
     log_action(
         _log,
         "requested",
