@@ -257,6 +257,7 @@ describe("trakt connection hooks", () => {
     await waitFor(() => expect(result.current.isSuccess).toBe(true))
     expect(toast.success).toHaveBeenCalledWith("Trakt settings saved")
     expect(invalidate).toHaveBeenCalledWith({ queryKey: queryKeys.traktSettings })
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: queryKeys.activity })
   })
 
   it("useUpdateTraktSettings toasts on error", async () => {
@@ -293,6 +294,7 @@ describe("trakt connection hooks", () => {
     expect(invalidate).toHaveBeenCalledWith({
       queryKey: queryKeys.traktAuthStatus,
     })
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: queryKeys.activity })
   })
 
   it("useStartTraktAuth toasts on error", async () => {
@@ -314,7 +316,8 @@ describe("trakt connection hooks", () => {
       user: "erena",
       message: "Connection OK",
     })
-    const { wrapper } = setup()
+    const { queryClient, wrapper } = setup()
+    const invalidate = vi.spyOn(queryClient, "invalidateQueries")
     const { result } = renderHook(() => useTestTrakt(), { wrapper })
 
     act(() => result.current.mutate())
@@ -323,6 +326,7 @@ describe("trakt connection hooks", () => {
     expect(toast.success).toHaveBeenCalledWith("Trakt connection OK", {
       description: "Signed in as erena",
     })
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: queryKeys.activity })
   })
 
   it("useTestTrakt omits the description when no user is returned", async () => {
@@ -331,7 +335,8 @@ describe("trakt connection hooks", () => {
       user: null,
       message: "Connection OK",
     })
-    const { wrapper } = setup()
+    const { queryClient, wrapper } = setup()
+    const invalidate = vi.spyOn(queryClient, "invalidateQueries")
     const { result } = renderHook(() => useTestTrakt(), { wrapper })
 
     act(() => result.current.mutate())
@@ -340,6 +345,7 @@ describe("trakt connection hooks", () => {
     expect(toast.success).toHaveBeenCalledWith("Trakt connection OK", {
       description: undefined,
     })
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: queryKeys.activity })
   })
 
   it("useTestTrakt reports a failed test", async () => {
@@ -348,7 +354,8 @@ describe("trakt connection hooks", () => {
       user: null,
       message: "no token",
     })
-    const { wrapper } = setup()
+    const { queryClient, wrapper } = setup()
+    const invalidate = vi.spyOn(queryClient, "invalidateQueries")
     const { result } = renderHook(() => useTestTrakt(), { wrapper })
 
     act(() => result.current.mutate())
@@ -357,6 +364,7 @@ describe("trakt connection hooks", () => {
     expect(toast.error).toHaveBeenCalledWith("Trakt connection failed", {
       description: "no token",
     })
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: queryKeys.activity })
   })
 
   it("useTestTrakt toasts on a thrown error", async () => {
@@ -384,6 +392,7 @@ describe("trakt connection hooks", () => {
     expect(toast.success).toHaveBeenCalledWith("List added")
     expect(invalidate).toHaveBeenCalledWith({ queryKey: queryKeys.traktSettings })
     expect(invalidate).toHaveBeenCalledWith({ queryKey: queryKeys.traktLists })
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: queryKeys.activity })
   })
 
   it("useAddTraktList toasts on error", async () => {
@@ -411,6 +420,7 @@ describe("trakt connection hooks", () => {
     expect(api.removeTraktList).toHaveBeenCalledWith("me", "movies")
     expect(toast.success).toHaveBeenCalledWith("List removed")
     expect(invalidate).toHaveBeenCalledWith({ queryKey: queryKeys.traktLists })
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: queryKeys.activity })
   })
 
   it("useRemoveTraktList toasts on error", async () => {
@@ -459,6 +469,7 @@ describe("service connection hooks", () => {
     })
     expect(toast.success).toHaveBeenCalledWith("Connection saved")
     expect(invalidate).toHaveBeenCalledWith({ queryKey: queryKeys.services })
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: queryKeys.activity })
   })
 
   it("useUpdateServiceSettings toasts on error", async () => {
@@ -479,7 +490,8 @@ describe("service connection hooks", () => {
       ok: true,
       detail: "Connected to Sonarr 4.0",
     })
-    const { wrapper } = setup()
+    const { queryClient, wrapper } = setup()
+    const invalidate = vi.spyOn(queryClient, "invalidateQueries")
     const { result } = renderHook(() => useTestService(), { wrapper })
 
     act(() => result.current.mutate("sonarr"))
@@ -489,6 +501,7 @@ describe("service connection hooks", () => {
     expect(toast.success).toHaveBeenCalledWith("Connection OK", {
       description: "Connected to Sonarr 4.0",
     })
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: queryKeys.activity })
   })
 
   it("useTestService reports a failed test", async () => {
@@ -496,7 +509,8 @@ describe("service connection hooks", () => {
       ok: false,
       detail: "HTTP 401",
     })
-    const { wrapper } = setup()
+    const { queryClient, wrapper } = setup()
+    const invalidate = vi.spyOn(queryClient, "invalidateQueries")
     const { result } = renderHook(() => useTestService(), { wrapper })
 
     act(() => result.current.mutate("radarr"))
@@ -505,6 +519,7 @@ describe("service connection hooks", () => {
     expect(toast.error).toHaveBeenCalledWith("Connection failed", {
       description: "HTTP 401",
     })
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: queryKeys.activity })
   })
 
   it("useTestService toasts on a thrown error", async () => {
@@ -555,6 +570,7 @@ describe("service status hooks", () => {
     expect(api.checkServiceStatuses).toHaveBeenCalled()
     expect(toast.success).toHaveBeenCalledWith("Status check complete")
     expect(invalidate).toHaveBeenCalledWith({ queryKey: queryKeys.serviceStatuses })
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: queryKeys.activity })
   })
 
   it("useCheckServiceStatuses toasts on error", async () => {
@@ -600,6 +616,7 @@ describe("general settings hooks", () => {
     )
     expect(invalidate).toHaveBeenCalledWith({ queryKey: queryKeys.serviceStatuses })
     expect(invalidate).toHaveBeenCalledWith({ queryKey: queryKeys.generalSettings })
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: queryKeys.activity })
   })
 
   it("useUpdateStatusInterval toasts on error", async () => {
@@ -633,6 +650,7 @@ describe("general settings hooks", () => {
     })
     expect(invalidate).toHaveBeenCalledWith({ queryKey: queryKeys.generalSettings })
     expect(invalidate).toHaveBeenCalledWith({ queryKey: queryKeys.lists })
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: queryKeys.activity })
   })
 
   it("useUpdateSyncInterval toasts on error", async () => {
@@ -671,6 +689,7 @@ describe("general settings hooks", () => {
     expect(invalidate).toHaveBeenCalledWith({
       queryKey: queryKeys.generalSettings,
     })
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: queryKeys.activity })
   })
 
   it("useUpdateAutoRemoveWhenAvailable announces disabled on the false branch", async () => {
@@ -717,6 +736,7 @@ describe("general settings hooks", () => {
     expect(invalidate).toHaveBeenCalledWith({ queryKey: ["items"] })
     expect(invalidate).toHaveBeenCalledWith({ queryKey: queryKeys.lists })
     expect(invalidate).toHaveBeenCalledWith({ queryKey: queryKeys.status })
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: queryKeys.activity })
   })
 
   it("useRemoveItem toasts on error", async () => {
@@ -743,6 +763,8 @@ describe("general settings hooks", () => {
     await waitFor(() => expect(result.current.isSuccess).toBe(true))
     expect(api.removeAvailable).toHaveBeenCalled()
     expect(invalidate).toHaveBeenCalledWith({ queryKey: ["items"] })
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: queryKeys.lists })
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: queryKeys.status })
     expect(invalidate).toHaveBeenCalledWith({ queryKey: queryKeys.activity })
   })
 

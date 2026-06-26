@@ -107,7 +107,7 @@ export function Dashboard() {
             <div>
               <CardTitle>Recent activity</CardTitle>
               <CardDescription>
-                The 50 most recent actions taken by the sync engine.
+                Recent meaningful app activity from the last 15 days.
               </CardDescription>
             </div>
             <span className="inline-flex items-center text-sm font-medium text-muted-foreground">

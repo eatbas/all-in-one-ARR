@@ -167,6 +167,7 @@ export function useUpdateTraktSettings(): UseMutationResult<
     onSuccess: () => {
       toast.success("Trakt settings saved")
       void queryClient.invalidateQueries({ queryKey: queryKeys.traktSettings })
+      void queryClient.invalidateQueries({ queryKey: queryKeys.activity })
     },
     onError: (error) => {
       toast.error("Could not save Trakt settings", { description: error.message })
@@ -184,6 +185,7 @@ export function useStartTraktAuth(): UseMutationResult<TraktAuthStart, Error, vo
         description: "Enter the code shown below at trakt.tv/activate.",
       })
       void queryClient.invalidateQueries({ queryKey: queryKeys.traktAuthStatus })
+      void queryClient.invalidateQueries({ queryKey: queryKeys.activity })
     },
     onError: (error) => {
       toast.error("Could not start authorisation", { description: error.message })
@@ -192,6 +194,8 @@ export function useStartTraktAuth(): UseMutationResult<TraktAuthStart, Error, vo
 }
 
 export function useTestTrakt(): UseMutationResult<TraktTestResult, Error, void> {
+  const queryClient = useQueryClient()
+
   return useMutation({
     mutationFn: testTrakt,
     onSuccess: (result) => {
@@ -202,6 +206,7 @@ export function useTestTrakt(): UseMutationResult<TraktTestResult, Error, void> 
       } else {
         toast.error("Trakt connection failed", { description: result.message })
       }
+      void queryClient.invalidateQueries({ queryKey: queryKeys.activity })
     },
     onError: (error) => {
       toast.error("Could not test connection", { description: error.message })
@@ -222,6 +227,7 @@ export function useAddTraktList(): UseMutationResult<
       toast.success("List added")
       void queryClient.invalidateQueries({ queryKey: queryKeys.traktSettings })
       void queryClient.invalidateQueries({ queryKey: queryKeys.traktLists })
+      void queryClient.invalidateQueries({ queryKey: queryKeys.activity })
     },
     onError: (error) => {
       toast.error("Could not add list", { description: error.message })
@@ -242,6 +248,7 @@ export function useRemoveTraktList(): UseMutationResult<
       toast.success("List removed")
       void queryClient.invalidateQueries({ queryKey: queryKeys.traktSettings })
       void queryClient.invalidateQueries({ queryKey: queryKeys.traktLists })
+      void queryClient.invalidateQueries({ queryKey: queryKeys.activity })
     },
     onError: (error) => {
       toast.error("Could not remove list", { description: error.message })
@@ -268,6 +275,7 @@ export function useUpdateServiceSettings(): UseMutationResult<
     onSuccess: () => {
       toast.success("Connection saved")
       void queryClient.invalidateQueries({ queryKey: queryKeys.services })
+      void queryClient.invalidateQueries({ queryKey: queryKeys.activity })
     },
     onError: (error) => {
       toast.error("Could not save connection", { description: error.message })
@@ -280,6 +288,8 @@ export function useTestService(): UseMutationResult<
   Error,
   ServiceName
 > {
+  const queryClient = useQueryClient()
+
   return useMutation({
     mutationFn: (name) => testService(name),
     onSuccess: (result) => {
@@ -288,6 +298,7 @@ export function useTestService(): UseMutationResult<
       } else {
         toast.error("Connection failed", { description: result.detail })
       }
+      void queryClient.invalidateQueries({ queryKey: queryKeys.activity })
     },
     onError: (error) => {
       toast.error("Could not test connection", { description: error.message })
@@ -316,6 +327,7 @@ export function useCheckServiceStatuses(): UseMutationResult<
     onSuccess: () => {
       toast.success("Status check complete")
       void queryClient.invalidateQueries({ queryKey: queryKeys.serviceStatuses })
+      void queryClient.invalidateQueries({ queryKey: queryKeys.activity })
     },
     onError: (error) => {
       toast.error("Status check failed", { description: error.message })
@@ -338,6 +350,7 @@ export function useUpdateStatusInterval(): UseMutationResult<
       })
       void queryClient.invalidateQueries({ queryKey: queryKeys.serviceStatuses })
       void queryClient.invalidateQueries({ queryKey: queryKeys.generalSettings })
+      void queryClient.invalidateQueries({ queryKey: queryKeys.activity })
     },
     onError: (error) => {
       toast.error("Could not update interval", { description: error.message })
@@ -368,6 +381,7 @@ export function useUpdateSyncInterval(): UseMutationResult<
       })
       void queryClient.invalidateQueries({ queryKey: queryKeys.generalSettings })
       void queryClient.invalidateQueries({ queryKey: queryKeys.lists })
+      void queryClient.invalidateQueries({ queryKey: queryKeys.activity })
     },
     onError: (error) => {
       toast.error("Could not update sync interval", { description: error.message })
@@ -397,6 +411,7 @@ export function useUpdateAutoRemoveWhenAvailable(): UseMutationResult<
         },
       )
       void queryClient.invalidateQueries({ queryKey: queryKeys.generalSettings })
+      void queryClient.invalidateQueries({ queryKey: queryKeys.activity })
     },
     onError: (error) => {
       toast.error("Could not update auto-remove", { description: error.message })
@@ -418,6 +433,7 @@ export function useRemoveItem(): UseMutationResult<
       void queryClient.invalidateQueries({ queryKey: ["items"] })
       void queryClient.invalidateQueries({ queryKey: queryKeys.lists })
       void queryClient.invalidateQueries({ queryKey: queryKeys.status })
+      void queryClient.invalidateQueries({ queryKey: queryKeys.activity })
     },
     onError: (error) => {
       toast.error("Could not remove item", { description: error.message })
