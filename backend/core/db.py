@@ -8,6 +8,7 @@ Uvicorn worker. Multi-worker deployment is explicitly out of scope.
 
 from __future__ import annotations
 
+import os
 import sqlite3
 import threading
 from datetime import datetime, timedelta, timezone
@@ -292,6 +293,52 @@ class Database:
             "SELECT list_id, last_synced_at FROM list_state"
         ).fetchall()
         return {row["list_id"]: row["last_synced_at"] for row in rows}
+
+    def disk_size_bytes(self) -> int:
+        """Return the on-disk size of the database files in bytes.
+
+        Includes the main database file plus any WAL and SHM sidecar files.
+        Returns ``0`` for in-memory databases or when the files do not exist.
+        """
+        if self._path == ":memory:":
+            return 0
+        total = 0
+        for suffix in ("", "-wal", "-shm"):
+            file_path = self._path + suffix
+            try:
+                total += os.path.getsize(file_path)
+            except FileNotFoundError:
+                pass
+        return total
+
+    def table_counts(self) -> dict[str, int]:
+        """Return row counts for the tracked tables."""
+        counts: dict[str, int] = {}
+        for table in ("items", "activity", "list_state"):
+            row = self._conn.execute(
+                f"SELECT COUNT(*) AS n FROM {table}"
+            ).fetchone()
+            counts[table] = row["n"]
+        return counts
+
+    def clear_activity(self) -> int:
+        """Delete every row from the activity log and return the count removed."""
+        with self._lock:
+            cursor = self._conn.execute("DELETE FROM activity")
+            self._conn.commit()
+            return cursor.rowcount
+
+    def clear_items_and_sync_state(self) -> int:
+        """Delete every row from items and list_state, returning the total removed.
+
+        Tracked-list configuration in ``app_settings.json`` is untouched; the next
+        sync rebuilds the rows from Trakt.
+        """
+        with self._lock:
+            items_cursor = self._conn.execute("DELETE FROM items")
+            state_cursor = self._conn.execute("DELETE FROM list_state")
+            self._conn.commit()
+            return items_cursor.rowcount + state_cursor.rowcount
 
     def close(self) -> None:
         """Close the underlying connection."""

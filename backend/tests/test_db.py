@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import sqlite3
+from pathlib import Path
 
 import pytest
 
@@ -172,3 +173,99 @@ def test_activity_retention_prunes_old_rows(db: Database) -> None:
     db._prune_activity("2026-01-01T00:00:00+00:00")
     feed = db.recent_activity(limit=10)
     assert [a["action"] for a in feed] == ["recent"]
+
+
+def test_disk_size_bytes_returns_zero_for_memory_db(db: Database) -> None:
+    assert db._path == ":memory:"
+    assert db.disk_size_bytes() == 0
+
+
+def test_disk_size_bytes_sums_db_and_wal_and_shm(tmp_path) -> None:
+    path = tmp_path / "aio.db"
+    database = Database(str(path))
+    database.init_db()
+    database.add_activity("test", "test entry")
+
+    # WAL mode creates at least the main file; create the sidecars if absent so
+    # the sum path is fully exercised.
+    for suffix in ("-wal", "-shm"):
+        sidecar = Path(str(path) + suffix)
+        if not sidecar.exists():
+            sidecar.write_bytes(b"x")
+
+    expected = sum(
+        Path(str(path) + suffix).stat().st_size
+        for suffix in ("", "-wal", "-shm")
+    )
+    assert database.disk_size_bytes() == expected
+    database.close()
+
+
+def test_disk_size_bytes_tolerates_missing_wal_and_shm(tmp_path) -> None:
+    path = tmp_path / "aio.db"
+    database = Database(str(path))
+    database.init_db()
+    # Whatever files exist on disk, the helper must sum them without raising.
+    expected = sum(
+        Path(str(path) + suffix).stat().st_size
+        for suffix in ("", "-wal", "-shm")
+        if Path(str(path) + suffix).exists()
+    )
+    assert database.disk_size_bytes() == expected
+    database.close()
+
+
+def test_disk_size_bytes_handles_partial_sidecars(tmp_path) -> None:
+    path = tmp_path / "aio.db"
+    database = Database(str(path))
+    database.init_db()
+    # Force the FileNotFoundError branch by deleting any sidecar that exists.
+    for suffix in ("-wal", "-shm"):
+        sidecar = Path(str(path) + suffix)
+        if sidecar.exists():
+            sidecar.unlink()
+    assert database.disk_size_bytes() == Path(path).stat().st_size
+    database.close()
+
+
+def test_table_counts_returns_zero_for_empty_db(db: Database) -> None:
+    assert db.table_counts() == {
+        "items": 0,
+        "activity": 0,
+        "list_state": 0,
+    }
+
+
+def test_table_counts_reflects_inserted_rows(db: Database) -> None:
+    db.upsert_item(**_MOVIE)
+    db.upsert_item(**{**_SHOW, "list_id": "tv"})
+    db.add_activity("sync", "synced lists")
+    db.touch_list_synced("watchlist")
+    db.touch_list_synced("tv")
+    assert db.table_counts() == {
+        "items": 2,
+        "activity": 1,
+        "list_state": 2,
+    }
+
+
+def test_clear_activity_removes_all_rows_and_returns_count(db: Database) -> None:
+    db.add_activity("one", "first")
+    db.add_activity("two", "second")
+    removed = db.clear_activity()
+    assert removed == 2
+    assert db.table_counts()["activity"] == 0
+    assert db.recent_activity(limit=10) == []
+
+
+def test_clear_items_and_sync_state_removes_both_tables(db: Database) -> None:
+    db.upsert_item(**_MOVIE)
+    db.upsert_item(**{**_SHOW, "list_id": "tv"})
+    db.touch_list_synced("watchlist")
+    removed = db.clear_items_and_sync_state()
+    assert removed == 3
+    assert db.table_counts()["items"] == 0
+    assert db.table_counts()["list_state"] == 0
+    # The database remains usable after the clear.
+    db.upsert_item(**_MOVIE)
+    assert db.table_counts()["items"] == 1

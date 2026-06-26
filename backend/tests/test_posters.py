@@ -94,3 +94,47 @@ async def test_concurrent_requests_fetch_once(tmp_path) -> None:
     assert results[0] == results[1]
     # Only A fetched upstream; B served the freshly-cached file via the re-check.
     assert cache._tmdb.fetch_poster.await_count == 1
+
+
+def test_total_size_bytes_empty_and_missing_dir(tmp_path) -> None:
+    cache = _cache(tmp_path)
+    assert cache.total_size_bytes() == 0
+
+
+def test_total_size_bytes_sums_jpg_files(tmp_path) -> None:
+    cache = _cache(tmp_path)
+    cache_dir = tmp_path / "posters"
+    cache_dir.mkdir(parents=True, exist_ok=True)
+    (cache_dir / "movie-1.jpg").write_bytes(b"abc")
+    (cache_dir / "show-2.jpg").write_bytes(b"def")
+    (cache_dir / "ignore.tmp").write_bytes(b"xyz")
+    assert cache.total_size_bytes() == 6
+
+
+def test_clear_removes_jpg_files_and_returns_bytes_freed(tmp_path) -> None:
+    cache = _cache(tmp_path)
+    cache_dir = tmp_path / "posters"
+    cache_dir.mkdir(parents=True, exist_ok=True)
+    (cache_dir / "movie-1.jpg").write_bytes(b"abc")
+    (cache_dir / "show-2.jpg").write_bytes(b"defghij")
+    (cache_dir / "ignore.tmp").write_bytes(b"xyz")
+    freed = cache.clear()
+    assert freed == 10
+    assert list(cache_dir.glob("*.jpg")) == []
+    assert (cache_dir / "ignore.tmp").exists()
+
+
+def test_clear_tolerates_missing_directory(tmp_path) -> None:
+    cache = _cache(tmp_path)
+    assert cache.clear() == 0
+
+
+def test_clear_skips_non_file_matches(tmp_path) -> None:
+    cache = _cache(tmp_path)
+    cache_dir = tmp_path / "posters"
+    cache_dir.mkdir(parents=True, exist_ok=True)
+    (cache_dir / "movie-1.jpg").write_bytes(b"abc")
+    # A directory whose name happens to match the glob pattern must be ignored.
+    (cache_dir / "show-2.jpg").mkdir()
+    assert cache.clear() == 3
+    assert list(cache_dir.glob("*.jpg")) == [cache_dir / "show-2.jpg"]

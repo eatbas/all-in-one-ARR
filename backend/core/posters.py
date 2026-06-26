@@ -93,3 +93,27 @@ class PosterCache:
         tmp = path.with_suffix(path.suffix + ".tmp")
         tmp.write_bytes(data)
         os.replace(tmp, path)
+
+    def total_size_bytes(self) -> int:
+        """Return the total size of cached ``*.jpg`` files in bytes."""
+        if not self._cache_dir.exists():
+            return 0
+        return sum(
+            file_path.stat().st_size
+            for file_path in self._cache_dir.glob("*.jpg")
+            if file_path.is_file()
+        )
+
+    def clear(self) -> int:
+        """Delete every cached ``*.jpg`` file and return the bytes freed.
+
+        Tolerates a missing cache directory by returning ``0``.
+        """
+        if not self._cache_dir.exists():
+            return 0
+        freed = 0
+        for file_path in list(self._cache_dir.glob("*.jpg")):
+            if file_path.is_file():
+                freed += file_path.stat().st_size
+                file_path.unlink()
+        return freed

@@ -413,3 +413,73 @@ def test_delete_item_endpoint_503_without_handler(db) -> None:
     ctx = make_ctx(db=db)  # ctx.remove_item defaults to None
     resp = build_client(ctx).delete("/api/items/watchlist/1")
     assert resp.status_code == 503
+
+
+def test_get_database_settings_returns_counts_and_sizes(db: Database) -> None:
+    db.upsert_item(**_ITEM)
+    db.add_activity("sync", "synced")
+    db.touch_list_synced("watchlist")
+    ctx = make_ctx(db=db)
+    body = build_client(ctx).get("/api/settings/database").json()
+    assert body["item_count"] == 1
+    assert body["activity_count"] == 1
+    assert body["list_state_count"] == 1
+    assert body["db_size_bytes"] == 0  # :memory: fixture
+    assert body["poster_cache_bytes"] == 0  # no poster cache configured
+
+
+def test_clear_activity_endpoint_empties_log_and_records_audit(db: Database) -> None:
+    db.add_activity("one", "first")
+    db.add_activity("two", "second")
+    ctx = make_ctx(db=db)
+    resp = build_client(ctx).post("/api/settings/database/clear-activity")
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["activity_count"] == 1  # the audit entry written after clearing
+    assert body["item_count"] == 0
+    activity = db.recent_activity(limit=10)
+    assert [a["action"] for a in activity] == ["Activity log cleared"]
+
+
+def test_clear_items_endpoint_deletes_items_and_state(db: Database) -> None:
+    db.upsert_item(**_ITEM)
+    db.touch_list_synced("watchlist")
+    ctx = make_ctx(db=db)
+    resp = build_client(ctx).post("/api/settings/database/clear-items")
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["item_count"] == 0
+    assert body["list_state_count"] == 0
+    assert body["activity_count"] == 1
+    activity = db.recent_activity(limit=10)
+    assert [a["action"] for a in activity] == ["Synced items cleared"]
+
+
+def test_clear_posters_endpoint_no_op_when_cache_unset(db: Database) -> None:
+    ctx = make_ctx(db=db)
+    ctx.poster_cache = None
+    resp = build_client(ctx).post("/api/settings/database/clear-posters")
+    assert resp.status_code == 200
+    assert resp.json()["poster_cache_bytes"] == 0
+    assert not any(a["action"] == "Poster cache cleared" for a in db.recent_activity())
+
+
+def test_clear_posters_endpoint_clears_cache_and_records_audit(db, tmp_path) -> None:
+    from core.posters import PosterCache
+
+    cache_dir = tmp_path / "posters"
+    cache_dir.mkdir(parents=True, exist_ok=True)
+    (cache_dir / "movie-1.jpg").write_bytes(b"img")
+
+    tmdb = AsyncMock()
+    omdb = AsyncMock()
+    poster_cache = PosterCache(cache_dir=str(cache_dir), tmdb=tmdb, omdb=omdb)
+
+    ctx = make_ctx(db=db)
+    ctx.poster_cache = poster_cache
+    resp = build_client(ctx).post("/api/settings/database/clear-posters")
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["poster_cache_bytes"] == 0
+    assert any(a["action"] == "Poster cache cleared" for a in db.recent_activity())
+    assert list(cache_dir.glob("*.jpg")) == []

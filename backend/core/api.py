@@ -115,6 +115,14 @@ class GeneralSettingsResponse(BaseModel):
     auto_remove_when_available: bool
 
 
+class DatabaseStatsResponse(BaseModel):
+    db_size_bytes: int
+    poster_cache_bytes: int
+    item_count: int
+    activity_count: int
+    list_state_count: int
+
+
 def _next_sync_at(last_synced_at: str | None, interval_minutes: int) -> str | None:
     """Derive the next poll time from the last sync plus the poll interval.
 
@@ -238,6 +246,44 @@ def create_api_router(ctx: "AppContext") -> APIRouter:
     @router.get("/settings/general", response_model=GeneralSettingsResponse)
     async def get_general_settings() -> GeneralSettingsResponse:
         return _general_settings()
+
+    def _database_stats() -> DatabaseStatsResponse:
+        counts = ctx.db.table_counts()
+        poster_cache_bytes = (
+            ctx.poster_cache.total_size_bytes() if ctx.poster_cache is not None else 0
+        )
+        return DatabaseStatsResponse(
+            db_size_bytes=ctx.db.disk_size_bytes(),
+            poster_cache_bytes=poster_cache_bytes,
+            item_count=counts["items"],
+            activity_count=counts["activity"],
+            list_state_count=counts["list_state"],
+        )
+
+    @router.get("/settings/database", response_model=DatabaseStatsResponse)
+    async def get_database_settings() -> DatabaseStatsResponse:
+        return _database_stats()
+
+    @router.post("/settings/database/clear-activity", response_model=DatabaseStatsResponse)
+    async def post_clear_activity() -> DatabaseStatsResponse:
+        removed = ctx.db.clear_activity()
+        ctx.db.add_activity("Activity log cleared", f"Removed {removed} activity entries")
+        return _database_stats()
+
+    @router.post("/settings/database/clear-items", response_model=DatabaseStatsResponse)
+    async def post_clear_items() -> DatabaseStatsResponse:
+        removed = ctx.db.clear_items_and_sync_state()
+        ctx.db.add_activity(
+            "Synced items cleared", f"Removed {removed} tracked items and sync state"
+        )
+        return _database_stats()
+
+    @router.post("/settings/database/clear-posters", response_model=DatabaseStatsResponse)
+    async def post_clear_posters() -> DatabaseStatsResponse:
+        if ctx.poster_cache is not None:
+            freed = ctx.poster_cache.clear()
+            ctx.db.add_activity("Poster cache cleared", f"Freed {freed} bytes")
+        return _database_stats()
 
     @router.get("/status/services", response_model=ServicesStatusResponse)
     async def get_services_status() -> ServicesStatusResponse:
