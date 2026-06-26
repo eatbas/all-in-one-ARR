@@ -10,9 +10,12 @@ from __future__ import annotations
 
 import sqlite3
 import threading
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Iterable
+
+# Activity rows are kept for this many days; the absolute maximum is 30 days.
+ACTIVITY_RETENTION_DAYS = 15
 
 # The lifecycle states an item moves through.
 ITEM_STATUSES = ("synced", "requested", "available", "removed")
@@ -67,6 +70,7 @@ class Database:
                     action TEXT NOT NULL,
                     detail TEXT NOT NULL
                 );
+                CREATE INDEX IF NOT EXISTS idx_activity_ts ON activity(ts);
 
                 CREATE TABLE IF NOT EXISTS list_state (
                     list_id TEXT PRIMARY KEY,
@@ -239,13 +243,27 @@ class Database:
     # ---- activity ----
 
     def add_activity(self, action: str, detail: str) -> None:
-        """Append an entry to the activity feed."""
+        """Append an entry to the activity feed and prune stale rows."""
         with self._lock:
             self._conn.execute(
                 "INSERT INTO activity (ts, action, detail) VALUES (?, ?, ?)",
                 (utcnow_iso(), action, detail),
             )
+            self._prune_activity(
+                (datetime.now(timezone.utc) - timedelta(days=ACTIVITY_RETENTION_DAYS)).isoformat()
+            )
             self._conn.commit()
+
+    def _prune_activity(self, cutoff_iso: str) -> None:
+        """Remove activity rows older than ``cutoff_iso``.
+
+        This is split out as a narrow seam so tests can prune deterministically
+        without waiting for real time to pass.
+        """
+        self._conn.execute(
+            "DELETE FROM activity WHERE ts < ?",
+            (cutoff_iso,),
+        )
 
     def recent_activity(self, limit: int = 50) -> list[dict[str, Any]]:
         """Return the most recent activity entries, newest first."""

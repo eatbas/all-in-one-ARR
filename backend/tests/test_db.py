@@ -156,3 +156,19 @@ def test_rows_to_dicts_and_utcnow() -> None:
     assert rows_to_dicts(rows) == [{"a": 1, "b": 2}]
     conn.close()
     assert "T" in utcnow_iso()
+
+
+def test_activity_retention_prunes_old_rows(db: Database) -> None:
+    # Seed one old row and one recent row, then prune against a cutoff that keeps
+    # only the recent entry.
+    db._conn.execute(
+        "INSERT INTO activity (ts, action, detail) VALUES (?, ?, ?)",
+        ("2020-01-01T00:00:00+00:00", "old", "old entry"),
+    )
+    db._conn.execute(
+        "INSERT INTO activity (ts, action, detail) VALUES (?, ?, ?)",
+        ("2026-06-26T00:00:00+00:00", "recent", "recent entry"),
+    )
+    db._prune_activity("2026-01-01T00:00:00+00:00")
+    feed = db.recent_activity(limit=10)
+    assert [a["action"] for a in feed] == ["recent"]

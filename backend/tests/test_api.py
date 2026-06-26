@@ -9,7 +9,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from core.api import _SYNC_TASKS, _remember_task, create_api_router
-from tests.conftest import StubTrakt, make_ctx
+from tests.conftest import StubSettingsStore, StubTrakt, make_ctx
 
 _ITEM = dict(
     trakt_id=1, type="movie", title="Dune", year=2021, tmdb=100,
@@ -132,6 +132,7 @@ def test_sync_endpoint_awaits_handler_and_returns_completed(db) -> None:
     assert resp.status_code == 200
     assert resp.json() == {"status": "completed"}
     ctx.sync_now.assert_awaited()
+    assert any(a["action"] == "Sync completed" for a in db.recent_activity())
 
 
 def test_sync_endpoint_without_handler_returns_503(db) -> None:
@@ -152,6 +153,9 @@ async def test_sync_endpoint_returns_409_while_sync_already_running(db) -> None:
         assert resp.status_code == 409
         assert resp.json() == {"detail": "sync already running"}
         ctx.sync_now.assert_not_awaited()
+        assert any(
+            a["action"] == "Sync already running" for a in db.recent_activity()
+        )
     finally:
         ctx.sync_gate._get_lock().release()
 
@@ -242,6 +246,10 @@ def test_services_check_endpoint_triggers_check(db) -> None:
     body = build_client(ctx).post("/api/status/services/check").json()
     assert "interval_seconds" in body
     ctx.status_checker.check_now.assert_awaited_once()
+    assert any(
+        a["action"] == "Integration status check completed"
+        for a in db.recent_activity()
+    )
 
 
 def test_put_general_settings_updates_status_interval(db) -> None:
@@ -254,6 +262,9 @@ def test_put_general_settings_updates_status_interval(db) -> None:
         "auto_remove_when_available": True,
     }
     assert ctx.settings_store.status_check_interval_seconds() == 30
+    assert any(
+        a["action"] == "Status interval updated" for a in db.recent_activity()
+    )
 
 
 def test_put_general_settings_rejects_invalid_status_interval(db) -> None:
@@ -281,6 +292,9 @@ def test_put_general_settings_updates_sync_interval_and_reschedules(db) -> None:
     }
     assert ctx.settings_store.sync_interval_minutes() == 30
     ctx.reschedule_sync.assert_awaited_once_with(30)
+    assert any(
+        a["action"] == "Sync interval updated" for a in db.recent_activity()
+    )
 
 
 def test_put_general_settings_rejects_invalid_sync_interval(db) -> None:
@@ -322,6 +336,42 @@ def test_put_general_settings_toggles_auto_remove_when_available(db) -> None:
         "auto_remove_when_available": False,
     }
     assert ctx.settings_store.auto_remove_when_available() is False
+    assert any(
+        a["action"] == "Auto-remove when available disabled"
+        for a in db.recent_activity()
+    )
+
+
+def test_put_general_settings_enables_auto_remove_when_available(db) -> None:
+    ctx = make_ctx(
+        db=db,
+        settings_store=StubSettingsStore(auto_remove_when_available=False),
+    )
+    resp = build_client(ctx).put(
+        "/api/settings/general", json={"auto_remove_when_available": True}
+    )
+    assert resp.status_code == 200
+    assert resp.json()["auto_remove_when_available"] is True
+    assert ctx.settings_store.auto_remove_when_available() is True
+    assert any(
+        a["action"] == "Auto-remove when available enabled"
+        for a in db.recent_activity()
+    )
+
+
+def test_put_general_settings_no_activity_when_auto_remove_unchanged(db) -> None:
+    ctx = make_ctx(
+        db=db,
+        settings_store=StubSettingsStore(auto_remove_when_available=False),
+    )
+    resp = build_client(ctx).put(
+        "/api/settings/general", json={"auto_remove_when_available": False}
+    )
+    assert resp.status_code == 200
+    assert resp.json()["auto_remove_when_available"] is False
+    assert not any(
+        "Auto-remove when available" in a["action"] for a in db.recent_activity()
+    )
 
 
 def test_remove_available_endpoint_triggers_handler(db) -> None:
@@ -331,6 +381,10 @@ def test_remove_available_endpoint_triggers_handler(db) -> None:
     assert resp.status_code == 202
     assert resp.json() == {"status": "triggered"}
     ctx.remove_available.assert_awaited()
+    assert any(
+        a["action"] == "Remove available items triggered"
+        for a in db.recent_activity()
+    )
 
 
 def test_remove_available_endpoint_without_handler(db) -> None:

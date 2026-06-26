@@ -218,10 +218,14 @@ def create_api_router(ctx: "AppContext") -> APIRouter:
             await ctx.sync_gate.try_run(ctx.sync_now)
         except SyncAlreadyRunning:
             log.info("manual sync rejected: a sync is already running")
+            ctx.db.add_activity(
+                "Sync already running", "A sync is already running"
+            )
             return JSONResponse(
                 status_code=409, content={"detail": "sync already running"}
             )
         log.info("manual sync completed")
+        ctx.db.add_activity("Sync completed", "Manual sync completed")
         return JSONResponse(status_code=200, content={"status": "completed"})
 
     def _general_settings() -> GeneralSettingsResponse:
@@ -241,28 +245,62 @@ def create_api_router(ctx: "AppContext") -> APIRouter:
 
     @router.post("/status/services/check", response_model=ServicesStatusResponse)
     async def post_services_check() -> ServicesStatusResponse:
-        return _services_status_response(await ctx.status_checker.check_now())
+        result = _services_status_response(await ctx.status_checker.check_now())
+        ctx.db.add_activity(
+            "Integration status check completed", "All service statuses refreshed"
+        )
+        return result
 
     @router.put("/settings/general", response_model=GeneralSettingsResponse)
     async def put_general_settings(
         body: GeneralSettingsRequest,
     ) -> GeneralSettingsResponse:
         if body.interval_seconds is not None:
-            ctx.settings_store.update_status_check_interval(body.interval_seconds)
+            previous = ctx.settings_store.status_check_interval_seconds()
+            seconds = ctx.settings_store.update_status_check_interval(
+                body.interval_seconds
+            )
+            if seconds != previous:
+                ctx.db.add_activity(
+                    "Status interval updated",
+                    f"Status interval updated to {seconds} seconds",
+                )
         if body.sync_interval_minutes is not None:
+            previous = ctx.settings_store.sync_interval_minutes()
             minutes = ctx.settings_store.update_sync_interval(body.sync_interval_minutes)
+            if minutes != previous:
+                ctx.db.add_activity(
+                    "Sync interval updated",
+                    f"Sync interval updated to {minutes} minutes",
+                )
             if ctx.reschedule_sync is not None:
                 await ctx.reschedule_sync(minutes)
         if body.auto_remove_when_available is not None:
-            ctx.settings_store.update_auto_remove_when_available(
+            previous = ctx.settings_store.auto_remove_when_available()
+            enabled = ctx.settings_store.update_auto_remove_when_available(
                 body.auto_remove_when_available
             )
+            if enabled != previous:
+                if enabled:
+                    ctx.db.add_activity(
+                        "Auto-remove when available enabled",
+                        "Items will be removed from Trakt once available in Seer",
+                    )
+                else:
+                    ctx.db.add_activity(
+                        "Auto-remove when available disabled",
+                        "Available items stay on their Trakt list until manually removed",
+                    )
         return _general_settings()
 
     @router.post("/items/remove-available", response_model=SyncResponse, status_code=202)
     async def post_remove_available() -> JSONResponse:
         """Sweep every Available item out of its Trakt list (manual reconcile)."""
         if ctx.remove_available is not None:
+            ctx.db.add_activity(
+                "Remove available items triggered",
+                "Available items are being removed from their Trakt lists",
+            )
             _remember_task(asyncio.create_task(ctx.remove_available()))
             log.info("manual remove-available triggered")
         else:  # no module registered the removal callable
