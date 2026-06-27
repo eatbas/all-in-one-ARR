@@ -1,5 +1,3 @@
-import { ActivityIcon, SettingsIcon } from "lucide-react"
-
 import { Badge } from "@/shared/components/ui/badge"
 import { Card, CardContent } from "@/shared/components/ui/card"
 import { Switch } from "@/shared/components/ui/switch"
@@ -20,62 +18,48 @@ export function Status() {
   const updateSettings = useUpdateBandwidthSettings()
 
   const enabled = status?.enabled ?? false
+  const statusText = status?.status ?? "Monitoring only"
   const isActive = status?.status.includes("Active torrents") ?? false
   const qb = status?.qbittorrent
   const sab = status?.sabnzbd
+  const controlLabel = enabled ? "Enabled" : "Disabled"
+  const badgeLabel = enabled ? statusText : `${statusText} (Disabled)`
 
   return (
     <div className="flex flex-col gap-6">
       <Card className={isActive ? "border-destructive" : undefined}>
-        <CardContent className="flex items-center justify-between gap-4 py-6">
-          <div className="flex items-center gap-3">
-            <ActivityIcon
-              className={cn(
-                "size-5",
-                isActive ? "text-destructive" : "text-emerald-500",
-              )}
-            />
-            <div>
-              <p className="font-medium">
-                {status?.status ?? "Monitoring only"}
-              </p>
-              <p className="text-sm text-muted-foreground">
-                {status?.last_run_at
-                  ? `Last check: ${formatTimestamp(status.last_run_at)}`
-                  : "Waiting for first check…"}
-              </p>
-            </div>
+        <CardContent className="flex flex-col gap-4 sm:flex-row sm:items-center">
+          <div className="min-w-0">
+            <p className="font-medium">System Status</p>
+            <p className="text-sm text-muted-foreground">
+              {status?.last_run_at
+                ? `Last check: ${formatTimestamp(status.last_run_at)}`
+                : "Waiting for first check…"}
+            </p>
           </div>
-          <Badge variant={isActive ? "destructive" : "default"}>
-            {isActive ? "Control active" : "Idle"}
+          <div className="flex items-center gap-3 sm:ml-8">
+            <Switch
+              aria-label="Enable bandwidth control"
+              checked={enabled}
+              disabled={updateSettings.isPending}
+              onCheckedChange={(checked) =>
+                updateSettings.mutate({ enabled: checked })
+              }
+            />
+            <span className="text-sm font-medium">{controlLabel}</span>
+          </div>
+          <Badge
+            variant={isActive ? "destructive" : "default"}
+            className={cn(
+              "w-fit max-w-full px-4 py-2 text-sm font-semibold sm:ml-auto",
+              !isActive &&
+                "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400",
+            )}
+          >
+            {badgeLabel}
           </Badge>
         </CardContent>
       </Card>
-
-      <div className="flex items-center justify-between gap-4 rounded-xl border bg-card p-6 shadow-sm">
-        <div>
-          <p className="font-medium">Bandwidth control</p>
-          <p className="text-sm text-muted-foreground">
-            When on, SABnzbd pauses while qBittorrent has active torrents and
-            resumes when they finish.{" "}
-            <a
-              href="/settings"
-              className="inline-flex items-center gap-1 text-primary hover:underline"
-            >
-              Configure connections in Settings
-              <SettingsIcon className="size-3" />
-            </a>
-          </p>
-        </div>
-        <Switch
-          aria-label="Enable bandwidth control"
-          checked={enabled}
-          disabled={updateSettings.isPending}
-          onCheckedChange={(checked) =>
-            updateSettings.mutate({ enabled: checked })
-          }
-        />
-      </div>
 
       <div className="grid gap-6 md:grid-cols-2">
         <ClientCard

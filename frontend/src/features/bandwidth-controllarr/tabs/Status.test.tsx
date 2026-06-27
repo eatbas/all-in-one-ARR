@@ -49,7 +49,17 @@ beforeEach(() => {
 
 describe("Status", () => {
   it("renders both client cards", () => {
-    render(<Status />)
+    const { container } = render(<Status />)
+    const statusTab = container.firstElementChild
+
+    expect(statusTab?.children).toHaveLength(2)
+    expect(statusTab?.firstElementChild).toContainElement(
+      screen.getByText("System Status"),
+    )
+    expect(statusTab?.firstElementChild).toContainElement(
+      screen.getByText("Disabled"),
+    )
+    expect(screen.getByText("Monitoring only (Disabled)")).toBeInTheDocument()
     expect(screen.getByText("qBittorrent")).toBeInTheDocument()
     expect(screen.getByText("SABnzbd")).toBeInTheDocument()
     expect(screen.getByText("5.50 MB/s")).toBeInTheDocument()
@@ -68,8 +78,8 @@ describe("Status", () => {
     )
     render(<Status />)
     expect(screen.getByText("Active torrents — SABnzbd paused")).toBeInTheDocument()
+    expect(screen.getByText("Enabled")).toBeInTheDocument()
     expect(screen.getByText("PAUSED")).toBeInTheDocument()
-    expect(screen.getByText("Control active")).toBeInTheDocument()
   })
 
   it("toggles bandwidth control on", async () => {

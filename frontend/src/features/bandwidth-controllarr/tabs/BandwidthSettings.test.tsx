@@ -48,23 +48,14 @@ beforeEach(() => {
 })
 
 describe("BandwidthSettings", () => {
-  it("renders the master switch and interval select", () => {
+  it("renders the interval select without the master switch", () => {
     render(<BandwidthSettings />)
     expect(
-      screen.getByRole("switch", { name: "Enable bandwidth control" }),
-    ).toBeInTheDocument()
+      screen.queryByRole("switch", { name: "Enable bandwidth control" }),
+    ).not.toBeInTheDocument()
     expect(screen.getByRole("combobox", { name: "Check interval" })).toHaveTextContent(
       "15 seconds",
     )
-  })
-
-  it("toggles bandwidth control on", async () => {
-    const user = userEvent.setup()
-    render(<BandwidthSettings />)
-    const toggle = screen.getByRole("switch", { name: "Enable bandwidth control" })
-    expect(toggle).not.toBeChecked()
-    await user.click(toggle)
-    expect(updateMutate).toHaveBeenCalledWith({ enabled: true })
   })
 
   it("changes the check interval", async () => {
@@ -96,9 +87,6 @@ describe("BandwidthSettings", () => {
   it("disables controls while the mutation is pending", () => {
     vi.mocked(useUpdateBandwidthSettings).mockReturnValue(mutation(updateMutate, true))
     render(<BandwidthSettings />)
-    expect(
-      screen.getByRole("switch", { name: "Enable bandwidth control" }),
-    ).toBeDisabled()
     expect(screen.getByRole("combobox", { name: "Check interval" })).toBeDisabled()
   })
 
@@ -108,8 +96,8 @@ describe("BandwidthSettings", () => {
     )
     render(<BandwidthSettings />)
     expect(
-      screen.getByRole("switch", { name: "Enable bandwidth control" }),
-    ).not.toBeChecked()
+      screen.queryByRole("switch", { name: "Enable bandwidth control" }),
+    ).not.toBeInTheDocument()
     expect(screen.getByRole("combobox", { name: "Check interval" })).toHaveTextContent(
       "15 seconds",
     )

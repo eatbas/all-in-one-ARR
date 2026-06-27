@@ -15,7 +15,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/shared/components/ui/select"
-import { Switch } from "@/shared/components/ui/switch"
 import {
   useBandwidthStatus,
   useUpdateBandwidthSettings,
@@ -24,14 +23,13 @@ import {
 const INTERVAL_OPTIONS = [10, 15, 30, 60] as const
 
 /**
- * Bandwidth-Controllarr Settings tab: toggle the master switch and choose the
- * control-loop check interval. Also exposes a link to the Prometheus metrics.
+ * Bandwidth-Controllarr Settings tab: choose the control-loop check interval
+ * and expose a link to the Prometheus metrics.
  */
 export function BandwidthSettings() {
   const { data: status } = useBandwidthStatus()
   const updateSettings = useUpdateBandwidthSettings()
 
-  const enabled = status?.enabled ?? false
   const interval = status?.check_interval_seconds ?? 15
 
   return (
@@ -52,30 +50,15 @@ export function BandwidthSettings() {
           </CardDescription>
         </CardHeader>
         <CardContent className="flex flex-col gap-6">
-          <div className="flex items-center justify-between gap-4">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
             <div>
-              <p className="text-sm font-medium">Enable bandwidth control</p>
+              <label htmlFor="check-interval" className="text-sm font-medium">
+                Check interval
+              </label>
               <p className="text-sm text-muted-foreground">
-                Disabling resumes SABnzbd if it had been paused by this feature.
+                How often the engine polls qBittorrent and SABnzbd.
               </p>
             </div>
-            <Switch
-              aria-label="Enable bandwidth control"
-              checked={enabled}
-              disabled={updateSettings.isPending}
-              onCheckedChange={(checked) =>
-                updateSettings.mutate({ enabled: checked })
-              }
-            />
-          </div>
-
-          <div className="flex flex-col gap-2">
-            <label htmlFor="check-interval" className="text-sm font-medium">
-              Check interval
-            </label>
-            <p className="text-sm text-muted-foreground">
-              How often the engine polls qBittorrent and SABnzbd.
-            </p>
             <Select
               value={String(interval)}
               onValueChange={(value) =>
@@ -85,7 +68,7 @@ export function BandwidthSettings() {
               }
               disabled={updateSettings.isPending}
             >
-              <SelectTrigger id="check-interval" className="w-40">
+              <SelectTrigger id="check-interval" className="w-full sm:w-40">
                 <SelectValue placeholder="Select interval" />
               </SelectTrigger>
               <SelectContent>
