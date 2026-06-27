@@ -74,11 +74,15 @@ class StubSettingsStore:
         status_check_interval_seconds: int = 60,
         sync_interval_minutes: int = 15,
         auto_remove_when_available: bool = True,
+        bandwidth_control_enabled: bool = False,
+        bandwidth_check_interval_seconds: int = 15,
     ) -> None:
         # Defaults to True (unlike the real store, which seeds False) so the
         # availability-removal tests exercise the enabled path without having to opt
         # in; the off path is covered explicitly by passing auto_remove_when_available.
         self._auto_remove_when_available = auto_remove_when_available
+        self._bandwidth_control_enabled = bandwidth_control_enabled
+        self._bandwidth_check_interval_seconds = bandwidth_check_interval_seconds
         self._lists = (
             lists
             if lists is not None
@@ -152,6 +156,22 @@ class StubSettingsStore:
         self._auto_remove_when_available = bool(enabled)
         return self._auto_remove_when_available
 
+    def bandwidth_control_enabled(self) -> bool:
+        return self._bandwidth_control_enabled
+
+    def update_bandwidth_control_enabled(self, enabled: bool) -> bool:
+        self._bandwidth_control_enabled = bool(enabled)
+        return self._bandwidth_control_enabled
+
+    def bandwidth_check_interval_seconds(self) -> int:
+        return self._bandwidth_check_interval_seconds
+
+    def update_bandwidth_check_interval(self, seconds: int) -> int:
+        if seconds not in {10, 15, 30, 60}:
+            seconds = 15
+        self._bandwidth_check_interval_seconds = seconds
+        return seconds
+
     def masked_services(self) -> dict[str, dict[str, Any]]:
         return {
             desc.name: masked_entry(desc, self._services[desc.name])
@@ -184,12 +204,24 @@ class StubService:
     """Minimal stand-in for the simple connection-test clients.
 
     Covers TMDB/OMDb/SABnzbd/qBittorrent, which share the
-    ``update_credentials``/``test_connection``/``aclose`` contract.
+    ``update_credentials``/``test_connection``/``aclose`` contract. The
+    Bandwidth-Controllarr methods are included so control-loop tests can use
+    the generic stub when they do not care about specific client behaviour.
     """
 
     def __init__(self) -> None:
         self.update_credentials = MagicMock()
         self.test_connection = AsyncMock(return_value={"ok": True, "detail": "Connected"})
+        self.get_stats = AsyncMock(
+            return_value={
+                "online": True,
+                "speed_mbps": 0,
+                "active_downloads": 0,
+                "queue_size": 0,
+            }
+        )
+        self.pause = AsyncMock(return_value=True)
+        self.resume = AsyncMock(return_value=True)
         self.aclose = AsyncMock()
 
 

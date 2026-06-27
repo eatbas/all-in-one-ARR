@@ -9,6 +9,8 @@ from core.clients.qbittorrent import QbittorrentClient
 
 _BASE = "http://qb:8080"
 _VERSION = f"{_BASE}/api/v2/app/version"
+_TRANSFER = f"{_BASE}/api/v2/transfer/info"
+_TORRENTS = f"{_BASE}/api/v2/torrents/info"
 _KEY = "qbt_0123456789abcdefghijklmnop"
 
 
@@ -95,3 +97,109 @@ async def test_update_credentials_changes_target() -> None:
 
 async def test_aclose() -> None:
     await make_client().aclose()
+
+
+@respx.mock
+async def test_get_stats_success() -> None:
+    transfer = respx.get(_TRANSFER).mock(
+        return_value=httpx.Response(200, json={"dl_info_speed": 12_500_000})
+    )
+    torrents = respx.get(_TORRENTS).mock(
+        return_value=httpx.Response(
+            200,
+            json=[
+                {"state": "downloading"},
+                {"state": "stalledDL"},
+                {"state": "forcedDL"},
+                {"state": "metaDL"},
+                {"state": "allocating"},
+                {"state": "queuedDL"},
+                {"state": "uploading"},
+            ],
+        )
+    )
+    result = await make_client().get_stats()
+    assert result == {
+        "online": True,
+        "speed_mbps": 12.5,
+        "active_downloads": 5,
+        "queue_size": 1,
+    }
+    assert transfer.calls.last.request.headers["Authorization"] == f"Bearer {_KEY}"
+    assert transfer.calls.last.request.headers["Referer"] == _BASE
+    assert torrents.calls.last.request.headers["Authorization"] == f"Bearer {_KEY}"
+
+
+@respx.mock
+async def test_get_stats_blank_key_returns_offline() -> None:
+    transfer = respx.get(_TRANSFER).mock(return_value=httpx.Response(200, json={}))
+    torrents = respx.get(_TORRENTS).mock(return_value=httpx.Response(200, json=[]))
+    result = await make_client(api_key="   ").get_stats()
+    assert result["online"] is False
+    assert result["active_downloads"] == 0
+    assert not transfer.called
+    assert not torrents.called
+
+
+@respx.mock
+async def test_get_stats_network_error_returns_offline() -> None:
+    respx.get(_TRANSFER).mock(side_effect=httpx.ConnectError("down"))
+    result = await make_client().get_stats()
+    assert result["online"] is False
+
+
+@respx.mock
+async def test_get_stats_non_200_returns_offline() -> None:
+    respx.get(_TRANSFER).mock(return_value=httpx.Response(500))
+    respx.get(_TORRENTS).mock(return_value=httpx.Response(200, json=[]))
+    result = await make_client().get_stats()
+    assert result["online"] is False
+
+
+@respx.mock
+async def test_get_stats_invalid_json_returns_offline() -> None:
+    respx.get(_TRANSFER).mock(return_value=httpx.Response(200, text="not json"))
+    respx.get(_TORRENTS).mock(return_value=httpx.Response(200, json=[]))
+    result = await make_client().get_stats()
+    assert result["online"] is False
+
+
+@respx.mock
+async def test_get_stats_zero_speed_rounded() -> None:
+    respx.get(_TRANSFER).mock(return_value=httpx.Response(200, json={"dl_info_speed": 0}))
+    respx.get(_TORRENTS).mock(return_value=httpx.Response(200, json=[]))
+    result = await make_client().get_stats()
+    assert result["online"] is True
+    assert result["speed_mbps"] == 0.0
+
+
+@respx.mock
+async def test_get_stats_non_dict_transfer_returns_offline() -> None:
+    respx.get(_TRANSFER).mock(return_value=httpx.Response(200, json=["bad"]))
+    respx.get(_TORRENTS).mock(return_value=httpx.Response(200, json=[]))
+    result = await make_client().get_stats()
+    assert result["online"] is False
+
+
+@respx.mock
+async def test_get_stats_non_numeric_speed_returns_offline() -> None:
+    respx.get(_TRANSFER).mock(return_value=httpx.Response(200, json={"dl_info_speed": "fast"}))
+    respx.get(_TORRENTS).mock(return_value=httpx.Response(200, json=[]))
+    result = await make_client().get_stats()
+    assert result["online"] is False
+
+
+@respx.mock
+async def test_get_stats_non_list_torrents_returns_offline() -> None:
+    respx.get(_TRANSFER).mock(return_value=httpx.Response(200, json={"dl_info_speed": 0}))
+    respx.get(_TORRENTS).mock(return_value=httpx.Response(200, json={"bad": True}))
+    result = await make_client().get_stats()
+    assert result["online"] is False
+
+
+@respx.mock
+async def test_get_stats_non_dict_torrent_entry_returns_offline() -> None:
+    respx.get(_TRANSFER).mock(return_value=httpx.Response(200, json={"dl_info_speed": 0}))
+    respx.get(_TORRENTS).mock(return_value=httpx.Response(200, json=["not-a-dict"]))
+    result = await make_client().get_stats()
+    assert result["online"] is False

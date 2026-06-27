@@ -81,6 +81,87 @@ class QbittorrentClient:
             ),
         }
 
+    async def get_stats(self) -> dict[str, Any]:
+        """Return qBittorrent transfer/torrent statistics for the dashboard.
+
+        Fetches ``/api/v2/transfer/info`` for the current download speed and
+        ``/api/v2/torrents/info`` for active/queued counts. Active states are
+        ``downloading``, ``stalledDL``, ``forcedDL``, ``metaDL`` and ``allocating``;
+        queued is ``queuedDL``. Returns zeros and ``online: False`` on any failure
+        so the control loop never crashes because a client is temporarily down.
+        """
+        api_key = self._api_key.strip()
+        if not api_key:
+            return _offline_stats()
+        try:
+            transfer = await self._client.get(
+                f"{self._base_url}/api/v2/transfer/info",
+                headers={
+                    "Authorization": f"Bearer {api_key}",
+                    "Referer": self._base_url,
+                },
+            )
+            torrents = await self._client.get(
+                f"{self._base_url}/api/v2/torrents/info",
+                headers={
+                    "Authorization": f"Bearer {api_key}",
+                    "Referer": self._base_url,
+                },
+            )
+        except httpx.HTTPError:
+            return _offline_stats()
+        if transfer.status_code != 200 or torrents.status_code != 200:
+            return _offline_stats()
+        try:
+            transfer_data = transfer.json()
+            torrent_data = torrents.json()
+        except ValueError:
+            return _offline_stats()
+
+        if not isinstance(transfer_data, dict) or not isinstance(torrent_data, list):
+            return _offline_stats()
+        if not all(isinstance(torrent, dict) for torrent in torrent_data):
+            return _offline_stats()
+
+        speed_bps = transfer_data.get("dl_info_speed", 0) or 0
+        if not isinstance(speed_bps, (int, float)):
+            return _offline_stats()
+        speed_mbps = round(speed_bps / 1_000_000, 2)
+
+        active_states = {
+            "downloading",
+            "stalledDL",
+            "forcedDL",
+            "metaDL",
+            "allocating",
+        }
+        queued_states = {"queuedDL"}
+        active_downloads = 0
+        queue_size = 0
+        for torrent in torrent_data:
+            state = torrent.get("state")
+            if state in active_states:
+                active_downloads += 1
+            elif state in queued_states:
+                queue_size += 1
+
+        return {
+            "online": True,
+            "speed_mbps": speed_mbps,
+            "active_downloads": active_downloads,
+            "queue_size": queue_size,
+        }
+
     async def aclose(self) -> None:
         """Close the underlying HTTP client."""
         await self._client.aclose()
+
+
+def _offline_stats() -> dict[str, Any]:
+    """Return the zero/offline payload used by every failure branch."""
+    return {
+        "online": False,
+        "speed_mbps": 0,
+        "active_downloads": 0,
+        "queue_size": 0,
+    }

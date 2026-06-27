@@ -111,3 +111,9 @@ class AppContext:
     remove_available: Callable[[], Awaitable[Any]] | None = field(default=None)
     remove_item: Callable[[str, int], Awaitable[bool]] | None = field(default=None)
     reschedule_sync: Callable[[int], Awaitable[Any]] | None = field(default=None)
+    # Bandwidth-Controllarr callables, set by the module during setup(); the API
+    # router uses them so the core stays decoupled from the module.
+    bandwidth_status: Callable[[], Awaitable[dict]] | None = field(default=None)
+    bandwidth_update_settings: Callable[..., Awaitable[dict]] | None = field(
+        default=None
+    )
