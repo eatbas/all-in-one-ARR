@@ -597,13 +597,15 @@ function GeneralCard() {
         </CardDescription>
       </CardHeader>
       <CardContent className="flex flex-col gap-6">
-        <div className="flex flex-col gap-2">
-          <label htmlFor="status-interval" className="text-sm font-medium">
-            Status check interval
-          </label>
-          <p className="text-sm text-muted-foreground">
-            How often the dashboard pings each integration.
-          </p>
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <label htmlFor="status-interval" className="text-sm font-medium">
+              Status check interval
+            </label>
+            <p className="text-sm text-muted-foreground">
+              How often the dashboard pings each integration.
+            </p>
+          </div>
           <Select
             value={String(interval)}
             onValueChange={(value) =>
@@ -611,7 +613,7 @@ function GeneralCard() {
             }
             disabled={updateInterval.isPending}
           >
-            <SelectTrigger id="status-interval" className="w-40">
+            <SelectTrigger id="status-interval" className="w-full sm:w-40">
               <SelectValue placeholder="Select interval" />
             </SelectTrigger>
             <SelectContent>
@@ -624,7 +626,7 @@ function GeneralCard() {
           </Select>
         </div>
 
-        <div className="flex flex-col gap-2">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <p className="text-sm font-medium">Appearance</p>
           <div className="flex flex-wrap gap-2">
             {THEME_OPTIONS.map((option) => (
