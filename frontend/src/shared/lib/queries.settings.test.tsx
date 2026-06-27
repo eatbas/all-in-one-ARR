@@ -1,22 +1,11 @@
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
 import { act, renderHook, waitFor } from "@testing-library/react"
-import type { ReactNode } from "react"
 import { beforeEach, describe, expect, it, vi } from "vitest"
 
 vi.mock("@/shared/lib/api", () => ({
-  getStatus: vi.fn(),
-  getItems: vi.fn(),
-  getLists: vi.fn(),
-  getActivity: vi.fn(),
-  triggerSync: vi.fn(),
   getTraktSettings: vi.fn(),
-  getTraktAuthStatus: vi.fn(),
-  getTraktLists: vi.fn(),
   updateTraktSettings: vi.fn(),
   startTraktAuth: vi.fn(),
   testTrakt: vi.fn(),
-  addTraktList: vi.fn(),
-  removeTraktList: vi.fn(),
   getServiceSettings: vi.fn(),
   updateServiceSettings: vi.fn(),
   testService: vi.fn(),
@@ -24,12 +13,6 @@ vi.mock("@/shared/lib/api", () => ({
   checkServiceStatuses: vi.fn(),
   getGeneralSettings: vi.fn(),
   updateGeneralSettings: vi.fn(),
-  removeItem: vi.fn(),
-  removeAvailable: vi.fn(),
-  getDatabaseStats: vi.fn(),
-  clearActivity: vi.fn(),
-  clearItems: vi.fn(),
-  clearPosters: vi.fn(),
 }))
 
 vi.mock("sonner", () => ({
@@ -41,28 +24,13 @@ import { toast } from "sonner"
 
 import {
   queryKeys,
-  useActivity,
-  useAddTraktList,
   useCheckServiceStatuses,
-  useClearActivity,
-  useClearItems,
-  useClearPosters,
-  useDatabaseStats,
   useGeneralSettings,
-  useListItems,
-  useLists,
-  useRemoveTraktList,
   useServiceSettings,
   useServiceStatuses,
   useStartTraktAuth,
-  useStatus,
-  useSyncNow,
   useTestService,
   useTestTrakt,
-  useRemoveAvailable,
-  useRemoveItem,
-  useTraktAuthStatus,
-  useTraktLists,
   useTraktSettings,
   useUpdateAutoRemoveWhenAvailable,
   useUpdateServiceSettings,
@@ -70,18 +38,7 @@ import {
   useUpdateSyncInterval,
   useUpdateTraktSettings,
 } from "@/shared/lib/queries"
-
-/** A fresh client (retries disabled so failures surface immediately) plus its
- * matching provider wrapper. */
-function setup() {
-  const queryClient = new QueryClient({
-    defaultOptions: { queries: { retry: false } },
-  })
-  const wrapper = ({ children }: { children: ReactNode }) => (
-    <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
-  )
-  return { queryClient, wrapper }
-}
+import { setup } from "@/shared/test/query-provider"
 
 const sampleSettings = {
   client_id_hint: "1234",
@@ -92,22 +49,7 @@ const sampleSettings = {
 }
 
 beforeEach(() => {
-  vi.mocked(api.getStatus).mockResolvedValue({
-    trakt_connected: false,
-    counts: { synced: 0, requested: 0, available: 0, removed: 0 },
-  })
-  vi.mocked(api.getItems).mockResolvedValue([])
-  vi.mocked(api.getLists).mockResolvedValue([])
-  vi.mocked(api.getActivity).mockResolvedValue([])
   vi.mocked(api.getTraktSettings).mockResolvedValue(sampleSettings)
-  vi.mocked(api.getTraktAuthStatus).mockResolvedValue({
-    state: "idle",
-    user_code: null,
-    verification_url: null,
-    message: null,
-    connected: false,
-  })
-  vi.mocked(api.getTraktLists).mockResolvedValue([])
   vi.mocked(api.getServiceSettings).mockResolvedValue({
     seer: { url: "http://js", api_key_set: true },
     sonarr: { url: "", api_key_set: false },
@@ -132,133 +74,14 @@ beforeEach(() => {
     sync_interval_minutes: 15,
     auto_remove_when_available: false,
   })
-  vi.mocked(api.getDatabaseStats).mockResolvedValue({
-    db_size_bytes: 1024,
-    poster_cache_bytes: 2048,
-    item_count: 5,
-    activity_count: 12,
-    list_state_count: 2,
-  })
 })
 
-describe("query hooks", () => {
-  it("useStatus fetches the app status (counts)", async () => {
-    const { wrapper } = setup()
-    const { result } = renderHook(() => useStatus(), { wrapper })
-
-    await waitFor(() => expect(result.current.isSuccess).toBe(true))
-    expect(api.getStatus).toHaveBeenCalled()
-    expect(result.current.data?.trakt_connected).toBe(false)
-  })
-
-  it("useActivity fetches the activity feed", async () => {
-    const { wrapper } = setup()
-    const { result } = renderHook(() => useActivity(), { wrapper })
-
-    await waitFor(() => expect(result.current.isSuccess).toBe(true))
-    expect(api.getActivity).toHaveBeenCalled()
-  })
-
-  it("useLists fetches the synced lists", async () => {
-    const { wrapper } = setup()
-    const { result } = renderHook(() => useLists(), { wrapper })
-
-    await waitFor(() => expect(result.current.isSuccess).toBe(true))
-    expect(api.getLists).toHaveBeenCalled()
-  })
-
-  it("useListItems fetches a list's items when enabled", async () => {
-    const { wrapper } = setup()
-    const { result } = renderHook(() => useListItems("movies", true), { wrapper })
-
-    await waitFor(() => expect(result.current.isSuccess).toBe(true))
-    expect(api.getItems).toHaveBeenCalledWith(undefined, "movies")
-  })
-
-  it("useListItems stays idle while disabled", () => {
-    const { wrapper } = setup()
-    const { result } = renderHook(() => useListItems("movies", false), { wrapper })
-
-    expect(result.current.fetchStatus).toBe("idle")
-    expect(api.getItems).not.toHaveBeenCalled()
-  })
-})
-
-describe("useSyncNow", () => {
-  it("toasts success and awaits invalidation of the affected queries", async () => {
-    vi.mocked(api.triggerSync).mockResolvedValue({ status: "completed" })
-    const { queryClient, wrapper } = setup()
-    const invalidate = vi
-      .spyOn(queryClient, "invalidateQueries")
-      .mockResolvedValue(undefined)
-    const { result } = renderHook(() => useSyncNow(), { wrapper })
-
-    act(() => result.current.mutate())
-
-    await waitFor(() => expect(result.current.isSuccess).toBe(true))
-    expect(toast.success).toHaveBeenCalledWith(
-      "Sync complete",
-      expect.objectContaining({ description: expect.any(String) }),
-    )
-    expect(invalidate).toHaveBeenCalledWith({ queryKey: queryKeys.status })
-    expect(invalidate).toHaveBeenCalledWith({ queryKey: ["items"] })
-    expect(invalidate).toHaveBeenCalledWith({ queryKey: queryKeys.lists })
-    expect(invalidate).toHaveBeenCalledWith({ queryKey: queryKeys.activity })
-  })
-
-  it("toasts the error message when the sync fails", async () => {
-    vi.mocked(api.triggerSync).mockRejectedValue(new Error("backend down"))
-    const { wrapper } = setup()
-    const { result } = renderHook(() => useSyncNow(), { wrapper })
-
-    act(() => result.current.mutate())
-
-    await waitFor(() => expect(result.current.isError).toBe(true))
-    expect(toast.error).toHaveBeenCalledWith("Could not trigger sync", {
-      description: "backend down",
-    })
-  })
-})
-
-describe("trakt connection hooks", () => {
+describe("trakt settings hooks", () => {
   it("useTraktSettings fetches the settings", async () => {
     const { wrapper } = setup()
     const { result } = renderHook(() => useTraktSettings(), { wrapper })
     await waitFor(() => expect(result.current.isSuccess).toBe(true))
     expect(result.current.data?.client_id_hint).toBe("1234")
-  })
-
-  it("useTraktAuthStatus stops polling once not pending", async () => {
-    const { wrapper } = setup()
-    const { result } = renderHook(() => useTraktAuthStatus(), { wrapper })
-    await waitFor(() => expect(result.current.isSuccess).toBe(true))
-    expect(api.getTraktAuthStatus).toHaveBeenCalled()
-  })
-
-  it("useTraktAuthStatus keeps polling while pending", async () => {
-    vi.mocked(api.getTraktAuthStatus).mockResolvedValue({
-      state: "pending",
-      user_code: "ABCD",
-      verification_url: "https://trakt.tv/activate",
-      message: "waiting",
-      connected: false,
-    })
-    const { wrapper } = setup()
-    const { result } = renderHook(() => useTraktAuthStatus(), { wrapper })
-    await waitFor(() => expect(result.current.data?.state).toBe("pending"))
-  })
-
-  it("useTraktLists fetches only when enabled", async () => {
-    const { wrapper } = setup()
-    const { result } = renderHook(() => useTraktLists(true), { wrapper })
-    await waitFor(() => expect(result.current.isSuccess).toBe(true))
-    expect(api.getTraktLists).toHaveBeenCalled()
-  })
-
-  it("useTraktLists stays idle when disabled", () => {
-    const { wrapper } = setup()
-    renderHook(() => useTraktLists(false), { wrapper })
-    expect(api.getTraktLists).not.toHaveBeenCalled()
   })
 
   it("useUpdateTraktSettings toasts and invalidates on success", async () => {
@@ -392,62 +215,6 @@ describe("trakt connection hooks", () => {
     await waitFor(() => expect(result.current.isError).toBe(true))
     expect(toast.error).toHaveBeenCalledWith("Could not test connection", {
       description: "boom",
-    })
-  })
-
-  it("useAddTraktList toasts and invalidates on success", async () => {
-    vi.mocked(api.addTraktList).mockResolvedValue(sampleSettings)
-    const { queryClient, wrapper } = setup()
-    const invalidate = vi.spyOn(queryClient, "invalidateQueries")
-    const { result } = renderHook(() => useAddTraktList(), { wrapper })
-
-    act(() => result.current.mutate({ url: "https://trakt.tv/users/me/lists/anime" }))
-
-    await waitFor(() => expect(result.current.isSuccess).toBe(true))
-    expect(toast.success).toHaveBeenCalledWith("List added")
-    expect(invalidate).toHaveBeenCalledWith({ queryKey: queryKeys.traktSettings })
-    expect(invalidate).toHaveBeenCalledWith({ queryKey: queryKeys.traktLists })
-    expect(invalidate).toHaveBeenCalledWith({ queryKey: queryKeys.activity })
-  })
-
-  it("useAddTraktList toasts on error", async () => {
-    vi.mocked(api.addTraktList).mockRejectedValue(new Error("bad url"))
-    const { wrapper } = setup()
-    const { result } = renderHook(() => useAddTraktList(), { wrapper })
-
-    act(() => result.current.mutate({ url: "x" }))
-
-    await waitFor(() => expect(result.current.isError).toBe(true))
-    expect(toast.error).toHaveBeenCalledWith("Could not add list", {
-      description: "bad url",
-    })
-  })
-
-  it("useRemoveTraktList removes by owner and slug", async () => {
-    vi.mocked(api.removeTraktList).mockResolvedValue(sampleSettings)
-    const { queryClient, wrapper } = setup()
-    const invalidate = vi.spyOn(queryClient, "invalidateQueries")
-    const { result } = renderHook(() => useRemoveTraktList(), { wrapper })
-
-    act(() => result.current.mutate({ owner_user: "me", slug: "movies" }))
-
-    await waitFor(() => expect(result.current.isSuccess).toBe(true))
-    expect(api.removeTraktList).toHaveBeenCalledWith("me", "movies")
-    expect(toast.success).toHaveBeenCalledWith("List removed")
-    expect(invalidate).toHaveBeenCalledWith({ queryKey: queryKeys.traktLists })
-    expect(invalidate).toHaveBeenCalledWith({ queryKey: queryKeys.activity })
-  })
-
-  it("useRemoveTraktList toasts on error", async () => {
-    vi.mocked(api.removeTraktList).mockRejectedValue(new Error("nope"))
-    const { wrapper } = setup()
-    const { result } = renderHook(() => useRemoveTraktList(), { wrapper })
-
-    act(() => result.current.mutate({ owner_user: "me", slug: "movies" }))
-
-    await waitFor(() => expect(result.current.isError).toBe(true))
-    expect(toast.error).toHaveBeenCalledWith("Could not remove list", {
-      description: "nope",
     })
   })
 })
@@ -735,180 +502,6 @@ describe("general settings hooks", () => {
     await waitFor(() => expect(result.current.isError).toBe(true))
     expect(toast.error).toHaveBeenCalledWith("Could not update auto-remove", {
       description: "boom",
-    })
-  })
-
-  it("useRemoveItem deletes an item and invalidates queries", async () => {
-    vi.mocked(api.removeItem).mockResolvedValue(undefined)
-    const { queryClient, wrapper } = setup()
-    const invalidate = vi.spyOn(queryClient, "invalidateQueries")
-    const { result } = renderHook(() => useRemoveItem(), { wrapper })
-
-    act(() => result.current.mutate({ list_id: "movies", trakt_id: 1 }))
-
-    await waitFor(() => expect(result.current.isSuccess).toBe(true))
-    expect(api.removeItem).toHaveBeenCalledWith("movies", 1)
-    expect(invalidate).toHaveBeenCalledWith({ queryKey: ["items"] })
-    expect(invalidate).toHaveBeenCalledWith({ queryKey: queryKeys.lists })
-    expect(invalidate).toHaveBeenCalledWith({ queryKey: queryKeys.status })
-    expect(invalidate).toHaveBeenCalledWith({ queryKey: queryKeys.activity })
-  })
-
-  it("useRemoveItem toasts on error", async () => {
-    vi.mocked(api.removeItem).mockRejectedValue(new Error("denied"))
-    const { wrapper } = setup()
-    const { result } = renderHook(() => useRemoveItem(), { wrapper })
-
-    act(() => result.current.mutate({ list_id: "movies", trakt_id: 1 }))
-
-    await waitFor(() => expect(result.current.isError).toBe(true))
-    expect(toast.error).toHaveBeenCalledWith("Could not remove item", {
-      description: "denied",
-    })
-  })
-
-  it("useRemoveAvailable triggers the sweep and invalidates queries", async () => {
-    vi.mocked(api.removeAvailable).mockResolvedValue({ status: "triggered" })
-    const { queryClient, wrapper } = setup()
-    const invalidate = vi.spyOn(queryClient, "invalidateQueries")
-    const { result } = renderHook(() => useRemoveAvailable(), { wrapper })
-
-    act(() => result.current.mutate())
-
-    await waitFor(() => expect(result.current.isSuccess).toBe(true))
-    expect(api.removeAvailable).toHaveBeenCalled()
-    expect(invalidate).toHaveBeenCalledWith({ queryKey: ["items"] })
-    expect(invalidate).toHaveBeenCalledWith({ queryKey: queryKeys.lists })
-    expect(invalidate).toHaveBeenCalledWith({ queryKey: queryKeys.status })
-    expect(invalidate).toHaveBeenCalledWith({ queryKey: queryKeys.activity })
-  })
-
-  it("useRemoveAvailable toasts on error", async () => {
-    vi.mocked(api.removeAvailable).mockRejectedValue(new Error("offline"))
-    const { wrapper } = setup()
-    const { result } = renderHook(() => useRemoveAvailable(), { wrapper })
-
-    act(() => result.current.mutate())
-
-    await waitFor(() => expect(result.current.isError).toBe(true))
-    expect(toast.error).toHaveBeenCalledWith("Could not remove available items", {
-      description: "offline",
-    })
-  })
-})
-
-describe("database hooks", () => {
-  it("useDatabaseStats fetches the storage overview", async () => {
-    const { wrapper } = setup()
-    const { result } = renderHook(() => useDatabaseStats(), { wrapper })
-
-    await waitFor(() => expect(result.current.isSuccess).toBe(true))
-    expect(api.getDatabaseStats).toHaveBeenCalled()
-    expect(result.current.data?.db_size_bytes).toBe(1024)
-  })
-
-  it("useClearActivity toasts and invalidates on success", async () => {
-    vi.mocked(api.clearActivity).mockResolvedValue({
-      db_size_bytes: 512,
-      poster_cache_bytes: 2048,
-      item_count: 5,
-      activity_count: 1,
-      list_state_count: 2,
-    })
-    const { queryClient, wrapper } = setup()
-    const invalidate = vi.spyOn(queryClient, "invalidateQueries")
-    const { result } = renderHook(() => useClearActivity(), { wrapper })
-
-    act(() => result.current.mutate())
-
-    await waitFor(() => expect(result.current.isSuccess).toBe(true))
-    expect(toast.success).toHaveBeenCalledWith("Activity log cleared")
-    expect(invalidate).toHaveBeenCalledWith({ queryKey: queryKeys.database })
-    expect(invalidate).toHaveBeenCalledWith({ queryKey: queryKeys.activity })
-  })
-
-  it("useClearActivity toasts on error", async () => {
-    vi.mocked(api.clearActivity).mockRejectedValue(new Error("denied"))
-    const { wrapper } = setup()
-    const { result } = renderHook(() => useClearActivity(), { wrapper })
-
-    act(() => result.current.mutate())
-
-    await waitFor(() => expect(result.current.isError).toBe(true))
-    expect(toast.error).toHaveBeenCalledWith("Could not clear activity log", {
-      description: "denied",
-    })
-  })
-
-  it("useClearItems toasts and invalidates affected queries", async () => {
-    vi.mocked(api.clearItems).mockResolvedValue({
-      db_size_bytes: 512,
-      poster_cache_bytes: 2048,
-      item_count: 0,
-      activity_count: 1,
-      list_state_count: 0,
-    })
-    const { queryClient, wrapper } = setup()
-    const invalidate = vi.spyOn(queryClient, "invalidateQueries")
-    const { result } = renderHook(() => useClearItems(), { wrapper })
-
-    act(() => result.current.mutate())
-
-    await waitFor(() => expect(result.current.isSuccess).toBe(true))
-    expect(toast.success).toHaveBeenCalledWith(
-      "Synced items cleared",
-      expect.objectContaining({ description: expect.any(String) }),
-    )
-    expect(invalidate).toHaveBeenCalledWith({ queryKey: queryKeys.database })
-    expect(invalidate).toHaveBeenCalledWith({ queryKey: queryKeys.activity })
-    expect(invalidate).toHaveBeenCalledWith({ queryKey: queryKeys.lists })
-    expect(invalidate).toHaveBeenCalledWith({ queryKey: queryKeys.status })
-    expect(invalidate).toHaveBeenCalledWith({ queryKey: ["items"] })
-  })
-
-  it("useClearItems toasts on error", async () => {
-    vi.mocked(api.clearItems).mockRejectedValue(new Error("denied"))
-    const { wrapper } = setup()
-    const { result } = renderHook(() => useClearItems(), { wrapper })
-
-    act(() => result.current.mutate())
-
-    await waitFor(() => expect(result.current.isError).toBe(true))
-    expect(toast.error).toHaveBeenCalledWith("Could not clear synced items", {
-      description: "denied",
-    })
-  })
-
-  it("useClearPosters toasts and invalidates on success", async () => {
-    vi.mocked(api.clearPosters).mockResolvedValue({
-      db_size_bytes: 1024,
-      poster_cache_bytes: 0,
-      item_count: 5,
-      activity_count: 13,
-      list_state_count: 2,
-    })
-    const { queryClient, wrapper } = setup()
-    const invalidate = vi.spyOn(queryClient, "invalidateQueries")
-    const { result } = renderHook(() => useClearPosters(), { wrapper })
-
-    act(() => result.current.mutate())
-
-    await waitFor(() => expect(result.current.isSuccess).toBe(true))
-    expect(toast.success).toHaveBeenCalledWith("Poster cache cleared")
-    expect(invalidate).toHaveBeenCalledWith({ queryKey: queryKeys.database })
-    expect(invalidate).toHaveBeenCalledWith({ queryKey: queryKeys.activity })
-  })
-
-  it("useClearPosters toasts on error", async () => {
-    vi.mocked(api.clearPosters).mockRejectedValue(new Error("denied"))
-    const { wrapper } = setup()
-    const { result } = renderHook(() => useClearPosters(), { wrapper })
-
-    act(() => result.current.mutate())
-
-    await waitFor(() => expect(result.current.isError).toBe(true))
-    expect(toast.error).toHaveBeenCalledWith("Could not clear poster cache", {
-      description: "denied",
     })
   })
 })

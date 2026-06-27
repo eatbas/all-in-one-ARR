@@ -388,6 +388,31 @@ export function clearPosters(): Promise<DatabaseStats> {
   return postJson<DatabaseStats>("/api/settings/database/clear-posters", {})
 }
 
+/** Statistics for one download client shown on the Bandwidth-Controllarr page. */
+export interface BandwidthClientStats {
+  online: boolean
+  speed_mbps: number
+  active_downloads: number
+  queue_size: number
+  paused?: boolean
+}
+
+/** Full live status returned by `GET /api/bandwidth/status`. */
+export interface BandwidthStatus {
+  enabled: boolean
+  status: string
+  last_run_at: string | null
+  check_interval_seconds: number
+  qbittorrent: BandwidthClientStats
+  sabnzbd: BandwidthClientStats
+}
+
+/** Body of `PUT /api/bandwidth/settings`; omitted fields stay unchanged. */
+export interface BandwidthSettingsUpdate {
+  enabled?: boolean
+  check_interval_seconds?: number
+}
+
 /** Remove a single tracked item from its Trakt list. */
 export function removeItem(listId: string, traktId: number): Promise<void> {
   return request<void>(
@@ -399,4 +424,18 @@ export function removeItem(listId: string, traktId: number): Promise<void> {
 /** Trigger removal of every Available item from its Trakt list. */
 export function removeAvailable(): Promise<SyncResult> {
   return postJson<SyncResult>("/api/items/remove-available", {})
+}
+
+export function getBandwidthStatus(): Promise<BandwidthStatus> {
+  return request<BandwidthStatus>("/api/bandwidth/status")
+}
+
+export function updateBandwidthSettings(
+  body: BandwidthSettingsUpdate,
+): Promise<BandwidthStatus> {
+  return request<BandwidthStatus>("/api/bandwidth/settings", {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  })
 }

@@ -1,4 +1,5 @@
 import {
+  GaugeIcon,
   LayoutDashboardIcon,
   ListChecksIcon,
   SettingsIcon,
@@ -33,6 +34,12 @@ export const NAV_ITEMS: ReadonlyArray<NavItem> = [
     to: "/list-syncarr",
     icon: ListChecksIcon,
     description: "Synced Trakt lists and their mirrored items",
+  },
+  {
+    title: "Bandwidth-Controllarr",
+    to: "/bandwidth-controllarr",
+    icon: GaugeIcon,
+    description: "Pause Usenet while torrents download",
   },
   {
     title: "Settings",

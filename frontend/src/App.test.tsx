@@ -33,6 +33,8 @@ vi.mock("@/shared/lib/queries", () => ({
   useServiceSettings: vi.fn(() => ({ data: undefined })),
   useUpdateServiceSettings: vi.fn(() => ({ mutate: vi.fn(), isPending: false })),
   useTestService: vi.fn(() => ({ mutate: vi.fn(), isPending: false })),
+  useBandwidthStatus: vi.fn(() => ({ data: undefined, isLoading: false })),
+  useUpdateBandwidthSettings: vi.fn(() => ({ mutate: vi.fn(), isPending: false })),
 }))
 
 import App from "@/App"
@@ -79,6 +81,17 @@ describe("App routing", () => {
     renderAt("/settings")
     // The General tab is the default landing tab.
     expect(screen.getByText("Status check interval")).toBeInTheDocument()
+  })
+
+  it("renders the Bandwidth-Controllarr page at /bandwidth-controllarr", () => {
+    renderAt("/bandwidth-controllarr")
+    expect(screen.getByRole("tab", { name: "Status" })).toBeInTheDocument()
+    expect(screen.getByRole("tab", { name: "Settings" })).toBeInTheDocument()
+    expect(
+      screen.getByText((text) =>
+        text.includes("Prioritise BitTorrent over Usenet by pausing SABnzbd while"),
+      ),
+    ).toBeInTheDocument()
   })
 
   it("redirects unknown routes back to the dashboard", () => {

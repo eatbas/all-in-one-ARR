@@ -14,6 +14,7 @@ import {
   clearItems,
   clearPosters,
   getActivity,
+  getBandwidthStatus,
   getDatabaseStats,
   getGeneralSettings,
   getItems,
@@ -31,11 +32,14 @@ import {
   testService,
   testTrakt,
   triggerSync,
+  updateBandwidthSettings,
   updateGeneralSettings,
   updateServiceSettings,
   updateTraktSettings,
   type ActivityEntry,
   type AddListPayload,
+  type BandwidthSettingsUpdate,
+  type BandwidthStatus,
   type DatabaseStats,
   type GeneralSettings,
   type Item,
@@ -75,6 +79,7 @@ export const queryKeys = {
   serviceStatuses: ["service-statuses"] as const,
   generalSettings: ["general", "settings"] as const,
   database: ["database", "stats"] as const,
+  bandwidthStatus: ["bandwidth", "status"] as const,
 }
 
 export function useStatus(): UseQueryResult<Status> {
@@ -473,6 +478,37 @@ export function useDatabaseStats(): UseQueryResult<DatabaseStats> {
   return useQuery({
     queryKey: queryKeys.database,
     queryFn: getDatabaseStats,
+  })
+}
+
+/** Polling interval (ms) for the Bandwidth-Controllarr status page. */
+const BANDWIDTH_REFETCH_INTERVAL = 3_000
+
+export function useBandwidthStatus(): UseQueryResult<BandwidthStatus> {
+  return useQuery({
+    queryKey: queryKeys.bandwidthStatus,
+    queryFn: getBandwidthStatus,
+    refetchInterval: BANDWIDTH_REFETCH_INTERVAL,
+  })
+}
+
+export function useUpdateBandwidthSettings(): UseMutationResult<
+  BandwidthStatus,
+  Error,
+  BandwidthSettingsUpdate
+> {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: updateBandwidthSettings,
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.bandwidthStatus })
+    },
+    onError: (error) => {
+      toast.error("Could not update bandwidth settings", {
+        description: error.message,
+      })
+    },
   })
 }
 
