@@ -157,9 +157,10 @@ that drains over their ~3-second lifetime.
 
 **Trakt tab:**
 
-- **Credentials** – enter/update the Trakt client id and secret (the secret is
-  stored server-side and never shown again). The connected account is always
-  addressed as `me`.
+- **Credentials** – the Trakt client id is shown in the input so you can edit it
+  directly; the secret is stored server-side and never shown again. Changes
+  autosave after you stop typing. The connected account is always addressed as
+  `me`.
 - **Connect** – runs the device-auth flow from the browser: it shows the
   `trakt.tv/activate` code and polls until it reads **Connected**.
 - **Test connection** – verifies the saved token against the Trakt account.
@@ -172,21 +173,23 @@ that drains over their ~3-second lifetime.
 **Seer / Sonarr / Radarr / SABnzbd tabs:** each takes a **base URL** and an
 **API key** and offers a **Test connection** button. The test validates the key
 against the service's own endpoint (`/api/v1/auth/me` for Seer,
-`/api/v3/system/status` for Sonarr/Radarr, and `mode=queue` for SABnzbd). The key
-is stored server-side and is never returned in clear (the API only exposes whether
-a key is set).
+`/api/v3/system/status` for Sonarr/Radarr, and `mode=queue` for SABnzbd). The
+base URL is shown in the input; the key is stored server-side and is never
+returned in clear (the API only exposes whether a key is set). Edits autosave
+after you stop typing.
 
 **TMDB / OMDb tabs:** each takes only an **API key** (the base URL is the
 service's fixed public endpoint) and offers a **Test connection** button. TMDB
 accepts either a v3 API key or a v4 read-access token and is validated against
 `/3/configuration`; OMDb is validated with a probe lookup. The key is stored
-server-side and never returned in clear.
+server-side and never returned in clear. Edits autosave after you stop typing.
 
 **qBittorrent tab:** takes a **base URL** and a **WebUI API key** (generated in
 qBittorrent's Web UI settings; requires qBittorrent ≥ 5.2.0) and offers a **Test
 connection** button, which authenticates with an `Authorization: Bearer` header
-and reads the application version. The key is stored server-side and never
-returned in clear (the API only exposes whether a key is set).
+and reads the application version. The base URL is shown in the input; the key
+is stored server-side and never returned in clear (the API only exposes whether
+a key is set). Edits autosave after you stop typing.
 
 ### Bandwidth-Controllarr page
 
@@ -297,7 +300,9 @@ cd frontend && npm run build
   and stored under `POSTER_CACHE_PATH` so each is fetched only once.
 - `GET /api/activity` – recent meaningful app activity and sync outcomes from the last 15 days (a concise, human-friendly feed, not every read-only API call).
 - `POST /api/sync` – trigger an immediate sync and wait for it to complete; returns `409` if a sync is already running.
-- `GET /api/settings/trakt` – masked Trakt settings (credentials, user, lists).
+- `GET /api/settings/trakt` – Trakt settings; the client id and URL/hint are
+  returned in clear, the client secret is reduced to `client_secret_set`, and
+  tracked lists are included.
 - `PUT /api/settings/trakt` – update Trakt client id/secret/user.
 - `POST /api/trakt/auth/start` – begin device authorisation; returns the code/URL.
 - `GET /api/trakt/auth/status` – poll device-auth progress.
