@@ -31,6 +31,7 @@ class TrackedListModel(BaseModel):
 
 
 class TraktSettingsResponse(BaseModel):
+    client_id: str
     client_id_hint: str
     client_id_set: bool
     client_secret_set: bool
@@ -84,6 +85,7 @@ def _settings_response(ctx: "AppContext") -> TraktSettingsResponse:
     """Build the masked Trakt settings view from the store and client."""
     client_id, client_secret = ctx.settings_store.trakt_credentials()
     return TraktSettingsResponse(
+        client_id=client_id,
         client_id_hint=client_id[-4:] if client_id else "",
         client_id_set=bool(client_id),
         client_secret_set=bool(client_secret),

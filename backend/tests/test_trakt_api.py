@@ -54,9 +54,11 @@ def _activity_actions(ctx) -> list[str]:
 def test_get_settings_masks_secrets(db, tmp_path) -> None:
     ctx = _ctx(db, tmp_path)
     body = _client(ctx).get("/api/settings/trakt").json()
+    assert body["client_id"] == "cid"
     assert body["client_id_hint"] == "cid"[-4:] or body["client_id_hint"] == "cid"
     assert body["client_id_set"] is True
     assert body["client_secret_set"] is True
+    assert "client_secret" not in body
     assert body["connected"] is False
     assert body["lists"][0]["slug"] == "movies"
 
@@ -64,6 +66,7 @@ def test_get_settings_masks_secrets(db, tmp_path) -> None:
 def test_get_settings_without_credentials(db, tmp_path) -> None:
     ctx = _ctx(db, tmp_path, client_id="")
     body = _client(ctx).get("/api/settings/trakt").json()
+    assert body["client_id"] == ""
     assert body["client_id_hint"] == ""
     assert body["client_id_set"] is False
 
@@ -76,6 +79,7 @@ def test_put_settings_updates_store_and_client(db, tmp_path) -> None:
         json={"client_id": "newid1234", "client_secret": "newsec"},
     )
     assert resp.status_code == 200
+    assert resp.json()["client_id"] == "newid1234"
     assert resp.json()["client_id_hint"] == "1234"
     assert ctx.settings_store.trakt_credentials() == ("newid1234", "newsec")
     trakt.update_credentials.assert_called_once_with(
