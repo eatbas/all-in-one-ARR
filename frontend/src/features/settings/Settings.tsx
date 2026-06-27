@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ReactNode } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react"
 
 import {
   AlertDialog,
@@ -79,16 +79,100 @@ function Field({
   )
 }
 
+const AUTOSAVE_DELAY_MS = 800
+
+/**
+ * Debounced autosave helper. Schedules `mutate(body)` after `AUTOSAVE_DELAY_MS`
+ * whenever `body` is non-null, but skips scheduling while a matching save is
+ * already in-flight. It also suppresses re-submission of an identical body
+ * after a failed save settles back to `isPending === false`, preventing the
+ * same failed payload from being retried automatically every debounce cycle.
+ */
+function useAutosave<TBody>({
+  body,
+  draftRevision,
+  mutate,
+  isPending,
+  onSuccess,
+}: {
+  body: TBody | null
+  draftRevision: number
+  mutate: (body: TBody, options?: { onSuccess?: () => void }) => void
+  isPending: boolean
+  onSuccess: () => void
+}): void {
+  const lastSubmittedRevisionRef = useRef<number | null>(null)
+
+  useEffect(() => {
+    if (!body) {
+      lastSubmittedRevisionRef.current = null
+      return
+    }
+    if (isPending) return
+
+    // Revisions are non-secret edit counters, so failed-save suppression does
+    // not retain Trakt secrets or service API keys in component refs.
+    if (draftRevision === lastSubmittedRevisionRef.current) return
+
+    const timer = window.setTimeout(() => {
+      lastSubmittedRevisionRef.current = draftRevision
+      mutate(body, { onSuccess })
+    }, AUTOSAVE_DELAY_MS)
+    return () => window.clearTimeout(timer)
+  }, [body, draftRevision, isPending, mutate, onSuccess])
+}
+
 /** Edit the Trakt credentials, authorise the app, and test the connection. */
 function CredentialsCard() {
   const { data: settings, isLoading } = useTraktSettings()
   const { data: auth } = useTraktAuthStatus()
-  const update = useUpdateTraktSettings()
+  const {
+    mutate: updateTraktSettings,
+    isPending: isUpdatingTraktSettings,
+  } = useUpdateTraktSettings()
   const startAuth = useStartTraktAuth()
   const test = useTestTrakt()
   const queryClient = useQueryClient()
-  const [clientId, setClientId] = useState("")
+  const [clientIdEdit, setClientIdEdit] = useState<string | null>(null)
   const [clientSecret, setClientSecret] = useState("")
+  const [traktDraftRevision, setTraktDraftRevision] = useState(0)
+
+  const savedClientId = settings?.client_id ?? ""
+  const clientId = clientIdEdit ?? savedClientId
+
+  const traktBody = useMemo<UpdateTraktSettings | null>(() => {
+    const body: UpdateTraktSettings = {}
+    if (clientId.trim() !== savedClientId.trim()) {
+      body.client_id = clientId
+    }
+    if (clientSecret) {
+      body.client_secret = clientSecret
+    }
+    return Object.keys(body).length > 0 ? body : null
+  }, [clientId, clientSecret, savedClientId])
+
+  const clearTraktEdit = useCallback(() => {
+    setClientSecret("")
+    setClientIdEdit(null)
+  }, [])
+
+  const editClientId = useCallback((value: string) => {
+    setClientIdEdit(value)
+    setTraktDraftRevision((revision) => revision + 1)
+  }, [])
+
+  const editClientSecret = useCallback((value: string) => {
+    setClientSecret(value)
+    setTraktDraftRevision((revision) => revision + 1)
+  }, [])
+
+  useAutosave({
+    body: traktBody,
+    draftRevision: traktDraftRevision,
+    mutate: updateTraktSettings,
+    isPending: isUpdatingTraktSettings,
+    onSuccess: clearTraktEdit,
+  })
 
   const connected = settings?.connected ?? false
   const pending = auth && auth.state === "pending" ? auth : undefined
@@ -111,12 +195,16 @@ function CredentialsCard() {
     }
   }, [auth, queryClient])
 
-  function save() {
-    const body: UpdateTraktSettings = {}
-    if (clientId) body.client_id = clientId
-    if (clientSecret) body.client_secret = clientSecret
-    update.mutate(body)
-  }
+  const clientIdHint = isUpdatingTraktSettings
+    ? "Saving…"
+    : settings?.client_id_set
+      ? "Saved"
+      : "Not set"
+  const clientSecretHint = clientSecret
+    ? "Unsaved"
+    : settings?.client_secret_set
+      ? "Saved"
+      : "Not set"
 
   return (
     <Card>
@@ -144,35 +232,22 @@ function CredentialsCard() {
           <p className="text-sm text-muted-foreground">Loading…</p>
         ) : (
           <>
-            <Field
-              label="Client ID"
-              hint={
-                settings?.client_id_set
-                  ? `Saved (…${settings.client_id_hint})`
-                  : "Not set"
-              }
-            >
+            <Field label="Client ID" hint={clientIdHint}>
               <Input
                 value={clientId}
-                onChange={(event) => setClientId(event.target.value)}
+                onChange={(event) => editClientId(event.target.value)}
                 placeholder="Trakt client id"
               />
             </Field>
-            <Field
-              label="Client secret"
-              hint={settings?.client_secret_set ? "Saved" : "Not set"}
-            >
+            <Field label="Client secret" hint={clientSecretHint}>
               <Input
                 type="password"
                 value={clientSecret}
-                onChange={(event) => setClientSecret(event.target.value)}
+                onChange={(event) => editClientSecret(event.target.value)}
                 placeholder="Leave blank to keep current"
               />
             </Field>
             <div className="flex flex-wrap gap-3">
-              <Button onClick={save} disabled={update.isPending}>
-                Save credentials
-              </Button>
               <Button
                 onClick={() => startAuth.mutate()}
                 disabled={startAuth.isPending}
@@ -234,26 +309,76 @@ function CredentialsCard() {
 /** Edit a service connection (URL / API key) and test it. */
 function ServiceConnectionCard({ name, label, fields }: ServiceTab) {
   const { data: services } = useServiceSettings()
-  const update = useUpdateServiceSettings()
+  const {
+    mutate: updateServiceSettings,
+    isPending: isUpdatingServiceSettings,
+  } = useUpdateServiceSettings()
   const test = useTestService()
   const current = services?.[name]
-  const [url, setUrl] = useState("")
+  const [urlEdit, setUrlEdit] = useState<string | null>(null)
   const [apiKey, setApiKey] = useState("")
+  const [serviceDraftRevision, setServiceDraftRevision] = useState(0)
 
   // Every managed service carries an API key; only some also carry a URL.
   const hasUrl = fields.includes("url")
+  const savedUrl = current?.url ?? ""
+  const url = urlEdit ?? savedUrl
 
-  function save() {
+  const serviceBody = useMemo<UpdateServicePayload | null>(() => {
     const body: UpdateServicePayload = {}
-    if (hasUrl && url) body.url = url
-    if (apiKey) body.api_key = apiKey
-    update.mutate({ name, body })
-  }
+    if (hasUrl && url.trim() !== savedUrl.trim()) {
+      body.url = url
+    }
+    if (apiKey) {
+      body.api_key = apiKey
+    }
+    return Object.keys(body).length > 0 ? body : null
+  }, [hasUrl, url, apiKey, savedUrl])
+
+  const clearServiceEdit = useCallback(() => {
+    setApiKey("")
+    setUrlEdit(null)
+  }, [])
+
+  const editUrl = useCallback((value: string) => {
+    setUrlEdit(value)
+    setServiceDraftRevision((revision) => revision + 1)
+  }, [])
+
+  const editApiKey = useCallback((value: string) => {
+    setApiKey(value)
+    setServiceDraftRevision((revision) => revision + 1)
+  }, [])
+
+  const saveService = useCallback(
+    (body: UpdateServicePayload, options?: { onSuccess?: () => void }) =>
+      updateServiceSettings({ name, body }, options),
+    [name, updateServiceSettings],
+  )
+
+  useAutosave({
+    body: serviceBody,
+    draftRevision: serviceDraftRevision,
+    mutate: saveService,
+    isPending: isUpdatingServiceSettings,
+    onSuccess: clearServiceEdit,
+  })
 
   // Every managed service authenticates with an API key, so the badge reflects
   // whether that key is set.
   const configured = current?.api_key_set
   const badgeLabel = configured ? "Key set" : "No key"
+
+  const urlHint = isUpdatingServiceSettings
+    ? "Saving…"
+    : savedUrl
+      ? "Saved"
+      : "Not set"
+  const apiKeyHint = apiKey
+    ? "Unsaved"
+    : current?.api_key_set
+      ? "Saved"
+      : "Not set"
 
   return (
     <Card>
@@ -275,29 +400,23 @@ function ServiceConnectionCard({ name, label, fields }: ServiceTab) {
       </CardHeader>
       <CardContent className="flex flex-col gap-4">
         {hasUrl ? (
-          <Field
-            label="URL"
-            hint={current?.url ? `Saved: ${current.url}` : "Not set"}
-          >
+          <Field label="URL" hint={urlHint}>
             <Input
               value={url}
-              onChange={(event) => setUrl(event.target.value)}
-              placeholder={current?.url || "http://host:port"}
+              onChange={(event) => editUrl(event.target.value)}
+              placeholder="http://host:port"
             />
           </Field>
         ) : null}
-        <Field label="API key" hint={current?.api_key_set ? "Saved" : "Not set"}>
+        <Field label="API key" hint={apiKeyHint}>
           <Input
             type="password"
             value={apiKey}
-            onChange={(event) => setApiKey(event.target.value)}
+            onChange={(event) => editApiKey(event.target.value)}
             placeholder="Leave blank to keep current"
           />
         </Field>
         <div className="flex flex-wrap gap-3">
-          <Button onClick={save} disabled={update.isPending}>
-            Save
-          </Button>
           <Button
             variant="outline"
             onClick={() => test.mutate(name)}
@@ -568,6 +687,7 @@ export function Settings() {
       {SERVICE_TABS.map((tab) => (
         <TabsContent key={tab.name} value={tab.name}>
           <ServiceConnectionCard
+            key={tab.name}
             name={tab.name}
             label={tab.label}
             fields={tab.fields}

@@ -1,4 +1,4 @@
-import { render as rtlRender, screen } from "@testing-library/react"
+import { render as rtlRender, screen, fireEvent, act } from "@testing-library/react"
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
 import type { ReactElement } from "react"
 import userEvent from "@testing-library/user-event"
@@ -76,11 +76,27 @@ function render(ui: ReactElement, options?: Parameters<typeof rtlRender>[1]) {
 }
 
 /** Build a mutation-shaped stub; typed loosely as these are test doubles. */
-function mutation(mutate: unknown, isPending = false, data?: unknown) {
+function mutation(
+  mutateImpl: unknown,
+  isPending = false,
+  data?: unknown,
+  callOnSuccess?: boolean,
+) {
+  const shouldCallOnSuccess = callOnSuccess ?? !isPending
+  const mutate = vi.fn((vars: unknown, options?: { onSuccess?: () => void }) => {
+    ;(mutateImpl as (vars: unknown) => void)(vars)
+    // When simulating a pending mutation, the success callback has not fired
+    // yet, so do not invoke it automatically. Tests can also suppress
+    // onSuccess for settled-error scenarios.
+    if (shouldCallOnSuccess && options?.onSuccess) {
+      options.onSuccess()
+    }
+  })
   return { mutate, isPending, data } as never
 }
 
 const SETTINGS: TraktSettings = {
+  client_id: "abcd1234",
   client_id_hint: "1234",
   client_id_set: true,
   client_secret_set: true,
@@ -165,6 +181,8 @@ afterEach(() => {
   // Some tests stub `localStorage`; restore it so the next `beforeEach` (which
   // reads it) is unaffected.
   vi.unstubAllGlobals()
+  // Ensure fake timers never leak between tests.
+  vi.useRealTimers()
 })
 
 function withTestResult(data: TraktTestResult) {
@@ -198,8 +216,7 @@ describe("Settings — credentials", () => {
 
   it("shows saved hints and the connected state", async () => {
     await renderTrakt()
-    expect(screen.getByText("Saved (…1234)")).toBeInTheDocument()
-    expect(screen.getByText("Saved")).toBeInTheDocument()
+    expect(screen.getAllByText("Saved").length).toBeGreaterThan(0)
     expect(screen.getByText("Connected")).toBeInTheDocument()
     expect(
       screen.getByRole("button", { name: "Re-connect Trakt" }),
@@ -227,24 +244,174 @@ describe("Settings — credentials", () => {
     ).toBeInTheDocument()
   })
 
-  it("saves only the fields that were entered", async () => {
-    const user = await renderTrakt()
-    await user.type(screen.getByPlaceholderText("Trakt client id"), "cid")
-    await user.type(
-      screen.getByPlaceholderText("Leave blank to keep current"),
-      "sec",
+  it("hydrates the saved client id and leaves the secret input blank", async () => {
+    await renderTrakt()
+    expect(screen.getByPlaceholderText("Trakt client id")).toHaveValue(
+      SETTINGS.client_id,
     )
-    await user.click(screen.getByRole("button", { name: "Save credentials" }))
-    expect(updateMutate).toHaveBeenCalledWith({
-      client_id: "cid",
-      client_secret: "sec",
-    })
+    expect(screen.getByPlaceholderText("Leave blank to keep current")).toHaveValue(
+      "",
+    )
   })
 
-  it("saves an empty body when nothing was entered", async () => {
-    const user = await renderTrakt()
-    await user.click(screen.getByRole("button", { name: "Save credentials" }))
-    expect(updateMutate).toHaveBeenCalledWith({})
+  it("shows a saving hint while the update is pending", async () => {
+    const { rerender } = render(<Settings />)
+    await userEvent.click(screen.getByRole("tab", { name: "Trakt" }))
+    vi.mocked(useUpdateTraktSettings).mockReturnValue(
+      mutation(updateMutate, true),
+    )
+    rerender(<Settings />)
+    expect(screen.getByText("Saving…")).toBeInTheDocument()
+  })
+
+  it("does not autosave on initial render", async () => {
+    await renderTrakt()
+    expect(updateMutate).not.toHaveBeenCalled()
+  })
+
+  it("autosaves only the fields that changed after debounce", async () => {
+    await renderTrakt()
+    vi.useFakeTimers()
+
+    act(() => {
+      fireEvent.change(screen.getByPlaceholderText("Trakt client id"), {
+        target: { value: `${SETTINGS.client_id}cid` },
+      })
+      fireEvent.change(
+        screen.getByPlaceholderText("Leave blank to keep current"),
+        { target: { value: "sec" } },
+      )
+    })
+    expect(updateMutate).not.toHaveBeenCalled()
+
+    act(() => vi.advanceTimersByTime(800))
+    expect(updateMutate).toHaveBeenCalledTimes(1)
+    expect(updateMutate).toHaveBeenCalledWith({
+      client_id: `${SETTINGS.client_id}cid`,
+      client_secret: "sec",
+    })
+
+    vi.useRealTimers()
+  })
+
+  it("autosaves only a secret edit without resending the unchanged client id", async () => {
+    await renderTrakt()
+    vi.useFakeTimers()
+
+    act(() =>
+      fireEvent.change(
+        screen.getByPlaceholderText("Leave blank to keep current"),
+        { target: { value: "sec" } },
+      ),
+    )
+    act(() => vi.advanceTimersByTime(800))
+    expect(updateMutate).toHaveBeenCalledWith({ client_secret: "sec" })
+
+    vi.useRealTimers()
+  })
+
+  it("clears the secret input after a successful autosave", async () => {
+    await renderTrakt()
+    vi.useFakeTimers()
+
+    const secretInput = screen.getByPlaceholderText("Leave blank to keep current")
+    act(() => fireEvent.change(secretInput, { target: { value: "sec" } }))
+    act(() => vi.advanceTimersByTime(800))
+    expect(secretInput).toHaveValue("")
+
+    vi.useRealTimers()
+  })
+
+  it("does not send duplicate Trakt saves while a save is pending", async () => {
+    const { rerender } = render(<Settings />)
+    await userEvent.click(screen.getByRole("tab", { name: "Trakt" }))
+    vi.useFakeTimers()
+
+    act(() =>
+      fireEvent.change(screen.getByPlaceholderText("Trakt client id"), {
+        target: { value: `${SETTINGS.client_id}cid` },
+      }),
+    )
+    act(() => vi.advanceTimersByTime(800))
+    expect(updateMutate).toHaveBeenCalledTimes(1)
+
+    // Simulate the mutation entering the pending state (save in-flight) and a
+    // re-render with a fresh mutation result object. The original effect
+    // depended on the whole result object, which would schedule another save;
+    // the fixed effect depends on the stable mutate function and the isPending
+    // guard.
+    vi.mocked(useUpdateTraktSettings).mockReturnValue(
+      mutation(updateMutate, true),
+    )
+    rerender(<Settings />)
+
+    act(() => vi.advanceTimersByTime(800))
+    expect(updateMutate).toHaveBeenCalledTimes(1)
+
+    vi.useRealTimers()
+  })
+
+  it("does not retry a failed Trakt save until a further edit", async () => {
+    // Suppress onSuccess so the dirty draft survives the first submission,
+    // simulating a failed save that settles back to non-pending.
+    vi.mocked(useUpdateTraktSettings).mockReturnValue(
+      mutation(updateMutate, false, undefined, false),
+    )
+    const { rerender } = render(<Settings />)
+    await userEvent.click(screen.getByRole("tab", { name: "Trakt" }))
+    vi.useFakeTimers()
+
+    act(() =>
+      fireEvent.change(screen.getByPlaceholderText("Trakt client id"), {
+        target: { value: `${SETTINGS.client_id}cid` },
+      }),
+    )
+    act(() =>
+      fireEvent.change(
+        screen.getByPlaceholderText("Leave blank to keep current"),
+        { target: { value: "secret-before-failure" } },
+      ),
+    )
+    act(() => vi.advanceTimersByTime(800))
+    expect(updateMutate).toHaveBeenCalledTimes(1)
+    expect(updateMutate).toHaveBeenLastCalledWith({
+      client_id: `${SETTINGS.client_id}cid`,
+      client_secret: "secret-before-failure",
+    })
+
+    // Mutation enters pending state.
+    vi.mocked(useUpdateTraktSettings).mockReturnValue(
+      mutation(updateMutate, true),
+    )
+    rerender(<Settings />)
+
+    act(() => vi.advanceTimersByTime(800))
+    expect(updateMutate).toHaveBeenCalledTimes(1)
+
+    // Mutation fails/settles back to non-pending without calling onSuccess;
+    // the dirty body must not be re-submitted automatically.
+    vi.mocked(useUpdateTraktSettings).mockReturnValue(
+      mutation(updateMutate, false, undefined, false),
+    )
+    rerender(<Settings />)
+
+    act(() => vi.advanceTimersByTime(800))
+    expect(updateMutate).toHaveBeenCalledTimes(1)
+
+    act(() =>
+      fireEvent.change(
+        screen.getByPlaceholderText("Leave blank to keep current"),
+        { target: { value: "secret-after-failure" } },
+      ),
+    )
+    act(() => vi.advanceTimersByTime(800))
+    expect(updateMutate).toHaveBeenCalledTimes(2)
+    expect(updateMutate).toHaveBeenLastCalledWith({
+      client_id: `${SETTINGS.client_id}cid`,
+      client_secret: "secret-after-failure",
+    })
+
+    vi.useRealTimers()
   })
 })
 
@@ -455,7 +622,9 @@ describe("Settings — service tabs", () => {
     const user = userEvent.setup()
     render(<Settings />)
     await user.click(screen.getByRole("tab", { name: "Seer" }))
-    expect(screen.getByText("Saved: http://js:5055")).toBeInTheDocument()
+    expect(screen.getByPlaceholderText("http://host:port")).toHaveValue(
+      "http://js:5055",
+    )
     expect(screen.getByText("Key set")).toBeInTheDocument()
   })
 
@@ -480,31 +649,74 @@ describe("Settings — service tabs", () => {
     ).toBeInTheDocument()
   })
 
-  it("saves a service URL and key", async () => {
+  it("shows a saving hint while the service update is pending", async () => {
+    const user = userEvent.setup()
+    const { rerender } = render(<Settings />)
+    await user.click(screen.getByRole("tab", { name: "Seer" }))
+    vi.mocked(useUpdateServiceSettings).mockReturnValue(
+      mutation(serviceUpdateMutate, true),
+    )
+    rerender(<Settings />)
+    expect(screen.getByText("Saving…")).toBeInTheDocument()
+  })
+
+  it("hydrates the saved service URL and leaves the API key input blank", async () => {
+    const user = userEvent.setup()
+    render(<Settings />)
+    await user.click(screen.getByRole("tab", { name: "Seer" }))
+    expect(screen.getByPlaceholderText("http://host:port")).toHaveValue(
+      "http://js:5055",
+    )
+    expect(screen.getByPlaceholderText("Leave blank to keep current")).toHaveValue(
+      "",
+    )
+  })
+
+  it("does not autosave a service on initial render", async () => {
     const user = userEvent.setup()
     render(<Settings />)
     await user.click(screen.getByRole("tab", { name: "Radarr" }))
-    await user.type(
-      screen.getByPlaceholderText("http://host:port"),
-      "http://radarr:7878",
-    )
-    await user.type(
-      screen.getByPlaceholderText("Leave blank to keep current"),
-      "rk",
-    )
-    await user.click(screen.getByRole("button", { name: "Save" }))
+    expect(serviceUpdateMutate).not.toHaveBeenCalled()
+  })
+
+  it("autosaves a service URL and key after debounce", async () => {
+    const user = userEvent.setup()
+    render(<Settings />)
+    await user.click(screen.getByRole("tab", { name: "Radarr" }))
+    vi.useFakeTimers()
+
+    act(() => {
+      fireEvent.change(screen.getByPlaceholderText("http://host:port"), {
+        target: { value: "http://radarr:7878" },
+      })
+      fireEvent.change(
+        screen.getByPlaceholderText("Leave blank to keep current"),
+        { target: { value: "rk" } },
+      )
+    })
+    expect(serviceUpdateMutate).not.toHaveBeenCalled()
+
+    act(() => vi.advanceTimersByTime(800))
+    expect(serviceUpdateMutate).toHaveBeenCalledTimes(1)
     expect(serviceUpdateMutate).toHaveBeenCalledWith({
       name: "radarr",
       body: { url: "http://radarr:7878", api_key: "rk" },
     })
+
+    vi.useRealTimers()
   })
 
-  it("saves an empty body when nothing is entered", async () => {
+  it("does not leak one service's URL into another service's tab", async () => {
     const user = userEvent.setup()
     render(<Settings />)
+
+    await user.click(screen.getByRole("tab", { name: "Seer" }))
+    expect(screen.getByPlaceholderText("http://host:port")).toHaveValue(
+      "http://js:5055",
+    )
+
     await user.click(screen.getByRole("tab", { name: "Sonarr" }))
-    await user.click(screen.getByRole("button", { name: "Save" }))
-    expect(serviceUpdateMutate).toHaveBeenCalledWith({ name: "sonarr", body: {} })
+    expect(screen.getByPlaceholderText("http://host:port")).toHaveValue("")
   })
 
   it("tests a service connection", async () => {
@@ -551,19 +763,27 @@ describe("Settings — service tabs", () => {
     expect(screen.getByText("No key")).toBeInTheDocument()
   })
 
-  it("saves only the API key for an API-key-only service", async () => {
+  it("autosaves only the API key for an API-key-only service", async () => {
     const user = userEvent.setup()
     render(<Settings />)
     await user.click(screen.getByRole("tab", { name: "TMDB" }))
-    await user.type(
-      screen.getByPlaceholderText("Leave blank to keep current"),
-      "tk",
+    vi.useFakeTimers()
+
+    act(() =>
+      fireEvent.change(
+        screen.getByPlaceholderText("Leave blank to keep current"),
+        { target: { value: "tk" } },
+      ),
     )
-    await user.click(screen.getByRole("button", { name: "Save" }))
+    expect(serviceUpdateMutate).not.toHaveBeenCalled()
+
+    act(() => vi.advanceTimersByTime(800))
     expect(serviceUpdateMutate).toHaveBeenCalledWith({
       name: "tmdb",
       body: { api_key: "tk" },
     })
+
+    vi.useRealTimers()
   })
 
   it("renders qBittorrent with url and api key and no stored secret", async () => {
@@ -590,10 +810,11 @@ describe("Settings — service tabs", () => {
     const user = userEvent.setup()
     render(<Settings />)
     await user.click(screen.getByRole("tab", { name: "qBittorrent" }))
-    expect(screen.getByText("Saved: http://qb:8080")).toBeInTheDocument()
+    expect(screen.getByPlaceholderText("http://host:port")).toHaveValue(
+      "http://qb:8080",
+    )
     expect(screen.getByText("Key set")).toBeInTheDocument()
-    // The API key hint reads the bare "Saved".
-    expect(screen.getByText("Saved")).toBeInTheDocument()
+    expect(screen.getAllByText("Saved").length).toBeGreaterThan(0)
   })
 
   it("falls back gracefully for qBittorrent when the query has no data", async () => {
@@ -610,34 +831,188 @@ describe("Settings — service tabs", () => {
     ).toBeInTheDocument()
   })
 
-  it("saves the URL and API key for qBittorrent", async () => {
+  it("autosaves the URL and API key for qBittorrent", async () => {
     const user = userEvent.setup()
     render(<Settings />)
     await user.click(screen.getByRole("tab", { name: "qBittorrent" }))
-    await user.type(
-      screen.getByPlaceholderText("http://host:port"),
-      "http://qb:8080",
-    )
-    await user.type(
-      screen.getByPlaceholderText("Leave blank to keep current"),
-      "qbt_key",
-    )
-    await user.click(screen.getByRole("button", { name: "Save" }))
+    vi.useFakeTimers()
+
+    act(() => {
+      fireEvent.change(screen.getByPlaceholderText("http://host:port"), {
+        target: { value: "http://qb:8080" },
+      })
+      fireEvent.change(
+        screen.getByPlaceholderText("Leave blank to keep current"),
+        { target: { value: "qbt_key" } },
+      )
+    })
+    expect(serviceUpdateMutate).not.toHaveBeenCalled()
+
+    act(() => vi.advanceTimersByTime(800))
     expect(serviceUpdateMutate).toHaveBeenCalledWith({
       name: "qbittorrent",
       body: { url: "http://qb:8080", api_key: "qbt_key" },
     })
+
+    vi.useRealTimers()
   })
 
-  it("saves an empty body for qBittorrent when nothing is entered", async () => {
+  it("does not autosave qBittorrent when nothing changed", async () => {
     const user = userEvent.setup()
     render(<Settings />)
     await user.click(screen.getByRole("tab", { name: "qBittorrent" }))
-    await user.click(screen.getByRole("button", { name: "Save" }))
-    expect(serviceUpdateMutate).toHaveBeenCalledWith({
-      name: "qbittorrent",
-      body: {},
+    vi.useFakeTimers()
+
+    act(() => vi.advanceTimersByTime(800))
+    expect(serviceUpdateMutate).not.toHaveBeenCalled()
+
+    vi.useRealTimers()
+  })
+
+  it("does not send duplicate URL-only service saves while pending", async () => {
+    const { rerender } = render(<Settings />)
+    await userEvent.click(screen.getByRole("tab", { name: "Sonarr" }))
+    vi.useFakeTimers()
+
+    act(() =>
+      fireEvent.change(screen.getByPlaceholderText("http://host:port"), {
+        target: { value: "http://sonarr:8989" },
+      }),
+    )
+    act(() => vi.advanceTimersByTime(800))
+    expect(serviceUpdateMutate).toHaveBeenCalledTimes(1)
+    expect(serviceUpdateMutate).toHaveBeenLastCalledWith({
+      name: "sonarr",
+      body: { url: "http://sonarr:8989" },
     })
+
+    vi.mocked(useUpdateServiceSettings).mockReturnValue(
+      mutation(serviceUpdateMutate, true),
+    )
+    rerender(<Settings />)
+
+    act(() => vi.advanceTimersByTime(800))
+    expect(serviceUpdateMutate).toHaveBeenCalledTimes(1)
+
+    vi.useRealTimers()
+  })
+
+  it("does not send duplicate API-key-only service saves while pending", async () => {
+    const { rerender } = render(<Settings />)
+    await userEvent.click(screen.getByRole("tab", { name: "TMDB" }))
+    vi.useFakeTimers()
+
+    act(() =>
+      fireEvent.change(
+        screen.getByPlaceholderText("Leave blank to keep current"),
+        { target: { value: "tmdb_key" } },
+      ),
+    )
+    act(() => vi.advanceTimersByTime(800))
+    expect(serviceUpdateMutate).toHaveBeenCalledTimes(1)
+    expect(serviceUpdateMutate).toHaveBeenLastCalledWith({
+      name: "tmdb",
+      body: { api_key: "tmdb_key" },
+    })
+
+    vi.mocked(useUpdateServiceSettings).mockReturnValue(
+      mutation(serviceUpdateMutate, true),
+    )
+    rerender(<Settings />)
+
+    act(() => vi.advanceTimersByTime(800))
+    expect(serviceUpdateMutate).toHaveBeenCalledTimes(1)
+
+    vi.useRealTimers()
+  })
+
+  it("does not send duplicate URL+API-key service saves while pending", async () => {
+    const { rerender } = render(<Settings />)
+    await userEvent.click(screen.getByRole("tab", { name: "qBittorrent" }))
+    vi.useFakeTimers()
+
+    act(() => {
+      fireEvent.change(screen.getByPlaceholderText("http://host:port"), {
+        target: { value: "http://qb:8080" },
+      })
+      fireEvent.change(
+        screen.getByPlaceholderText("Leave blank to keep current"),
+        { target: { value: "qbt_key" } },
+      )
+    })
+    act(() => vi.advanceTimersByTime(800))
+    expect(serviceUpdateMutate).toHaveBeenCalledTimes(1)
+    expect(serviceUpdateMutate).toHaveBeenLastCalledWith({
+      name: "qbittorrent",
+      body: { url: "http://qb:8080", api_key: "qbt_key" },
+    })
+
+    vi.mocked(useUpdateServiceSettings).mockReturnValue(
+      mutation(serviceUpdateMutate, true),
+    )
+    rerender(<Settings />)
+
+    act(() => vi.advanceTimersByTime(800))
+    expect(serviceUpdateMutate).toHaveBeenCalledTimes(1)
+
+    vi.useRealTimers()
+  })
+
+  it("does not retry a failed service save until a further edit", async () => {
+    // Suppress onSuccess so the dirty draft survives the first submission,
+    // simulating a failed save that settles back to non-pending.
+    vi.mocked(useUpdateServiceSettings).mockReturnValue(
+      mutation(serviceUpdateMutate, false, undefined, false),
+    )
+    const { rerender } = render(<Settings />)
+    await userEvent.click(screen.getByRole("tab", { name: "qBittorrent" }))
+    vi.useFakeTimers()
+
+    act(() => {
+      fireEvent.change(screen.getByPlaceholderText("http://host:port"), {
+        target: { value: "http://qb:8080" },
+      })
+      fireEvent.change(
+        screen.getByPlaceholderText("Leave blank to keep current"),
+        { target: { value: "qbt_key" } },
+      )
+    })
+    act(() => vi.advanceTimersByTime(800))
+    expect(serviceUpdateMutate).toHaveBeenCalledTimes(1)
+
+    // Mutation enters pending state.
+    vi.mocked(useUpdateServiceSettings).mockReturnValue(
+      mutation(serviceUpdateMutate, true),
+    )
+    rerender(<Settings />)
+
+    act(() => vi.advanceTimersByTime(800))
+    expect(serviceUpdateMutate).toHaveBeenCalledTimes(1)
+
+    // Mutation fails/settles back to non-pending without calling onSuccess;
+    // the dirty body must not be re-submitted automatically.
+    vi.mocked(useUpdateServiceSettings).mockReturnValue(
+      mutation(serviceUpdateMutate, false, undefined, false),
+    )
+    rerender(<Settings />)
+
+    act(() => vi.advanceTimersByTime(800))
+    expect(serviceUpdateMutate).toHaveBeenCalledTimes(1)
+
+    act(() =>
+      fireEvent.change(
+        screen.getByPlaceholderText("Leave blank to keep current"),
+        { target: { value: "qbt_key_after_failure" } },
+      ),
+    )
+    act(() => vi.advanceTimersByTime(800))
+    expect(serviceUpdateMutate).toHaveBeenCalledTimes(2)
+    expect(serviceUpdateMutate).toHaveBeenLastCalledWith({
+      name: "qbittorrent",
+      body: { url: "http://qb:8080", api_key: "qbt_key_after_failure" },
+    })
+
+    vi.useRealTimers()
   })
 })
 
