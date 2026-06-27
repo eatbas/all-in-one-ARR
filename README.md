@@ -3,12 +3,14 @@
 A small, self-hosted service that keeps a **Trakt list in sync with Seer**
 and — the key part — optionally **removes an item from the Trakt list once
 Seer reports it available** (off by default; removes the list entry and
-known Seer request, never the media files in Radarr/Sonarr). It uses
-**official REST APIs only** (no scraping).
+known Seer request, never the media files in Radarr/Sonarr). It also includes
+**Bandwidth-Controllarr**, which can pause **SABnzbd** while **qBittorrent**
+has active torrents and resume it when the torrents go idle (off by default).
+It uses **official REST APIs only** (no scraping).
 
-This is the plugin **core** plus the first module, **`list_syncarr`**. Future
-modules (`bandwidtharr`, `deletearr`, `neutarr`) drop into `backend/modules/` and
-auto-load — see [Adding a module](#adding-a-module).
+This is the plugin **core** plus two modules, **`list_syncarr`** and
+**`bandwidth_controllarr`**. Future modules (`deletearr`, `neutarr`) drop into
+`backend/modules/` and auto-load — see [Adding a module](#adding-a-module).
 
 ## How it works
 
@@ -47,7 +49,8 @@ backend/
       seer.py        # status check, create request
       arr_client.py  # outbound Radarr/Sonarr connection test
   modules/
-    list_syncarr/    # the first module: poll/request, availability-driven removal, reconcile
+    list_syncarr/         # poll/request, availability-driven removal, reconcile
+    bandwidth_controllarr/  # pause SABnzbd while qBittorrent has active torrents
   main.py            # entrypoint: `uvicorn main:app --app-dir backend`
   pyproject.toml     # packaging + pytest + coverage config
   tests/             # backend test suite (100% coverage)
@@ -89,6 +92,8 @@ cp .env.example .env
 | `QBITTORRENT_API_KEY` | – | qBittorrent WebUI API key, requires qBittorrent ≥ 5.2.0 (seeds the store; settable in the UI) |
 | `SYNC_INTERVAL_MIN` | `15` | Poll interval in minutes (seeds the store; settable in the UI) |
 | `AUTO_REMOVE_WHEN_AVAILABLE` | `false` | Auto-remove items from their Trakt list once available in Seer (seeds the store; settable in the UI). The legacy `AUTO_REMOVE_ON_IMPORT` name is still accepted. |
+| `BANDWIDTH_CONTROL_ENABLED` | `false` | Enable the Bandwidth-Controllarr loop (seeds the store; toggleable in the UI). Off by default so SABnzbd is never paused without opt-in. |
+| `BANDWIDTH_CHECK_INTERVAL_SEC` | `15` | How often Bandwidth-Controllarr polls qBittorrent and SABnzbd, in seconds (seeds the store; settable in the UI). |
 | `WEBHOOK_PORT` | `3223` | Port the service listens on |
 | `TZ` | `Europe/Istanbul` | Timezone for the scheduler |
 | `LOG_LEVEL` | `INFO` | Log level |
@@ -183,15 +188,35 @@ connection** button, which authenticates with an `Authorization: Bearer` header
 and reads the application version. The key is stored server-side and never
 returned in clear (the API only exposes whether a key is set).
 
+### Bandwidth-Controllarr page
+
+The dashboard **Bandwidth-Controllarr** page (left menu) has two tabs:
+
+- **Status** — live cards for qBittorrent and SABnzbd (download speed, active
+downloads, queue size, and a **PAUSED/RESUMED** badge for SABnzbd), plus a
+system-status banner that shows the last control check and turns red while
+qBittorrent has active torrents. The page auto-refreshes every few seconds.
+- **Settings** — the master **Enable bandwidth control** switch and a **Check
+interval** selector (10, 15, 30, or 60 seconds). The switch is also available on
+the Status tab for convenience. A link to the Prometheus metrics endpoint
+(`/metrics`) is provided.
+
+Connections are not configured on this page; configure **SABnzbd** and
+**qBittorrent** in **Settings** first.
+
 ### Upgrading from the previous release
 
 This release renames the connection service to **Seer** (environment variables
-`SEER_URL`/`SEER_API_KEY`, database column `seer_request_id`). There are **no
-migration shims**: databases and settings files created by the previous release
-still use the old request-id column and service key. On upgrade, stop the
-container and remove the `data/` volume (or at least `data/aio-arr.db` and
-`data/app_settings.json`), then start fresh and re-enter the Seer URL and API
-key in **Settings → Seer**. Fresh installs are unaffected.
+`SEER_URL`/`SEER_API_KEY`, database column `seer_request_id`). Upgrades are
+handled automatically on startup: the database schema is migrated in place — the
+`seer_request_id` column is added to an existing `items` table and any value
+stored under the old `jellyseerr_request_id` column is carried forward — and the
+settings file self-migrates. **No manual data wipe is required.**
+
+Because the service itself was renamed, the Seer **URL and API key are not
+carried over** from the old Jellyseerr entry; after upgrading, confirm or enter
+them in **Settings → Seer** (or set `SEER_URL`/`SEER_API_KEY`). Fresh installs
+are unaffected.
 
 ## Local development
 
@@ -294,6 +319,14 @@ cd frontend && npm run build
   sync state, preserving tracked-list configuration; returns refreshed stats.
 - `POST /api/settings/database/clear-posters` – delete cached poster thumbnails;
   returns refreshed stats.
+- `GET /api/bandwidth/status` – live Bandwidth-Controllarr state: enabled flag,
+  control status, last-check timestamp, configured interval, and current
+  qBittorrent/SABnzbd stats.
+- `PUT /api/bandwidth/settings` – update `{ enabled?, check_interval_seconds? }`;
+  persists the change, reschedules the control loop on interval change, and
+  returns the updated state.
+- `GET /metrics` – Prometheus-compatible text exposition of the
+  Bandwidth-Controllarr gauges (`bw_qbit_*`, `bw_sab_*`, `bw_check_status`).
 
 ## Adding a module
 
@@ -334,3 +367,10 @@ cd frontend && npm run build
   uses WAL with a process-level lock. Multi-worker deployment is out of scope.
 - APScheduler 4 is pre-release; all scheduler usage is isolated behind
   `backend/core/scheduler.py` so a downgrade to 3.x is a one-file change.
+- **Bandwidth-Controllarr** is off by default. When enabled, it polls
+  qBittorrent and SABnzbd every `BANDWIDTH_CHECK_INTERVAL_SEC` seconds; if
+  qBittorrent has active torrents, SABnzbd is paused, and resumed once the
+  torrents go idle. Disabling the switch resumes SABnzbd if it had been paused
+  by the loop. All control state is persisted in `SETTINGS_STORE_PATH`; the
+  Prometheus metrics at `/metrics` use the same gauge names as the standalone
+  source tool.

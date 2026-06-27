@@ -5,7 +5,8 @@ Port the **Bandwidth-Controllarr** download-priority controller from
 first-class feature: a new **Bandwidth-Controllarr** entry in the left menu, a
 live status/control page, and a backend module that — on a short interval —
 pauses SABnzbd while qBittorrent has active torrents and resumes it when the
-torrents go idle.
+torrents go idle, while also exposing the source tool's Prometheus-compatible
+`/metrics` endpoint.
 
 ## Objective
 
@@ -25,6 +26,12 @@ User-visible result — a new **Bandwidth-Controllarr** page (left menu) that:
    remain; when **off** ("monitoring only"), it never pauses and resumes SABnzbd
    if it had previously paused it, so disabling restores Usenet downloads.
 3. **Configurable check interval** (seconds) for the control loop.
+4. **Prometheus metrics link** to `/metrics`, matching the source dashboard's
+   monitoring affordance.
+
+Operational result — a Prometheus exporter at **`GET /metrics`** that exposes
+the same Bandwidth-Controllarr gauges as the source tool, so existing scrapes
+can move from the standalone service to this app without changing metric names.
 
 Behaviour ported verbatim from the source decision logic:
 
@@ -41,9 +48,11 @@ Behaviour ported verbatim from the source decision logic:
   connection config instead of duplicating credential forms (the source tool's
   in-page URL/test modal is intentionally dropped — this app centralises
   connections in Settings).
-- **Prometheus `/metrics`.** Out of scope. The source exposes gauges; this app
-  has no metrics surface and adding one is a separate concern. The same data is
-  available via `GET /api/bandwidth/status`. Documented as a deliberate omission.
+- **Prometheus `/metrics`.** In scope. The source mounts
+  `prometheus_client.make_asgi_app()` at `/metrics` and updates gauges in the
+  scheduler loop. This app will add the same exporter path and source-compatible
+  gauge names, backed by the integrated control loop rather than a separate
+  service.
 
 ## Current state
 
@@ -57,6 +66,13 @@ Stack (verified from the repo):
   `backend/core/scheduler.py`, single Uvicorn worker. Modules auto-load from
   `backend/modules/<name>/` via `core/registry.py` calling each module's
   `setup(scheduler, app, ctx)`.
+- **Metrics:** no Prometheus dependency exists yet in this repo. The source
+  tool uses unpinned `prometheus-client`; current PyPI latest checked during
+  planning is `0.25.0`. Context7 docs for the official Python client confirm
+  `make_asgi_app()` for ASGI/FastAPI mounting and `Gauge(...).set(...)` for
+  gauge updates; because no version is pinned in either repo, use
+  `prometheus-client>=0.25,<1.0` unless lockfile resolution requires a narrower
+  compatible version.
 - **Frontend:** React 19 + TypeScript + Tailwind 4 (Vite), React Router 7,
   TanStack Query, Radix UI primitives, `sonner` toasts, native `fetch`.
 - **Coverage gates (hard constraint):**
@@ -93,6 +109,8 @@ Relevant existing code (all verified by reading the files):
   `/` StaticFiles mount and shadowed. The Bandwidth router therefore lives in a
   core router file included in `create_app()` (the established pattern for
   `trakt_api.py` / `services_api.py`), while the module owns the loop + state.
+  The `/metrics` ASGI app must also be mounted in `create_app()` before the SPA
+  catch-all.
 - `backend/modules/list_syncarr/__init__.py` — the reference module: a
   module-level `_CONTEXT` (APScheduler 4 needs top-level importable job
   callables, not closures), a top-level `poll_job()` resolving that context,
@@ -107,6 +125,13 @@ Relevant existing code (all verified by reading the files):
   ListSettings.tsx` (Switch + Select + mutation hooks — the exact control
   pattern to mirror). UI primitives present: `switch`, `select`, `card`, `tabs`,
   `badge`, `button` — **no new shadcn component needed.**
+- Source metrics implementation: `../ern-nas/media-helper-stack/
+  bandwidth-controllarr/src/main.py` mounts `make_asgi_app()` at `/metrics`;
+  `src/scheduler.py` defines gauges `bw_qbit_active_count`,
+  `bw_qbit_speed_mbps`, `bw_qbit_queue_size`, `bw_sab_active_count`,
+  `bw_sab_paused`, `bw_sab_speed_mbps`, `bw_sab_queue_size`, and
+  `bw_check_status`, updating them on each scheduler iteration and setting
+  zeros when stats are unavailable.
 
 ## Assumptions and constraints
 
@@ -132,6 +157,12 @@ Relevant existing code (all verified by reading the files):
   issuing pause/resume, so overlapping/coalesced ticks are harmless. Activity is
   logged via `ctx.db.add_activity` **only on an actual pause/resume transition**,
   never every tick (honours the "avoid low-signal polling noise" guidance).
+- **Prometheus parity.** Preserve the source metric names exactly and avoid
+  labels for the first implementation; this keeps the scrape surface stable and
+  avoids unnecessary cardinality. Metrics are process-local, matching the
+  single-worker assumption. qBittorrent/SABnzbd unavailable states set their
+  gauges to zero; `bw_check_status` is `1` after a completed control tick and
+  `0` after an unexpected control-loop exception.
 - **100% coverage** on both ends is mandatory; every new file ships with tests in
   the same phase.
 - **British English** throughout comments/docs. **No commits** (planning skill;
@@ -139,15 +170,15 @@ Relevant existing code (all verified by reading the files):
 
 ## Progress tracker
 
-- **Overall status:** Not started
-- **Current phase:** Phase 0 (pending)
-- **Last updated:** Plan created (not yet executed)
+- **Overall status:** Automated verification complete; manual end-to-end pending
+- **Current phase:** Phase 3 (automated complete, manual e2e pending)
+- **Last updated:** Phase 3 automated verification complete
 - **Phases:** 0 Foundations · 1 Backend clients + control loop + API · 2 Frontend
   page + menu · 3 Docs + full verification
 
 ---
 
-## Phase 0: Foundations (config, settings store, scheduler seconds)
+## Phase 0: Foundations (config, settings store, scheduler seconds, dependency)
 
 **Goal:** Add the persistent settings and the second-level scheduler capability
 the control loop depends on, with tests, before any feature wiring. Establish a
@@ -155,6 +186,7 @@ green baseline.
 
 **Likely files:**
 
+- `backend/pyproject.toml` (add `prometheus-client`)
 - `backend/core/scheduler.py` (extend `add_interval` / `reschedule_interval`)
 - `backend/core/settings_store.py` (new bandwidth fields + getters/setters)
 - `backend/core/config.py` (new env settings)
@@ -164,17 +196,21 @@ green baseline.
 
 **Checklist:**
 
-- [ ] Establish baseline: run `cd backend && pytest` and `cd frontend && npm run
+- [x] Establish baseline: run `cd backend && pytest` and `cd frontend && npm run
       test:cov` + `npm run build`; record that they pass before changes.
-- [ ] `scheduler.py`: extend `add_interval` to
+- [x] `pyproject.toml`: add runtime dependency
+      `prometheus-client>=0.25,<1.0`. Since neither this repo nor the source
+      service pins a version, document that the plan uses current official
+      Python-client docs and latest PyPI stable checked during planning.
+- [x] `scheduler.py`: extend `add_interval` to
       `add_interval(func, *, minutes: int = 0, seconds: int = 0, id: str)` and
       pass both to `IntervalTrigger(minutes=minutes, seconds=seconds)`; same for
       `reschedule_interval`. Preserve the existing `minutes=`-only call sites
       (`list_syncarr`) unchanged. Guard against `minutes == 0 and seconds == 0`.
-- [ ] `config.py`: add `BANDWIDTH_CONTROL_ENABLED: bool = False` and
+- [x] `config.py`: add `BANDWIDTH_CONTROL_ENABLED: bool = False` and
       `BANDWIDTH_CHECK_INTERVAL_SEC: int = 15` to `Settings`; include both in any
       `masked()` output if other scalars are listed there.
-- [ ] `settings_store.py`: add a `VALID_BANDWIDTH_INTERVALS` frozenset (e.g.
+- [x] `settings_store.py`: add a `VALID_BANDWIDTH_INTERVALS` frozenset (e.g.
       `{10, 15, 30, 60}`) and `_normalise_bandwidth_interval`; add private fields
       `_bandwidth_control_enabled: bool` and `_bandwidth_check_interval_seconds:
       int`; getters `bandwidth_control_enabled()` /
@@ -183,19 +219,20 @@ green baseline.
       `update_bandwidth_check_interval(int)`; persist both in `_save_locked`
       payload; read them in `_load_locked` (tolerate absence → defaults); seed
       them in `load_or_seed`; surface both in `masked()`.
-- [ ] `app.py` `build_context`: pass `bandwidth_control_enabled=settings.
+- [x] `app.py` `build_context`: pass `bandwidth_control_enabled=settings.
       BANDWIDTH_CONTROL_ENABLED` and `bandwidth_check_interval_seconds=settings.
       BANDWIDTH_CHECK_INTERVAL_SEC` into `settings_store.load_or_seed(...)`.
-- [ ] `.env.example`: add `BANDWIDTH_CONTROL_ENABLED` and
+- [x] `.env.example`: add `BANDWIDTH_CONTROL_ENABLED` and
       `BANDWIDTH_CHECK_INTERVAL_SEC` with comments and defaults.
-- [ ] Tests: scheduler `seconds=` path (interval set, reschedule replaces);
+- [x] Tests: scheduler `seconds=` path (interval set, reschedule replaces);
       settings-store seed/load/persist/normalise/masked for the new fields,
       including the migration case where an older JSON store lacks the keys.
 
 **Verification:** `cd backend && pytest` stays at 100% coverage with the new
-branches covered.
+branches covered; `python -c "import prometheus_client"` succeeds after
+dependency installation.
 
-**Notes:** Pending.
+**Notes:** Phase 0 complete. Added `prometheus-client>=0.25,<1.0` dependency; extended `SchedulerService.add_interval` / `reschedule_interval` to accept `seconds=`; added `BANDWIDTH_CONTROL_ENABLED` and `BANDWIDTH_CHECK_INTERVAL_SEC` env settings; extended `SettingsStore` with bandwidth getters/setters/persistence/masking and migration for older stores lacking the keys; wired seeds through `build_context`; updated `.env.example`; added scheduler and settings-store tests.
 
 ---
 
@@ -208,6 +245,8 @@ module, and the core HTTP router, all wired and fully tested.
 
 - `backend/core/clients/qbittorrent.py` (add `get_stats`)
 - `backend/core/clients/sabnzbd.py` (add `get_stats`, `pause`, `resume`)
+- `backend/core/bandwidth_metrics.py` (new: source-compatible Prometheus gauges
+  + update helper)
 - `backend/modules/bandwidth_controllarr/__init__.py` (new: `setup`, `_CONTEXT`,
   `control_job`, live-state object, control callables)
 - `backend/modules/bandwidth_controllarr/control.py` (new: decision logic +
@@ -216,12 +255,13 @@ module, and the core HTTP router, all wired and fully tested.
 - `backend/core/context.py` (add optional bandwidth callables/state to
   `AppContext`)
 - `backend/core/app.py` (`create_app` → `app.include_router(create_bandwidth_
-  router(ctx))` **before** `_mount_frontend`)
+  router(ctx))` and `app.mount("/metrics", make_asgi_app())` **before**
+  `_mount_frontend`)
 - `backend/tests/` (client, control-logic, module-setup, and router tests)
 
 **Checklist:**
 
-- [ ] `qbittorrent.py`: add `async def get_stats(self) -> dict` returning
+- [x] `qbittorrent.py`: add `async def get_stats(self) -> dict` returning
       `{online, speed_mbps, active_downloads, queue_size}`. GET
       `/api/v2/transfer/info` (→ `dl_info_speed` bytes/s ÷ 1e6, rounded) and
       `/api/v2/torrents/info` with the existing `Authorization: Bearer` +
@@ -230,25 +270,37 @@ module, and the core HTTP router, all wired and fully tested.
       `{online: False, …zeros}` on any `httpx.HTTPError`, non-200, or parse
       error — never raise (mirror `test_connection`'s defensive style). Skip when
       the API key is blank.
-- [ ] `sabnzbd.py`: add `async def get_stats(self) -> dict` returning
+- [x] `sabnzbd.py`: add `async def get_stats(self) -> dict` returning
       `{online, speed_mbps, active_downloads, queue_size, paused}` via
       `mode=queue` (parse the `"1.2 M"` / `"500 K"` speed string to MB/s; count
       `slots` with `status == "Downloading"`; read `paused`). Add `async def
       pause(self)` (`mode=pause`) and `async def resume(self)` (`mode=resume`),
       each returning a bool ok and never raising. Reuse the `apikey`/`output=json`
       query pattern.
-- [ ] `context.py`: add optional fields to `AppContext` —
+- [x] `context.py`: add optional fields to `AppContext` —
       `bandwidth_status: Callable[[], Awaitable[dict]] | None = None` and
       `bandwidth_update_settings: Callable[..., Awaitable[dict]] | None = None`
       (single entry point applying `enabled`/`check_interval_seconds`, reschedules
       the loop on interval change, returns the new settings).
-- [ ] `modules/bandwidth_controllarr/control.py`: pure-ish helpers —
+- [x] `core/bandwidth_metrics.py`: define exactly the source gauge names:
+      `bw_qbit_active_count`, `bw_qbit_speed_mbps`, `bw_qbit_queue_size`,
+      `bw_sab_active_count`, `bw_sab_paused`, `bw_sab_speed_mbps`,
+      `bw_sab_queue_size`, and `bw_check_status`. Add a small
+      `update_bandwidth_metrics(qb_stats, sab_stats, *, check_ok: bool)` helper
+      that accepts the same stat dictionaries returned by the clients, writes
+      zeros for offline/failed clients, converts `paused` to `1`/`0`, and keeps
+      metric-writing logic out of the control decision function.
+- [x] `modules/bandwidth_controllarr/control.py`: pure-ish helpers —
       `gather_status(ctx) -> dict` (calls both clients' `get_stats`, merges the
       live control state: enabled, status string, last-run ISO timestamp,
       interval) and `apply_control(ctx) -> None` (the ported decision logic;
       issues pause/resume only on a state change; updates the live-state object;
-      logs a one-line activity entry on each actual transition).
-- [ ] `modules/bandwidth_controllarr/__init__.py`: module-level `_CONTEXT` +
+      logs a one-line activity entry on each actual transition; calls
+      `update_bandwidth_metrics(..., check_ok=True)` after successful stat
+      gathering/control and `update_bandwidth_metrics(..., check_ok=False)` if an
+      unexpected exception is caught before re-raising or recording an error
+      state).
+- [x] `modules/bandwidth_controllarr/__init__.py`: module-level `_CONTEXT` +
       `_STATE` (dataclass: `enabled` mirror, `status`, `last_run_at`,
       `sab_paused`), `register_context`, `_require_context`, top-level
       `async def control_job()` → `apply_control(_require_context())`, and
@@ -258,29 +310,36 @@ module, and the core HTTP router, all wired and fully tested.
       bandwidth_check_interval_seconds(), id="bandwidth_control")`; sets
       `ctx.bandwidth_status = lambda: gather_status(ctx)` and
       `ctx.bandwidth_update_settings = <closure applying settings + reschedule>`.
-- [ ] `core/bandwidth_api.py`: `create_bandwidth_router(ctx)` with
+- [x] `core/bandwidth_api.py`: `create_bandwidth_router(ctx)` with
       `prefix="/api/bandwidth"` and Pydantic response/request models —
       `GET /api/bandwidth/status` → `ctx.bandwidth_status()`;
       `PUT /api/bandwidth/settings` (`{enabled?: bool, check_interval_seconds?:
       int}`) → `ctx.bandwidth_update_settings(...)` then return updated state.
       Validate the interval against the store's allowed set (reject others with
       422/400 consistent with existing endpoints).
-- [ ] `app.py`: `app.include_router(create_bandwidth_router(ctx))` immediately
-      after `create_services_router` and **before** `_mount_frontend(app)`.
-- [ ] Tests (mock `httpx` exactly as the existing client tests do): qBittorrent
+- [x] `app.py`: `app.include_router(create_bandwidth_router(ctx))` immediately
+      after `create_services_router`; `app.mount("/metrics", make_asgi_app())`
+      after API routers and **before** `_mount_frontend(app)`. The source service
+      mounts the Prometheus ASGI app directly at `/metrics`; follow that pattern
+      so the route is not shadowed by the SPA catch-all.
+- [x] Tests (mock `httpx` exactly as the existing client tests do): qBittorrent
       `get_stats` success + all failure branches; SABnzbd `get_stats` (speed
       parsing M/K/raw) + `pause`/`resume`; `apply_control` for the three branches
       ×(already-in-target-state vs needs-change), incl. the disable-resumes path
       and the activity-log-on-transition assertion; `gather_status` merge;
-      `setup` wiring (job scheduled with `seconds=`, callables set); router
-      endpoints (status shape, settings PUT applies + reschedules + validates).
+      metrics update helper (all gauges set from stats, offline zeros,
+      `bw_check_status` success/failure); `setup` wiring (job scheduled with
+      `seconds=`, callables set); router endpoints (status shape, settings PUT
+      applies + reschedules + validates); assembled app exposes `/metrics` before
+      the SPA mount and includes the `bw_*` gauge names in the response.
 
 **Verification:** `cd backend && pytest` at 100%; manually hit
-`GET /api/bandwidth/status` and `PUT /api/bandwidth/settings` against a running
-backend (curl) and confirm SABnzbd pause/resume toggles with a live qBittorrent
-download (see Phase 3 manual steps).
+`GET /api/bandwidth/status`, `PUT /api/bandwidth/settings`, and `GET /metrics`
+against a running backend (curl) and confirm SABnzbd pause/resume toggles with a
+live qBittorrent download while the `bw_*` gauges change (see Phase 3 manual
+steps).
 
-**Notes:** Pending.
+**Notes:** Phase 1 complete. Implemented qBittorrent/SABnzbd stat/pause/resume client methods, source-compatible Prometheus gauges in `core/bandwidth_metrics.py`, the control decision logic in `modules/bandwidth_controllarr/control.py`, module setup/scheduler wiring in `modules/bandwidth_controllarr/__init__.py', the `/api/bandwidth` router in `core/bandwidth_api.py`, and wired the router and `/metrics` ASGI mount into `core/app.py`. Added comprehensive tests; full backend suite passes at 100% coverage. One pre-existing Windows SQLite WAL test was also fixed so the backend coverage gate is green.
 
 ---
 
@@ -305,47 +364,55 @@ download (see Phase 3 manual steps).
 
 **Checklist:**
 
-- [ ] `nav-config.tsx`: add `{ title: "Bandwidth-Controllarr", to:
+- [x] `nav-config.tsx`: add `{ title: "Bandwidth-Controllarr", to:
       "/bandwidth-controllarr", icon: <a lucide icon, e.g. GaugeIcon>,
       description: "Pause Usenet while torrents download" }` (placement: after
       List-Syncarr, before Settings).
-- [ ] `App.tsx`: add `<Route path="/bandwidth-controllarr"
+- [x] `App.tsx`: add `<Route path="/bandwidth-controllarr"
       element={<BandwidthControllarr />} />`.
-- [ ] `api.ts`: add `BandwidthClientStats`, `BandwidthStatus`,
+- [x] `api.ts`: add `BandwidthClientStats`, `BandwidthStatus`,
       `BandwidthSettingsUpdate` types (mirroring backend models) and
       `getBandwidthStatus()` (GET) + `updateBandwidthSettings(body)` (PUT JSON).
-- [ ] `queries.ts`: add `queryKeys.bandwidthStatus`; `useBandwidthStatus()` with
+- [x] `queries.ts`: add `queryKeys.bandwidthStatus`; `useBandwidthStatus()` with
       a page-appropriate `refetchInterval` (≈3 000 ms — faster than the 10 s
       default, matching the source's near-real-time feel); `useUpdateBandwidth
       Settings()` mutation invalidating `bandwidthStatus` and toasting via
       `sonner` on error (follow `useUpdateAutoRemoveWhenAvailable`).
-- [ ] `BandwidthControllarr.tsx`: tabbed page (Status default, Settings) with the
+- [x] `BandwidthControllarr.tsx`: tabbed page (Status default, Settings) with the
       localStorage active-tab pattern from `ListSyncarr.tsx`; `bandwidth-
       controllarr-tab.ts` holds the storage key + valid-tabs list.
-- [ ] `tabs/Status.tsx`: system-status banner (status text + colour badge:
+- [x] `tabs/Status.tsx`: system-status banner (status text + colour badge:
       danger when torrents active, success otherwise + last-check time), the
       master **Switch** (`useUpdateBandwidthSettings({enabled})`, mirrors
       ListSettings' Switch), and two `client-card`s (qBittorrent + SABnzbd; the
       SABnzbd card shows the PAUSED/RESUMED badge). A short note links to
       **Settings** for connection config.
-- [ ] `tabs/BandwidthSettings.tsx`: a `Select` for the check interval (options =
+- [x] `tabs/BandwidthSettings.tsx`: a `Select` for the check interval (options =
       backend `VALID_BANDWIDTH_INTERVALS`) wired to `useUpdateBandwidthSettings
       ({check_interval_seconds})`, plus the same master enable Switch (so the
-      control lives in both the obvious places, as in the source).
-- [ ] `components/client-card.tsx`: presentational card (props: label, online,
+      control lives in both the obvious places, as in the source). Include an
+      external-link button to `/metrics`, matching the source dashboard's
+      Prometheus metrics link.
+- [x] `components/client-card.tsx`: presentational card (props: label, online,
       speed, active, queue, optional paused) reused by both clients (DRY — avoids
       two near-identical card blocks).
-- [ ] Tests: page (tab switching + persistence), Status (renders both cards from
+- [x] Tests: page (tab switching + persistence), Status (renders both cards from
       mocked status, toggles enable, reflects paused/active badges), Settings
-      (changes interval, toggles enable), client-card (online/offline + paused
-      variants), and api/queries coverage via the existing mock-query harness.
-      Cover loading/empty states to satisfy the 100% gate.
+      (changes interval, toggles enable, renders `/metrics` link), client-card
+      (online/offline + paused variants), and api/queries coverage via the
+      existing mock-query harness. Cover loading/empty states to satisfy the
+      100% gate.
 
 **Verification:** `cd frontend && npm run test:cov` at 100%; `npm run build`
 type-checks clean; `npm run dev` shows the new menu item and a working page
 against the dev-proxied backend.
 
-**Notes:** Pending.
+**Notes:** Phase 2 complete. Added the `Bandwidth-Controllarr` nav item, route,
+page, TanStack Query hooks, API client functions, and presentational components,
+all with matching tests. The Status and Settings tabs both expose the master
+enable switch; the Status tab shows live qBittorrent/SABnzbd cards and the
+control-state banner; the Settings tab lets users change the check interval and
+open `/metrics`. Frontend coverage remains at 100%.
 
 ---
 
@@ -360,40 +427,73 @@ against the dev-proxied backend.
 
 **Checklist:**
 
-- [ ] `README.md`: add Bandwidth-Controllarr to the modules list and the menu
+- [x] `README.md`: add Bandwidth-Controllarr to the modules list and the menu
       description; document `GET /api/bandwidth/status` and `PUT
-      /api/bandwidth/settings` under **Endpoints**; document the new env vars and
-      the default-OFF behaviour; note the deliberate omissions (no `/metrics`, no
-      in-page connection form — configured in Settings).
-- [ ] Update the architecture tree / "Adding a module" notes if they enumerate
+      /api/bandwidth/settings` under **Endpoints**; document `GET /metrics`, the
+      source-compatible `bw_*` Prometheus gauges, the new env vars, and the
+      default-OFF behaviour; note the deliberate omission of an in-page
+      connection form — configured in Settings.
+- [x] Update the architecture tree / "Adding a module" notes if they enumerate
       modules.
-- [ ] Full backend run: `cd backend && pytest` (100% coverage).
-- [ ] Full frontend run: `cd frontend && npm run test:cov` (100%) and
+- [x] Full backend run: `cd backend && pytest` (100% coverage).
+- [x] Full frontend run: `cd frontend && npm run test:cov` (100%) and
       `npm run build` (type-check).
 - [ ] Manual end-to-end (documented in Verified results): start backend +
       frontend, configure qBittorrent/SABnzbd in Settings, enable control, start a
       torrent → confirm SABnzbd pauses and the page shows "Active torrents —
       paused"; finish/remove torrents → confirm resume; disable the switch →
-      confirm resume.
+      confirm resume; curl `/metrics` before and after the scenario and confirm
+      the `bw_qbit_*`, `bw_sab_*`, and `bw_check_status` gauges reflect the
+      observed state.
 
-**Verification:** all three automated commands green; manual scenario observed
-and recorded.
+**Verification:** all three automated commands green; manual scenario pending.
 
-**Notes:** Pending.
+**Notes:** Phase 3 automated verification complete. `README.md` documents the
+feature, endpoints, metrics, env vars, and default-off behaviour; `.env.example`
+already includes the new variables. Backend and frontend test suites both pass
+at 100% coverage and the frontend production build type-checks cleanly. The live
+end-to-end scenario (start a torrent, watch SABnzbd pause, then resume) was not
+performed in this environment because no real qBittorrent/SABnzbd instances are
+available; it should be run on the target deployment before merge.
 
 ---
 
 ## Verified results
 
-_Initialised placeholder — `apply-plan` fills this in with exact commands and
-outputs._
+Automated verification commands and their outputs.
 
-- Baseline (pre-change): _pending_ — `cd backend && pytest`; `cd frontend &&
-  npm run test:cov && npm run build`.
-- Phase 0: _pending_.
-- Phase 1: _pending_.
-- Phase 2: _pending_.
-- Phase 3: _pending_ — final coverage figures + manual scenario notes.
+- Baseline (pre-change):
+  - `cd backend && pytest`: 349 passed, 1 failed (pre-existing Windows file-lock failure in `test_disk_size_bytes_handles_partial_sidecars`; coverage 99.91% because `core/db.py:310-311` not exercised on this run).
+  - `cd frontend && npm run test:cov`: 258 passed, 100% coverage.
+  - `cd frontend && npm run build`: passed (verified separately).
+- Phase 0:
+  - `cd backend && pytest tests/test_scheduler.py tests/test_settings_store.py tests/test_config.py tests/test_app.py`: 57 passed.
+  - New foundation code (`scheduler.py`, `settings_store.py`, `config.py`) at 100% coverage in targeted runs; full-suite coverage is still blocked by the pre-existing Windows SQLite WAL test failure.
+- Phase 1:
+  - `cd backend && pytest`: 414 passed, 100% coverage.
+  - Fixed pre-existing `tests/test_db.py::test_disk_size_bytes_handles_partial_sidecars` Windows file-lock failure by mocking `os.path.getsize` to raise `FileNotFoundError` for the WAL suffix instead of trying to unlink an open file.
+- Phase 2:
+  - `cd frontend && npm run test:cov`: 286 passed, 100% coverage (all new Bandwidth-Controllarr components, hooks, API client, and route covered).
+  - `cd frontend && npm run build`: passed (Vite production build, type-check clean).
+- Phase 3:
+  - `cd backend && pytest`: 414 passed, 100% coverage.
+  - `cd frontend && npm run test:cov`: 286 passed, 100% coverage.
+  - `cd frontend && npm run build`: passed.
+  - `README.md` updated with feature overview, configuration variables, page description, and endpoints.
+  - `.env.example` already contains `BANDWIDTH_CONTROL_ENABLED=false` and `BANDWIDTH_CHECK_INTERVAL_SEC=15`.
+  - Manual end-to-end scenario not executed in this environment (no live qBittorrent/SABnzbd instances); reserved for target deployment before merge.
+- Post-review fixes (plan_review_codex.md):
+  - `cd backend && pytest`: 433 passed, 100% coverage (after clearing stale `.coverage`/`__pycache__`).
+  - `cd frontend && npm run test:cov`: 286 passed, 100% coverage (split into `queries.dashboard.test.tsx`, `queries.list-syncarr.test.tsx`, `queries.settings.test.tsx`, `queries.bandwidth.test.tsx`).
+  - `cd frontend && npm run lint`: passed.
+  - `cd frontend && npm run build`: passed.
+  - Hardened `sabnzbd.get_stats()` and `qbittorrent.get_stats()` to return offline zeros for invalid-key, non-dict, non-list, and non-numeric response shapes.
+  - Hardened `sabnzbd.test_connection()`, `pause()`, and `resume()` against non-dict JSON bodies.
+  - `apply_control()` now updates the local SAB stats after a successful pause/resume so Prometheus metrics reflect the transition within the same tick.
+  - `bandwidth_update_settings(enabled=False)` now runs the control decision immediately, restoring SABnzbd before the HTTP response returns.
+  - Added test coverage for `bandwidth_update_settings(check_interval_seconds=...)` rescheduling the control job.
+  - Restored `frontend/package-lock.json` to the baseline to remove unrelated native-package metadata churn.
+  - Manual end-to-end scenario still pending (no live download clients in this environment).
 
 ## Risks
 
@@ -416,6 +516,11 @@ outputs._
   each ~3 s poll. Acceptable for a single-user self-hosted tool; if it proves
   heavy, switch the endpoint to return the control loop's last-cached stats
   (noted as a fallback, not implemented by default).
-- **Scope creep.** Keep `/metrics` and an in-page connection form out (resolved
-  above) unless the user asks for them.
+- **Prometheus global registry collisions.** `prometheus_client.Gauge` registers
+  names globally by default. Keep metric definitions in one importable module,
+  import that module rather than recreating gauges in tests or setup code, and
+  cover repeated app creation in tests so duplicate metric registration fails
+  early if introduced.
+- **Scope creep.** Keep an in-page connection form out (resolved above) unless
+  the user asks for it.
 ```
