@@ -41,6 +41,7 @@ import {
 import { setup } from "@/shared/test/query-provider"
 
 const sampleSettings = {
+  client_id: "abcd1234",
   client_id_hint: "1234",
   client_id_set: true,
   client_secret_set: true,
@@ -84,7 +85,7 @@ describe("trakt settings hooks", () => {
     expect(result.current.data?.client_id_hint).toBe("1234")
   })
 
-  it("useUpdateTraktSettings toasts and invalidates on success", async () => {
+  it("useUpdateTraktSettings invalidates on success", async () => {
     vi.mocked(api.updateTraktSettings).mockResolvedValue(sampleSettings)
     const { queryClient, wrapper } = setup()
     const invalidate = vi.spyOn(queryClient, "invalidateQueries")
@@ -93,7 +94,6 @@ describe("trakt settings hooks", () => {
     act(() => result.current.mutate({ client_id: "newid1234" }))
 
     await waitFor(() => expect(result.current.isSuccess).toBe(true))
-    expect(toast.success).toHaveBeenCalledWith("Trakt settings saved")
     expect(invalidate).toHaveBeenCalledWith({ queryKey: queryKeys.traktSettings })
     expect(invalidate).toHaveBeenCalledWith({ queryKey: queryKeys.activity })
   })
@@ -227,7 +227,7 @@ describe("service connection hooks", () => {
     expect(result.current.data?.seer.api_key_set).toBe(true)
   })
 
-  it("useUpdateServiceSettings toasts and invalidates on success", async () => {
+  it("useUpdateServiceSettings invalidates on success", async () => {
     vi.mocked(api.updateServiceSettings).mockResolvedValue({
       seer: { url: "http://js", api_key_set: true },
       sonarr: { url: "http://sonarr", api_key_set: true },
@@ -249,7 +249,6 @@ describe("service connection hooks", () => {
     expect(api.updateServiceSettings).toHaveBeenCalledWith("sonarr", {
       url: "http://sonarr",
     })
-    expect(toast.success).toHaveBeenCalledWith("Connection saved")
     expect(invalidate).toHaveBeenCalledWith({ queryKey: queryKeys.services })
     expect(invalidate).toHaveBeenCalledWith({ queryKey: queryKeys.activity })
   })

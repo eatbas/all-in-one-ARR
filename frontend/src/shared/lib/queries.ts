@@ -176,7 +176,6 @@ export function useUpdateTraktSettings(): UseMutationResult<
   return useMutation({
     mutationFn: updateTraktSettings,
     onSuccess: () => {
-      toast.success("Trakt settings saved")
       void queryClient.invalidateQueries({ queryKey: queryKeys.traktSettings })
       void queryClient.invalidateQueries({ queryKey: queryKeys.activity })
     },
@@ -284,7 +283,6 @@ export function useUpdateServiceSettings(): UseMutationResult<
   return useMutation({
     mutationFn: ({ name, body }) => updateServiceSettings(name, body),
     onSuccess: () => {
-      toast.success("Connection saved")
       void queryClient.invalidateQueries({ queryKey: queryKeys.services })
       void queryClient.invalidateQueries({ queryKey: queryKeys.activity })
     },
