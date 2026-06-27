@@ -17,6 +17,7 @@ dependencies = [
     "httpx>=0.28,<1.0",
     "pydantic>=2.9,<3.0",
     "pydantic-settings>=2.6,<3.0",
+    "prometheus-client>=0.25,<1.0",
 ]
 
 [project.optional-dependencies]
@@ -31,7 +32,7 @@ dev = [
 # The backend is laid out as top-level packages inside backend/ (this file's
 # directory); a hyphenated distribution name is not importable, so the code is
 # exposed as the core/ and modules/ packages rather than an aio_arr/ package.
-packages = ["core", "core.clients", "modules", "modules.list_syncarr"]
+packages = ["core", "core.clients", "modules", "modules.list_syncarr", "modules.bandwidth_controllarr"]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"

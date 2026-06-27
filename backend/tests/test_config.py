@@ -16,6 +16,8 @@ def test_valid_settings_defaults() -> None:
     settings = Settings(_env_file=None, **_VALID)
     assert settings.SYNC_INTERVAL_MIN == 15
     assert settings.POSTER_CACHE_PATH == "data/posters"
+    assert settings.BANDWIDTH_CONTROL_ENABLED is False
+    assert settings.BANDWIDTH_CHECK_INTERVAL_SEC == 15
 
 
 def test_all_service_credentials_are_optional() -> None:

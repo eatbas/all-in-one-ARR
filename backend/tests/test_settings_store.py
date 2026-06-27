@@ -389,3 +389,80 @@ def test_legacy_auto_remove_on_import_key_migrates(tmp_path) -> None:
     saved = json.loads(path.read_text())
     assert saved["auto_remove_when_available"] is True
     assert "auto_remove_on_import" not in saved
+
+
+def test_bandwidth_control_defaults_to_false(tmp_path) -> None:
+    store = SettingsStore(str(tmp_path / "settings.json"))
+    _seed(store)
+    assert store.bandwidth_control_enabled() is False
+    assert store.bandwidth_check_interval_seconds() == 15
+
+
+def test_bandwidth_control_seed_and_reload(tmp_path) -> None:
+    path = tmp_path / "settings.json"
+    store = SettingsStore(str(path))
+    store.load_or_seed(
+        client_id="cid",
+        client_secret="sec",
+        bandwidth_control_enabled=True,
+        bandwidth_check_interval_seconds=30,
+    )
+    assert store.bandwidth_control_enabled() is True
+    assert store.bandwidth_check_interval_seconds() == 30
+    saved = json.loads(path.read_text())
+    assert saved["bandwidth_control_enabled"] is True
+    assert saved["bandwidth_check_interval_seconds"] == 30
+
+    reopened = SettingsStore(str(path))
+    reopened.load_or_seed(client_id="x", client_secret="x")
+    assert reopened.bandwidth_control_enabled() is True
+    assert reopened.bandwidth_check_interval_seconds() == 30
+
+
+def test_bandwidth_check_interval_invalid_value_falls_back(tmp_path) -> None:
+    store = SettingsStore(str(tmp_path / "settings.json"))
+    _seed(store)
+    assert store.update_bandwidth_check_interval(10) == 10
+    assert store.update_bandwidth_check_interval(99) == 15
+    assert store.bandwidth_check_interval_seconds() == 15
+
+
+def test_bandwidth_check_interval_invalid_seed_falls_back(tmp_path) -> None:
+    store = SettingsStore(str(tmp_path / "settings.json"))
+    store.load_or_seed(
+        client_id="cid",
+        client_secret="sec",
+        bandwidth_check_interval_seconds=999,
+    )
+    assert store.bandwidth_check_interval_seconds() == 15
+
+
+def test_bandwidth_settings_update_and_masked(tmp_path) -> None:
+    store = SettingsStore(str(tmp_path / "settings.json"))
+    _seed(store)
+    assert store.update_bandwidth_control_enabled(True) is True
+    assert store.bandwidth_control_enabled() is True
+    assert store.update_bandwidth_check_interval(60) == 60
+    masked = store.masked()
+    assert masked["bandwidth_control_enabled"] is True
+    assert masked["bandwidth_check_interval_seconds"] == 60
+
+
+def test_legacy_store_without_bandwidth_keys_defaults(tmp_path) -> None:
+    # A store created before Bandwidth-Controllarr existed loads without the new keys
+    # and falls back to the default values.
+    path = tmp_path / "settings.json"
+    SettingsStore(str(path)).load_or_seed(client_id="cid", client_secret="sec")
+    data = json.loads(path.read_text())
+    data.pop("bandwidth_control_enabled", None)
+    data.pop("bandwidth_check_interval_seconds", None)
+    path.write_text(json.dumps(data), encoding="utf-8")
+
+    reopened = SettingsStore(str(path))
+    reopened.load_or_seed(client_id="x", client_secret="x")
+    assert reopened.bandwidth_control_enabled() is False
+    assert reopened.bandwidth_check_interval_seconds() == 15
+    # A subsequent save persists the defaults so the store stays current.
+    saved = json.loads(path.read_text())
+    assert saved["bandwidth_control_enabled"] is False
+    assert saved["bandwidth_check_interval_seconds"] == 15

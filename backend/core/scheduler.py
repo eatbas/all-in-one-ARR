@@ -25,15 +25,25 @@ class SchedulerService:
         self._scheduler = scheduler or AsyncScheduler()
         self._log = get_logger("scheduler")
 
-    async def add_interval(self, func: JobFunc, *, minutes: int, id: str) -> None:
-        """Schedule ``func`` to run every ``minutes`` minutes."""
+    async def add_interval(
+        self, func: JobFunc, *, minutes: int = 0, seconds: int = 0, id: str
+    ) -> None:
+        """Schedule ``func`` to run every ``minutes``/``seconds``.
+
+        At least one of ``minutes`` or ``seconds`` must be positive; supplying
+        both combines them (e.g. ``minutes=1, seconds=30``).
+        """
+        if minutes == 0 and seconds == 0:
+            raise ValueError("interval must be greater than zero")
         await self._scheduler.add_schedule(
-            func, IntervalTrigger(minutes=minutes), id=id
+            func, IntervalTrigger(minutes=minutes, seconds=seconds), id=id
         )
-        self._log.info("scheduled interval job id=%s minutes=%s", id, minutes)
+        self._log.info(
+            "scheduled interval job id=%s minutes=%s seconds=%s", id, minutes, seconds
+        )
 
     async def reschedule_interval(
-        self, func: JobFunc, *, minutes: int, id: str
+        self, func: JobFunc, *, minutes: int = 0, seconds: int = 0, id: str
     ) -> None:
         """Re-point an interval job at a new period.
 
@@ -44,7 +54,7 @@ class SchedulerService:
             await self._scheduler.remove_schedule(id)
         except ScheduleLookupError:
             self._log.info("no existing schedule id=%s to remove", id)
-        await self.add_interval(func, minutes=minutes, id=id)
+        await self.add_interval(func, minutes=minutes, seconds=seconds, id=id)
 
     async def add_cron(self, func: JobFunc, *, hour: int, minute: int, id: str) -> None:
         """Schedule ``func`` to run daily at ``hour:minute``."""

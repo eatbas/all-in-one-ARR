@@ -70,6 +70,10 @@ class Settings(BaseSettings):
     # ---- Sync behaviour ----
     SYNC_INTERVAL_MIN: int = 15
     STATUS_CHECK_INTERVAL_SECONDS: int = 60
+
+    # ---- Bandwidth-Controllarr ----
+    BANDWIDTH_CONTROL_ENABLED: bool = False
+    BANDWIDTH_CHECK_INTERVAL_SEC: int = 15
     # Whether the poll removes an item from its Trakt list once Seer reports
     # it available (the list entry only — media files are untouched). Off by default
     # so removal is fully manual (via the dashboard); seeds the store on first run,

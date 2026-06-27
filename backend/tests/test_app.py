@@ -89,6 +89,14 @@ def test_lifespan_authenticated_placeholder_frontend(_env, monkeypatch, tmp_path
         assert client.get("/health").json() == {"status": "ok"}
         assert client.get("/status").json()["synced"] == 0
         assert client.get("/api/status").status_code == 200
+        # Prometheus metrics are mounted before the SPA catch-all.
+        metrics = client.get("/metrics")
+        assert metrics.status_code == 200
+        assert "bw_qbit_active_count" in metrics.text
+        assert "bw_sab_active_count" in metrics.text
+        assert "bw_check_status" in metrics.text
+        # Bandwidth router is reachable through the assembled app.
+        assert client.get("/api/bandwidth/status").status_code == 200
         # Placeholder served at root.
         assert "All-in-One ARR" in client.get("/").text
 

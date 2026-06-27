@@ -41,7 +41,12 @@ class Database:
         self._conn.execute("PRAGMA foreign_keys=ON")
 
     def init_db(self) -> None:
-        """Create tables and indexes if they do not already exist."""
+        """Create tables and indexes if they do not already exist.
+
+        Also applies lightweight, idempotent column migrations so a database
+        created by an earlier release is brought up to the current schema
+        (``CREATE TABLE IF NOT EXISTS`` never alters an existing table).
+        """
         with self._lock:
             self._conn.executescript(
                 """
@@ -79,7 +84,30 @@ class Database:
                 );
                 """
             )
+            self._migrate_items_columns()
             self._conn.commit()
+
+    def _migrate_items_columns(self) -> None:
+        """Backfill columns added or renamed after the items table was created.
+
+        ``CREATE TABLE IF NOT EXISTS`` never alters an existing table, so a
+        database created before the Jellyseerr->Seer rename still carries
+        ``jellyseerr_request_id`` and lacks ``seer_request_id``. This adds the new
+        column when absent and carries forward any request ids tracked under the
+        old name. It is additive and idempotent: on a fresh or already-migrated
+        database the column is present and this is a no-op.
+        """
+        columns = {
+            row["name"]
+            for row in self._conn.execute("PRAGMA table_info(items)").fetchall()
+        }
+        if "seer_request_id" not in columns:
+            self._conn.execute("ALTER TABLE items ADD COLUMN seer_request_id INTEGER")
+            if "jellyseerr_request_id" in columns:
+                # Carry forward request ids tracked under the pre-rename name.
+                self._conn.execute(
+                    "UPDATE items SET seer_request_id = jellyseerr_request_id"
+                )
 
     # ---- items ----
 

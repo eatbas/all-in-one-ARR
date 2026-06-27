@@ -15,9 +15,11 @@ from typing import AsyncIterator
 from fastapi import FastAPI, Request
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
+from prometheus_client import make_asgi_app
 
 from core import registry
 from core.api import create_api_router
+from core.bandwidth_api import create_bandwidth_router
 from core.clients.arr_client import ArrClient
 from core.clients.seer import SeerClient
 from core.clients.omdb import OmdbClient
@@ -57,6 +59,8 @@ def build_context(settings: Settings) -> AppContext:
         status_check_interval_seconds=settings.STATUS_CHECK_INTERVAL_SECONDS,
         sync_interval_minutes=settings.SYNC_INTERVAL_MIN,
         auto_remove_when_available=settings.AUTO_REMOVE_WHEN_AVAILABLE,
+        bandwidth_control_enabled=settings.BANDWIDTH_CONTROL_ENABLED,
+        bandwidth_check_interval_seconds=settings.BANDWIDTH_CHECK_INTERVAL_SEC,
     )
     client_id, client_secret = settings_store.trakt_credentials()
 
@@ -199,7 +203,12 @@ def create_app() -> FastAPI:
     app.include_router(create_api_router(ctx))
     app.include_router(create_trakt_router(ctx))
     app.include_router(create_services_router(ctx))
+    app.include_router(create_bandwidth_router(ctx))
     app.include_router(ctx.webhooks.router)
+
+    # Prometheus metrics are mounted before the SPA catch-all so they are
+    # served directly instead of being swallowed by the React router fallback.
+    app.mount("/metrics", make_asgi_app())
     _mount_frontend(app)
 
     return app

@@ -35,6 +35,9 @@ VALID_STATUS_INTERVALS: frozenset[int] = frozenset({30, 45, 60})
 # Allowed Trakt sync (poll) intervals in minutes offered by the dashboard.
 VALID_SYNC_INTERVALS: frozenset[int] = frozenset({15, 30, 45, 60})
 
+# Allowed Bandwidth-Controllarr check intervals in seconds offered by the dashboard.
+VALID_BANDWIDTH_INTERVALS: frozenset[int] = frozenset({10, 15, 30, 60})
+
 
 def _service_seed(
     desc: ServiceDescriptor, seed: dict[str, str] | None
@@ -52,6 +55,11 @@ def _normalise_interval(value: int) -> int:
 def _normalise_sync_interval(value: int) -> int:
     """Return a valid Trakt sync interval in minutes, defaulting to 15."""
     return value if value in VALID_SYNC_INTERVALS else 15
+
+
+def _normalise_bandwidth_interval(value: int) -> int:
+    """Return a valid Bandwidth-Controllarr interval in seconds, defaulting to 15."""
+    return value if value in VALID_BANDWIDTH_INTERVALS else 15
 
 
 @dataclass(frozen=True)
@@ -94,6 +102,8 @@ class SettingsStore:
         self._status_check_interval_seconds = 60
         self._sync_interval_minutes = 15
         self._auto_remove_when_available = False
+        self._bandwidth_control_enabled = False
+        self._bandwidth_check_interval_seconds = 15
         self._services: dict[str, dict[str, str]] = {
             desc.name: empty_values(desc) for desc in SERVICES
         }
@@ -109,6 +119,8 @@ class SettingsStore:
         status_check_interval_seconds: int = 60,
         sync_interval_minutes: int = 15,
         auto_remove_when_available: bool = False,
+        bandwidth_control_enabled: bool = False,
+        bandwidth_check_interval_seconds: int = 15,
     ) -> None:
         """Load persisted settings, or seed from the supplied defaults.
 
@@ -132,6 +144,10 @@ class SettingsStore:
                     sync_interval_minutes
                 )
                 self._auto_remove_when_available = bool(auto_remove_when_available)
+                self._bandwidth_control_enabled = bool(bandwidth_control_enabled)
+                self._bandwidth_check_interval_seconds = _normalise_bandwidth_interval(
+                    bandwidth_check_interval_seconds
+                )
                 for desc in SERVICES:
                     self._services[desc.name] = _service_seed(
                         desc, (services or {}).get(desc.name)
@@ -149,6 +165,16 @@ class SettingsStore:
         )
         self._sync_interval_minutes = _normalise_sync_interval(
             data.get("sync_interval_minutes", 15)
+        )
+        migrated_bandwidth = (
+            "bandwidth_control_enabled" not in data
+            or "bandwidth_check_interval_seconds" not in data
+        )
+        self._bandwidth_control_enabled = bool(
+            data.get("bandwidth_control_enabled", False)
+        )
+        self._bandwidth_check_interval_seconds = _normalise_bandwidth_interval(
+            data.get("bandwidth_check_interval_seconds", 15)
         )
         # Migration: the flag was historically persisted as ``auto_remove_on_import``
         # (remove when Radarr/Sonarr imported the title). It now means "remove from
@@ -190,13 +216,14 @@ class SettingsStore:
             else:
                 self._services[name] = _service_seed(desc, seed.get(name))
                 backfilled = True
-        if backfilled or migrated_auto_remove:
+        if backfilled or migrated_auto_remove or migrated_bandwidth:
             self._save_locked()
             self._log.info(
                 "persisted store migration (services_backfilled=%s "
-                "auto_remove_key_migrated=%s)",
+                "auto_remove_key_migrated=%s bandwidth_keys_migrated=%s)",
                 backfilled,
                 migrated_auto_remove,
+                migrated_bandwidth,
             )
 
     def _save_locked(self) -> None:
@@ -208,6 +235,8 @@ class SettingsStore:
             "status_check_interval_seconds": self._status_check_interval_seconds,
             "sync_interval_minutes": self._sync_interval_minutes,
             "auto_remove_when_available": self._auto_remove_when_available,
+            "bandwidth_control_enabled": self._bandwidth_control_enabled,
+            "bandwidth_check_interval_seconds": self._bandwidth_check_interval_seconds,
             "lists": [item.to_dict() for item in self._lists],
             "services": self._services,
         }
@@ -291,6 +320,36 @@ class SettingsStore:
             self._save_locked()
             self._log.info("updated auto-remove when available to %s", enabled)
             return enabled
+
+    # ---- Bandwidth-Controllarr ----
+
+    def bandwidth_control_enabled(self) -> bool:
+        """Whether Bandwidth-Controllarr pauses SABnzbd while torrents are active."""
+        with self._lock:
+            return self._bandwidth_control_enabled
+
+    def update_bandwidth_control_enabled(self, enabled: bool) -> bool:
+        """Enable or disable Bandwidth-Controllarr; returns the new value."""
+        enabled = bool(enabled)
+        with self._lock:
+            self._bandwidth_control_enabled = enabled
+            self._save_locked()
+            self._log.info("updated bandwidth control enabled to %s", enabled)
+            return enabled
+
+    def bandwidth_check_interval_seconds(self) -> int:
+        """Return the configured Bandwidth-Controllarr check interval in seconds."""
+        with self._lock:
+            return self._bandwidth_check_interval_seconds
+
+    def update_bandwidth_check_interval(self, seconds: int) -> int:
+        """Update the Bandwidth-Controllarr check interval; invalid values fall back to 15 s."""
+        seconds = _normalise_bandwidth_interval(seconds)
+        with self._lock:
+            self._bandwidth_check_interval_seconds = seconds
+            self._save_locked()
+            self._log.info("updated bandwidth check interval to %s seconds", seconds)
+            return seconds
 
     # ---- tracked lists ----
 
@@ -401,6 +460,8 @@ class SettingsStore:
                 "status_check_interval_seconds": self._status_check_interval_seconds,
                 "sync_interval_minutes": self._sync_interval_minutes,
                 "auto_remove_when_available": self._auto_remove_when_available,
+                "bandwidth_control_enabled": self._bandwidth_control_enabled,
+                "bandwidth_check_interval_seconds": self._bandwidth_check_interval_seconds,
                 "lists": [item.to_dict() for item in self._lists],
                 "services": self.masked_services(),
             }

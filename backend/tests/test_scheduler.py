@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from unittest.mock import AsyncMock
 
+import pytest
 from apscheduler import AsyncScheduler, ScheduleLookupError
 from apscheduler.triggers.cron import CronTrigger
 from apscheduler.triggers.interval import IntervalTrigger
@@ -84,3 +85,32 @@ async def test_start_and_stop() -> None:
     stub.start_in_background.assert_awaited_once()
     await service.stop()
     assert stub.exited is True
+
+
+async def test_add_interval_accepts_seconds() -> None:
+    stub = StubScheduler()
+    service = SchedulerService(scheduler=stub)
+    await service.add_interval(def_noop, seconds=15, id="bw")
+    _, trigger = stub.add_schedule.call_args.args
+    assert isinstance(trigger, IntervalTrigger)
+    assert trigger.seconds == 15
+    assert trigger.minutes == 0
+
+
+async def test_add_interval_rejects_zero() -> None:
+    stub = StubScheduler()
+    service = SchedulerService(scheduler=stub)
+    with pytest.raises(ValueError):
+        await service.add_interval(def_noop, minutes=0, seconds=0, id="bw")
+    stub.add_schedule.assert_not_awaited()
+
+
+async def test_reschedule_interval_accepts_seconds() -> None:
+    stub = StubScheduler()
+    service = SchedulerService(scheduler=stub)
+    await service.reschedule_interval(def_noop, seconds=30, id="bw")
+    stub.remove_schedule.assert_awaited_once_with("bw")
+    _, trigger = stub.add_schedule.call_args.args
+    assert isinstance(trigger, IntervalTrigger)
+    assert trigger.seconds == 30
+    assert trigger.minutes == 0

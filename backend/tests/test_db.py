@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import sqlite3
 from pathlib import Path
 
@@ -24,6 +25,100 @@ def test_file_backed_db_creates_parent(tmp_path) -> None:
     database = Database(str(path))
     database.init_db()
     assert path.exists()
+    database.close()
+
+
+def test_init_db_migrates_legacy_jellyseerr_column(tmp_path) -> None:
+    # A database created before the Jellyseerr->Seer rename has the old column
+    # name and lacks seer_request_id; init_db must add the column and carry the
+    # stored request id forward under the new name.
+    path = tmp_path / "legacy.db"
+    legacy = sqlite3.connect(str(path))
+    legacy.executescript(
+        """
+        CREATE TABLE items (
+            trakt_id INTEGER NOT NULL,
+            type TEXT NOT NULL,
+            title TEXT,
+            year INTEGER,
+            tmdb INTEGER,
+            tvdb INTEGER,
+            imdb TEXT,
+            list_id TEXT NOT NULL,
+            jellyseerr_request_id INTEGER,
+            status TEXT NOT NULL,
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL,
+            PRIMARY KEY (trakt_id, list_id)
+        );
+        """
+    )
+    legacy.execute(
+        "INSERT INTO items (trakt_id, type, title, year, tmdb, tvdb, imdb, "
+        "list_id, jellyseerr_request_id, status, created_at, updated_at) "
+        "VALUES (1, 'movie', 'Dune', 2021, 438631, NULL, 'tt1160419', "
+        "'watchlist', 77, 'requested', ?, ?)",
+        (utcnow_iso(), utcnow_iso()),
+    )
+    legacy.commit()
+    legacy.close()
+
+    database = Database(str(path))
+    database.init_db()
+    columns = {
+        row["name"]
+        for row in database._conn.execute("PRAGMA table_info(items)").fetchall()
+    }
+    assert "seer_request_id" in columns
+    # The legacy request id is carried forward under the new column name.
+    item = database.get_item(trakt_id=1, list_id="watchlist")
+    assert item["seer_request_id"] == 77
+    # The migrated database is fully usable and the migration is idempotent.
+    database.upsert_item(**_MOVIE)
+    database.init_db()  # second run must be a harmless no-op
+    assert (
+        database.get_item(trakt_id=1, list_id="watchlist")["seer_request_id"] == 77
+    )
+    database.close()
+
+
+def test_init_db_adds_seer_column_when_legacy_absent(tmp_path) -> None:
+    # An even older database lacks both the new and the legacy request-id column;
+    # init_db must add seer_request_id with nothing to carry forward.
+    path = tmp_path / "older.db"
+    older = sqlite3.connect(str(path))
+    older.executescript(
+        """
+        CREATE TABLE items (
+            trakt_id INTEGER NOT NULL,
+            type TEXT NOT NULL,
+            title TEXT,
+            year INTEGER,
+            tmdb INTEGER,
+            tvdb INTEGER,
+            imdb TEXT,
+            list_id TEXT NOT NULL,
+            status TEXT NOT NULL,
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL,
+            PRIMARY KEY (trakt_id, list_id)
+        );
+        """
+    )
+    older.execute(
+        "INSERT INTO items (trakt_id, type, title, year, tmdb, tvdb, imdb, "
+        "list_id, status, created_at, updated_at) "
+        "VALUES (1, 'movie', 'Dune', 2021, 438631, NULL, 'tt1160419', "
+        "'watchlist', 'synced', ?, ?)",
+        (utcnow_iso(), utcnow_iso()),
+    )
+    older.commit()
+    older.close()
+
+    database = Database(str(path))
+    database.init_db()
+    item = database.get_item(trakt_id=1, list_id="watchlist")
+    assert item["seer_request_id"] is None
     database.close()
 
 
@@ -215,16 +310,25 @@ def test_disk_size_bytes_tolerates_missing_wal_and_shm(tmp_path) -> None:
     database.close()
 
 
-def test_disk_size_bytes_handles_partial_sidecars(tmp_path) -> None:
+def test_disk_size_bytes_handles_partial_sidecars(tmp_path, monkeypatch) -> None:
     path = tmp_path / "aio.db"
     database = Database(str(path))
     database.init_db()
-    # Force the FileNotFoundError branch by deleting any sidecar that exists.
-    for suffix in ("-wal", "-shm"):
-        sidecar = Path(str(path) + suffix)
-        if sidecar.exists():
-            sidecar.unlink()
-    assert database.disk_size_bytes() == Path(path).stat().st_size
+    # Simulate a missing sidecar without trying to unlink a file that Windows
+    # holds open: make os.path.getsize raise FileNotFoundError for the WAL file.
+    original_getsize = os.path.getsize
+
+    def _stub_getsize(file_path: str) -> int:
+        if file_path.endswith("-wal"):
+            raise FileNotFoundError(file_path)
+        return original_getsize(file_path)
+
+    monkeypatch.setattr(os.path, "getsize", _stub_getsize)
+    # The helper should still sum the main DB plus any existing sidecars.
+    expected = Path(path).stat().st_size
+    if Path(str(path) + "-shm").exists():
+        expected += Path(str(path) + "-shm").stat().st_size
+    assert database.disk_size_bytes() == expected
     database.close()
 
 
