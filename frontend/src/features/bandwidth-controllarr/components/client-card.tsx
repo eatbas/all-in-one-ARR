@@ -38,7 +38,14 @@ export function ClientCard({
               {paused ? "PAUSED" : "RESUMED"}
             </Badge>
           )}
-          <Badge variant={online ? "default" : "outline"}>
+          <Badge
+            variant={online ? "default" : "outline"}
+            className={
+              online
+                ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400"
+                : "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400"
+            }
+          >
             {online ? "Online" : "Offline"}
           </Badge>
         </div>
