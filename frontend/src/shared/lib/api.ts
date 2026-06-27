@@ -82,6 +82,7 @@ export interface ListSummary {
 
 /** Response of `GET`/`PUT /api/settings/trakt`. */
 export interface TraktSettings {
+  client_id: string
   client_id_hint: string
   client_id_set: boolean
   client_secret_set: boolean

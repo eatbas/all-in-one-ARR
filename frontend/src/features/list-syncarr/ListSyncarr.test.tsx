@@ -52,6 +52,7 @@ function mutation(mutate: unknown, isPending = false) {
 }
 
 const TRAKT_SETTINGS: TraktSettings = {
+  client_id: "abcd1234",
   client_id_hint: "1234",
   client_id_set: true,
   client_secret_set: true,
