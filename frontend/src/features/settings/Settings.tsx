@@ -11,7 +11,6 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/shared/components/ui/alert-dialog"
-import { Badge } from "@/shared/components/ui/badge"
 import { Button } from "@/shared/components/ui/button"
 import {
   Card,
@@ -29,6 +28,10 @@ import {
   SelectValue,
 } from "@/shared/components/ui/select"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/shared/components/ui/tabs"
+import {
+  ConnectionBadge,
+  type ConnectionState,
+} from "@/shared/components/connection-badge"
 import { useTheme } from "@/shared/components/theme-context"
 import { cn } from "@/shared/lib/utils"
 import { SERVICE_TABS, VALID_TAB_VALUES, type ServiceTab } from "@/shared/lib/services"
@@ -43,6 +46,7 @@ import {
   useDatabaseStats,
   useGeneralSettings,
   useServiceSettings,
+  useServiceStatuses,
   useStartTraktAuth,
   useTestService,
   useTestTrakt,
@@ -216,16 +220,10 @@ function CredentialsCard() {
             stored server-side and never shown again.
           </CardDescription>
         </div>
-        <Badge
-          variant="outline"
-          className={cn(
-            connected
-              ? "border-emerald-500/40 text-emerald-600 dark:text-emerald-400"
-              : "border-amber-500/40 text-amber-600 dark:text-amber-400",
-          )}
-        >
-          {connected ? "Connected" : "Not connected"}
-        </Badge>
+        <ConnectionBadge
+          state={connected ? "connected" : "not-set"}
+          labels={{ "not-set": "Not connected" }}
+        />
       </CardHeader>
       <CardContent className="flex flex-col gap-4">
         {isLoading ? (
@@ -309,6 +307,7 @@ function CredentialsCard() {
 /** Edit a service connection (URL / API key) and test it. */
 function ServiceConnectionCard({ name, label, fields }: ServiceTab) {
   const { data: services } = useServiceSettings()
+  const { data: statuses } = useServiceStatuses()
   const {
     mutate: updateServiceSettings,
     isPending: isUpdatingServiceSettings,
@@ -364,10 +363,17 @@ function ServiceConnectionCard({ name, label, fields }: ServiceTab) {
     onSuccess: clearServiceEdit,
   })
 
-  // Every managed service authenticates with an API key, so the badge reflects
-  // whether that key is set.
-  const configured = current?.api_key_set
-  const badgeLabel = configured ? "Key set" : "No key"
+  // The badge reflects both whether the API key is set and the live status
+  // snapshot from the background checker.
+  const configured = current?.api_key_set ?? false
+  const snapshot = statuses?.services?.[name]
+  const connectionState: ConnectionState = !configured
+    ? "not-set"
+    : snapshot === undefined
+      ? "checking"
+      : snapshot.ok
+        ? "connected"
+        : "offline"
 
   const urlHint = isUpdatingServiceSettings
     ? "Saving…"
@@ -387,16 +393,7 @@ function ServiceConnectionCard({ name, label, fields }: ServiceTab) {
           <CardTitle>{label}</CardTitle>
           <CardDescription>Connection settings for {label}.</CardDescription>
         </div>
-        <Badge
-          variant="outline"
-          className={cn(
-            configured
-              ? "border-emerald-500/40 text-emerald-600 dark:text-emerald-400"
-              : "border-amber-500/40 text-amber-600 dark:text-amber-400",
-          )}
-        >
-          {badgeLabel}
-        </Badge>
+        <ConnectionBadge state={connectionState} detail={snapshot?.detail} />
       </CardHeader>
       <CardContent className="flex flex-col gap-4">
         {hasUrl ? (

@@ -19,6 +19,7 @@ vi.mock("@/shared/lib/queries", () => ({
   useStartTraktAuth: vi.fn(),
   useTestTrakt: vi.fn(),
   useServiceSettings: vi.fn(),
+  useServiceStatuses: vi.fn(),
   useUpdateServiceSettings: vi.fn(),
   useTestService: vi.fn(),
   useGeneralSettings: vi.fn(),
@@ -41,6 +42,7 @@ import {
   useDatabaseStats,
   useGeneralSettings,
   useServiceSettings,
+  useServiceStatuses,
   useStartTraktAuth,
   useTestService,
   useTestTrakt,
@@ -54,6 +56,7 @@ import { Settings } from "@/features/settings/Settings"
 import type {
   GeneralSettings,
   ServicesSettings,
+  ServicesStatusResponse,
   TraktAuthStatus,
   TraktSettings,
   TraktTestResult,
@@ -159,6 +162,13 @@ beforeEach(() => {
   vi.mocked(useStartTraktAuth).mockReturnValue(mutation(startMutate))
   vi.mocked(useTestTrakt).mockReturnValue(mutation(testMutate))
   vi.mocked(useServiceSettings).mockReturnValue(queryResult(SERVICES))
+  vi.mocked(useServiceStatuses).mockReturnValue(
+    queryResult<ServicesStatusResponse>({
+      interval_seconds: 60,
+      last_check_at: null,
+      services: {},
+    }),
+  )
   vi.mocked(useUpdateServiceSettings).mockReturnValue(mutation(serviceUpdateMutate))
   vi.mocked(useTestService).mockReturnValue(mutation(serviceTestMutate))
   vi.mocked(useGeneralSettings).mockReturnValue(
@@ -625,14 +635,14 @@ describe("Settings — service tabs", () => {
     expect(screen.getByPlaceholderText("http://host:port")).toHaveValue(
       "http://js:5055",
     )
-    expect(screen.getByText("Key set")).toBeInTheDocument()
+    expect(screen.getByText("Checking…")).toBeInTheDocument()
   })
 
   it("shows a service without a key as not set", async () => {
     const user = userEvent.setup()
     render(<Settings />)
     await user.click(screen.getByRole("tab", { name: "Sonarr" }))
-    expect(screen.getByText("No key")).toBeInTheDocument()
+    expect(screen.getByText("Set key")).toBeInTheDocument()
     expect(screen.getAllByText("Not set").length).toBeGreaterThan(0)
   })
 
@@ -643,7 +653,7 @@ describe("Settings — service tabs", () => {
     const user = userEvent.setup()
     render(<Settings />)
     await user.click(screen.getByRole("tab", { name: "Radarr" }))
-    expect(screen.getByText("No key")).toBeInTheDocument()
+    expect(screen.getByText("Set key")).toBeInTheDocument()
     expect(
       screen.getByPlaceholderText("http://host:port"),
     ).toBeInTheDocument()
@@ -760,7 +770,7 @@ describe("Settings — service tabs", () => {
     // An API-key-only service shows no URL row.
     expect(screen.queryByText("URL")).not.toBeInTheDocument()
     expect(screen.getByText("API key")).toBeInTheDocument()
-    expect(screen.getByText("No key")).toBeInTheDocument()
+    expect(screen.getByText("Set key")).toBeInTheDocument()
   })
 
   it("autosaves only the API key for an API-key-only service", async () => {
@@ -792,7 +802,7 @@ describe("Settings — service tabs", () => {
     await user.click(screen.getByRole("tab", { name: "qBittorrent" }))
     expect(screen.getByText("URL")).toBeInTheDocument()
     expect(screen.getByText("API key")).toBeInTheDocument()
-    expect(screen.getByText("No key")).toBeInTheDocument()
+    expect(screen.getByText("Set key")).toBeInTheDocument()
     // Both the URL and API key hints read "Not set" when unconfigured.
     expect(screen.getAllByText("Not set")).toHaveLength(2)
   })
@@ -813,7 +823,7 @@ describe("Settings — service tabs", () => {
     expect(screen.getByPlaceholderText("http://host:port")).toHaveValue(
       "http://qb:8080",
     )
-    expect(screen.getByText("Key set")).toBeInTheDocument()
+    expect(screen.getByText("Checking…")).toBeInTheDocument()
     expect(screen.getAllByText("Saved").length).toBeGreaterThan(0)
   })
 
@@ -824,7 +834,7 @@ describe("Settings — service tabs", () => {
     const user = userEvent.setup()
     render(<Settings />)
     await user.click(screen.getByRole("tab", { name: "qBittorrent" }))
-    expect(screen.getByText("No key")).toBeInTheDocument()
+    expect(screen.getByText("Set key")).toBeInTheDocument()
     expect(screen.getByPlaceholderText("http://host:port")).toBeInTheDocument()
     expect(
       screen.getByPlaceholderText("Leave blank to keep current"),
@@ -1013,6 +1023,70 @@ describe("Settings — service tabs", () => {
     })
 
     vi.useRealTimers()
+  })
+
+  it("shows a configured service as Connected when the snapshot is ok", async () => {
+    vi.mocked(useServiceStatuses).mockReturnValue(
+      queryResult<ServicesStatusResponse>({
+        interval_seconds: 60,
+        last_check_at: "2026-06-27T12:00:00Z",
+        services: { seer: { ok: true, detail: "Reachable", checked_at: "2026-06-27T12:00:00Z" } },
+      }),
+    )
+    const user = userEvent.setup()
+    render(<Settings />)
+    await user.click(screen.getByRole("tab", { name: "Seer" }))
+    const badge = screen.getByText("Connected")
+    expect(badge).toHaveClass("border-emerald-500/40")
+    expect(badge).toHaveAttribute("title", "Reachable")
+  })
+
+  it("shows a configured service as Offline when the snapshot reports down", async () => {
+    vi.mocked(useServiceStatuses).mockReturnValue(
+      queryResult<ServicesStatusResponse>({
+        interval_seconds: 60,
+        last_check_at: "2026-06-27T12:00:00Z",
+        services: {
+          seer: { ok: false, detail: "Connection refused", checked_at: "2026-06-27T12:00:00Z" },
+        },
+      }),
+    )
+    const user = userEvent.setup()
+    render(<Settings />)
+    await user.click(screen.getByRole("tab", { name: "Seer" }))
+    const badge = screen.getByText("Offline")
+    expect(badge).toHaveClass("border-red-500/40")
+    expect(badge).toHaveAttribute("title", "Connection refused")
+  })
+
+  it("shows a configured service as Checking before the first status snapshot", async () => {
+    vi.mocked(useServiceStatuses).mockReturnValue(
+      queryResult<ServicesStatusResponse>({
+        interval_seconds: 60,
+        last_check_at: null,
+        services: {},
+      }),
+    )
+    const user = userEvent.setup()
+    render(<Settings />)
+    await user.click(screen.getByRole("tab", { name: "Seer" }))
+    const badge = screen.getByText("Checking…")
+    expect(badge).toHaveClass("border-slate-500/40")
+  })
+
+  it("shows an unconfigured service as Set key regardless of the status snapshot", async () => {
+    vi.mocked(useServiceStatuses).mockReturnValue(
+      queryResult<ServicesStatusResponse>({
+        interval_seconds: 60,
+        last_check_at: "2026-06-27T12:00:00Z",
+        services: { sonarr: { ok: true, detail: "Reachable", checked_at: "2026-06-27T12:00:00Z" } },
+      }),
+    )
+    const user = userEvent.setup()
+    render(<Settings />)
+    await user.click(screen.getByRole("tab", { name: "Sonarr" }))
+    const badge = screen.getByText("Set key")
+    expect(badge).toHaveClass("border-amber-500/40")
   })
 })
 
