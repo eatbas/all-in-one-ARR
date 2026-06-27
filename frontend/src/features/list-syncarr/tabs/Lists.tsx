@@ -33,6 +33,7 @@ import {
 import { Switch } from "@/shared/components/ui/switch"
 import { PosterThumb } from "@/features/list-syncarr/components/poster-thumb"
 import { StatusBadge } from "@/features/list-syncarr/components/status-badge"
+import { SyncStats } from "@/features/list-syncarr/components/sync-stats"
 import { cn } from "@/shared/lib/utils"
 import {
   useLists,
@@ -228,11 +229,13 @@ export function Lists() {
   return (
     <div className="flex flex-col gap-6">
       <div>
-        <h1 className="text-2xl font-semibold tracking-tight">Lists</h1>
+        <h2 className="text-2xl font-semibold tracking-tight">Lists</h2>
         <p className="text-sm text-muted-foreground">
           Trakt lists kept in sync by the engine.
         </p>
       </div>
+
+      <SyncStats />
 
       <Card>
         <CardHeader className="flex flex-row items-start justify-between gap-4 space-y-0">

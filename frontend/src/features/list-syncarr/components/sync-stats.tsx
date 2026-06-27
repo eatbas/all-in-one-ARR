@@ -49,7 +49,7 @@ const STAT_CARDS: ReadonlyArray<StatCard> = [
   },
 ]
 
-/** Aggregate sync-engine counts, shown as stat cards atop the List-Syncarr page. */
+/** Aggregate sync-engine counts, shown as stat cards in the List-Syncarr Lists tab. */
 export function SyncStats() {
   const { data: status, isLoading } = useStatus()
 

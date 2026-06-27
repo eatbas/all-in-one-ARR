@@ -3,6 +3,7 @@ import userEvent from "@testing-library/user-event"
 import { beforeEach, describe, expect, it, vi } from "vitest"
 
 vi.mock("@/shared/lib/queries", () => ({
+  useStatus: vi.fn(),
   useLists: vi.fn(),
   useListItems: vi.fn(),
   useServiceSettings: vi.fn(),
@@ -17,11 +18,12 @@ import {
   useRemoveAvailable,
   useRemoveItem,
   useServiceSettings,
+  useStatus,
   useSyncNow,
 } from "@/shared/lib/queries"
 
 import { Lists } from "@/features/list-syncarr/tabs/Lists"
-import type { Item, ListSummary, ServicesSettings } from "@/shared/lib/api"
+import type { Item, ListSummary, ServicesSettings, Status } from "@/shared/lib/api"
 import { queryResult } from "@/shared/test/mock-query"
 
 const SERVICES: ServicesSettings = {
@@ -104,12 +106,21 @@ describe("Lists page", () => {
     removeItemMutate = vi.fn()
     removeAvailableMutate = vi.fn()
     syncNowMutate = vi.fn()
+    vi.mocked(useStatus).mockReturnValue(queryResult<Status>(undefined, false))
     vi.mocked(useLists).mockReturnValue(queryResult(lists))
     vi.mocked(useListItems).mockReturnValue(queryResult(items))
     vi.mocked(useServiceSettings).mockReturnValue(queryResult(SERVICES))
     vi.mocked(useRemoveItem).mockReturnValue(mutation(removeItemMutate))
     vi.mocked(useRemoveAvailable).mockReturnValue(mutation(removeAvailableMutate))
     vi.mocked(useSyncNow).mockReturnValue(mutation(syncNowMutate))
+  })
+
+  it("renders the sync-engine stat cards between the Lists heading and the synced lists card", () => {
+    render(<Lists />)
+    expect(screen.getByText("Synced")).toBeInTheDocument()
+    expect(screen.getByText("Requested")).toBeInTheDocument()
+    expect(screen.getByText("Available")).toBeInTheDocument()
+    expect(screen.getByText("Removed")).toBeInTheDocument()
   })
 
   it("shows a loading message while the lists query is pending", () => {
@@ -217,8 +228,12 @@ describe("Lists page", () => {
     expect(screen.getByText("2021 · movie")).toBeInTheDocument()
     expect(screen.getByText("— · movie")).toBeInTheDocument()
     // The availability pill is overlaid on each poster with its full status name.
-    expect(screen.getByText("Available")).toBeInTheDocument()
-    expect(screen.getByText("Requested")).toBeInTheDocument()
+    expect(
+      screen.getByText("Available", { selector: "[data-slot='badge']" }),
+    ).toBeInTheDocument()
+    expect(
+      screen.getByText("Requested", { selector: "[data-slot='badge']" }),
+    ).toBeInTheDocument()
     // The item with a TMDB id links to its Seer request page.
     expect(
       screen.getByRole("link", { name: 'Request "Dune" in Seer' }),
@@ -312,7 +327,9 @@ describe("Lists page", () => {
 
     // By default the removed item is hidden, so the expanded list looks empty.
     await user.click(screen.getByRole("button", { name: /Movies/ }))
-    expect(screen.queryByText("Removed")).not.toBeInTheDocument()
+    expect(
+      screen.queryByText("Removed", { selector: "[data-slot='badge']" }),
+    ).not.toBeInTheDocument()
     expect(screen.getByText("This list has no items yet.")).toBeInTheDocument()
   })
 
@@ -324,7 +341,9 @@ describe("Lists page", () => {
     await user.click(screen.getByRole("switch", { name: "Show removed items" }))
     await user.click(screen.getByRole("button", { name: /Movies/ }))
     // The removed item now renders (with its status pill) but offers no delete.
-    expect(screen.getByText("Removed")).toBeInTheDocument()
+    expect(
+      screen.getByText("Removed", { selector: "[data-slot='badge']" }),
+    ).toBeInTheDocument()
     expect(
       screen.queryByRole("button", { name: 'Remove "Gone" from the list' }),
     ).not.toBeInTheDocument()

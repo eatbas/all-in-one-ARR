@@ -91,6 +91,18 @@ afterEach(() => {
 })
 
 describe("ListSyncarr", () => {
+  it("renders the page header above the tabs", () => {
+    render(<ListSyncarr />)
+    expect(
+      screen.getByRole("heading", { name: "List-Syncarr" }),
+    ).toBeInTheDocument()
+    expect(
+      screen.getByText((text) =>
+        text.includes("Mirror your Trakt lists to Seer"),
+      ),
+    ).toBeInTheDocument()
+  })
+
   it("defaults to the Lists tab", () => {
     render(<ListSyncarr />)
     expect(screen.getByRole("tab", { name: "Lists" })).toHaveAttribute(
