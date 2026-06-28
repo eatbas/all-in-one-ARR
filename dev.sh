@@ -52,8 +52,64 @@ else
 fi
 
 # --- Verify prerequisites -----------------------------------------------------
-if ! "$VENV_PY" -c "import uvicorn" >/dev/null 2>&1; then
-  echo "Error: uvicorn is not installed in .venv" >&2
+if ! "$VENV_PY" - <<'PY' >/dev/null 2>&1; then
+from importlib import metadata
+from pathlib import Path
+import re
+import sys
+import tomllib
+
+ROOT_DIR = Path.cwd()
+PYPROJECT = ROOT_DIR / "backend" / "pyproject.toml"
+NAME_PATTERN = re.compile(r"^[A-Za-z0-9_.-]+")
+
+
+def normalise_requirement_name(requirement: str) -> str:
+    match = NAME_PATTERN.match(requirement)
+    if match is None:
+        raise ValueError(f"Cannot parse requirement name from {requirement!r}")
+    return re.sub(r"[-_.]+", "-", match.group(0)).lower()
+
+
+def find_metadata_path(distribution: metadata.Distribution) -> Path | None:
+    for distribution_file in distribution.files or ():
+        if distribution_file.name == "METADATA":
+            return Path(distribution.locate_file(distribution_file))
+    return None
+
+
+try:
+    project = tomllib.loads(PYPROJECT.read_text(encoding="utf-8"))["project"]
+    expected_dependencies = {
+        normalise_requirement_name(requirement)
+        for requirement in project.get("dependencies", [])
+    }
+    distribution = metadata.distribution(project["name"])
+    installed_dependencies = {
+        normalise_requirement_name(requirement)
+        for requirement in distribution.requires or []
+        if "extra ==" not in requirement
+    }
+    metadata_path = find_metadata_path(distribution)
+except Exception:
+    sys.exit(1)
+
+if not expected_dependencies <= installed_dependencies:
+    sys.exit(1)
+
+if (
+    metadata_path is None
+    or not metadata_path.exists()
+    or PYPROJECT.stat().st_mtime > metadata_path.stat().st_mtime
+):
+    sys.exit(1)
+PY
+  echo "Backend dependencies are out of date — running pip install…"
+  "$VENV_PY" -m pip install -e "./backend[dev]"
+fi
+
+if ! "$VENV_PY" -c "import prometheus_client, uvicorn" >/dev/null 2>&1; then
+  echo "Error: backend dependencies are missing from .venv" >&2
   echo "  \"$VENV_PY\" -m pip install -e \"./backend[dev]\"" >&2
   exit 1
 fi
