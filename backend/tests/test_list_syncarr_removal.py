@@ -59,6 +59,84 @@ async def test_removes_known_seer_request_without_touching_arr_media(db) -> None
     assert any('Removed the Seer request for "Dune".' in a["detail"] for a in db.recent_activity())
 
 
+async def test_looks_up_and_deletes_unknown_request(db) -> None:
+    # When this app did not create the request (no stored id), the request id is
+    # looked up from Seer's mediaInfo and deleted so it does not linger.
+    seed(db)
+    trakt = StubTrakt()
+    seer = StubSeer(request_ids=[371])
+    ctx = make_ctx(db=db, trakt=trakt, seer=seer)
+    item = db.get_item(trakt_id=1, list_id="watchlist")
+
+    await remove_tracked_item(ctx, item, reason="available in Seer")
+
+    assert db.get_item(trakt_id=1, list_id="watchlist")["status"] == "removed"
+    seer.get_request_ids.assert_awaited_once_with(media_type="movie", tmdb_id=100)
+    seer.delete_request.assert_awaited_once_with(request_id=371)
+    assert any(a["action"] == "Seer request removed" for a in db.recent_activity())
+
+
+async def test_deletes_all_looked_up_requests(db) -> None:
+    # Seer can attach several requests to one item (e.g. per-season TV requests); every
+    # looked-up request id must be deleted, not just the first.
+    seed(db)
+    trakt = StubTrakt()
+    seer = StubSeer(request_ids=[10, 20])
+    ctx = make_ctx(db=db, trakt=trakt, seer=seer)
+    item = db.get_item(trakt_id=1, list_id="watchlist")
+
+    await remove_tracked_item(ctx, item, reason="available in Seer")
+
+    assert db.get_item(trakt_id=1, list_id="watchlist")["status"] == "removed"
+    assert seer.delete_request.await_count == 2
+    seer.delete_request.assert_any_await(request_id=10)
+    seer.delete_request.assert_any_await(request_id=20)
+    assert any(a["action"] == "Seer request removed" for a in db.recent_activity())
+
+
+async def test_request_lookup_failure_leaves_item_active(db) -> None:
+    # If the Seer lookup itself fails, the item is left active (retried) and the
+    # failure is recorded rather than silently dropping the request.
+    seed(db)
+    trakt = StubTrakt()
+    seer = StubSeer()
+    seer.get_request_ids = AsyncMock(side_effect=RuntimeError("lookup boom"))
+    ctx = make_ctx(db=db, trakt=trakt, seer=seer)
+    item = db.get_item(trakt_id=1, list_id="watchlist")
+
+    await remove_tracked_item(ctx, item, reason="available in Seer")
+
+    assert db.get_item(trakt_id=1, list_id="watchlist")["status"] == "synced"
+    seer.delete_request.assert_not_awaited()
+    assert any(
+        a["action"] == "Removal failed" and "look up the Seer request" in a["detail"]
+        for a in db.recent_activity()
+    )
+    assert not any("lookup boom" in a["detail"] for a in db.recent_activity())
+
+
+async def test_removes_show_without_tmdb_skips_seer_lookup(db) -> None:
+    # A show with a TVDB id but no TMDB id can be removed from Trakt, but there is no
+    # TMDB id to resolve a Seer request by, so the Seer lookup is skipped entirely.
+    db.upsert_item(
+        trakt_id=5, type="show", title="No TMDB Show", year=2020,
+        tmdb=None, tvdb=555, imdb="tt5", list_id="watchlist",
+    )
+    trakt = StubTrakt()
+    seer = StubSeer()
+    ctx = make_ctx(db=db, trakt=trakt, seer=seer)
+    item = db.get_item(trakt_id=5, list_id="watchlist")
+
+    await remove_tracked_item(ctx, item, reason="available in Seer")
+
+    assert db.get_item(trakt_id=5, list_id="watchlist")["status"] == "removed"
+    trakt.remove_items.assert_awaited_once_with(
+        shows=[555], list_id="watchlist", owner_user="me"
+    )
+    seer.get_request_ids.assert_not_awaited()
+    seer.delete_request.assert_not_awaited()
+
+
 async def test_request_delete_failure_leaves_item_active(db) -> None:
     seed(db)
     db.set_request_id(trakt_id=1, list_id="watchlist", request_id=77)
@@ -81,12 +159,12 @@ async def test_request_delete_failure_leaves_item_active(db) -> None:
     assert not any("delete failed" in a["detail"] for a in db.recent_activity())
 
 
-async def test_no_stored_request_id_still_removes_trakt_entry(db) -> None:
-    # When this app did not create the request, there is no stored id and removal
-    # must still delete the Trakt list entry without calling the Seer service.
+async def test_no_stored_request_id_and_no_seer_request_still_removes(db) -> None:
+    # No stored id and Seer reports no requests for the item: removal looks Seer up,
+    # finds nothing to delete, and still drops the Trakt entry.
     seed(db)
     trakt = StubTrakt()
-    ctx = make_ctx(db=db, trakt=trakt)
+    ctx = make_ctx(db=db, trakt=trakt)  # default StubSeer: get_request_ids -> []
     item = db.get_item(trakt_id=1, list_id="watchlist")
 
     await remove_tracked_item(ctx, item, reason="available in Seer")
@@ -95,6 +173,7 @@ async def test_no_stored_request_id_still_removes_trakt_entry(db) -> None:
     trakt.remove_items.assert_awaited_once_with(
         movies=[100], list_id="watchlist", owner_user="me"
     )
+    ctx.seer.get_request_ids.assert_awaited_once_with(media_type="movie", tmdb_id=100)
     ctx.seer.delete_request.assert_not_awaited()
     assert any(a["action"] == "Item removed from Trakt" for a in db.recent_activity())
 

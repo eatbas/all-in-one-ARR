@@ -229,8 +229,15 @@ class StubSettingsStore:
 class StubSeer:
     """Minimal stand-in for :class:`SeerClient`."""
 
-    def __init__(self, *, status: int | None = None, request_id: int | None = 99):
+    def __init__(
+        self,
+        *,
+        status: int | None = None,
+        request_id: int | None = 99,
+        request_ids: list[int] | None = None,
+    ):
         self.get_status = AsyncMock(return_value=status)
+        self.get_request_ids = AsyncMock(return_value=request_ids or [])
         self.create_request = AsyncMock(return_value=request_id)
         self.delete_request = AsyncMock(return_value=None)
         self.update_credentials = MagicMock()

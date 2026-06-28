@@ -42,6 +42,20 @@ async def test_unavailable_item_left_alone(db) -> None:
     trakt.remove_items.assert_not_awaited()
 
 
+async def test_untracked_list_item_left_alone(db) -> None:
+    # An active item whose list the user has untracked is not swept, even if Seer
+    # reports it available — the manual sweep is scoped to currently-tracked lists.
+    db.upsert_item(**{**_MOVIE, "trakt_id": 9}, list_id="oldlist")
+    db.set_status(trakt_id=9, list_id="oldlist", status="requested")
+    trakt = StubTrakt()
+    seer = StubSeer(status=AVAILABLE)
+    ctx = make_ctx(db=db, trakt=trakt, seer=seer)  # default tracks 'watchlist' only
+    await reconcile(ctx)
+    assert db.get_item(trakt_id=9, list_id="oldlist")["status"] == "requested"
+    seer.get_status.assert_not_awaited()
+    trakt.remove_items.assert_not_awaited()
+
+
 async def test_item_without_tmdb_skipped(db) -> None:
     db.upsert_item(**{**_MOVIE, "tmdb": None}, list_id="watchlist")
     seer = StubSeer()

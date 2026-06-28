@@ -404,13 +404,15 @@ class SettingsStore:
     # ---- auto-remove when available ----
 
     def auto_remove_when_available(self) -> bool:
-        """Whether the poll removes an item from its Trakt list once available.
+        """Whether the poll removes an item from its Trakt list once it is in Seer.
 
-        When ``True``, an item Seer reports as available is dropped from its
-        Trakt list during the sync (the list entry only — media files are not
-        touched). When ``False`` (the default), removal is fully manual — the
-        dashboard's per-item and "Delete availables" controls are the only ways an
-        item leaves a Trakt list.
+        When ``True``, an item is dropped from its Trakt list during the sync once
+        Seer reports it available or partially available — never the instant it is
+        merely requested. Removal deletes both the Trakt entry and the Seer request;
+        the media files in Radarr/Sonarr are never touched. When ``False`` (the
+        default), removal is fully manual — the dashboard's per-item and "Delete
+        availables" controls are the only ways an item leaves a Trakt list. The key
+        name is retained for backward compatibility with persisted stores.
         """
         with self._lock:
             return self._auto_remove_when_available

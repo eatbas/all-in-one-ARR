@@ -2,20 +2,21 @@
 missing items and removing them once they are available.
 
 The module registers:
-- an interval poll job (poll Trakt -> request in Seer, and remove items that
-  Seer reports as available when auto-remove is enabled) at the configured,
-  runtime-adjustable sync interval,
+- an interval poll job (poll Trakt -> request in Seer, remove items that Seer
+  reports as available or partially available when auto-remove is enabled, and
+  refresh the stored status of every tracked item against Seer — including items that
+  have left their Trakt list) at the configured, runtime-adjustable sync interval,
 - ``ctx.sync_now`` so the dashboard's "Sync now" button works,
 - and the manual removal/reschedule callables the dashboard's delete controls and
   sync-interval setting drive (``ctx.remove_available``/``remove_item``/``reschedule_sync``).
 
-Availability-driven removal happens inside the poll itself, in the same pass an
-item first becomes available, gated by the ``auto_remove_when_available`` setting.
-Removal deletes the Trakt list entry and known Seer request — the media
-files in Radarr/Sonarr are never touched. The manual "Delete availables" action
-(``ctx.remove_available``) runs the same :func:`reconcile` sweep on demand to
-clear any backlog (e.g. items already marked available before the setting was
-enabled).
+Removal happens inside the poll itself, in the same pass an item first becomes
+available or partially available, gated by the ``auto_remove_when_available``
+setting. It deletes the Trakt list entry and the Seer request (the stored id, or
+one looked up from Seer when this app did not create it) — the media files in
+Radarr/Sonarr are never touched. The manual "Delete availables" action
+(``ctx.remove_available``) runs the :func:`reconcile` sweep on demand to clear any
+backlog of items Seer now reports as available.
 
 ``setup`` is async because APScheduler 4's ``add_schedule`` is async; the
 registry awaits it. APScheduler 4 requires top-level importable callables for

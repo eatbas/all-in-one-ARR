@@ -20,11 +20,20 @@ _log = get_logger("list_syncarr.reconcile")
 
 
 async def reconcile(ctx: "AppContext") -> None:
-    """Remove any tracked items Seer now reports as Available."""
+    """Remove items Seer now reports as Available from their Trakt list.
+
+    Scoped to lists still in the settings store: an active item whose list the user
+    has untracked is left alone, mirroring the per-sync refresh in ``sync.py`` (the
+    DB keeps a list's item rows after it is untracked, so the slug filter is what
+    keeps the manual sweep from touching them).
+    """
+    tracked_slugs = {item.slug for item in ctx.settings_store.tracked_lists()}
     items = ctx.db.active_items()
     _log.info("reconciling %d active item(s)", len(items))
 
     for item in items:
+        if item["list_id"] not in tracked_slugs:
+            continue
         tmdb = item.get("tmdb")
         if tmdb is None:
             continue
