@@ -239,7 +239,7 @@ describe("ListSettings — sync behaviour", () => {
     await expectHelpTooltip(
       user,
       "Explain Remove from Trakt when available",
-      "Removes the list entry when Seer reports the item available; media files are untouched.",
+      "Removes the list entry and the Seer request once Seer reports the item available or partially available. A merely-requested item is not removed; media files in Radarr/Sonarr are untouched.",
     )
   })
 

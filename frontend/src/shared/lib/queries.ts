@@ -431,8 +431,8 @@ export function useUpdateAutoRemoveWhenAvailable(): UseMutationResult<
           : "Auto-remove when available disabled",
         {
           description: result.auto_remove_when_available
-            ? "Items are removed from their Trakt list once available in Seer."
-            : "Available items stay on their Trakt list until you remove them.",
+            ? "Items are removed from their Trakt list once available (or partially available) in Seer."
+            : "Items stay on their Trakt list until you remove them.",
         },
       )
       void queryClient.invalidateQueries({ queryKey: queryKeys.generalSettings })

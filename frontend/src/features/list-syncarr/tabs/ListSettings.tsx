@@ -63,15 +63,18 @@ export function ListSettings() {
                   Remove from Trakt when available
                 </p>
                 <SettingsHelp label="Remove from Trakt when available">
-                  Removes the list entry when Seer reports the item available;
-                  media files are untouched.
+                  Removes the list entry and the Seer request once Seer reports the
+                  item available or partially available. A merely-requested item is
+                  not removed; media files in Radarr/Sonarr are untouched.
                 </SettingsHelp>
               </div>
               <p className="text-sm text-muted-foreground">
-                When on, an item is removed from its Trakt list as soon as
-                Seer reports it available — the list entry only; the media
-                files in Radarr/Sonarr are untouched. When off, removal is manual —
-                use the controls in the Lists tab.
+                When on, an item is removed from its Trakt list once Seer reports it
+                available — or partially available (some episodes downloaded). Both
+                the Trakt entry and the Seer request are deleted; media files in
+                Radarr/Sonarr are untouched, so any download in progress continues. A
+                merely-requested item stays until it is at least partially available.
+                When off, removal is manual — use the controls in the Lists tab.
               </p>
             </div>
             <Switch
