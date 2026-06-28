@@ -6,10 +6,12 @@ Seer reports it available** (off by default; removes the list entry and
 known Seer request, never the media files in Radarr/Sonarr). It also includes
 **Bandwidth-Controllarr**, which can pause **SABnzbd** while **qBittorrent**
 has active torrents and resume it when the torrents go idle (off by default).
+It also includes **Findarr**, which can trigger bounded missing-media and
+quality-cutoff searches in **Sonarr 4+** and **Radarr 6+** (off by default).
 It uses **official REST APIs only** (no scraping).
 
-This is the plugin **core** plus two modules, **`list_syncarr`** and
-**`bandwidth_controllarr`**. Future modules (`deletearr`, `neutarr`) drop into
+This is the plugin **core** plus three modules, **`list_syncarr`**,
+**`bandwidth_controllarr`**, and **`findarr`**. Future modules drop into
 `backend/modules/` and auto-load — see [Adding a module](#adding-a-module).
 
 ## How it works
@@ -51,6 +53,7 @@ backend/
   modules/
     list_syncarr/         # poll/request, availability-driven removal, reconcile
     bandwidth_controllarr/  # pause SABnzbd while qBittorrent has active torrents
+    findarr/              # bounded Sonarr/Radarr missing and upgrade searches
   main.py            # entrypoint: `uvicorn main:app --app-dir backend`
   pyproject.toml     # packaging + pytest + coverage config
   tests/             # backend test suite (100% coverage)
@@ -206,6 +209,29 @@ the Status tab for convenience. A link to the Prometheus metrics endpoint
 
 Connections are not configured on this page; configure **SABnzbd** and
 **qBittorrent** in **Settings** first.
+
+### Findarr page
+
+The dashboard **Findarr** page (left menu) automates conservative search
+commands for the already-configured **Sonarr** and **Radarr** connections:
+
+- **Supported versions** — Sonarr `4+` and Radarr `6+`. Findarr checks
+  `/api/v3/system/status` before sending search commands and reports older
+  connected versions as unsupported.
+- **Search modes** — missing media and quality-cutoff upgrades for Sonarr and
+  Radarr.
+- **Safety boundaries** — Findarr only triggers native Arr search commands. It
+  does not delete media files, remove Seer requests, alter download clients, or
+  change Trakt lists.
+- **Safe defaults** — the master switch is off by default. Per-cycle limits, an
+  hourly command cap, monitored-only filtering, skip-future filtering, and an
+  optional queue-size guard bound the side effects.
+- **State and history** — processed items are recorded so Findarr does not
+  repeatedly search the same item. The page shows recent Findarr actions and
+  provides an explicit reset control for processed state.
+
+Connections are not configured on this page; configure **Sonarr** and
+**Radarr** in **Settings** first.
 
 ### Upgrading from the previous release
 
