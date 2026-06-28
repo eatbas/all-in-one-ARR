@@ -1,9 +1,9 @@
 # All-in-One ARR
 
 A small, self-hosted service that keeps a **Trakt list in sync with Seer**
-and — the key part — optionally **removes an item from the Trakt list once
-Seer reports it available** (off by default; removes the list entry and
-known Seer request, never the media files in Radarr/Sonarr). It also includes
+and — the key part — optionally **removes an item from the Trakt list once Seer
+reports it available** — or partially available (off by default; deletes the Trakt
+entry and the Seer request, never the media files in Radarr/Sonarr). It also includes
 **Bandwidth-Controllarr**, which can pause **SABnzbd** while **qBittorrent**
 has active torrents and resume it when the torrents go idle (off by default).
 It also includes **Findarr**, which can trigger bounded missing-media and
@@ -21,17 +21,24 @@ This is the plugin **core** plus three modules, **`list_syncarr`**,
 2. For each item not already handled, check Seer; if it is not already
    requested/available, create a request.
 3. (Your existing Seer → Radarr/Sonarr → download/import flow runs.)
-4. On a later poll, once Seer reports the item **Available** (downloaded
-   and ready to serve) and **if auto-remove when available is enabled**, remove
-   it from the Trakt list in the same pass. The Trakt list entry and known
-   Seer request are removed — the media files in Radarr/Sonarr are never
-   touched. Auto-remove is **off by default**, so removal is manual unless you switch it on
-   (**List-Syncarr → Settings**).
-5. Removal can also be triggered manually from the dashboard at any time: the
+4. On a later poll, once Seer reports the item **available** — or **partially
+   available** (some episodes downloaded) — and **if auto-remove is enabled**, remove
+   it from the Trakt list. Both the Trakt entry and the Seer request are deleted (the
+   request id we stored, or one looked up from Seer when the request was made
+   elsewhere); the media files in Radarr/Sonarr are never touched, so any in-progress
+   download continues. A merely-requested item (pending/processing) is left on the
+   list until it is at least partially available. Auto-remove is **off by default**,
+   so removal is manual unless you switch it on (**List-Syncarr → Settings**).
+5. Each poll also **refreshes the status of every tracked item against Seer** — even
+   items that have since left their Trakt list — so a stored status never drifts: an
+   item that became available while off-list is still relabelled (and auto-removed
+   when enabled) instead of staying frozen.
+6. Removal can also be triggered manually from the dashboard at any time: the
    per-item delete control on a poster, or **Delete availables**
    (**List-Syncarr → Lists**), which removes every tracked item Seer now
-   reports as *Available*. Removed items stay recorded and can be shown in the
-   list with the **Show removed** toggle.
+   reports as *Available*. (It sweeps only fully-available items; partially-available
+   items are removed by the auto-remove poll when that is enabled.) Removed items stay
+   recorded and can be shown in the list with the **Show removed** toggle.
 
 ## Architecture
 
@@ -94,7 +101,7 @@ cp .env.example .env
 | `QBITTORRENT_URL` | – | Base URL of the qBittorrent WebUI (seeds the store; settable in the UI) |
 | `QBITTORRENT_API_KEY` | – | qBittorrent WebUI API key, requires qBittorrent ≥ 5.2.0 (seeds the store; settable in the UI) |
 | `SYNC_INTERVAL_MIN` | `15` | Poll interval in minutes (seeds the store; settable in the UI) |
-| `AUTO_REMOVE_WHEN_AVAILABLE` | `false` | Auto-remove items from their Trakt list once available in Seer (seeds the store; settable in the UI). The legacy `AUTO_REMOVE_ON_IMPORT` name is still accepted. |
+| `AUTO_REMOVE_WHEN_AVAILABLE` | `false` | Auto-remove items from their Trakt list once Seer reports them available or partially available; deletes the Trakt entry and the Seer request, never the media files (seeds the store, settable in the UI). The legacy `AUTO_REMOVE_ON_IMPORT` name is still accepted. |
 | `BANDWIDTH_CONTROL_ENABLED` | `false` | Enable the Bandwidth-Controllarr loop (seeds the store; toggleable in the UI). Off by default so SABnzbd is never paused without opt-in. |
 | `BANDWIDTH_CHECK_INTERVAL_SEC` | `15` | How often Bandwidth-Controllarr polls qBittorrent and SABnzbd, in seconds (seeds the store; settable in the UI). |
 | `WEBHOOK_PORT` | `3223` | Port the service listens on |
