@@ -53,6 +53,7 @@ import {
   useUpdateTraktSettings,
 } from "@/shared/lib/queries"
 import { Settings } from "@/features/settings/Settings"
+import { TooltipProvider } from "@/shared/components/ui/tooltip"
 import type {
   GeneralSettings,
   ServicesSettings,
@@ -71,7 +72,9 @@ function render(ui: ReactElement, options?: Parameters<typeof rtlRender>[1]) {
     queryClient,
     ...rtlRender(ui, {
       wrapper: ({ children }) => (
-        <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+        <QueryClientProvider client={queryClient}>
+          <TooltipProvider>{children}</TooltipProvider>
+        </QueryClientProvider>
       ),
       ...options,
     }),
@@ -215,6 +218,15 @@ async function renderDatabase() {
   return user
 }
 
+async function expectHelpTooltip(
+  user: ReturnType<typeof userEvent.setup>,
+  name: string,
+  text: string,
+) {
+  await user.hover(screen.getByRole("button", { name }))
+  expect((await screen.findAllByText(text)).length).toBeGreaterThan(0)
+}
+
 describe("Settings — credentials", () => {
   it("shows a loading state while the settings load", async () => {
     vi.mocked(useTraktSettings).mockReturnValue(
@@ -231,6 +243,15 @@ describe("Settings — credentials", () => {
     expect(
       screen.getByRole("button", { name: "Re-connect Trakt" }),
     ).toBeInTheDocument()
+  })
+
+  it("shows help for Trakt credential fields", async () => {
+    const user = await renderTrakt()
+    await expectHelpTooltip(
+      user,
+      "Explain Client ID",
+      "The public client identifier from your Trakt application.",
+    )
   })
 
   it("does not render the list-management selector on the Trakt tab", async () => {
@@ -625,6 +646,16 @@ describe("Settings — general", () => {
     await user.click(screen.getByRole("button", { name: "Light" }))
     expect(setThemeMock).toHaveBeenCalledWith("light")
   })
+
+  it("shows help for the status interval", async () => {
+    const user = userEvent.setup()
+    render(<Settings />)
+    await expectHelpTooltip(
+      user,
+      "Explain Status check interval",
+      "How often the dashboard refreshes connection status for configured integrations.",
+    )
+  })
 })
 
 describe("Settings — service tabs", () => {
@@ -636,6 +667,17 @@ describe("Settings — service tabs", () => {
       "http://js:5055",
     )
     expect(screen.getByText("Checking…")).toBeInTheDocument()
+  })
+
+  it("shows help for service connection fields", async () => {
+    const user = userEvent.setup()
+    render(<Settings />)
+    await user.click(screen.getByRole("tab", { name: "Seer" }))
+    await expectHelpTooltip(
+      user,
+      "Explain URL",
+      "Base URL for this service, including protocol and port when required.",
+    )
   })
 
   it("shows a service without a key as not set", async () => {

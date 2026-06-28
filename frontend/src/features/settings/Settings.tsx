@@ -32,6 +32,7 @@ import {
   ConnectionBadge,
   type ConnectionState,
 } from "@/shared/components/connection-badge"
+import { SettingsHelp } from "@/shared/components/settings-help"
 import { useTheme } from "@/shared/components/theme-context"
 import { cn } from "@/shared/lib/utils"
 import { SERVICE_TABS, VALID_TAB_VALUES, type ServiceTab } from "@/shared/lib/services"
@@ -66,19 +67,41 @@ import { useQueryClient } from "@tanstack/react-query"
 function Field({
   label,
   hint,
+  helpText,
   children,
 }: {
   label: string
   hint: string
+  helpText?: ReactNode
   children: ReactNode
 }) {
   return (
     <div className="flex flex-col gap-1.5">
       <div className="flex items-center justify-between">
-        <label className="text-sm font-medium">{label}</label>
+        <div className="flex items-center gap-1.5">
+          <label className="text-sm font-medium">{label}</label>
+          {helpText ? <SettingsHelp label={label}>{helpText}</SettingsHelp> : null}
+        </div>
         <span className="text-xs text-muted-foreground">{hint}</span>
       </div>
       {children}
+    </div>
+  )
+}
+
+function ActionWithHelp({
+  label,
+  helpText,
+  children,
+}: {
+  label: string
+  helpText: ReactNode
+  children: ReactNode
+}) {
+  return (
+    <div className="flex items-center gap-1.5">
+      {children}
+      <SettingsHelp label={label}>{helpText}</SettingsHelp>
     </div>
   )
 }
@@ -230,14 +253,22 @@ function CredentialsCard() {
           <p className="text-sm text-muted-foreground">Loading…</p>
         ) : (
           <>
-            <Field label="Client ID" hint={clientIdHint}>
+            <Field
+              label="Client ID"
+              hint={clientIdHint}
+              helpText="The public client identifier from your Trakt application."
+            >
               <Input
                 value={clientId}
                 onChange={(event) => editClientId(event.target.value)}
                 placeholder="Trakt client id"
               />
             </Field>
-            <Field label="Client secret" hint={clientSecretHint}>
+            <Field
+              label="Client secret"
+              hint={clientSecretHint}
+              helpText="The private Trakt application secret. It is saved server-side and not shown again."
+            >
               <Input
                 type="password"
                 value={clientSecret}
@@ -246,19 +277,29 @@ function CredentialsCard() {
               />
             </Field>
             <div className="flex flex-wrap gap-3">
-              <Button
-                onClick={() => startAuth.mutate()}
-                disabled={startAuth.isPending}
+              <ActionWithHelp
+                label={connected ? "Re-connect Trakt" : "Connect Trakt"}
+                helpText="Starts Trakt device authorisation so this app can read and update your selected lists."
               >
-                {connected ? "Re-connect Trakt" : "Connect Trakt"}
-              </Button>
-              <Button
-                variant="outline"
-                onClick={() => test.mutate()}
-                disabled={test.isPending}
+                <Button
+                  onClick={() => startAuth.mutate()}
+                  disabled={startAuth.isPending}
+                >
+                  {connected ? "Re-connect Trakt" : "Connect Trakt"}
+                </Button>
+              </ActionWithHelp>
+              <ActionWithHelp
+                label="Test connection"
+                helpText="Checks the saved credentials or token without changing settings."
               >
-                Test connection
-              </Button>
+                <Button
+                  variant="outline"
+                  onClick={() => test.mutate()}
+                  disabled={test.isPending}
+                >
+                  Test connection
+                </Button>
+              </ActionWithHelp>
             </div>
             {pending?.user_code ? (
               <div className="rounded-md border bg-muted/40 p-4 text-sm">
@@ -397,7 +438,11 @@ function ServiceConnectionCard({ name, label, fields }: ServiceTab) {
       </CardHeader>
       <CardContent className="flex flex-col gap-4">
         {hasUrl ? (
-          <Field label="URL" hint={urlHint}>
+          <Field
+            label="URL"
+            hint={urlHint}
+            helpText="Base URL for this service, including protocol and port when required."
+          >
             <Input
               value={url}
               onChange={(event) => editUrl(event.target.value)}
@@ -405,7 +450,11 @@ function ServiceConnectionCard({ name, label, fields }: ServiceTab) {
             />
           </Field>
         ) : null}
-        <Field label="API key" hint={apiKeyHint}>
+        <Field
+          label="API key"
+          hint={apiKeyHint}
+          helpText="API key saved server-side. Existing keys are never returned to the browser."
+        >
           <Input
             type="password"
             value={apiKey}
@@ -414,13 +463,18 @@ function ServiceConnectionCard({ name, label, fields }: ServiceTab) {
           />
         </Field>
         <div className="flex flex-wrap gap-3">
-          <Button
-            variant="outline"
-            onClick={() => test.mutate(name)}
-            disabled={test.isPending}
+          <ActionWithHelp
+            label="Test connection"
+            helpText="Checks the saved credentials or token without changing settings."
           >
-            Test connection
-          </Button>
+            <Button
+              variant="outline"
+              onClick={() => test.mutate(name)}
+              disabled={test.isPending}
+            >
+              Test connection
+            </Button>
+          </ActionWithHelp>
         </div>
         {test.data ? (
           <p
@@ -446,33 +500,39 @@ function ClearAction({
   label,
   description,
   confirmLabel,
+  helpText,
   disabled,
   onConfirm,
 }: {
   label: string
   description: string
   confirmLabel: string
+  helpText: ReactNode
   disabled: boolean
   onConfirm: () => void
 }) {
   return (
-    <AlertDialog>
-      <AlertDialogTrigger asChild>
-        <Button variant="outline" disabled={disabled}>
-          {label}
-        </Button>
-      </AlertDialogTrigger>
-      <AlertDialogContent>
-        <AlertDialogHeader>
-          <AlertDialogTitle>{label}?</AlertDialogTitle>
-          <AlertDialogDescription>{description}</AlertDialogDescription>
-        </AlertDialogHeader>
-        <AlertDialogFooter>
-          <AlertDialogCancel>Cancel</AlertDialogCancel>
-          <AlertDialogAction onClick={onConfirm}>{confirmLabel}</AlertDialogAction>
-        </AlertDialogFooter>
-      </AlertDialogContent>
-    </AlertDialog>
+    <ActionWithHelp label={label} helpText={helpText}>
+      <AlertDialog>
+        <AlertDialogTrigger asChild>
+          <Button variant="outline" disabled={disabled}>
+            {label}
+          </Button>
+        </AlertDialogTrigger>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{label}?</AlertDialogTitle>
+            <AlertDialogDescription>{description}</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={onConfirm}>
+              {confirmLabel}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </ActionWithHelp>
   )
 }
 
@@ -545,6 +605,7 @@ function DatabaseCard() {
                   label="Clear activity log"
                   description="Empty the entire activity log. A single audit entry will remain."
                   confirmLabel="Clear"
+                  helpText="Deletes activity history only; credentials and list configuration remain."
                   disabled={clearActivity.isPending}
                   onConfirm={() => clearActivity.mutate()}
                 />
@@ -552,6 +613,7 @@ function DatabaseCard() {
                   label="Clear synced items & sync state"
                   description="Delete every tracked item and list sync state. Your tracked-list configuration is preserved and the next sync rebuilds the data."
                   confirmLabel="Clear"
+                  helpText="Deletes mirrored list items and sync state so the next sync rebuilds them."
                   disabled={clearItems.isPending}
                   onConfirm={() => clearItems.mutate()}
                 />
@@ -559,6 +621,7 @@ function DatabaseCard() {
                   label="Clear poster cache"
                   description="Delete all cached poster thumbnails. They will be re-fetched on demand."
                   confirmLabel="Clear"
+                  helpText="Deletes cached poster thumbnails. They are fetched again on demand."
                   disabled={clearPosters.isPending}
                   onConfirm={() => clearPosters.mutate()}
                 />
@@ -596,9 +659,15 @@ function GeneralCard() {
       <CardContent className="flex flex-col gap-6">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <label htmlFor="status-interval" className="text-sm font-medium">
-              Status check interval
-            </label>
+            <div className="flex items-center gap-1.5">
+              <label htmlFor="status-interval" className="text-sm font-medium">
+                Status check interval
+              </label>
+              <SettingsHelp label="Status check interval">
+                How often the dashboard refreshes connection status for
+                configured integrations.
+              </SettingsHelp>
+            </div>
             <p className="text-sm text-muted-foreground">
               How often the dashboard pings each integration.
             </p>
@@ -624,7 +693,13 @@ function GeneralCard() {
         </div>
 
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-          <p className="text-sm font-medium">Appearance</p>
+          <div className="flex items-center gap-1.5">
+            <p className="text-sm font-medium">Appearance</p>
+            <SettingsHelp label="Appearance">
+              Changes the dashboard colour mode only; it does not change backend
+              behaviour.
+            </SettingsHelp>
+          </div>
           <div className="flex flex-wrap gap-2">
             {THEME_OPTIONS.map((option) => (
               <Button
@@ -664,7 +739,7 @@ export function Settings() {
 
   return (
     <Tabs value={activeTab} onValueChange={handleTabChange}>
-      <TabsList>
+      <TabsList className="h-auto max-w-full flex-wrap justify-start">
         <TabsTrigger value="general">General</TabsTrigger>
         <TabsTrigger value="database">Database</TabsTrigger>
         <TabsTrigger value="trakt">Trakt</TabsTrigger>

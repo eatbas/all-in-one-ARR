@@ -12,6 +12,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/shared/components/ui/select"
+import { SettingsHelp } from "@/shared/components/settings-help"
 import { Switch } from "@/shared/components/ui/switch"
 import { TraktListSelector } from "@/features/list-syncarr/components/trakt-list-selector"
 import {
@@ -57,7 +58,15 @@ export function ListSettings() {
         <CardContent className="flex flex-col gap-6">
           <div className="flex items-center justify-between gap-4">
             <div>
-              <p className="text-sm font-medium">Remove from Trakt when available</p>
+              <div className="flex items-center gap-1.5">
+                <p className="text-sm font-medium">
+                  Remove from Trakt when available
+                </p>
+                <SettingsHelp label="Remove from Trakt when available">
+                  Removes the list entry when Seer reports the item available;
+                  media files are untouched.
+                </SettingsHelp>
+              </div>
               <p className="text-sm text-muted-foreground">
                 When on, an item is removed from its Trakt list as soon as
                 Seer reports it available — the list entry only; the media
@@ -74,9 +83,15 @@ export function ListSettings() {
           </div>
 
           <div className="flex flex-col gap-2">
-            <label htmlFor="sync-interval" className="text-sm font-medium">
-              Sync interval
-            </label>
+            <div className="flex items-center gap-1.5">
+              <label htmlFor="sync-interval" className="text-sm font-medium">
+                Sync interval
+              </label>
+              <SettingsHelp label="Sync interval">
+                How often List-Syncarr polls Trakt and requests missing items in
+                Seer.
+              </SettingsHelp>
+            </div>
             <p className="text-sm text-muted-foreground">
               How often the engine polls Trakt and requests in Seer.
             </p>

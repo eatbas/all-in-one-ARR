@@ -1,5 +1,6 @@
-import { render, screen } from "@testing-library/react"
+import { render as rtlRender, screen } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
+import type { ReactElement } from "react"
 import { beforeEach, describe, expect, it, vi } from "vitest"
 
 vi.mock("@/shared/lib/queries", () => ({
@@ -22,6 +23,7 @@ import {
   useUpdateSyncInterval,
 } from "@/shared/lib/queries"
 import { ListSettings } from "@/features/list-syncarr/tabs/ListSettings"
+import { TooltipProvider } from "@/shared/components/ui/tooltip"
 import type {
   GeneralSettings,
   TraktListEntry,
@@ -54,10 +56,23 @@ const GENERAL: GeneralSettings = {
   auto_remove_when_available: false,
 }
 
+function render(ui: ReactElement) {
+  return rtlRender(<TooltipProvider>{ui}</TooltipProvider>)
+}
+
 let addMutate: ReturnType<typeof vi.fn>
 let removeMutate: ReturnType<typeof vi.fn>
 let syncIntervalMutate: ReturnType<typeof vi.fn>
 let autoRemoveMutate: ReturnType<typeof vi.fn>
+
+async function expectHelpTooltip(
+  user: ReturnType<typeof userEvent.setup>,
+  name: string,
+  text: string,
+) {
+  await user.hover(screen.getByRole("button", { name }))
+  expect((await screen.findAllByText(text)).length).toBeGreaterThan(0)
+}
 
 beforeEach(() => {
   addMutate = vi.fn()
@@ -224,6 +239,16 @@ describe("ListSettings — sync behaviour", () => {
     await user.click(combobox)
     await user.click(screen.getByRole("option", { name: "30 minutes" }))
     expect(syncIntervalMutate).toHaveBeenCalledWith(30)
+  })
+
+  it("shows help for sync behaviour controls", async () => {
+    const user = userEvent.setup()
+    render(<ListSettings />)
+    await expectHelpTooltip(
+      user,
+      "Explain Remove from Trakt when available",
+      "Removes the list entry when Seer reports the item available; media files are untouched.",
+    )
   })
 
   it("falls back to defaults when general settings are unset", () => {

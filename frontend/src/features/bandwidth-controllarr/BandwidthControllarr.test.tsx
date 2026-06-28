@@ -1,5 +1,6 @@
-import { render, screen } from "@testing-library/react"
+import { render as rtlRender, screen } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
+import type { ReactElement } from "react"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
 vi.mock("@/shared/lib/queries", () => ({
@@ -13,6 +14,7 @@ import {
 } from "@/shared/lib/queries"
 import { BandwidthControllarr } from "@/features/bandwidth-controllarr/BandwidthControllarr"
 import { BANDWIDTH_CONTROLLARR_TAB_STORAGE_KEY } from "@/features/bandwidth-controllarr/bandwidth-controllarr-tab"
+import { TooltipProvider } from "@/shared/components/ui/tooltip"
 import type { BandwidthStatus } from "@/shared/lib/api"
 import { queryResult } from "@/shared/test/mock-query"
 
@@ -40,6 +42,10 @@ const STATUS: BandwidthStatus = {
   },
 }
 
+function render(ui: ReactElement) {
+  return rtlRender(<TooltipProvider>{ui}</TooltipProvider>)
+}
+
 beforeEach(() => {
   localStorage.clear()
   vi.mocked(useBandwidthStatus).mockReturnValue(queryResult(STATUS))
@@ -49,6 +55,15 @@ beforeEach(() => {
 afterEach(() => {
   vi.unstubAllGlobals()
 })
+
+async function expectHelpTooltip(
+  user: ReturnType<typeof userEvent.setup>,
+  name: string,
+  text: string,
+) {
+  await user.hover(screen.getByRole("button", { name }))
+  expect((await screen.findAllByText(text)).length).toBeGreaterThan(0)
+}
 
 describe("BandwidthControllarr", () => {
   it("defaults to the Status tab", () => {
@@ -69,6 +84,27 @@ describe("BandwidthControllarr", () => {
     expect(
       screen.getByText((text) => text.includes("Control when SABnzbd pauses")),
     ).toBeInTheDocument()
+  })
+
+  it("shows help for settings controls", async () => {
+    const user = userEvent.setup()
+    render(<BandwidthControllarr />)
+    await user.click(screen.getByRole("tab", { name: "Settings" }))
+    await expectHelpTooltip(
+      user,
+      "Explain Check interval",
+      "How often the bandwidth loop checks qBittorrent and SABnzbd.",
+    )
+  })
+
+  it("shows help for the status enable control", async () => {
+    const user = userEvent.setup()
+    render(<BandwidthControllarr />)
+    await expectHelpTooltip(
+      user,
+      "Explain Enable bandwidth control",
+      "Allows SABnzbd to pause while qBittorrent has active torrents and resume when idle.",
+    )
   })
 
   it("restores the Settings tab from localStorage", () => {

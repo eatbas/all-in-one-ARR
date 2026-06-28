@@ -19,6 +19,7 @@ import {
   useBandwidthStatus,
   useUpdateBandwidthSettings,
 } from "@/shared/lib/queries"
+import { SettingsHelp } from "@/shared/components/settings-help"
 
 const INTERVAL_OPTIONS = [10, 15, 30, 60] as const
 
@@ -52,9 +53,14 @@ export function BandwidthSettings() {
         <CardContent className="flex flex-col gap-6">
           <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
             <div>
-              <label htmlFor="check-interval" className="text-sm font-medium">
-                Check interval
-              </label>
+              <div className="flex items-center gap-1.5">
+                <label htmlFor="check-interval" className="text-sm font-medium">
+                  Check interval
+                </label>
+                <SettingsHelp label="Check interval">
+                  How often the bandwidth loop checks qBittorrent and SABnzbd.
+                </SettingsHelp>
+              </div>
               <p className="text-sm text-muted-foreground">
                 How often the engine polls qBittorrent and SABnzbd.
               </p>
@@ -89,12 +95,17 @@ export function BandwidthSettings() {
                 <code>/metrics</code>.
               </p>
             </div>
-            <Button asChild variant="outline" size="sm">
-              <a href="/metrics" target="_blank" rel="noreferrer">
-                <ExternalLinkIcon className="size-4" />
-                Open /metrics
-              </a>
-            </Button>
+            <div className="flex items-center gap-1.5">
+              <Button asChild variant="outline" size="sm">
+                <a href="/metrics" target="_blank" rel="noreferrer">
+                  <ExternalLinkIcon className="size-4" />
+                  Open /metrics
+                </a>
+              </Button>
+              <SettingsHelp label="Open metrics">
+                Opens the Prometheus scrape endpoint for bandwidth control gauges.
+              </SettingsHelp>
+            </div>
           </div>
         </CardContent>
       </Card>

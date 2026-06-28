@@ -10,6 +10,7 @@ import {
 } from "@/shared/components/ui/card"
 import { Input } from "@/shared/components/ui/input"
 import { Switch } from "@/shared/components/ui/switch"
+import { SettingsHelp } from "@/shared/components/settings-help"
 import {
   Tabs,
   TabsContent,
@@ -52,16 +53,29 @@ export function TraktListSelector() {
       </CardHeader>
       <CardContent className="flex flex-col gap-6">
         <div className="flex flex-col gap-2">
-          <p className="text-sm font-medium">Add by Trakt URL</p>
+          <div className="flex items-center gap-1.5">
+            <label htmlFor="trakt-list-url" className="text-sm font-medium">
+              Add by Trakt URL
+            </label>
+            <SettingsHelp label="Add by Trakt URL">
+              Adds a Trakt list by URL when it belongs to the connected account.
+            </SettingsHelp>
+          </div>
           <div className="flex gap-2">
             <Input
+              id="trakt-list-url"
               value={url}
               onChange={(event) => setUrl(event.target.value)}
               placeholder="https://trakt.tv/users/me/lists/anime"
             />
-            <Button onClick={addByUrl} disabled={add.isPending || !url}>
-              Add
-            </Button>
+            <div className="flex items-center gap-1.5">
+              <Button onClick={addByUrl} disabled={add.isPending || !url}>
+                Add
+              </Button>
+              <SettingsHelp label="Add Trakt list">
+                Adds the entered Trakt list to the sync set.
+              </SettingsHelp>
+            </div>
           </div>
         </div>
 
@@ -89,19 +103,25 @@ export function TraktListSelector() {
                           ({item.owner_user}/{item.slug})
                         </span>
                       </span>
-                      <Button
-                        size="xs"
-                        variant="ghost"
-                        onClick={() =>
-                          remove.mutate({
-                            owner_user: item.owner_user,
-                            slug: item.slug,
-                          })
-                        }
-                        disabled={remove.isPending}
-                      >
-                        Remove
-                      </Button>
+                      <div className="flex items-center gap-1.5">
+                        <Button
+                          size="xs"
+                          variant="ghost"
+                          onClick={() =>
+                            remove.mutate({
+                              owner_user: item.owner_user,
+                              slug: item.slug,
+                            })
+                          }
+                          disabled={remove.isPending}
+                        >
+                          Remove
+                        </Button>
+                        <SettingsHelp label={`Remove ${item.slug}`}>
+                          Stops syncing this list. It does not delete the list
+                          from Trakt.
+                        </SettingsHelp>
+                      </div>
                     </li>
                   ))}
                 </ul>
@@ -135,22 +155,27 @@ export function TraktListSelector() {
                           ({entry.item_count ?? 0} items)
                         </span>
                       </span>
-                      <Switch
-                        checked={entry.selected}
-                        disabled={add.isPending || remove.isPending}
-                        onCheckedChange={(checked) =>
-                          checked
-                            ? add.mutate({
-                                owner_user: entry.owner_user,
-                                slug: entry.slug,
-                              })
-                            : remove.mutate({
-                                owner_user: entry.owner_user,
-                                slug: entry.slug,
-                              })
-                        }
-                        aria-label={`Sync ${entry.slug}`}
-                      />
+                      <div className="flex items-center gap-1.5">
+                        <Switch
+                          checked={entry.selected}
+                          disabled={add.isPending || remove.isPending}
+                          onCheckedChange={(checked) =>
+                            checked
+                              ? add.mutate({
+                                  owner_user: entry.owner_user,
+                                  slug: entry.slug,
+                                })
+                              : remove.mutate({
+                                  owner_user: entry.owner_user,
+                                  slug: entry.slug,
+                                })
+                          }
+                          aria-label={`Sync ${entry.slug}`}
+                        />
+                        <SettingsHelp label={`Sync ${entry.slug}`}>
+                          Turns syncing on or off for this discovered Trakt list.
+                        </SettingsHelp>
+                      </div>
                     </li>
                   ))}
                 </ul>

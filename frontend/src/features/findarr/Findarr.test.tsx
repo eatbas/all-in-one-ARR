@@ -1,5 +1,6 @@
-import { render, screen } from "@testing-library/react"
+import { render as rtlRender, screen } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
+import type { ReactElement } from "react"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
 vi.mock("@/shared/lib/queries", () => ({
@@ -14,6 +15,7 @@ vi.mock("@/shared/lib/queries", () => ({
 import type { FindarrSettings, FindarrStatus } from "@/shared/lib/api"
 import { Findarr } from "@/features/findarr/Findarr"
 import { FINDARR_TAB_STORAGE_KEY } from "@/features/findarr/findarr-tab"
+import { TooltipProvider } from "@/shared/components/ui/tooltip"
 import {
   useFindarrHistory,
   useFindarrSettings,
@@ -70,6 +72,10 @@ const STATUS: FindarrStatus = {
   hourly: { limit: 20, used: 5, remaining: 15 },
 }
 
+function render(ui: ReactElement) {
+  return rtlRender(<TooltipProvider>{ui}</TooltipProvider>)
+}
+
 beforeEach(() => {
   localStorage.clear()
   vi.mocked(useFindarrStatus).mockReturnValue(queryResult(STATUS))
@@ -99,6 +105,15 @@ afterEach(() => {
   vi.unstubAllGlobals()
 })
 
+async function expectHelpTooltip(
+  user: ReturnType<typeof userEvent.setup>,
+  name: string,
+  text: string,
+) {
+  await user.hover(screen.getByRole("button", { name }))
+  expect((await screen.findAllByText(text)).length).toBeGreaterThan(0)
+}
+
 describe("Findarr", () => {
   it("defaults to the Status tab and shows app cards", () => {
     render(<Findarr />)
@@ -116,6 +131,27 @@ describe("Findarr", () => {
     await user.click(screen.getByRole("tab", { name: "Settings" }))
     expect(localStorage.getItem(FINDARR_TAB_STORAGE_KEY)).toBe("settings")
     expect(screen.getByText("Findarr scheduler")).toBeInTheDocument()
+  })
+
+  it("shows help for settings controls", async () => {
+    const user = userEvent.setup()
+    render(<Findarr />)
+    await user.click(screen.getByRole("tab", { name: "Settings" }))
+    await expectHelpTooltip(
+      user,
+      "Explain Findarr interval",
+      "How often Findarr wakes up to run automatic searches.",
+    )
+  })
+
+  it("shows help for the status enable control", async () => {
+    const user = userEvent.setup()
+    render(<Findarr />)
+    await expectHelpTooltip(
+      user,
+      "Explain Enable Findarr",
+      "Allows the scheduler to run bounded missing and upgrade searches.",
+    )
   })
 
   it("renders history rows", async () => {

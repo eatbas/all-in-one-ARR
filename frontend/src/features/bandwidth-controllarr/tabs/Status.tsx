@@ -1,5 +1,6 @@
 import { Badge } from "@/shared/components/ui/badge"
 import { Card, CardContent } from "@/shared/components/ui/card"
+import { SettingsHelp } from "@/shared/components/settings-help"
 import { Switch } from "@/shared/components/ui/switch"
 import { ClientCard } from "@/features/bandwidth-controllarr/components/client-card"
 import {
@@ -46,7 +47,13 @@ export function Status() {
                 updateSettings.mutate({ enabled: checked })
               }
             />
-            <span className="text-sm font-medium">{controlLabel}</span>
+            <div className="flex items-center gap-1.5">
+              <span className="text-sm font-medium">{controlLabel}</span>
+              <SettingsHelp label="Enable bandwidth control">
+                Allows SABnzbd to pause while qBittorrent has active torrents and
+                resume when idle.
+              </SettingsHelp>
+            </div>
           </div>
           <Badge
             variant={isActive ? "destructive" : "default"}

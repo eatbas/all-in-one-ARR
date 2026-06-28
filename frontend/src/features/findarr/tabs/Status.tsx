@@ -14,6 +14,7 @@ import {
 import { Badge } from "@/shared/components/ui/badge"
 import { Button } from "@/shared/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/shared/components/ui/card"
+import { SettingsHelp } from "@/shared/components/settings-help"
 import { Switch } from "@/shared/components/ui/switch"
 import { formatTimestamp } from "@/shared/lib/format"
 import {
@@ -65,9 +66,14 @@ export function Status() {
                 updateSettings.mutate({ enabled: checked })
               }
             />
-            <span className="text-sm font-medium">
-              {enabled ? "Enabled" : "Disabled"}
-            </span>
+            <div className="flex items-center gap-1.5">
+              <span className="text-sm font-medium">
+                {enabled ? "Enabled" : "Disabled"}
+              </span>
+              <SettingsHelp label="Enable Findarr">
+                Allows the scheduler to run bounded missing and upgrade searches.
+              </SettingsHelp>
+            </div>
           </div>
           <Badge variant={status.running ? "destructive" : "default"} className="sm:ml-auto">
             {status.running ? "Running" : status.last_run_status ?? "Idle"}
@@ -122,42 +128,77 @@ export function Status() {
       </div>
 
       <div className="flex flex-wrap gap-3">
-        <Button onClick={() => runFindarr.mutate(undefined)} disabled={runFindarr.isPending}>
-          <PlayIcon className="size-4" />
-          Run all
-        </Button>
-        <Button variant="outline" onClick={() => runFindarr.mutate("sonarr")} disabled={runFindarr.isPending}>
-          <PlayIcon className="size-4" />
-          Run Sonarr
-        </Button>
-        <Button variant="outline" onClick={() => runFindarr.mutate("radarr")} disabled={runFindarr.isPending}>
-          <PlayIcon className="size-4" />
-          Run Radarr
-        </Button>
-        <AlertDialog>
-          <AlertDialogTrigger asChild>
-            <Button variant="destructive" disabled={resetState.isPending}>
-              <RotateCcwIcon className="size-4" />
-              Reset state
-            </Button>
-          </AlertDialogTrigger>
-          <AlertDialogContent>
-            <AlertDialogHeader>
-              <AlertDialogTitle>Reset Findarr processed state?</AlertDialogTitle>
-              <AlertDialogDescription>
-                This allows Findarr to consider previously processed Sonarr and
-                Radarr items again. It does not delete media or change Arr
-                libraries.
-              </AlertDialogDescription>
-            </AlertDialogHeader>
-            <AlertDialogFooter>
-              <AlertDialogCancel>Cancel</AlertDialogCancel>
-              <AlertDialogAction onClick={() => resetState.mutate()}>
+        <div className="flex items-center gap-1.5">
+          <Button
+            onClick={() => runFindarr.mutate(undefined)}
+            disabled={runFindarr.isPending}
+          >
+            <PlayIcon className="size-4" />
+            Run all
+          </Button>
+          <SettingsHelp label="Run all">
+            Starts a manual Findarr run immediately, respecting configured
+            limits.
+          </SettingsHelp>
+        </div>
+        <div className="flex items-center gap-1.5">
+          <Button
+            variant="outline"
+            onClick={() => runFindarr.mutate("sonarr")}
+            disabled={runFindarr.isPending}
+          >
+            <PlayIcon className="size-4" />
+            Run Sonarr
+          </Button>
+          <SettingsHelp label="Run Sonarr">
+            Starts a manual Sonarr Findarr run immediately, respecting configured
+            limits.
+          </SettingsHelp>
+        </div>
+        <div className="flex items-center gap-1.5">
+          <Button
+            variant="outline"
+            onClick={() => runFindarr.mutate("radarr")}
+            disabled={runFindarr.isPending}
+          >
+            <PlayIcon className="size-4" />
+            Run Radarr
+          </Button>
+          <SettingsHelp label="Run Radarr">
+            Starts a manual Radarr Findarr run immediately, respecting configured
+            limits.
+          </SettingsHelp>
+        </div>
+        <div className="flex items-center gap-1.5">
+          <AlertDialog>
+            <AlertDialogTrigger asChild>
+              <Button variant="destructive" disabled={resetState.isPending}>
+                <RotateCcwIcon className="size-4" />
                 Reset state
-              </AlertDialogAction>
-            </AlertDialogFooter>
-          </AlertDialogContent>
-        </AlertDialog>
+              </Button>
+            </AlertDialogTrigger>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Reset Findarr processed state?</AlertDialogTitle>
+                <AlertDialogDescription>
+                  This allows Findarr to consider previously processed Sonarr and
+                  Radarr items again. It does not delete media or change Arr
+                  libraries.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                <AlertDialogAction onClick={() => resetState.mutate()}>
+                  Reset state
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
+          <SettingsHelp label="Reset Findarr state">
+            Allows previously processed items to be considered again; it does not
+            delete media.
+          </SettingsHelp>
+        </div>
       </div>
     </div>
   )

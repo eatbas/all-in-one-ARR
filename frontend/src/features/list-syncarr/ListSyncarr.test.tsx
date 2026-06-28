@@ -1,5 +1,6 @@
-import { render, screen } from "@testing-library/react"
+import { render as rtlRender, screen } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
+import type { ReactElement } from "react"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
 vi.mock("@/shared/lib/queries", () => ({
@@ -37,6 +38,7 @@ import {
 } from "@/shared/lib/queries"
 import { ListSyncarr } from "@/features/list-syncarr/ListSyncarr"
 import { LIST_SYNCARR_TAB_STORAGE_KEY } from "@/features/list-syncarr/list-syncarr-tab"
+import { TooltipProvider } from "@/shared/components/ui/tooltip"
 import type {
   Item,
   ListSummary,
@@ -58,6 +60,10 @@ const TRAKT_SETTINGS: TraktSettings = {
   client_secret_set: true,
   connected: true,
   lists: [],
+}
+
+function render(ui: ReactElement) {
+  return rtlRender(<TooltipProvider>{ui}</TooltipProvider>)
 }
 
 beforeEach(() => {

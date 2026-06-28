@@ -1,5 +1,6 @@
-import { render, screen } from "@testing-library/react"
+import { render as rtlRender, screen } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
+import type { ReactElement } from "react"
 import { beforeEach, describe, expect, it, vi } from "vitest"
 
 vi.mock("@/shared/lib/queries", () => ({
@@ -12,6 +13,7 @@ import {
   useUpdateBandwidthSettings,
 } from "@/shared/lib/queries"
 import { Status } from "@/features/bandwidth-controllarr/tabs/Status"
+import { TooltipProvider } from "@/shared/components/ui/tooltip"
 import type { BandwidthStatus } from "@/shared/lib/api"
 import { queryResult } from "@/shared/test/mock-query"
 
@@ -39,7 +41,20 @@ const BASE: BandwidthStatus = {
   },
 }
 
+function render(ui: ReactElement) {
+  return rtlRender(<TooltipProvider>{ui}</TooltipProvider>)
+}
+
 let updateMutate: ReturnType<typeof vi.fn>
+
+async function expectHelpTooltip(
+  user: ReturnType<typeof userEvent.setup>,
+  name: string,
+  text: string,
+) {
+  await user.hover(screen.getByRole("button", { name }))
+  expect((await screen.findAllByText(text)).length).toBeGreaterThan(0)
+}
 
 beforeEach(() => {
   updateMutate = vi.fn()
@@ -89,6 +104,16 @@ describe("Status", () => {
     expect(toggle).not.toBeChecked()
     await user.click(toggle)
     expect(updateMutate).toHaveBeenCalledWith({ enabled: true })
+  })
+
+  it("shows help for the enable switch", async () => {
+    const user = userEvent.setup()
+    render(<Status />)
+    await expectHelpTooltip(
+      user,
+      "Explain Enable bandwidth control",
+      "Allows SABnzbd to pause while qBittorrent has active torrents and resume when idle.",
+    )
   })
 
   it("reflects the enabled state", () => {

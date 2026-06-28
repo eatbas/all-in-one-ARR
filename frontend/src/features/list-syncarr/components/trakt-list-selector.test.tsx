@@ -1,5 +1,6 @@
-import { render, screen } from "@testing-library/react"
+import { render as rtlRender, screen } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
+import type { ReactElement } from "react"
 import { beforeEach, describe, expect, it, vi } from "vitest"
 
 vi.mock("@/shared/lib/queries", () => ({
@@ -16,6 +17,7 @@ import {
   useTraktSettings,
 } from "@/shared/lib/queries"
 import { TraktListSelector } from "@/features/list-syncarr/components/trakt-list-selector"
+import { TooltipProvider } from "@/shared/components/ui/tooltip"
 import type { TraktListEntry, TraktSettings } from "@/shared/lib/api"
 import { queryResult } from "@/shared/test/mock-query"
 
@@ -38,8 +40,21 @@ const DISCOVERED: TraktListEntry[] = [
   { name: null, slug: "anime", owner_user: "me", item_count: null, selected: true },
 ]
 
+function render(ui: ReactElement) {
+  return rtlRender(<TooltipProvider>{ui}</TooltipProvider>)
+}
+
 let addMutate: ReturnType<typeof vi.fn>
 let removeMutate: ReturnType<typeof vi.fn>
+
+async function expectHelpTooltip(
+  user: ReturnType<typeof userEvent.setup>,
+  name: string,
+  text: string,
+) {
+  await user.hover(screen.getByRole("button", { name }))
+  expect((await screen.findAllByText(text)).length).toBeGreaterThan(0)
+}
 
 beforeEach(() => {
   addMutate = vi.fn()
@@ -85,6 +100,16 @@ describe("TraktListSelector", () => {
     })
   })
 
+  it("shows help for adding a Trakt list by URL", async () => {
+    const user = userEvent.setup()
+    render(<TraktListSelector />)
+    await expectHelpTooltip(
+      user,
+      "Explain Add by Trakt URL",
+      "Adds a Trakt list by URL when it belongs to the connected account.",
+    )
+  })
+
   it("renders Syncing and Your Trakt lists tabs with Syncing selected by default", () => {
     render(<TraktListSelector />)
     expect(screen.getByRole("tab", { name: "Syncing" })).toBeInTheDocument()
@@ -109,6 +134,17 @@ describe("TraktListSelector", () => {
 
     await user.click(screen.getByRole("switch", { name: "Sync anime" }))
     expect(removeMutate).toHaveBeenCalledWith({ owner_user: "me", slug: "anime" })
+  })
+
+  it("shows help for discovered list switches", async () => {
+    const user = userEvent.setup()
+    render(<TraktListSelector />)
+    await user.click(screen.getByRole("tab", { name: "Your Trakt lists" }))
+    await expectHelpTooltip(
+      user,
+      "Explain Sync tv",
+      "Turns syncing on or off for this discovered Trakt list.",
+    )
   })
 
   it("prompts to connect when Trakt is not connected", async () => {
