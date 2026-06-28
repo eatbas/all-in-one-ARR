@@ -50,7 +50,19 @@ import {
   formatYear,
 } from "@/shared/lib/format"
 import { seerMediaUrl } from "@/shared/lib/api"
-import type { Item, ListSummary } from "@/shared/lib/api"
+import type { Item, ItemStatus, ListSummary } from "@/shared/lib/api"
+
+/**
+ * Display order for the item grid: ready/in-progress states first, with
+ * already-`removed` items sunk to the bottom. Items sharing a status keep their
+ * incoming (newest-first) order because the sort is stable.
+ */
+const STATUS_ORDER: Record<ItemStatus, number> = {
+  available: 0,
+  requested: 1,
+  synced: 2,
+  removed: 3,
+}
 
 /**
  * A `Date` that advances once per second, letting relative-time labels (the
@@ -86,9 +98,13 @@ function ListRow({
   const [open, setOpen] = useState(false)
   const { data: items, isLoading } = useListItems(list.slug, open)
   // Removed items are hidden by default; the "Show removed" toggle reveals them.
-  const visibleItems = showRemoved
-    ? items
-    : items?.filter((item) => item.status !== "removed")
+  // The grid is then sorted by status (removed last) — on a copy, so the cached
+  // query data is never mutated in place.
+  const visibleItems = (
+    showRemoved ? items : items?.filter((item) => item.status !== "removed")
+  )
+    ?.slice()
+    .sort((a, b) => STATUS_ORDER[a.status] - STATUS_ORDER[b.status])
   // The header count mirrors the toggle: active-only by default, and
   // "active + removed" (e.g. "0 + 6") once removed items are revealed.
   const removedCount = list.removed_count
