@@ -64,6 +64,7 @@ import type {
 } from "@/shared/lib/api"
 import { SETTINGS_TAB_STORAGE_KEY } from "@/features/settings/settings-tab"
 import { queryResult } from "@/shared/test/mock-query"
+import { expectHelpTooltip } from "@/shared/test/tooltip"
 
 /** Render wrapped in a fresh TanStack Query client so `useQueryClient` works. */
 function render(ui: ReactElement, options?: Parameters<typeof rtlRender>[1]) {
@@ -216,15 +217,6 @@ async function renderDatabase() {
   render(<Settings />)
   await user.click(screen.getByRole("tab", { name: "Database" }))
   return user
-}
-
-async function expectHelpTooltip(
-  user: ReturnType<typeof userEvent.setup>,
-  name: string,
-  text: string,
-) {
-  await user.hover(screen.getByRole("button", { name }))
-  expect((await screen.findAllByText(text)).length).toBeGreaterThan(0)
 }
 
 describe("Settings — credentials", () => {

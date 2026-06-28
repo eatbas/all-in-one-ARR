@@ -20,6 +20,7 @@ import { TraktListSelector } from "@/features/list-syncarr/components/trakt-list
 import { TooltipProvider } from "@/shared/components/ui/tooltip"
 import type { TraktListEntry, TraktSettings } from "@/shared/lib/api"
 import { queryResult } from "@/shared/test/mock-query"
+import { expectHelpTooltip } from "@/shared/test/tooltip"
 
 /** Build a mutation-shaped stub; typed loosely as these are test doubles. */
 function mutation(mutate: unknown, isPending = false) {
@@ -46,15 +47,6 @@ function render(ui: ReactElement) {
 
 let addMutate: ReturnType<typeof vi.fn>
 let removeMutate: ReturnType<typeof vi.fn>
-
-async function expectHelpTooltip(
-  user: ReturnType<typeof userEvent.setup>,
-  name: string,
-  text: string,
-) {
-  await user.hover(screen.getByRole("button", { name }))
-  expect((await screen.findAllByText(text)).length).toBeGreaterThan(0)
-}
 
 beforeEach(() => {
   addMutate = vi.fn()

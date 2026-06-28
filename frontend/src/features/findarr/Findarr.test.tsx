@@ -25,6 +25,7 @@ import {
   useUpdateFindarrSettings,
 } from "@/shared/lib/queries"
 import { mutationResult, queryResult } from "@/shared/test/mock-query"
+import { expectHelpTooltip } from "@/shared/test/tooltip"
 
 const SETTINGS: FindarrSettings = {
   enabled: false,
@@ -104,15 +105,6 @@ beforeEach(() => {
 afterEach(() => {
   vi.unstubAllGlobals()
 })
-
-async function expectHelpTooltip(
-  user: ReturnType<typeof userEvent.setup>,
-  name: string,
-  text: string,
-) {
-  await user.hover(screen.getByRole("button", { name }))
-  expect((await screen.findAllByText(text)).length).toBeGreaterThan(0)
-}
 
 describe("Findarr", () => {
   it("defaults to the Status tab and shows app cards", () => {

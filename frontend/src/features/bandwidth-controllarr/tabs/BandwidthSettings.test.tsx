@@ -16,6 +16,7 @@ import { BandwidthSettings } from "@/features/bandwidth-controllarr/tabs/Bandwid
 import { TooltipProvider } from "@/shared/components/ui/tooltip"
 import type { BandwidthStatus } from "@/shared/lib/api"
 import { queryResult } from "@/shared/test/mock-query"
+import { expectHelpTooltip } from "@/shared/test/tooltip"
 
 function mutation(mutate: unknown, isPending = false) {
   return { mutate, isPending } as never
@@ -46,15 +47,6 @@ function render(ui: ReactElement) {
 }
 
 let updateMutate: ReturnType<typeof vi.fn>
-
-async function expectHelpTooltip(
-  user: ReturnType<typeof userEvent.setup>,
-  name: string,
-  text: string,
-) {
-  await user.hover(screen.getByRole("button", { name }))
-  expect((await screen.findAllByText(text)).length).toBeGreaterThan(0)
-}
 
 beforeEach(() => {
   updateMutate = vi.fn()
