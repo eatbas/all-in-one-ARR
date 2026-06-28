@@ -8,10 +8,11 @@ data/
 *.db-shm
 tokens.json
 
-# Generated planning / review artefacts (kept out of version control)
-plan_request_*.md
-plan_review_*.md
-review_request_*.md
+# Generated planning / review artefacts (kept out of version control).
+# Leading "*" tolerates agent-specific prefixes such as "i_plan_request_*.md".
+*plan_request_*.md
+*plan_review_*.md
+*review_request_*.md
 commit_plan.md
 
 # Python
