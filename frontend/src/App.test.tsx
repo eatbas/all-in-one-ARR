@@ -35,6 +35,57 @@ vi.mock("@/shared/lib/queries", () => ({
   useTestService: vi.fn(() => ({ mutate: vi.fn(), isPending: false })),
   useBandwidthStatus: vi.fn(() => ({ data: undefined, isLoading: false })),
   useUpdateBandwidthSettings: vi.fn(() => ({ mutate: vi.fn(), isPending: false })),
+  useFindarrStatus: vi.fn(() => ({
+    data: {
+      settings: {
+        enabled: false,
+        interval_minutes: 30,
+        hourly_cap: 20,
+        queue_limit: -1,
+        apps: {
+          sonarr: {
+            enabled: true,
+            missing_limit: 5,
+            upgrade_limit: 5,
+            monitored_only: true,
+            skip_future: true,
+          },
+          radarr: {
+            enabled: true,
+            missing_limit: 5,
+            upgrade_limit: 5,
+            monitored_only: true,
+            skip_future: true,
+          },
+        },
+      },
+      running: false,
+      last_run_at: null,
+      last_run_status: null,
+      last_run_detail: null,
+      apps: {
+        sonarr: {
+          detail: "Not checked yet",
+          version: null,
+          compatible: false,
+          processed: { missing: 0, upgrade: 0 },
+        },
+        radarr: {
+          detail: "Not checked yet",
+          version: null,
+          compatible: false,
+          processed: { missing: 0, upgrade: 0 },
+        },
+      },
+      hourly: { limit: 20, used: 0, remaining: 20 },
+    },
+    isLoading: false,
+  })),
+  useFindarrSettings: vi.fn(() => ({ data: undefined, isLoading: false })),
+  useFindarrHistory: vi.fn(() => ({ data: [], isLoading: false })),
+  useUpdateFindarrSettings: vi.fn(() => ({ mutate: vi.fn(), isPending: false })),
+  useRunFindarr: vi.fn(() => ({ mutate: vi.fn(), isPending: false })),
+  useResetFindarrState: vi.fn(() => ({ mutate: vi.fn(), isPending: false })),
 }))
 
 import App from "@/App"
@@ -91,6 +142,16 @@ describe("App routing", () => {
       screen.getByText((text) =>
         text.includes("Prioritise BitTorrent over Usenet by pausing SABnzbd while"),
       ),
+    ).toBeInTheDocument()
+  })
+
+  it("renders the Findarr page at /findarr", () => {
+    renderAt("/findarr")
+    expect(screen.getByRole("tab", { name: "Status" })).toBeInTheDocument()
+    expect(screen.getByRole("tab", { name: "Settings" })).toBeInTheDocument()
+    expect(screen.getByRole("tab", { name: "History" })).toBeInTheDocument()
+    expect(
+      screen.getByText("Search missing and cutoff-unmet media in Sonarr 4+ and Radarr 6+."),
     ).toBeInTheDocument()
   })
 

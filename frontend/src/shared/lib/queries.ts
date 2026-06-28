@@ -16,6 +16,9 @@ import {
   getActivity,
   getBandwidthStatus,
   getDatabaseStats,
+  getFindarrHistory,
+  getFindarrSettings,
+  getFindarrStatus,
   getGeneralSettings,
   getItems,
   getLists,
@@ -28,11 +31,14 @@ import {
   removeAvailable,
   removeItem,
   removeTraktList,
+  resetFindarrState,
+  runFindarr,
   startTraktAuth,
   testService,
   testTrakt,
   triggerSync,
   updateBandwidthSettings,
+  updateFindarrSettings,
   updateGeneralSettings,
   updateServiceSettings,
   updateTraktSettings,
@@ -41,6 +47,13 @@ import {
   type BandwidthSettingsUpdate,
   type BandwidthStatus,
   type DatabaseStats,
+  type FindarrAppName,
+  type FindarrHistoryEntry,
+  type FindarrResetResult,
+  type FindarrRunResult,
+  type FindarrSettings,
+  type FindarrSettingsUpdate,
+  type FindarrStatus,
   type GeneralSettings,
   type Item,
   type ListSummary,
@@ -80,6 +93,9 @@ export const queryKeys = {
   generalSettings: ["general", "settings"] as const,
   database: ["database", "stats"] as const,
   bandwidthStatus: ["bandwidth", "status"] as const,
+  findarrStatus: ["findarr", "status"] as const,
+  findarrSettings: ["findarr", "settings"] as const,
+  findarrHistory: ["findarr", "history"] as const,
 }
 
 export function useStatus(): UseQueryResult<Status> {
@@ -506,6 +522,99 @@ export function useUpdateBandwidthSettings(): UseMutationResult<
       toast.error("Could not update bandwidth settings", {
         description: error.message,
       })
+    },
+  })
+}
+
+const FINDARR_REFETCH_INTERVAL = 5_000
+
+export function useFindarrStatus(): UseQueryResult<FindarrStatus> {
+  return useQuery({
+    queryKey: queryKeys.findarrStatus,
+    queryFn: getFindarrStatus,
+    refetchInterval: FINDARR_REFETCH_INTERVAL,
+  })
+}
+
+export function useFindarrSettings(): UseQueryResult<FindarrSettings> {
+  return useQuery({
+    queryKey: queryKeys.findarrSettings,
+    queryFn: getFindarrSettings,
+  })
+}
+
+export function useFindarrHistory(): UseQueryResult<FindarrHistoryEntry[]> {
+  return useQuery({
+    queryKey: queryKeys.findarrHistory,
+    queryFn: getFindarrHistory,
+    refetchInterval: FINDARR_REFETCH_INTERVAL,
+  })
+}
+
+function invalidateFindarr(queryClient: ReturnType<typeof useQueryClient>) {
+  void queryClient.invalidateQueries({ queryKey: queryKeys.findarrStatus })
+  void queryClient.invalidateQueries({ queryKey: queryKeys.findarrSettings })
+  void queryClient.invalidateQueries({ queryKey: queryKeys.findarrHistory })
+  void queryClient.invalidateQueries({ queryKey: queryKeys.activity })
+}
+
+export function useUpdateFindarrSettings(): UseMutationResult<
+  FindarrStatus,
+  Error,
+  FindarrSettingsUpdate
+> {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: updateFindarrSettings,
+    onSuccess: () => {
+      toast.success("Findarr settings saved")
+      invalidateFindarr(queryClient)
+    },
+    onError: (error) => {
+      toast.error("Could not save Findarr settings", {
+        description: error.message,
+      })
+    },
+  })
+}
+
+export function useRunFindarr(): UseMutationResult<
+  FindarrRunResult,
+  Error,
+  FindarrAppName | undefined
+> {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: (app) => runFindarr(app),
+    onSuccess: (result) => {
+      toast.success("Findarr run complete", { description: result.detail })
+      invalidateFindarr(queryClient)
+    },
+    onError: (error) => {
+      toast.error("Could not run Findarr", { description: error.message })
+    },
+  })
+}
+
+export function useResetFindarrState(): UseMutationResult<
+  FindarrResetResult,
+  Error,
+  void
+> {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: resetFindarrState,
+    onSuccess: (result) => {
+      toast.success("Findarr state reset", {
+        description: `${result.removed} processed entries removed.`,
+      })
+      invalidateFindarr(queryClient)
+    },
+    onError: (error) => {
+      toast.error("Could not reset Findarr state", { description: error.message })
     },
   })
 }

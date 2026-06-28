@@ -414,6 +414,98 @@ export interface BandwidthSettingsUpdate {
   check_interval_seconds?: number
 }
 
+/** Per-app Findarr settings for Sonarr or Radarr. */
+export interface FindarrAppSettings {
+  enabled: boolean
+  missing_limit: number
+  upgrade_limit: number
+  monitored_only: boolean
+  skip_future: boolean
+}
+
+export type FindarrAppName = "sonarr" | "radarr"
+
+/** Full Findarr settings returned by the backend. */
+export interface FindarrSettings {
+  enabled: boolean
+  interval_minutes: number
+  hourly_cap: number
+  queue_limit: number
+  apps: Record<FindarrAppName, FindarrAppSettings>
+}
+
+/** Partial Findarr settings update. */
+export interface FindarrSettingsUpdate {
+  enabled?: boolean
+  interval_minutes?: number
+  hourly_cap?: number
+  queue_limit?: number
+  apps?: Partial<Record<FindarrAppName, Partial<FindarrAppSettings>>>
+}
+
+/** Status for one Findarr-managed app. */
+export interface FindarrAppStatus {
+  detail: string
+  version: string | null
+  compatible: boolean
+  processed: {
+    missing: number
+    upgrade: number
+  }
+}
+
+/** Full Findarr status response. */
+export interface FindarrStatus {
+  settings: FindarrSettings
+  running: boolean
+  last_run_at: string | null
+  last_run_status: string | null
+  last_run_detail: string | null
+  apps: Record<FindarrAppName, FindarrAppStatus>
+  hourly: {
+    limit: number
+    used: number
+    remaining: number
+  }
+}
+
+/** Result for a single Findarr app/mode slice. */
+export interface FindarrModeResult {
+  app: FindarrAppName
+  mode: "missing" | "upgrade"
+  scanned: number
+  selected: number
+  processed: number
+  skipped: number
+  detail: string
+}
+
+/** Manual Findarr run response. */
+export interface FindarrRunResult {
+  status: string
+  detail: string
+  processed: number
+  results: FindarrModeResult[]
+}
+
+/** One Findarr history row. */
+export interface FindarrHistoryEntry {
+  id: number
+  ts: string
+  app: FindarrAppName
+  mode: "missing" | "upgrade" | "system"
+  item_id: string | null
+  title: string | null
+  status: string
+  detail: string
+}
+
+/** Findarr reset response. */
+export interface FindarrResetResult {
+  status: string
+  removed: number
+}
+
 /** Remove a single tracked item from its Trakt list. */
 export function removeItem(listId: string, traktId: number): Promise<void> {
   return request<void>(
@@ -439,4 +531,34 @@ export function updateBandwidthSettings(
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
   })
+}
+
+export function getFindarrStatus(): Promise<FindarrStatus> {
+  return request<FindarrStatus>("/api/findarr/status")
+}
+
+export function getFindarrSettings(): Promise<FindarrSettings> {
+  return request<FindarrSettings>("/api/findarr/settings")
+}
+
+export function updateFindarrSettings(
+  body: FindarrSettingsUpdate,
+): Promise<FindarrStatus> {
+  return request<FindarrStatus>("/api/findarr/settings", {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  })
+}
+
+export function runFindarr(app?: FindarrAppName): Promise<FindarrRunResult> {
+  return postJson<FindarrRunResult>("/api/findarr/run", { app })
+}
+
+export function resetFindarrState(): Promise<FindarrResetResult> {
+  return postJson<FindarrResetResult>("/api/findarr/reset", {})
+}
+
+export function getFindarrHistory(): Promise<FindarrHistoryEntry[]> {
+  return request<FindarrHistoryEntry[]>("/api/findarr/history")
 }

@@ -2,6 +2,7 @@ import {
   GaugeIcon,
   LayoutDashboardIcon,
   ListChecksIcon,
+  SearchIcon,
   SettingsIcon,
   type LucideIcon,
 } from "lucide-react"
@@ -40,6 +41,12 @@ export const NAV_ITEMS: ReadonlyArray<NavItem> = [
     to: "/bandwidth-controllarr",
     icon: GaugeIcon,
     description: "Pause Usenet while torrents download",
+  },
+  {
+    title: "Findarr",
+    to: "/findarr",
+    icon: SearchIcon,
+    description: "Search missing and upgradeable Sonarr/Radarr media",
   },
   {
     title: "Settings",
