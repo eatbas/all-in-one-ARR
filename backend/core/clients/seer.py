@@ -49,11 +49,14 @@ class SeerClient:
     def _headers(self) -> dict[str, str]:
         return {"X-Api-Key": self._api_key}
 
-    async def get_status(self, *, media_type: str, tmdb_id: int) -> int | None:
-        """Return the Seer ``mediaInfo.status`` for an item.
+    async def _media_info(
+        self, *, media_type: str, tmdb_id: int
+    ) -> dict[str, Any] | None:
+        """Fetch an item's ``mediaInfo`` block (``None`` when Seer has no record).
 
-        Returns ``None`` when the item is not yet known to Seer (no
-        ``mediaInfo``) or when Seer reports it as not found (404).
+        Shared by :meth:`get_status` and :meth:`get_request_ids`. Returns ``None``
+        on a 404 or when the response carries no ``mediaInfo``; raises
+        :class:`SeerError` on a network failure or any other non-200 status.
         """
         endpoint = "movie" if media_type == "movie" else "tv"
         try:
@@ -68,10 +71,34 @@ class SeerClient:
             raise SeerError(
                 f"Seer status returned {response.status_code} for {tmdb_id}"
             )
-        media_info = response.json().get("mediaInfo")
+        return response.json().get("mediaInfo")
+
+    async def get_status(self, *, media_type: str, tmdb_id: int) -> int | None:
+        """Return the Seer ``mediaInfo.status`` for an item.
+
+        Returns ``None`` when the item is not yet known to Seer (no
+        ``mediaInfo``) or when Seer reports it as not found (404).
+        """
+        media_info = await self._media_info(media_type=media_type, tmdb_id=tmdb_id)
         if not media_info:
             return None
         return media_info.get("status")
+
+    async def get_request_ids(self, *, media_type: str, tmdb_id: int) -> list[int]:
+        """Return the ids of every Seer request recorded for an item.
+
+        Used to clean up a request this app did not create (so no id was stored):
+        the ids are read from ``mediaInfo.requests``. Returns an empty list when
+        Seer has no record of the item or it carries no requests.
+        """
+        media_info = await self._media_info(media_type=media_type, tmdb_id=tmdb_id)
+        if not media_info:
+            return []
+        return [
+            request["id"]
+            for request in (media_info.get("requests") or [])
+            if request.get("id") is not None
+        ]
 
     async def create_request(self, *, media_type: str, tmdb_id: int) -> int | None:
         """Create a Seer request.

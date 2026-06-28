@@ -57,6 +57,34 @@ async def test_get_status_network_error_raises() -> None:
 
 
 @respx.mock
+async def test_get_request_ids_returns_ids() -> None:
+    # Request entries without an id are skipped; the rest are returned in order.
+    respx.get(f"{_BASE}/api/v1/movie/100").mock(
+        return_value=httpx.Response(
+            200,
+            json={"mediaInfo": {"requests": [{"id": 371}, {"id": None}, {"id": 5}]}},
+        )
+    )
+    client = make_client()
+    assert await client.get_request_ids(media_type="movie", tmdb_id=100) == [371, 5]
+
+
+@respx.mock
+async def test_get_request_ids_empty_when_no_media_info() -> None:
+    respx.get(f"{_BASE}/api/v1/tv/200").mock(return_value=httpx.Response(404))
+    client = make_client()
+    assert await client.get_request_ids(media_type="tv", tmdb_id=200) == []
+
+
+@respx.mock
+async def test_get_request_ids_network_error_raises() -> None:
+    respx.get(f"{_BASE}/api/v1/movie/100").mock(side_effect=httpx.ConnectError("x"))
+    client = make_client()
+    with pytest.raises(SeerError):
+        await client.get_request_ids(media_type="movie", tmdb_id=100)
+
+
+@respx.mock
 async def test_create_request_movie() -> None:
     route = respx.post(f"{_BASE}/api/v1/request").mock(
         return_value=httpx.Response(201, json={"id": 7})
