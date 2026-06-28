@@ -1,5 +1,10 @@
-import { Badge } from "@/shared/components/ui/badge"
-import { Card, CardContent, CardHeader, CardTitle } from "@/shared/components/ui/card"
+import {
+  Card,
+  CardAction,
+  CardContent,
+  CardHeader,
+  CardTitle,
+} from "@/shared/components/ui/card"
 import { Input } from "@/shared/components/ui/input"
 import { SettingsHelp } from "@/shared/components/settings-help"
 import {
@@ -32,29 +37,45 @@ function NumberInput({
   value,
   helpText,
   onChange,
+  inline = false,
 }: {
   id: string
   label: string
   value: number
   helpText: string
   onChange: (value: number) => void
+  inline?: boolean
 }) {
+  const labelGroup = (
+    <div className="flex items-center gap-1.5">
+      <label htmlFor={id} className="font-medium">
+        {label}
+      </label>
+      <SettingsHelp label={label}>{helpText}</SettingsHelp>
+    </div>
+  )
+  const input = (
+    <Input
+      id={id}
+      type="number"
+      min={label === "Queue limit" ? -1 : 0}
+      max={100}
+      value={value}
+      onChange={(event) => onChange(Number(event.target.value))}
+    />
+  )
+  if (inline) {
+    return (
+      <div className="flex items-center gap-3 text-sm">
+        <div className="shrink-0">{labelGroup}</div>
+        <div className="flex-1">{input}</div>
+      </div>
+    )
+  }
   return (
     <div className="flex flex-col gap-1 text-sm">
-      <div className="flex items-center gap-1.5">
-        <label htmlFor={id} className="font-medium">
-          {label}
-        </label>
-        <SettingsHelp label={label}>{helpText}</SettingsHelp>
-      </div>
-      <Input
-        id={id}
-        type="number"
-        min={label === "Queue limit" ? -1 : 0}
-        max={100}
-        value={value}
-        onChange={(event) => onChange(Number(event.target.value))}
-      />
+      {labelGroup}
+      {input}
     </div>
   )
 }
@@ -80,15 +101,7 @@ export function Settings() {
       <Card>
         <CardHeader>
           <CardTitle>Findarr scheduler</CardTitle>
-        </CardHeader>
-        <CardContent className="grid gap-5 lg:grid-cols-4">
-          <div className="flex items-center gap-3">
-            <Switch
-              aria-label="Enable Findarr"
-              checked={settings.enabled}
-              disabled={updateSettings.isPending}
-              onCheckedChange={(checked) => update({ enabled: checked })}
-            />
+          <CardAction className="flex items-center gap-3">
             <div className="flex items-center gap-1.5">
               <span className="text-sm font-medium">
                 {settings.enabled ? "Enabled" : "Disabled"}
@@ -97,9 +110,17 @@ export function Settings() {
                 Allows the scheduler to run bounded missing and upgrade searches.
               </SettingsHelp>
             </div>
-          </div>
-          <div className="flex flex-col gap-1 text-sm">
-            <div className="flex items-center gap-1.5">
+            <Switch
+              aria-label="Enable Findarr"
+              checked={settings.enabled}
+              disabled={updateSettings.isPending}
+              onCheckedChange={(checked) => update({ enabled: checked })}
+            />
+          </CardAction>
+        </CardHeader>
+        <CardContent className="grid gap-5 lg:grid-cols-3">
+          <div className="flex items-center gap-3 text-sm">
+            <div className="flex shrink-0 items-center gap-1.5">
               <label htmlFor="findarr-interval" className="font-medium">
                 Interval
               </label>
@@ -111,7 +132,7 @@ export function Settings() {
               value={String(settings.interval_minutes)}
               onValueChange={(value) => update({ interval_minutes: Number(value) })}
             >
-              <SelectTrigger id="findarr-interval">
+              <SelectTrigger id="findarr-interval" className="flex-1">
                 <SelectValue placeholder="Interval" />
               </SelectTrigger>
               <SelectContent>
@@ -129,6 +150,7 @@ export function Settings() {
             value={settings.hourly_cap}
             helpText="Maximum number of Findarr search commands allowed per hour."
             onChange={(value) => update({ hourly_cap: value })}
+            inline
           />
           <NumberInput
             id="findarr-queue-limit"
@@ -136,6 +158,7 @@ export function Settings() {
             value={settings.queue_limit}
             helpText="Stops Findarr when the Arr queue is above this size; -1 disables this guard."
             onChange={(value) => update({ queue_limit: value })}
+            inline
           />
         </CardContent>
       </Card>
@@ -146,28 +169,29 @@ export function Settings() {
           return (
             <Card key={app}>
               <CardHeader>
-                <div className="flex items-center justify-between gap-3">
-                  <CardTitle>{APP_LABELS[app]}</CardTitle>
-                  <Badge variant={appSettings.enabled ? "default" : "outline"}>
-                    {appSettings.enabled ? "Enabled" : "Disabled"}
-                  </Badge>
-                </div>
-              </CardHeader>
-              <CardContent className="grid gap-5 sm:grid-cols-2">
-                <div className="flex items-center gap-3">
-                  <Switch
-                    aria-label={`Enable ${APP_LABELS[app]}`}
-                    checked={appSettings.enabled}
-                    onCheckedChange={(checked) => updateApp(app, { enabled: checked })}
-                  />
+                <CardTitle>{APP_LABELS[app]}</CardTitle>
+                <CardAction className="flex items-center gap-3">
                   <div className="flex items-center gap-1.5">
                     <span className="text-sm font-medium">Process app</span>
                     <SettingsHelp label={`${APP_LABELS[app]} process app`}>
                       Includes this Arr app in Findarr processing.
                     </SettingsHelp>
                   </div>
-                </div>
-                <div className="flex items-center gap-3">
+                  <Switch
+                    aria-label={`Enable ${APP_LABELS[app]}`}
+                    checked={appSettings.enabled}
+                    onCheckedChange={(checked) => updateApp(app, { enabled: checked })}
+                  />
+                </CardAction>
+              </CardHeader>
+              <CardContent className="grid gap-5 sm:grid-cols-2">
+                <div className="flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-sm font-medium">Monitored only</span>
+                    <SettingsHelp label={`${APP_LABELS[app]} monitored only`}>
+                      Searches only items marked monitored in the Arr app.
+                    </SettingsHelp>
+                  </div>
                   <Switch
                     aria-label={`${APP_LABELS[app]} monitored only`}
                     checked={appSettings.monitored_only}
@@ -175,14 +199,14 @@ export function Settings() {
                       updateApp(app, { monitored_only: checked })
                     }
                   />
+                </div>
+                <div className="flex items-center justify-between gap-3">
                   <div className="flex items-center gap-1.5">
-                    <span className="text-sm font-medium">Monitored only</span>
-                    <SettingsHelp label={`${APP_LABELS[app]} monitored only`}>
-                      Searches only items marked monitored in the Arr app.
+                    <span className="text-sm font-medium">Skip future</span>
+                    <SettingsHelp label={`${APP_LABELS[app]} skip future`}>
+                      Skips items whose release or air date is in the future.
                     </SettingsHelp>
                   </div>
-                </div>
-                <div className="flex items-center gap-3">
                   <Switch
                     aria-label={`${APP_LABELS[app]} skip future`}
                     checked={appSettings.skip_future}
@@ -190,12 +214,6 @@ export function Settings() {
                       updateApp(app, { skip_future: checked })
                     }
                   />
-                  <div className="flex items-center gap-1.5">
-                    <span className="text-sm font-medium">Skip future</span>
-                    <SettingsHelp label={`${APP_LABELS[app]} skip future`}>
-                      Skips items whose release or air date is in the future.
-                    </SettingsHelp>
-                  </div>
                 </div>
                 <NumberInput
                   id={`${app}-missing-limit`}
@@ -203,6 +221,7 @@ export function Settings() {
                   value={appSettings.missing_limit}
                   helpText="Maximum missing-item searches for this app in one Findarr cycle."
                   onChange={(value) => updateApp(app, { missing_limit: value })}
+                  inline
                 />
                 <NumberInput
                   id={`${app}-upgrade-limit`}
@@ -210,6 +229,7 @@ export function Settings() {
                   value={appSettings.upgrade_limit}
                   helpText="Maximum quality-upgrade searches for this app in one Findarr cycle."
                   onChange={(value) => updateApp(app, { upgrade_limit: value })}
+                  inline
                 />
               </CardContent>
             </Card>
