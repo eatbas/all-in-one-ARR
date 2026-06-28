@@ -82,19 +82,21 @@ export function ListSettings() {
             />
           </div>
 
-          <div className="flex flex-col gap-2">
-            <div className="flex items-center gap-1.5">
-              <label htmlFor="sync-interval" className="text-sm font-medium">
-                Sync interval
-              </label>
-              <SettingsHelp label="Sync interval">
-                How often List-Syncarr polls Trakt and requests missing items in
-                Seer.
-              </SettingsHelp>
+          <div className="flex items-center justify-between gap-4">
+            <div>
+              <div className="flex items-center gap-1.5">
+                <label htmlFor="sync-interval" className="text-sm font-medium">
+                  Sync interval
+                </label>
+                <SettingsHelp label="Sync interval">
+                  How often List-Syncarr polls Trakt and requests missing items in
+                  Seer.
+                </SettingsHelp>
+              </div>
+              <p className="text-sm text-muted-foreground">
+                How often the engine polls Trakt and requests in Seer.
+              </p>
             </div>
-            <p className="text-sm text-muted-foreground">
-              How often the engine polls Trakt and requests in Seer.
-            </p>
             <Select
               value={String(syncInterval)}
               onValueChange={(value) => updateSyncInterval.mutate(Number(value))}
