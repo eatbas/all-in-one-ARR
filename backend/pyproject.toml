@@ -32,7 +32,14 @@ dev = [
 # The backend is laid out as top-level packages inside backend/ (this file's
 # directory); a hyphenated distribution name is not importable, so the code is
 # exposed as the core/ and modules/ packages rather than an aio_arr/ package.
-packages = ["core", "core.clients", "modules", "modules.list_syncarr", "modules.bandwidth_controllarr"]
+packages = [
+    "core",
+    "core.clients",
+    "modules",
+    "modules.list_syncarr",
+    "modules.bandwidth_controllarr",
+    "modules.findarr",
+]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"

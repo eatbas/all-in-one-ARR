@@ -64,3 +64,7 @@ async def test_update_credentials_changes_target() -> None:
 
 async def test_aclose() -> None:
     await make_client().aclose()
+
+
+def test_connection_fields_returns_internal_copy() -> None:
+    assert make_client().connection_fields() == {"base_url": _BASE, "api_key": "key"}

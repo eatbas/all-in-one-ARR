@@ -38,6 +38,10 @@ class ArrClient:
         self._base_url = base_url.rstrip("/")
         self._api_key = api_key
 
+    def connection_fields(self) -> dict[str, str]:
+        """Return the current connection fields for internal clients."""
+        return {"base_url": self._base_url, "api_key": self._api_key}
+
     async def test_connection(self) -> dict[str, Any]:
         """Validate the base URL + API key against ``/api/v3/system/status``.
 

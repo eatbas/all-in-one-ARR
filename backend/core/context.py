@@ -117,3 +117,13 @@ class AppContext:
     bandwidth_update_settings: Callable[..., Awaitable[dict]] | None = field(
         default=None
     )
+    # Findarr callables, set by the module during setup(); the core router uses
+    # these so API routes are registered before the SPA catch-all while the
+    # scheduler-specific implementation remains module-owned.
+    findarr_status: Callable[[], Awaitable[dict]] | None = field(default=None)
+    findarr_run_now: Callable[..., Awaitable[dict]] | None = field(default=None)
+    findarr_history: Callable[[], Awaitable[list[dict]]] | None = field(default=None)
+    findarr_update_settings: Callable[..., Awaitable[dict]] | None = field(default=None)
+    findarr_reset_state: Callable[[], Awaitable[dict]] | None = field(default=None)
+    findarr_reschedule: Callable[[int], Awaitable[Any]] | None = field(default=None)
+    findarr_gate: SyncGate = field(default_factory=SyncGate)

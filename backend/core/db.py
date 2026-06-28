@@ -82,6 +82,37 @@ class Database:
                     list_id TEXT PRIMARY KEY,
                     last_synced_at TEXT NOT NULL
                 );
+
+                CREATE TABLE IF NOT EXISTS findarr_processed (
+                    app TEXT NOT NULL CHECK(app IN ('sonarr','radarr')),
+                    mode TEXT NOT NULL CHECK(mode IN ('missing','upgrade')),
+                    item_id TEXT NOT NULL,
+                    title TEXT,
+                    processed_at TEXT NOT NULL,
+                    PRIMARY KEY (app, mode, item_id)
+                );
+                CREATE INDEX IF NOT EXISTS idx_findarr_processed_at
+                    ON findarr_processed(processed_at);
+
+                CREATE TABLE IF NOT EXISTS findarr_history (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    ts TEXT NOT NULL,
+                    app TEXT NOT NULL CHECK(app IN ('sonarr','radarr')),
+                    mode TEXT NOT NULL CHECK(mode IN ('missing','upgrade','system')),
+                    item_id TEXT,
+                    title TEXT,
+                    status TEXT NOT NULL,
+                    detail TEXT NOT NULL
+                );
+                CREATE INDEX IF NOT EXISTS idx_findarr_history_ts
+                    ON findarr_history(ts);
+                CREATE INDEX IF NOT EXISTS idx_findarr_history_app
+                    ON findarr_history(app);
+
+                CREATE TABLE IF NOT EXISTS findarr_run_state (
+                    key TEXT PRIMARY KEY,
+                    value TEXT NOT NULL
+                );
                 """
             )
             self._migrate_items_columns()
@@ -367,6 +398,107 @@ class Database:
             state_cursor = self._conn.execute("DELETE FROM list_state")
             self._conn.commit()
             return items_cursor.rowcount + state_cursor.rowcount
+
+    # ---- Findarr ----
+
+    def findarr_is_processed(self, *, app: str, mode: str, item_id: str) -> bool:
+        """Return whether Findarr has already processed an item for an app/mode."""
+        row = self._conn.execute(
+            "SELECT 1 FROM findarr_processed WHERE app=? AND mode=? AND item_id=?",
+            (app, mode, item_id),
+        ).fetchone()
+        return row is not None
+
+    def findarr_mark_processed(
+        self, *, app: str, mode: str, item_id: str, title: str | None
+    ) -> None:
+        """Record that Findarr processed an item for an app/mode."""
+        with self._lock:
+            self._conn.execute(
+                """
+                INSERT INTO findarr_processed (app, mode, item_id, title, processed_at)
+                VALUES (?, ?, ?, ?, ?)
+                ON CONFLICT(app, mode, item_id) DO UPDATE SET
+                    title=excluded.title,
+                    processed_at=excluded.processed_at
+                """,
+                (app, mode, item_id, title, utcnow_iso()),
+            )
+            self._conn.commit()
+
+    def findarr_add_history(
+        self,
+        *,
+        app: str,
+        mode: str,
+        item_id: str | None,
+        title: str | None,
+        status: str,
+        detail: str,
+    ) -> None:
+        """Append a Findarr history entry."""
+        with self._lock:
+            self._conn.execute(
+                """
+                INSERT INTO findarr_history (ts, app, mode, item_id, title, status, detail)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+                """,
+                (utcnow_iso(), app, mode, item_id, title, status, detail),
+            )
+            self._conn.commit()
+
+    def findarr_recent_history(self, limit: int = 100) -> list[dict[str, Any]]:
+        """Return recent Findarr history entries, newest first."""
+        rows = self._conn.execute(
+            "SELECT id, ts, app, mode, item_id, title, status, detail "
+            "FROM findarr_history ORDER BY id DESC LIMIT ?",
+            (limit,),
+        ).fetchall()
+        return [dict(row) for row in rows]
+
+    def findarr_counts(self) -> dict[str, dict[str, int]]:
+        """Return processed counts by app and mode."""
+        counts = {
+            "sonarr": {"missing": 0, "upgrade": 0},
+            "radarr": {"missing": 0, "upgrade": 0},
+        }
+        rows = self._conn.execute(
+            "SELECT app, mode, COUNT(*) AS n FROM findarr_processed GROUP BY app, mode"
+        ).fetchall()
+        for row in rows:
+            counts[row["app"]][row["mode"]] = row["n"]
+        return counts
+
+    def findarr_success_count_since(self, cutoff_iso: str) -> int:
+        """Return successful Findarr item actions since ``cutoff_iso``."""
+        row = self._conn.execute(
+            "SELECT COUNT(*) AS n FROM findarr_history "
+            "WHERE ts >= ? AND status='success' AND mode IN ('missing','upgrade')",
+            (cutoff_iso,),
+        ).fetchone()
+        return int(row["n"])
+
+    def findarr_set_run_state(self, key: str, value: str) -> None:
+        """Persist one Findarr run-state value."""
+        with self._lock:
+            self._conn.execute(
+                "INSERT INTO findarr_run_state (key, value) VALUES (?, ?) "
+                "ON CONFLICT(key) DO UPDATE SET value=excluded.value",
+                (key, value),
+            )
+            self._conn.commit()
+
+    def findarr_run_state(self) -> dict[str, str]:
+        """Return all persisted Findarr run-state values."""
+        rows = self._conn.execute("SELECT key, value FROM findarr_run_state").fetchall()
+        return {row["key"]: row["value"] for row in rows}
+
+    def findarr_reset_state(self) -> int:
+        """Clear Findarr processed state and return the number of rows removed."""
+        with self._lock:
+            cursor = self._conn.execute("DELETE FROM findarr_processed")
+            self._conn.commit()
+            return cursor.rowcount
 
     def close(self) -> None:
         """Close the underlying connection."""

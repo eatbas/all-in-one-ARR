@@ -13,7 +13,7 @@ from pathlib import Path
 from typing import AsyncIterator
 
 from fastapi import FastAPI, Request
-from fastapi.responses import HTMLResponse
+from fastapi.responses import FileResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from prometheus_client import make_asgi_app
 
@@ -30,6 +30,7 @@ from core.clients.trakt import TraktClient
 from core.config import Settings
 from core.context import AppContext
 from core.db import Database
+from core.findarr_api import create_findarr_router
 from core.logging import configure_logging, get_logger
 from core.posters import PosterCache
 from core.scheduler import SchedulerService
@@ -127,6 +128,16 @@ async def _maybe_start_device_auth(ctx: AppContext) -> None:
 def _mount_frontend(app: FastAPI) -> None:
     """Serve the built SPA at ``/`` if present; otherwise serve a placeholder."""
     if FRONTEND_DIST.is_dir():
+        index_file = FRONTEND_DIST / "index.html"
+
+        @app.get("/", response_class=HTMLResponse)
+        @app.get("/list-syncarr", response_class=HTMLResponse)
+        @app.get("/bandwidth-controllarr", response_class=HTMLResponse)
+        @app.get("/findarr", response_class=HTMLResponse)
+        @app.get("/settings", response_class=HTMLResponse)
+        async def _spa_entry() -> FileResponse:
+            return FileResponse(index_file)
+
         app.mount(
             "/", StaticFiles(directory=str(FRONTEND_DIST), html=True), name="spa"
         )
@@ -204,6 +215,7 @@ def create_app() -> FastAPI:
     app.include_router(create_trakt_router(ctx))
     app.include_router(create_services_router(ctx))
     app.include_router(create_bandwidth_router(ctx))
+    app.include_router(create_findarr_router(ctx))
     app.include_router(ctx.webhooks.router)
 
     # Prometheus metrics are mounted before the SPA catch-all so they are

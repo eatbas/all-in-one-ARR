@@ -83,6 +83,28 @@ class StubSettingsStore:
         self._auto_remove_when_available = auto_remove_when_available
         self._bandwidth_control_enabled = bandwidth_control_enabled
         self._bandwidth_check_interval_seconds = bandwidth_check_interval_seconds
+        self._findarr_settings = {
+            "enabled": False,
+            "interval_minutes": 30,
+            "hourly_cap": 20,
+            "queue_limit": -1,
+            "apps": {
+                "sonarr": {
+                    "enabled": True,
+                    "missing_limit": 5,
+                    "upgrade_limit": 5,
+                    "monitored_only": True,
+                    "skip_future": True,
+                },
+                "radarr": {
+                    "enabled": True,
+                    "missing_limit": 5,
+                    "upgrade_limit": 5,
+                    "monitored_only": True,
+                    "skip_future": True,
+                },
+            },
+        }
         self._lists = (
             lists
             if lists is not None
@@ -172,6 +194,31 @@ class StubSettingsStore:
         self._bandwidth_check_interval_seconds = seconds
         return seconds
 
+    def findarr_settings(self) -> dict[str, Any]:
+        return {
+            **self._findarr_settings,
+            "apps": {
+                name: dict(settings)
+                for name, settings in self._findarr_settings["apps"].items()
+            },
+        }
+
+    def findarr_interval_minutes(self) -> int:
+        return int(self._findarr_settings["interval_minutes"])
+
+    def update_findarr_settings(self, updates: dict[str, Any]) -> dict[str, Any]:
+        for key in ("enabled", "interval_minutes", "hourly_cap", "queue_limit"):
+            if key in updates and updates[key] is not None:
+                self._findarr_settings[key] = updates[key]
+        apps = updates.get("apps", {})
+        if isinstance(apps, dict):
+            for name, values in apps.items():
+                if name in self._findarr_settings["apps"] and isinstance(values, dict):
+                    self._findarr_settings["apps"][name].update(
+                        {key: value for key, value in values.items() if value is not None}
+                    )
+        return self.findarr_settings()
+
     def masked_services(self) -> dict[str, dict[str, Any]]:
         return {
             desc.name: masked_entry(desc, self._services[desc.name])
@@ -198,6 +245,9 @@ class StubArr:
         self.update_credentials = MagicMock()
         self.test_connection = AsyncMock(return_value={"ok": True, "detail": "Connected"})
         self.aclose = AsyncMock()
+
+    def connection_fields(self) -> dict[str, str]:
+        return {"base_url": "http://arr", "api_key": "key"}
 
 
 class StubService:

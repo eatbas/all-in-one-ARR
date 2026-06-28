@@ -16,6 +16,7 @@ from __future__ import annotations
 import json
 import os
 import threading
+import copy
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -37,6 +38,34 @@ VALID_SYNC_INTERVALS: frozenset[int] = frozenset({15, 30, 45, 60})
 
 # Allowed Bandwidth-Controllarr check intervals in seconds offered by the dashboard.
 VALID_BANDWIDTH_INTERVALS: frozenset[int] = frozenset({10, 15, 30, 60})
+
+# Allowed Findarr scheduler intervals in minutes offered by the dashboard.
+VALID_FINDARR_INTERVALS: frozenset[int] = frozenset({15, 30, 45, 60})
+
+_FINDARR_LIMIT_MAX = 100
+
+DEFAULT_FINDARR_SETTINGS: dict[str, Any] = {
+    "enabled": False,
+    "interval_minutes": 30,
+    "hourly_cap": 20,
+    "queue_limit": -1,
+    "apps": {
+        "sonarr": {
+            "enabled": True,
+            "missing_limit": 5,
+            "upgrade_limit": 5,
+            "monitored_only": True,
+            "skip_future": True,
+        },
+        "radarr": {
+            "enabled": True,
+            "missing_limit": 5,
+            "upgrade_limit": 5,
+            "monitored_only": True,
+            "skip_future": True,
+        },
+    },
+}
 
 
 def _service_seed(
@@ -60,6 +89,73 @@ def _normalise_sync_interval(value: int) -> int:
 def _normalise_bandwidth_interval(value: int) -> int:
     """Return a valid Bandwidth-Controllarr interval in seconds, defaulting to 15."""
     return value if value in VALID_BANDWIDTH_INTERVALS else 15
+
+
+def _normalise_findarr_interval(value: int) -> int:
+    """Return a valid Findarr interval in minutes, defaulting to 30."""
+    return value if value in VALID_FINDARR_INTERVALS else 30
+
+
+def _normalise_findarr_limit(value: Any, *, default: int) -> int:
+    """Return a bounded non-negative Findarr per-cycle/API limit."""
+    try:
+        parsed = int(value)
+    except (TypeError, ValueError):
+        parsed = default
+    return max(0, min(parsed, _FINDARR_LIMIT_MAX))
+
+
+def _normalise_findarr_queue_limit(value: Any) -> int:
+    """Return a Findarr queue limit, where ``-1`` means no queue guard."""
+    try:
+        parsed = int(value)
+    except (TypeError, ValueError):
+        return -1
+    return -1 if parsed < 0 else min(parsed, _FINDARR_LIMIT_MAX)
+
+
+def _coerce_int(value: Any, default: int) -> int:
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return default
+
+
+def _normalise_findarr_settings(raw: dict[str, Any] | None = None) -> dict[str, Any]:
+    """Merge and validate persisted Findarr settings with safe defaults."""
+    raw = raw or {}
+    defaults = copy.deepcopy(DEFAULT_FINDARR_SETTINGS)
+    apps = raw.get("apps") if isinstance(raw.get("apps"), dict) else {}
+
+    normalised = {
+        "enabled": bool(raw.get("enabled", defaults["enabled"])),
+        "interval_minutes": _normalise_findarr_interval(
+            _coerce_int(raw.get("interval_minutes"), defaults["interval_minutes"])
+        ),
+        "hourly_cap": _normalise_findarr_limit(
+            raw.get("hourly_cap", defaults["hourly_cap"]),
+            default=defaults["hourly_cap"],
+        ),
+        "queue_limit": _normalise_findarr_queue_limit(raw.get("queue_limit", defaults["queue_limit"])),
+        "apps": {},
+    }
+
+    for app_name, app_defaults in defaults["apps"].items():
+        raw_app = apps.get(app_name) if isinstance(apps.get(app_name), dict) else {}
+        normalised["apps"][app_name] = {
+            "enabled": bool(raw_app.get("enabled", app_defaults["enabled"])),
+            "missing_limit": _normalise_findarr_limit(
+                raw_app.get("missing_limit", app_defaults["missing_limit"]),
+                default=app_defaults["missing_limit"],
+            ),
+            "upgrade_limit": _normalise_findarr_limit(
+                raw_app.get("upgrade_limit", app_defaults["upgrade_limit"]),
+                default=app_defaults["upgrade_limit"],
+            ),
+            "monitored_only": bool(raw_app.get("monitored_only", app_defaults["monitored_only"])),
+            "skip_future": bool(raw_app.get("skip_future", app_defaults["skip_future"])),
+        }
+    return normalised
 
 
 @dataclass(frozen=True)
@@ -104,6 +200,7 @@ class SettingsStore:
         self._auto_remove_when_available = False
         self._bandwidth_control_enabled = False
         self._bandwidth_check_interval_seconds = 15
+        self._findarr_settings = copy.deepcopy(DEFAULT_FINDARR_SETTINGS)
         self._services: dict[str, dict[str, str]] = {
             desc.name: empty_values(desc) for desc in SERVICES
         }
@@ -148,6 +245,7 @@ class SettingsStore:
                 self._bandwidth_check_interval_seconds = _normalise_bandwidth_interval(
                     bandwidth_check_interval_seconds
                 )
+                self._findarr_settings = _normalise_findarr_settings()
                 for desc in SERVICES:
                     self._services[desc.name] = _service_seed(
                         desc, (services or {}).get(desc.name)
@@ -176,6 +274,8 @@ class SettingsStore:
         self._bandwidth_check_interval_seconds = _normalise_bandwidth_interval(
             data.get("bandwidth_check_interval_seconds", 15)
         )
+        migrated_findarr = "findarr" not in data
+        self._findarr_settings = _normalise_findarr_settings(data.get("findarr"))
         # Migration: the flag was historically persisted as ``auto_remove_on_import``
         # (remove when Radarr/Sonarr imported the title). It now means "remove from
         # Trakt once Seer reports the item available". An existing store is read
@@ -216,14 +316,16 @@ class SettingsStore:
             else:
                 self._services[name] = _service_seed(desc, seed.get(name))
                 backfilled = True
-        if backfilled or migrated_auto_remove or migrated_bandwidth:
+        if backfilled or migrated_auto_remove or migrated_bandwidth or migrated_findarr:
             self._save_locked()
             self._log.info(
                 "persisted store migration (services_backfilled=%s "
-                "auto_remove_key_migrated=%s bandwidth_keys_migrated=%s)",
+                "auto_remove_key_migrated=%s bandwidth_keys_migrated=%s "
+                "findarr_keys_migrated=%s)",
                 backfilled,
                 migrated_auto_remove,
                 migrated_bandwidth,
+                migrated_findarr,
             )
 
     def _save_locked(self) -> None:
@@ -237,6 +339,7 @@ class SettingsStore:
             "auto_remove_when_available": self._auto_remove_when_available,
             "bandwidth_control_enabled": self._bandwidth_control_enabled,
             "bandwidth_check_interval_seconds": self._bandwidth_check_interval_seconds,
+            "findarr": self._findarr_settings,
             "lists": [item.to_dict() for item in self._lists],
             "services": self._services,
         }
@@ -351,6 +454,39 @@ class SettingsStore:
             self._log.info("updated bandwidth check interval to %s seconds", seconds)
             return seconds
 
+    # ---- Findarr ----
+
+    def findarr_settings(self) -> dict[str, Any]:
+        """Return a copy of the persisted Findarr settings."""
+        with self._lock:
+            return copy.deepcopy(self._findarr_settings)
+
+    def findarr_interval_minutes(self) -> int:
+        """Return Findarr's configured scheduler interval in minutes."""
+        with self._lock:
+            return int(self._findarr_settings["interval_minutes"])
+
+    def update_findarr_settings(self, updates: dict[str, Any]) -> dict[str, Any]:
+        """Merge, validate, persist, and return Findarr settings."""
+        with self._lock:
+            merged = copy.deepcopy(self._findarr_settings)
+            for key in ("enabled", "interval_minutes", "hourly_cap", "queue_limit"):
+                if key in updates and updates[key] is not None:
+                    merged[key] = updates[key]
+            app_updates = updates.get("apps")
+            if isinstance(app_updates, dict):
+                merged.setdefault("apps", {})
+                for app_name in ("sonarr", "radarr"):
+                    if isinstance(app_updates.get(app_name), dict):
+                        merged["apps"].setdefault(app_name, {})
+                        for key, value in app_updates[app_name].items():
+                            if value is not None:
+                                merged["apps"][app_name][key] = value
+            self._findarr_settings = _normalise_findarr_settings(merged)
+            self._save_locked()
+            self._log.info("updated Findarr settings")
+            return copy.deepcopy(self._findarr_settings)
+
     # ---- tracked lists ----
 
     def tracked_lists(self) -> list[TrackedList]:
@@ -462,6 +598,7 @@ class SettingsStore:
                 "auto_remove_when_available": self._auto_remove_when_available,
                 "bandwidth_control_enabled": self._bandwidth_control_enabled,
                 "bandwidth_check_interval_seconds": self._bandwidth_check_interval_seconds,
+                "findarr": copy.deepcopy(self._findarr_settings),
                 "lists": [item.to_dict() for item in self._lists],
                 "services": self.masked_services(),
             }
