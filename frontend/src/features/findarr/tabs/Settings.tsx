@@ -37,45 +37,33 @@ function NumberInput({
   value,
   helpText,
   onChange,
-  inline = false,
 }: {
   id: string
   label: string
   value: number
   helpText: string
   onChange: (value: number) => void
-  inline?: boolean
 }) {
-  const labelGroup = (
-    <div className="flex items-center gap-1.5">
-      <label htmlFor={id} className="font-medium">
-        {label}
-      </label>
-      <SettingsHelp label={label}>{helpText}</SettingsHelp>
-    </div>
-  )
-  const input = (
-    <Input
-      id={id}
-      type="number"
-      min={label === "Queue limit" ? -1 : 0}
-      max={100}
-      value={value}
-      onChange={(event) => onChange(Number(event.target.value))}
-    />
-  )
-  if (inline) {
-    return (
-      <div className="flex items-center gap-3 text-sm">
-        <div className="shrink-0">{labelGroup}</div>
-        <div className="flex-1">{input}</div>
-      </div>
-    )
-  }
   return (
-    <div className="flex flex-col gap-1 text-sm">
-      {labelGroup}
-      {input}
+    <div className="flex items-center gap-3 text-sm">
+      <div className="shrink-0">
+        <div className="flex items-center gap-1.5">
+          <label htmlFor={id} className="font-medium">
+            {label}
+          </label>
+          <SettingsHelp label={label}>{helpText}</SettingsHelp>
+        </div>
+      </div>
+      <div className="flex-1">
+        <Input
+          id={id}
+          type="number"
+          min={label === "Queue limit" ? -1 : 0}
+          max={100}
+          value={value}
+          onChange={(event) => onChange(Number(event.target.value))}
+        />
+      </div>
     </div>
   )
 }
@@ -150,7 +138,6 @@ export function Settings() {
             value={settings.hourly_cap}
             helpText="Maximum number of Findarr search commands allowed per hour."
             onChange={(value) => update({ hourly_cap: value })}
-            inline
           />
           <NumberInput
             id="findarr-queue-limit"
@@ -158,7 +145,6 @@ export function Settings() {
             value={settings.queue_limit}
             helpText="Stops Findarr when the Arr queue is above this size; -1 disables this guard."
             onChange={(value) => update({ queue_limit: value })}
-            inline
           />
         </CardContent>
       </Card>
@@ -221,7 +207,6 @@ export function Settings() {
                   value={appSettings.missing_limit}
                   helpText="Maximum missing-item searches for this app in one Findarr cycle."
                   onChange={(value) => updateApp(app, { missing_limit: value })}
-                  inline
                 />
                 <NumberInput
                   id={`${app}-upgrade-limit`}
@@ -229,7 +214,6 @@ export function Settings() {
                   value={appSettings.upgrade_limit}
                   helpText="Maximum quality-upgrade searches for this app in one Findarr cycle."
                   onChange={(value) => updateApp(app, { upgrade_limit: value })}
-                  inline
                 />
               </CardContent>
             </Card>
