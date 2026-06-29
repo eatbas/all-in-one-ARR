@@ -28,7 +28,7 @@ function mutation(mutate: unknown, isPending = false) {
 
 const BASE_STATUS: FindarrStatus = {
   settings: {
-    enabled: false,
+    enabled: true,
     interval_minutes: 30,
     hourly_cap: 20,
     queue_limit: -1,
@@ -73,75 +73,120 @@ describe("Findarr Status tab", () => {
     expect(screen.getByText("Loading Findarr…")).toBeInTheDocument()
   })
 
-  it("renders the last-run details and per-app cards", () => {
+  it("renders the system status and the Live Finds panel", () => {
     render(<Status />)
     expect(screen.getByText(/Last run:/)).toBeInTheDocument()
-    expect(screen.getByText("Processed 0 Findarr item(s)")).toBeInTheDocument()
-    expect(screen.getByText("Connected to Sonarr 4.0.1")).toBeInTheDocument()
-    expect(screen.getByText("15")).toBeInTheDocument() // hourly remaining
+    expect(screen.getByText("Live Finds Executed")).toBeInTheDocument()
+    expect(screen.getByText("20/15 Left")).toBeInTheDocument()
   })
 
-  it("falls back to placeholders and a Running badge when a run is in progress", () => {
+  it("renders each app card with its logo, pills, and counters", () => {
+    render(<Status />)
+
+    const sonarrRegion = screen.getByRole("region", { name: "Sonarr" })
+    const sonarr = within(sonarrRegion)
+    expect(sonarrRegion.querySelector("img")).toHaveAttribute(
+      "src",
+      "/brand/sonarr.svg",
+    )
+    expect(sonarr.getByText("Active")).toBeInTheDocument()
+    expect(sonarr.getByText("API 5 / 20")).toBeInTheDocument()
+    // Pair each counter with its caption so a missing<->upgrade swap is caught.
+    expect(sonarr.getByText("Searches Triggered").closest("div")).toHaveTextContent("1")
+    expect(sonarr.getByText("Upgrades Triggered").closest("div")).toHaveTextContent("2")
+
+    const radarrRegion = screen.getByRole("region", { name: "Radarr" })
+    const radarr = within(radarrRegion)
+    expect(radarrRegion.querySelector("img")).toHaveAttribute(
+      "src",
+      "/brand/radarr.svg",
+    )
+    expect(radarr.getByText("API 5 / 20")).toBeInTheDocument()
+    expect(radarr.getByText("Searches Triggered").closest("div")).toHaveTextContent("3")
+    expect(radarr.getByText("Upgrades Triggered").closest("div")).toHaveTextContent("4")
+  })
+
+  it("shows the waiting placeholder and pauses a disabled app", () => {
     vi.mocked(useFindarrStatus).mockReturnValue(
       queryResult({
         ...BASE_STATUS,
-        running: true,
         last_run_at: null,
-        last_run_status: null,
-        last_run_detail: null,
-        apps: {
-          ...BASE_STATUS.apps,
-          sonarr: { ...BASE_STATUS.apps.sonarr, compatible: false },
+        settings: {
+          ...BASE_STATUS.settings,
+          apps: {
+            ...BASE_STATUS.settings.apps,
+            sonarr: { ...BASE_STATUS.settings.apps.sonarr, enabled: false },
+          },
         },
       }),
     )
     render(<Status />)
     expect(screen.getByText("Waiting for first run…")).toBeInTheDocument()
-    expect(screen.getByText("No run details yet")).toBeInTheDocument()
-    expect(screen.getByText("Running")).toBeInTheDocument()
-    expect(screen.getByText("Unchecked")).toBeInTheDocument()
+    const sonarr = within(screen.getByRole("region", { name: "Sonarr" }))
+    expect(sonarr.getByText("Paused")).toBeInTheDocument()
+    const radarr = within(screen.getByRole("region", { name: "Radarr" }))
+    expect(radarr.getByText("Active")).toBeInTheDocument()
   })
 
-  it("shows Idle when not running and there is no last-run status", () => {
+  it("pauses every app and shows Disabled when Findarr is globally off", () => {
     vi.mocked(useFindarrStatus).mockReturnValue(
-      queryResult({ ...BASE_STATUS, running: false, last_run_status: null }),
+      queryResult({
+        ...BASE_STATUS,
+        settings: { ...BASE_STATUS.settings, enabled: false },
+      }),
     )
     render(<Status />)
-    expect(screen.getByText("Idle")).toBeInTheDocument()
+    expect(screen.getByText("Disabled")).toBeInTheDocument()
+    expect(
+      within(screen.getByRole("region", { name: "Sonarr" })).getByText("Paused"),
+    ).toBeInTheDocument()
+    expect(
+      within(screen.getByRole("region", { name: "Radarr" })).getByText("Paused"),
+    ).toBeInTheDocument()
   })
 
   it("toggles the enable switch", async () => {
     const user = userEvent.setup()
     render(<Status />)
     await user.click(screen.getByRole("switch", { name: "Enable Findarr" }))
-    expect(updateMutate).toHaveBeenCalledWith({ enabled: true })
+    expect(updateMutate).toHaveBeenCalledWith({ enabled: false })
   })
 
   it("reflects the enabled label when Findarr is on", () => {
-    vi.mocked(useFindarrStatus).mockReturnValue(
-      queryResult({ ...BASE_STATUS, settings: { ...BASE_STATUS.settings, enabled: true } }),
-    )
     render(<Status />)
     expect(screen.getByText("Enabled")).toBeInTheDocument()
   })
 
-  it("triggers manual runs for all, Sonarr, and Radarr", async () => {
+  it("runs all apps from the panel header", async () => {
     const user = userEvent.setup()
     render(<Status />)
     await user.click(screen.getByRole("button", { name: "Run all" }))
     expect(runMutate).toHaveBeenCalledWith(undefined)
+  })
+
+  it("runs a single app from its card", async () => {
+    const user = userEvent.setup()
+    render(<Status />)
     await user.click(screen.getByRole("button", { name: "Run Sonarr" }))
     expect(runMutate).toHaveBeenCalledWith("sonarr")
     await user.click(screen.getByRole("button", { name: "Run Radarr" }))
     expect(runMutate).toHaveBeenCalledWith("radarr")
   })
 
-  it("resets processed state after confirmation", async () => {
+  it("resets processed state from the panel header after confirmation", async () => {
     const user = userEvent.setup()
     render(<Status />)
-    await user.click(screen.getByRole("button", { name: "Reset state" }))
+    await user.click(screen.getByRole("button", { name: "Reset" }))
     const dialog = await screen.findByRole("alertdialog")
-    await user.click(within(dialog).getByRole("button", { name: "Reset state" }))
+    await user.click(within(dialog).getByRole("button", { name: "Reset" }))
     expect(resetMutate).toHaveBeenCalled()
+  })
+
+  it("disables the header controls while a run or reset is pending", () => {
+    vi.mocked(useRunFindarr).mockReturnValue(mutation(runMutate, true))
+    vi.mocked(useResetFindarrState).mockReturnValue(mutation(resetMutate, true))
+    render(<Status />)
+    expect(screen.getByRole("button", { name: "Run all" })).toBeDisabled()
+    expect(screen.getByRole("button", { name: "Reset" })).toBeDisabled()
   })
 })

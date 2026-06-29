@@ -113,8 +113,8 @@ describe("Findarr", () => {
       "aria-selected",
       "true",
     )
-    expect(screen.getByText("Connected to Sonarr 4.0.1")).toBeInTheDocument()
-    expect(screen.getByText("Connected to Radarr 6.0.0")).toBeInTheDocument()
+    expect(screen.getByRole("region", { name: "Sonarr" })).toBeInTheDocument()
+    expect(screen.getByRole("region", { name: "Radarr" })).toBeInTheDocument()
   })
 
   it("switches to Settings and persists the tab", async () => {

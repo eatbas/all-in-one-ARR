@@ -458,7 +458,12 @@ export interface FindarrSettingsUpdate {
   apps?: Partial<Record<FindarrAppName, Partial<FindarrAppSettings>>>
 }
 
-/** Status for one Findarr-managed app. */
+/**
+ * Status for one Findarr-managed app, mirroring the backend
+ * `GET /api/findarr/status` response. `detail`, `version`, and `compatible` are
+ * part of that wire contract but are not currently surfaced in the UI — the
+ * Status cards render only `processed`.
+ */
 export interface FindarrAppStatus {
   detail: string
   version: string | null
