@@ -169,4 +169,13 @@ describe("Findarr", () => {
     await user.click(screen.getByRole("tab", { name: "Settings" }))
     expect(screen.getAllByText("Findarr scheduler").length).toBeGreaterThan(0)
   })
+
+  it("restores a valid stored tab on mount", () => {
+    localStorage.setItem(FINDARR_TAB_STORAGE_KEY, "settings")
+    render(<Findarr />)
+    expect(screen.getByRole("tab", { name: "Settings" })).toHaveAttribute(
+      "aria-selected",
+      "true",
+    )
+  })
 })

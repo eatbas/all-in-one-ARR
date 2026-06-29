@@ -15,6 +15,7 @@ vi.mock("sonner", () => ({
 }))
 
 import * as api from "@/shared/lib/api"
+import { toast } from "sonner"
 import {
   queryKeys,
   useFindarrHistory,
@@ -120,5 +121,34 @@ describe("Findarr query hooks", () => {
     expect(invalidate).toHaveBeenCalledWith({ queryKey: queryKeys.findarrStatus })
     expect(invalidate).toHaveBeenCalledWith({ queryKey: queryKeys.findarrSettings })
     expect(invalidate).toHaveBeenCalledWith({ queryKey: queryKeys.findarrHistory })
+  })
+
+  it("toasts an error when a Findarr mutation fails", async () => {
+    vi.mocked(api.updateFindarrSettings).mockRejectedValue(new Error("save boom"))
+    vi.mocked(api.runFindarr).mockRejectedValue(new Error("run boom"))
+    vi.mocked(api.resetFindarrState).mockRejectedValue(new Error("reset boom"))
+    const { wrapper } = setup()
+
+    const updateHook = renderHook(() => useUpdateFindarrSettings(), { wrapper })
+    act(() => updateHook.result.current.mutate({ enabled: true }))
+    await waitFor(() => expect(updateHook.result.current.isError).toBe(true))
+
+    const runHook = renderHook(() => useRunFindarr(), { wrapper })
+    act(() => runHook.result.current.mutate("sonarr"))
+    await waitFor(() => expect(runHook.result.current.isError).toBe(true))
+
+    const resetHook = renderHook(() => useResetFindarrState(), { wrapper })
+    act(() => resetHook.result.current.mutate())
+    await waitFor(() => expect(resetHook.result.current.isError).toBe(true))
+
+    expect(toast.error).toHaveBeenCalledWith("Could not save Findarr settings", {
+      description: "save boom",
+    })
+    expect(toast.error).toHaveBeenCalledWith("Could not run Findarr", {
+      description: "run boom",
+    })
+    expect(toast.error).toHaveBeenCalledWith("Could not reset Findarr state", {
+      description: "reset boom",
+    })
   })
 })
