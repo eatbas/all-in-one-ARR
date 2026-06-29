@@ -19,6 +19,9 @@ from core.trakt_url import OFFICIAL_OWNER
 
 TRAKT_BASE_URL = "https://api.trakt.tv"
 
+# Maps the app's media type onto Trakt's path segment for discovery endpoints.
+_MEDIA_SEGMENT = {"movie": "movies", "show": "shows"}
+
 
 def _is_official(owner_user: str) -> bool:
     """Return True when the owner is the Trakt-curated official account."""
@@ -71,12 +74,24 @@ class TraktClient:
     # ---- headers ----
 
     async def _auth_headers(self) -> dict[str, str]:
-        """Headers for authenticated calls (list read/remove)."""
+        """Headers for authenticated calls (list read/remove/add)."""
         return {
             "Content-Type": "application/json",
             "trakt-api-version": "2",
             "trakt-api-key": self._client_id,
             "Authorization": f"Bearer {await self.ensure_token()}",
+        }
+
+    def _public_headers(self) -> dict[str, str]:
+        """Headers for public endpoints (trending/popular): API key only.
+
+        Trakt's discovery endpoints require only the API key, not an OAuth bearer
+        token, so they work even before the account is authorised.
+        """
+        return {
+            "Content-Type": "application/json",
+            "trakt-api-version": "2",
+            "trakt-api-key": self._client_id,
         }
 
     # ---- token store ----
@@ -248,6 +263,72 @@ class TraktClient:
         response.raise_for_status()
         return self._normalise_list(response.json(), owner_user)
 
+    # ---- discovery (trending / popular) ----
+
+    @staticmethod
+    def _discovery_row(obj: dict[str, Any], media_type: str) -> dict[str, Any]:
+        """Normalise a Trakt movie/show object into a uniform discovery row.
+
+        The shape matches the rows the TMDB and Seer clients emit so
+        :mod:`core.trending` can map every source the same way.
+        """
+        ids = obj.get("ids") or {}
+        return {
+            "media_type": media_type,
+            "tmdb": ids.get("tmdb"),
+            "imdb": ids.get("imdb"),
+            "tvdb": ids.get("tvdb"),
+            "trakt": ids.get("trakt"),
+            # The slug deep-links to the title's trakt.tv page; only Trakt rows
+            # carry it (TMDB/Seer rows leave it unset and so it normalises to None).
+            "slug": ids.get("slug"),
+            "title": obj.get("title"),
+            "year": obj.get("year"),
+        }
+
+    async def get_trending(
+        self, *, media_type: str, limit: int = 20
+    ) -> list[dict[str, Any]]:
+        """Return Trakt trending movies or shows as uniform discovery rows.
+
+        ``media_type`` is ``movie`` or ``show``. Trakt wraps each trending entry in
+        a ``{"watchers": N, "<media>": {...}}`` object; the inner media object is
+        unwrapped and normalised. Uses the public (API-key-only) headers.
+        """
+        segment = _MEDIA_SEGMENT[media_type]
+        response = await self._client.get(
+            f"/{segment}/trending",
+            headers=self._public_headers(),
+            params={"limit": limit},
+        )
+        response.raise_for_status()
+        return [
+            self._discovery_row(entry[media_type], media_type)
+            for entry in response.json()
+            if isinstance(entry.get(media_type), dict)
+        ]
+
+    async def get_popular(
+        self, *, media_type: str, limit: int = 20
+    ) -> list[dict[str, Any]]:
+        """Return Trakt popular movies or shows as uniform discovery rows.
+
+        ``media_type`` is ``movie`` or ``show``. Unlike trending, the popular
+        endpoint returns flat media objects (no ``watchers`` wrapper).
+        """
+        segment = _MEDIA_SEGMENT[media_type]
+        response = await self._client.get(
+            f"/{segment}/popular",
+            headers=self._public_headers(),
+            params={"limit": limit},
+        )
+        response.raise_for_status()
+        return [
+            self._discovery_row(entry, media_type)
+            for entry in response.json()
+            if isinstance(entry, dict)
+        ]
+
     async def test_connection(self) -> dict[str, Any]:
         """Verify the saved token by reading the account settings.
 
@@ -291,6 +372,12 @@ class TraktClient:
         if _is_official(owner_user):
             return f"/lists/{list_id}/items/remove"
         return f"/users/{owner_user}/lists/{list_id}/items/remove"
+
+    def _list_add_path(self, owner_user: str, list_id: str) -> str:
+        # Adds only target personal lists the account owns (the dashboard restricts
+        # the destination to owned, tracked, non-watchlist lists), mirroring the
+        # read/remove path construction.
+        return f"/users/{owner_user}/lists/{list_id}/items"
 
     async def read_list_items(
         self, *, list_id: str, owner_user: str | None = None
@@ -371,6 +458,44 @@ class TraktClient:
             shows=",".join(str(s) for s in show_ids) or None,
         )
         return response.json()
+
+    async def add_items(
+        self,
+        *,
+        movies: list[dict[str, int | str]] | None = None,
+        shows: list[dict[str, int | str]] | None = None,
+        list_id: str,
+        owner_user: str | None = None,
+    ) -> dict[str, Any]:
+        """Add items to a personal Trakt list.
+
+        ``movies`` and ``shows`` are lists of Trakt ``ids`` mappings (e.g.
+        ``{"tmdb": 680}``); Trakt accepts a TMDB id for both movies and shows on
+        add, so a TMDB id alone is sufficient. ``owner_user`` defaults to the
+        connected account (``me``). Returns Trakt's added/not-found summary (or an
+        empty dict when the response carries no body).
+        """
+        owner = owner_user or "me"
+        movie_ids = movies or []
+        show_ids = shows or []
+        body = {
+            "movies": [{"ids": ids} for ids in movie_ids],
+            "shows": [{"ids": ids} for ids in show_ids],
+        }
+        response = await self._client.post(
+            self._list_add_path(owner, list_id),
+            headers=await self._auth_headers(),
+            json=body,
+        )
+        response.raise_for_status()
+        log_action(
+            self._log,
+            "trakt_add",
+            list_id=list_id,
+            movies=",".join(str(ids) for ids in movie_ids) or None,
+            shows=",".join(str(ids) for ids in show_ids) or None,
+        )
+        return response.json() if response.content else {}
 
     async def aclose(self) -> None:
         """Close the underlying HTTP client."""

@@ -32,6 +32,9 @@ class StubTrakt:
         self._authenticated = authenticated
         self.read_list_items = AsyncMock(return_value=self._items)
         self.remove_items = AsyncMock(return_value={"ok": True})
+        self.add_items = AsyncMock(return_value={"added": {"movies": 1}})
+        self.get_trending = AsyncMock(return_value=[])
+        self.get_popular = AsyncMock(return_value=[])
         self.update_credentials = MagicMock()
         self.request_device_code = AsyncMock(
             return_value={
@@ -240,6 +243,8 @@ class StubSeer:
         self.get_request_ids = AsyncMock(return_value=request_ids or [])
         self.create_request = AsyncMock(return_value=request_id)
         self.delete_request = AsyncMock(return_value=None)
+        self.discover_trending = AsyncMock(return_value=[])
+        self.discover_popular = AsyncMock(return_value=[])
         self.update_credentials = MagicMock()
         self.test_connection = AsyncMock(return_value={"ok": True, "detail": "Connected"})
         self.aclose = AsyncMock()
@@ -251,6 +256,8 @@ class StubArr:
     def __init__(self) -> None:
         self.update_credentials = MagicMock()
         self.test_connection = AsyncMock(return_value={"ok": True, "detail": "Connected"})
+        # Trending in-library matching lists the Arr library; default to empty.
+        self.library_items = AsyncMock(return_value=[])
         self.aclose = AsyncMock()
 
     def connection_fields(self) -> dict[str, str]:
@@ -269,6 +276,14 @@ class StubService:
     def __init__(self) -> None:
         self.update_credentials = MagicMock()
         self.test_connection = AsyncMock(return_value={"ok": True, "detail": "Connected"})
+        # TMDB trending/discovery + external-id resolution (Trending feature); OMDb
+        # rating overlay. Harmless extra attributes on the other simple-service stubs.
+        self.get_trending = AsyncMock(return_value=[])
+        self.get_popular = AsyncMock(return_value=[])
+        self.fetch_external_ids = AsyncMock(return_value=None)
+        self.fetch_rating = AsyncMock(
+            return_value={"imdb_rating": None, "imdb_votes": None}
+        )
         self.get_stats = AsyncMock(
             return_value={
                 "online": True,

@@ -20,6 +20,26 @@ _BASE_URL = "https://www.omdbapi.com"
 _PROBE_IMDB_ID = "tt3896198"
 
 
+def _parse_rating(value: Any) -> float | None:
+    """Parse an OMDb ``imdbRating`` (e.g. ``"8.6"`` or ``"N/A"``) to a float."""
+    if not value or value == "N/A":
+        return None
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _parse_votes(value: Any) -> int | None:
+    """Parse an OMDb ``imdbVotes`` (e.g. ``"1,234,567"`` or ``"N/A"``) to an int."""
+    if not value or value == "N/A":
+        return None
+    try:
+        return int(str(value).replace(",", ""))
+    except (TypeError, ValueError):
+        return None
+
+
 class OmdbClient:
     """Async client for the OMDb connection test."""
 
@@ -57,6 +77,33 @@ class OmdbClient:
         if data.get("Response") == "True":
             return {"ok": True, "detail": "Connected to OMDb"}
         return {"ok": False, "detail": data.get("Error") or "OMDb rejected the API key"}
+
+    async def fetch_rating(self, *, imdb_id: str) -> dict[str, Any]:
+        """Return ``{"imdb_rating", "imdb_votes"}`` for an IMDb id.
+
+        Reads ``imdbRating`` and ``imdbVotes`` from an OMDb lookup; OMDb reports an
+        absent value as the literal ``"N/A"``. Never raises: any error (network,
+        non-200, non-JSON body) degrades to ``{"imdb_rating": None,
+        "imdb_votes": None}`` so the rating overlay can fall back silently.
+        """
+        empty: dict[str, Any] = {"imdb_rating": None, "imdb_votes": None}
+        try:
+            response = await self._client.get(
+                _BASE_URL, params={"apikey": self._api_key, "i": imdb_id}
+            )
+        except httpx.HTTPError as exc:
+            self._log.debug("OMDb rating lookup failed for %s: %s", imdb_id, exc)
+            return empty
+        if response.status_code != 200:
+            return empty
+        try:
+            data = response.json()
+        except ValueError:
+            return empty
+        return {
+            "imdb_rating": _parse_rating(data.get("imdbRating")),
+            "imdb_votes": _parse_votes(data.get("imdbVotes")),
+        }
 
     async def fetch_poster(self, *, imdb_id: str) -> bytes | None:
         """Return poster image bytes for an IMDb id, or ``None`` if unavailable.

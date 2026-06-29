@@ -4,6 +4,7 @@ import {
   ListChecksIcon,
   SearchIcon,
   SettingsIcon,
+  TrendingUpIcon,
   type LucideIcon,
 } from "lucide-react"
 
@@ -29,6 +30,12 @@ export const NAV_ITEMS: ReadonlyArray<NavItem> = [
     to: "/",
     icon: LayoutDashboardIcon,
     description: "Overview of sync counts and recent activity",
+  },
+  {
+    title: "Trending",
+    to: "/trending",
+    icon: TrendingUpIcon,
+    description: "Trending and popular movies and shows to add to a Trakt list",
   },
   {
     title: "List-Syncarr",

@@ -100,6 +100,81 @@ class SeerClient:
             if request.get("id") is not None
         ]
 
+    @staticmethod
+    def _normalise_discover(
+        result: dict[str, Any], default_media_type: str | None = None
+    ) -> dict[str, Any] | None:
+        """Normalise a Seer discover result into a uniform discovery row.
+
+        Returns ``None`` for entries that are not movies or TV shows (the trending
+        feed also includes people). Field names are read defensively (camelCase or
+        snake_case) so the parser survives Overseerr/Jellyseerr response variants.
+        The shape matches the Trakt and TMDB clients' rows.
+        """
+        media_type = result.get("mediaType") or default_media_type
+        if media_type not in ("movie", "tv"):
+            return None
+        media_info = result.get("mediaInfo") or {}
+        date = (
+            result.get("releaseDate")
+            or result.get("release_date")
+            or result.get("firstAirDate")
+            or result.get("first_air_date")
+            or ""
+        )
+        year = int(date[:4]) if date[:4].isdigit() else None
+        return {
+            "media_type": "movie" if media_type == "movie" else "show",
+            "tmdb": result.get("id"),
+            "title": result.get("title") or result.get("name"),
+            "year": year,
+            "seer_status": media_info.get("status"),
+        }
+
+    async def _discover(
+        self, path: str, *, params: dict[str, Any]
+    ) -> list[dict[str, Any]]:
+        """Fetch a Seer discover endpoint's raw ``results`` array.
+
+        Raises :class:`SeerError` on a network failure or any non-200 status, so a
+        dead Seer connection surfaces to the caller (the router degrades it to an
+        empty feed).
+        """
+        try:
+            response = await self._client.get(
+                f"{self._base_url}/api/v1/{path}", headers=self._headers, params=params
+            )
+        except httpx.HTTPError as exc:
+            raise SeerError(f"Seer discover request failed: {exc}") from exc
+        if response.status_code != 200:
+            raise SeerError(f"Seer discover returned {response.status_code} for {path}")
+        return response.json().get("results") or []
+
+    async def discover_trending(self, *, limit: int = 20) -> list[dict[str, Any]]:
+        """Return Seer's trending feed (mixed movies and shows) as discovery rows.
+
+        People entries are dropped; each row carries its own ``media_type`` from the
+        ``mediaType`` discriminator, so the caller can filter by type.
+        """
+        results = await self._discover("discover/trending", params={"page": 1})
+        rows = [self._normalise_discover(result) for result in results]
+        return [row for row in rows if row is not None][:limit]
+
+    async def discover_popular(
+        self, *, media_type: str, limit: int = 20
+    ) -> list[dict[str, Any]]:
+        """Return Seer's popular movies or shows (sorted by popularity) as rows."""
+        endpoint = "movies" if media_type == "movie" else "tv"
+        default = "movie" if media_type == "movie" else "tv"
+        results = await self._discover(
+            f"discover/{endpoint}", params={"sortBy": "popularity.desc", "page": 1}
+        )
+        rows = [
+            self._normalise_discover(result, default_media_type=default)
+            for result in results
+        ]
+        return [row for row in rows if row is not None][:limit]
+
     async def create_request(self, *, media_type: str, tmdb_id: int) -> int | None:
         """Create a Seer request.
 

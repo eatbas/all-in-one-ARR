@@ -240,6 +240,47 @@ commands for the already-configured **Sonarr** and **Radarr** connections:
 Connections are not configured on this page; configure **Sonarr** and
 **Radarr** in **Settings** first.
 
+### Trending page
+
+The dashboard **Trending** page (left menu, directly below the Dashboard)
+surfaces trending and popular **movies and TV shows** so you can add them to a
+Trakt list without leaving the app. It is organised as **per-source tabs**:
+
+- **Trakt / TMDB / Seer** — each tab shows that provider's own official
+  trending/popular feed. A **Movies | Shows** toggle and a **Trending | Popular**
+  toggle apply per tab. A **Hide available** switch filters out titles you already
+  have — anything in Radarr/Sonarr (the green ones) or reported *Available* in Seer.
+- **Open on the source** — each poster's **top-right** corner has a link to the
+  title's dedicated page on its source: the Trakt page (by slug), the TMDB page,
+  or — for Seer items — your configured Overseerr/Seer instance's media page.
+- **IMDb rating overlay** — each card shows the title's **IMDb rating and vote
+  count** (on the same line as the year and media type), fetched on demand from
+  **OMDb** (IMDb has no official trending API, so it is an enrichment overlay, not
+  a source). Ratings are cached server-side with a 24-hour TTL and fetched lazily,
+  so a grid does not exhaust the OMDb free-tier quota; a card simply omits the
+  rating when none is available.
+- **Library status (Seer tab)** — cards also show the item's Seer library status
+  (Requested / Processing / Partial / Available) read from `mediaInfo`, so you can
+  see what is already in your library. Items already mirrored in a tracked list
+  show a **Tracked** badge on any tab.
+- **Already in Sonarr/Radarr** — titles already present in **Radarr** (movies) or
+  **Sonarr** (shows) are marked with a **thick green ring** and an **In library**
+  badge on every tab. Movies match by TMDB id; shows match by TVDB id (or by TMDB
+  id when Sonarr exposes one), so a show discovered on the TMDB/Seer tabs is matched
+  when an id is resolvable. The Radarr/Sonarr libraries are listed at most once a
+  minute (cached) and degrade silently when an Arr is unconfigured or unreachable.
+- **Add to a Trakt list** — the **Add +** button in each poster's **bottom-right**
+  corner adds the item to one of your **owned** synced lists and then triggers the
+  **List-Syncarr** sync, which is what creates the Seer request through the normal
+  pipeline (no separate request is made). Adding only targets lists your connected
+  account owns (the watchlist and curated/official lists are excluded); if you have
+  no owned list yet, add one in **Settings → List-Syncarr** first.
+
+Connections are not configured on this page; configure **Trakt**, **TMDB**,
+**Seer** and (for the rating overlay) **OMDb** in **Settings** first. A tab whose
+source is unconfigured or unreachable simply shows an empty state rather than
+breaking the page.
+
 ### Upgrading from the previous release
 
 This release renames the connection service to **Seer** (environment variables
@@ -365,6 +406,17 @@ cd frontend && npm run build
   returns the updated state.
 - `GET /metrics` – Prometheus-compatible text exposition of the
   Bandwidth-Controllarr gauges (`bw_qbit_*`, `bw_sab_*`, `bw_check_status`).
+- `GET /api/trending?source=&media=&category=[&window=]` – normalised trending or
+  popular items for the Trending page. `source` is `trakt|tmdb|seer`, `media` is
+  `movie|show`, `category` is `trending|popular`, and `window` (`day|week`, TMDB
+  only) defaults to `week` — the endpoint still accepts it, but the UI no longer
+  exposes a time-window control. A failing/unconfigured source degrades to `[]`.
+- `GET /api/trending/rating?imdb=` *or* `?media=&tmdb=` – the IMDb rating overlay
+  `{ imdb_rating, imdb_votes }` via OMDb (resolving the IMDb id from TMDB when only
+  a TMDB id is given), served from a bounded 24-hour cache.
+- `POST /api/trending/add` – add `{ media_type, owner_user, slug, tmdb?, imdb?,
+  trakt?, tvdb?, title? }` to an owned Trakt list and trigger a sync; returns
+  `{ status: "added" | "added_pending_sync" }`.
 
 ## Adding a module
 

@@ -9,6 +9,7 @@ import { toast } from "sonner"
 
 import {
   addTraktList,
+  addTrending,
   checkServiceStatuses,
   clearActivity,
   clearItems,
@@ -28,6 +29,8 @@ import {
   getTraktAuthStatus,
   getTraktLists,
   getTraktSettings,
+  getTrending,
+  getTrendingRating,
   removeAvailable,
   removeItem,
   removeTraktList,
@@ -68,6 +71,11 @@ import {
   type TraktListEntry,
   type TraktSettings,
   type TraktTestResult,
+  type AddTrendingPayload,
+  type TrendingAddResult,
+  type TrendingItem,
+  type TrendingQuery,
+  type TrendingRating,
   type UpdateGeneralSettings,
   type UpdateServicePayload,
   type UpdateTraktSettings,
@@ -96,6 +104,9 @@ export const queryKeys = {
   findarrStatus: ["findarr", "status"] as const,
   findarrSettings: ["findarr", "settings"] as const,
   findarrHistory: ["findarr", "history"] as const,
+  trending: (query: TrendingQuery) =>
+    ["trending", query.source, query.media, query.category] as const,
+  trendingRating: (key: string) => ["trending", "rating", key] as const,
 }
 
 export function useStatus(): UseQueryResult<Status> {
@@ -670,6 +681,73 @@ export function useClearPosters(): UseMutationResult<DatabaseStats, Error, void>
     },
     onError: (error) => {
       toast.error("Could not clear poster cache", { description: error.message })
+    },
+  })
+}
+
+/**
+ * Trending feeds change slowly, so they are cached for several minutes rather
+ * than polled on the shared dashboard interval (which would hammer the external
+ * APIs).
+ */
+const TRENDING_STALE_TIME = 5 * 60_000
+
+export function useTrending(query: TrendingQuery): UseQueryResult<TrendingItem[]> {
+  return useQuery({
+    queryKey: queryKeys.trending(query),
+    queryFn: () => getTrending(query),
+    staleTime: TRENDING_STALE_TIME,
+  })
+}
+
+/**
+ * Fetch the IMDb rating overlay for one trending item, lazily. Disabled when the
+ * item carries no usable id; the backend caches results, so the rating is fetched
+ * at most once per id regardless of how often a card re-renders.
+ */
+export function useTrendingRating(
+  item: Pick<TrendingItem, "imdb" | "media_type" | "tmdb">,
+  enabled: boolean,
+): UseQueryResult<TrendingRating> {
+  const hasId = item.imdb !== null || item.tmdb !== null
+  const key = item.imdb ?? `${item.media_type}:${item.tmdb}`
+  return useQuery({
+    queryKey: queryKeys.trendingRating(key),
+    queryFn: () =>
+      getTrendingRating({ imdb: item.imdb, media: item.media_type, tmdb: item.tmdb }),
+    enabled: enabled && hasId,
+    staleTime: Infinity,
+  })
+}
+
+export function useAddTrending(): UseMutationResult<
+  TrendingAddResult,
+  Error,
+  AddTrendingPayload
+> {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: addTrending,
+    onSuccess: (result) => {
+      if (result.status === "added_pending_sync") {
+        toast.success("Added to Trakt list", {
+          description:
+            "A sync is already running; the item will be requested on the next poll.",
+        })
+      } else {
+        toast.success("Added to Trakt list", {
+          description: "Syncing now to request it in Seer.",
+        })
+      }
+      void queryClient.invalidateQueries({ queryKey: queryKeys.status })
+      void queryClient.invalidateQueries({ queryKey: queryKeys.lists })
+      void queryClient.invalidateQueries({ queryKey: ["items"] })
+      void queryClient.invalidateQueries({ queryKey: ["trending"] })
+      void queryClient.invalidateQueries({ queryKey: queryKeys.activity })
+    },
+    onError: (error) => {
+      toast.error("Could not add to list", { description: error.message })
     },
   })
 }

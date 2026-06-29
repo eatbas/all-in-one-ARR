@@ -130,5 +130,66 @@ async def test_fetch_poster_image_network_error_returns_none() -> None:
     assert await OmdbClient(api_key="ok").fetch_poster(imdb_id="tt1") is None
 
 
+@respx.mock
+async def test_fetch_rating_parses_rating_and_votes() -> None:
+    respx.get(_URL).mock(
+        return_value=httpx.Response(
+            200,
+            json={"Response": "True", "imdbRating": "8.6", "imdbVotes": "1,234,567"},
+        )
+    )
+    result = await OmdbClient(api_key="ok").fetch_rating(imdb_id="tt1")
+    assert result == {"imdb_rating": 8.6, "imdb_votes": 1234567}
+
+
+@respx.mock
+async def test_fetch_rating_na_values_become_none() -> None:
+    respx.get(_URL).mock(
+        return_value=httpx.Response(200, json={"imdbRating": "N/A", "imdbVotes": "N/A"})
+    )
+    assert await OmdbClient(api_key="ok").fetch_rating(imdb_id="tt1") == {
+        "imdb_rating": None,
+        "imdb_votes": None,
+    }
+
+
+@respx.mock
+async def test_fetch_rating_unparseable_values_become_none() -> None:
+    respx.get(_URL).mock(
+        return_value=httpx.Response(200, json={"imdbRating": "bad", "imdbVotes": "x"})
+    )
+    assert await OmdbClient(api_key="ok").fetch_rating(imdb_id="tt1") == {
+        "imdb_rating": None,
+        "imdb_votes": None,
+    }
+
+
+@respx.mock
+async def test_fetch_rating_non_200_returns_empty() -> None:
+    respx.get(_URL).mock(return_value=httpx.Response(500, json={}))
+    assert await OmdbClient(api_key="x").fetch_rating(imdb_id="tt1") == {
+        "imdb_rating": None,
+        "imdb_votes": None,
+    }
+
+
+@respx.mock
+async def test_fetch_rating_network_error_returns_empty() -> None:
+    respx.get(_URL).mock(side_effect=httpx.ConnectError("down"))
+    assert await OmdbClient(api_key="x").fetch_rating(imdb_id="tt1") == {
+        "imdb_rating": None,
+        "imdb_votes": None,
+    }
+
+
+@respx.mock
+async def test_fetch_rating_non_json_returns_empty() -> None:
+    respx.get(_URL).mock(return_value=httpx.Response(200, text="<html>"))
+    assert await OmdbClient(api_key="x").fetch_rating(imdb_id="tt1") == {
+        "imdb_rating": None,
+        "imdb_votes": None,
+    }
+
+
 async def test_aclose() -> None:
     await OmdbClient(api_key="x").aclose()

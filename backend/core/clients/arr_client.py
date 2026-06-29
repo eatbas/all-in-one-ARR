@@ -42,6 +42,30 @@ class ArrClient:
         """Return the current connection fields for internal clients."""
         return {"base_url": self._base_url, "api_key": self._api_key}
 
+    async def library_items(self) -> list[dict[str, Any]]:
+        """Return this app's full library (Radarr movies or Sonarr series).
+
+        Used by the Trending page to flag titles already present in Radarr/Sonarr.
+        The endpoint differs by app — Radarr exposes ``/api/v3/movie`` and Sonarr
+        ``/api/v3/series`` — selected from ``name``. Never raises: any error
+        (unconfigured, network, non-200, malformed body) degrades to an empty list
+        so a dead Arr never breaks the Trending page.
+        """
+        if not self._base_url or not self._api_key:
+            return []
+        path = "/api/v3/movie" if self._name == "radarr" else "/api/v3/series"
+        try:
+            response = await self._client.get(
+                f"{self._base_url}{path}", headers={"X-Api-Key": self._api_key}
+            )
+        except httpx.HTTPError as exc:
+            self._log.debug("%s library fetch failed: %s", self._name, exc)
+            return []
+        if response.status_code != 200:
+            return []
+        data = response.json()
+        return [item for item in data if isinstance(item, dict)]
+
     async def test_connection(self) -> dict[str, Any]:
         """Validate the base URL + API key against ``/api/v3/system/status``.
 

@@ -216,6 +216,99 @@ async def test_update_credentials_changes_target() -> None:
     assert await client.get_status(media_type="movie", tmdb_id=100) == AVAILABLE
 
 
+@respx.mock
+async def test_discover_trending_filters_people_and_maps_status() -> None:
+    respx.get(f"{_BASE}/api/v1/discover/trending").mock(
+        return_value=httpx.Response(
+            200,
+            json={
+                "results": [
+                    {
+                        "id": 603,
+                        "mediaType": "movie",
+                        "title": "The Matrix",
+                        "releaseDate": "1999-03-31",
+                        "mediaInfo": {"status": AVAILABLE},
+                    },
+                    {
+                        "id": 1399,
+                        "mediaType": "tv",
+                        "name": "Game of Thrones",
+                        "firstAirDate": "2011-04-17",
+                    },
+                    {"id": 5, "mediaType": "person", "name": "Keanu Reeves"},  # dropped
+                ]
+            },
+        )
+    )
+    rows = await make_client().discover_trending(limit=10)
+    assert rows == [
+        {
+            "media_type": "movie",
+            "tmdb": 603,
+            "title": "The Matrix",
+            "year": 1999,
+            "seer_status": AVAILABLE,
+        },
+        {
+            "media_type": "show",
+            "tmdb": 1399,
+            "title": "Game of Thrones",
+            "year": 2011,
+            "seer_status": None,
+        },
+    ]
+
+
+@respx.mock
+async def test_discover_popular_movies_uses_default_media_type() -> None:
+    route = respx.get(f"{_BASE}/api/v1/discover/movies").mock(
+        return_value=httpx.Response(
+            200,
+            # No mediaType on the result; the type-specific endpoint supplies the default.
+            json={"results": [{"id": 603, "title": "The Matrix", "release_date": "1999-03-31"}]},
+        )
+    )
+    rows = await make_client().discover_popular(media_type="movie", limit=10)
+    assert rows == [
+        {"media_type": "movie", "tmdb": 603, "title": "The Matrix", "year": 1999, "seer_status": None}
+    ]
+    assert route.calls.last.request.url.params["sortBy"] == "popularity.desc"
+
+
+@respx.mock
+async def test_discover_popular_tv_endpoint_and_cap() -> None:
+    respx.get(f"{_BASE}/api/v1/discover/tv").mock(
+        return_value=httpx.Response(
+            200,
+            json={
+                "results": [
+                    {"id": 1, "name": "A", "firstAirDate": "2020-01-01"},
+                    {"id": 2, "name": "B", "firstAirDate": "2021-01-01"},
+                ]
+            },
+        )
+    )
+    rows = await make_client().discover_popular(media_type="show", limit=1)
+    assert [row["tmdb"] for row in rows] == [1]
+
+
+@respx.mock
+async def test_discover_non_200_raises() -> None:
+    respx.get(f"{_BASE}/api/v1/discover/trending").mock(return_value=httpx.Response(500))
+    with pytest.raises(SeerError):
+        await make_client().discover_trending()
+
+
+@respx.mock
+async def test_discover_network_error_raises() -> None:
+    respx.get(f"{_BASE}/api/v1/discover/trending").mock(
+        side_effect=httpx.ConnectError("down")
+    )
+    with pytest.raises(SeerError):
+        await make_client().discover_trending()
+
+
 async def test_aclose() -> None:
     await make_client().aclose()
 

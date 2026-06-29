@@ -223,6 +223,105 @@ async def test_remove_items_real_show_watchlist(tmp_path) -> None:
     assert route.called
 
 
+@respx.mock
+async def test_get_trending_movies_unwraps_and_skips_non_dict(tmp_path) -> None:
+    respx.get(f"{TRAKT_BASE_URL}/movies/trending").mock(
+        return_value=httpx.Response(
+            200,
+            json=[
+                {
+                    "watchers": 99,
+                    "movie": {
+                        "title": "Dune",
+                        "year": 2021,
+                        "ids": {
+                            "trakt": 1,
+                            "slug": "dune-2021",
+                            "imdb": "tt1",
+                            "tmdb": 100,
+                            "tvdb": None,
+                        },
+                    },
+                },
+                {"watchers": 1, "movie": "broken"},  # skipped: inner is not a dict
+            ],
+        )
+    )
+    client = make_client(tmp_path)
+    rows = await client.get_trending(media_type="movie", limit=5)
+    assert rows == [
+        {
+            "media_type": "movie",
+            "tmdb": 100,
+            "imdb": "tt1",
+            "tvdb": None,
+            "trakt": 1,
+            "slug": "dune-2021",
+            "title": "Dune",
+            "year": 2021,
+        }
+    ]
+
+
+@respx.mock
+async def test_get_popular_shows_uses_flat_objects(tmp_path) -> None:
+    route = respx.get(f"{TRAKT_BASE_URL}/shows/popular").mock(
+        return_value=httpx.Response(
+            200,
+            json=[
+                {"title": "Severance", "year": 2022, "ids": {"trakt": 2, "tmdb": 200, "tvdb": 300}},
+                "broken",  # skipped: not a dict
+            ],
+        )
+    )
+    client = make_client(tmp_path)
+    rows = await client.get_popular(media_type="show", limit=5)
+    assert rows == [
+        {
+            "media_type": "show",
+            "tmdb": 200,
+            "imdb": None,
+            "tvdb": 300,
+            "trakt": 2,
+            # This entry has no slug in its ids, so it normalises to None.
+            "slug": None,
+            "title": "Severance",
+            "year": 2022,
+        }
+    ]
+    # Popular is a public endpoint: API key only, no OAuth bearer token.
+    assert "Authorization" not in route.calls.last.request.headers
+    assert route.calls.last.request.headers["trakt-api-key"] == "cid"
+
+
+@respx.mock
+async def test_add_items_movie_returns_summary(tmp_path) -> None:
+    route = respx.post(f"{TRAKT_BASE_URL}/users/me/lists/my-list/items").mock(
+        return_value=httpx.Response(201, json={"added": {"movies": 1}})
+    )
+    client = make_client(tmp_path)
+    client._tokens = dict(_TOKENS)
+    result = await client.add_items(movies=[{"tmdb": 100}], list_id="my-list")
+    assert result == {"added": {"movies": 1}}
+    assert json.loads(route.calls.last.request.content) == {
+        "movies": [{"ids": {"tmdb": 100}}],
+        "shows": [],
+    }
+
+
+@respx.mock
+async def test_add_items_show_empty_body_returns_empty_dict(tmp_path) -> None:
+    respx.post(f"{TRAKT_BASE_URL}/users/bob/lists/anime/items").mock(
+        return_value=httpx.Response(201)
+    )
+    client = make_client(tmp_path)
+    client._tokens = dict(_TOKENS)
+    result = await client.add_items(
+        shows=[{"tmdb": 200}], list_id="anime", owner_user="bob"
+    )
+    assert result == {}
+
+
 async def test_aclose(tmp_path) -> None:
     client = make_client(tmp_path)
     await client.aclose()

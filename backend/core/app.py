@@ -38,6 +38,7 @@ from core.services_api import create_services_router
 from core.settings_store import SettingsStore
 from core.status_checker import StatusChecker
 from core.trakt_api import create_trakt_router
+from core.trending_api import create_trending_router
 from core.trakt_auth import cancel_device_auth, start_device_auth
 from core.webhooks import WebhookRegistry
 
@@ -131,6 +132,7 @@ def _mount_frontend(app: FastAPI) -> None:
         index_file = FRONTEND_DIST / "index.html"
 
         @app.get("/", response_class=HTMLResponse)
+        @app.get("/trending", response_class=HTMLResponse)
         @app.get("/list-syncarr", response_class=HTMLResponse)
         @app.get("/bandwidth-controllarr", response_class=HTMLResponse)
         @app.get("/findarr", response_class=HTMLResponse)
@@ -216,6 +218,7 @@ def create_app() -> FastAPI:
     app.include_router(create_services_router(ctx))
     app.include_router(create_bandwidth_router(ctx))
     app.include_router(create_findarr_router(ctx))
+    app.include_router(create_trending_router(ctx))
     app.include_router(ctx.webhooks.router)
 
     # Prometheus metrics are mounted before the SPA catch-all so they are

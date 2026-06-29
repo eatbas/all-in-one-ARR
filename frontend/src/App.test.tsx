@@ -86,6 +86,9 @@ vi.mock("@/shared/lib/queries", () => ({
   useUpdateFindarrSettings: vi.fn(() => ({ mutate: vi.fn(), isPending: false })),
   useRunFindarr: vi.fn(() => ({ mutate: vi.fn(), isPending: false })),
   useResetFindarrState: vi.fn(() => ({ mutate: vi.fn(), isPending: false })),
+  useTrending: vi.fn(() => ({ data: [], isLoading: false })),
+  useTrendingRating: vi.fn(() => ({ data: undefined })),
+  useAddTrending: vi.fn(() => ({ mutate: vi.fn(), isPending: false })),
 }))
 
 import App from "@/App"
@@ -116,6 +119,13 @@ describe("App routing", () => {
   it("renders the dashboard at /", () => {
     renderAt("/")
     expect(screen.getByText("Recent activity")).toBeInTheDocument()
+  })
+
+  it("renders the Trending page with per-source tabs at /trending", () => {
+    renderAt("/trending")
+    expect(screen.getByRole("tab", { name: "Trakt" })).toBeInTheDocument()
+    expect(screen.getByRole("tab", { name: "TMDB" })).toBeInTheDocument()
+    expect(screen.getByRole("tab", { name: "Seer" })).toBeInTheDocument()
   })
 
   it("renders the List-Syncarr page with Lists and Settings tabs at /list-syncarr", () => {

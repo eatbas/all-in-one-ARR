@@ -6,6 +6,7 @@ import { Dashboard } from "@/features/dashboard/Dashboard"
 import { Findarr } from "@/features/findarr/Findarr"
 import { ListSyncarr } from "@/features/list-syncarr/ListSyncarr"
 import { Settings } from "@/features/settings/Settings"
+import { Trending } from "@/features/trending/Trending"
 
 /** Client-side route table, nested inside the persistent {@link AppShell}. */
 export default function App() {
@@ -13,6 +14,7 @@ export default function App() {
     <Routes>
       <Route element={<AppShell />}>
         <Route path="/" element={<Dashboard />} />
+        <Route path="/trending" element={<Trending />} />
         <Route path="/list-syncarr" element={<ListSyncarr />} />
         <Route path="/bandwidth-controllarr" element={<BandwidthControllarr />} />
         <Route path="/findarr" element={<Findarr />} />

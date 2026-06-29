@@ -62,6 +62,54 @@ async def test_update_credentials_changes_target() -> None:
     assert result == {"ok": True, "detail": "Connected to Radarr"}
 
 
+_RADARR_BASE = "http://radarr:7878"
+
+
+@respx.mock
+async def test_library_items_sonarr_uses_series_endpoint() -> None:
+    route = respx.get(f"{_BASE}/api/v3/series").mock(
+        return_value=httpx.Response(
+            200,
+            json=[
+                {"tvdbId": 121361, "tmdbId": 1399, "title": "GoT"},
+                "broken",  # non-dict entries are dropped
+            ],
+        )
+    )
+    items = await make_client(name="sonarr").library_items()
+    assert items == [{"tvdbId": 121361, "tmdbId": 1399, "title": "GoT"}]
+    assert route.called
+
+
+@respx.mock
+async def test_library_items_radarr_uses_movie_endpoint() -> None:
+    respx.get(f"{_RADARR_BASE}/api/v3/movie").mock(
+        return_value=httpx.Response(200, json=[{"tmdbId": 603, "title": "The Matrix"}])
+    )
+    items = await make_client(
+        name="radarr", base_url=_RADARR_BASE + "/"
+    ).library_items()
+    assert items == [{"tmdbId": 603, "title": "The Matrix"}]
+
+
+async def test_library_items_unconfigured_returns_empty() -> None:
+    # No HTTP route registered: an unconfigured client must not even call out.
+    client = make_client(base_url="", api_key="")
+    assert await client.library_items() == []
+
+
+@respx.mock
+async def test_library_items_non_200_returns_empty() -> None:
+    respx.get(f"{_BASE}/api/v3/series").mock(return_value=httpx.Response(500))
+    assert await make_client(name="sonarr").library_items() == []
+
+
+@respx.mock
+async def test_library_items_network_error_returns_empty() -> None:
+    respx.get(f"{_BASE}/api/v3/series").mock(side_effect=httpx.ConnectError("down"))
+    assert await make_client(name="sonarr").library_items() == []
+
+
 async def test_aclose() -> None:
     await make_client().aclose()
 

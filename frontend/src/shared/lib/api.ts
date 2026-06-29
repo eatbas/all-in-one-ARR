@@ -562,3 +562,114 @@ export function resetFindarrState(): Promise<FindarrResetResult> {
 export function getFindarrHistory(): Promise<FindarrHistoryEntry[]> {
   return request<FindarrHistoryEntry[]>("/api/findarr/history")
 }
+
+/** A discovery source backing one tab of the Trending page. */
+export type TrendingSource = "trakt" | "tmdb" | "seer"
+
+/** A discovery category exposed by the Trending page. */
+export type TrendingCategory = "trending" | "popular"
+
+/** A single trending result, normalised across sources by the backend. */
+export interface TrendingItem {
+  source: TrendingSource
+  media_type: ItemType
+  tmdb: number | null
+  imdb: string | null
+  tvdb: number | null
+  trakt: number | null
+  /** Trakt list slug, used to deep-link to trakt.tv; only set for Trakt-sourced items. */
+  slug: string | null
+  title: string | null
+  year: number | null
+  /** Seer `mediaInfo.status` (Seer tab only), else null. */
+  seer_status: number | null
+  /** Whether this item's TMDB id is already mirrored in a tracked list. */
+  already_tracked: boolean
+  /** Whether this item is already present in Radarr (movies) or Sonarr (shows). */
+  in_library: boolean
+}
+
+/** Query parameters for `GET /api/trending`. */
+export interface TrendingQuery {
+  source: TrendingSource
+  media: ItemType
+  category: TrendingCategory
+}
+
+/** IMDb rating overlay returned by `GET /api/trending/rating`. */
+export interface TrendingRating {
+  imdb_rating: number | null
+  imdb_votes: number | null
+}
+
+/** Body of `POST /api/trending/add`. */
+export interface AddTrendingPayload {
+  media_type: ItemType
+  owner_user: string
+  slug: string
+  tmdb?: number | null
+  imdb?: string | null
+  trakt?: number | null
+  tvdb?: number | null
+  title?: string | null
+}
+
+/** Response of `POST /api/trending/add`. */
+export interface TrendingAddResult {
+  status: "added" | "added_pending_sync"
+}
+
+export function getTrending(query: TrendingQuery): Promise<TrendingItem[]> {
+  const params = new URLSearchParams({
+    source: query.source,
+    media: query.media,
+    category: query.category,
+  })
+  return request<TrendingItem[]>(`/api/trending?${params.toString()}`)
+}
+
+export function getTrendingRating(params: {
+  imdb?: string | null
+  media?: ItemType
+  tmdb?: number | null
+}): Promise<TrendingRating> {
+  const query = new URLSearchParams()
+  if (params.imdb) {
+    query.set("imdb", params.imdb)
+  } else if (params.media && params.tmdb != null) {
+    query.set("media", params.media)
+    query.set("tmdb", String(params.tmdb))
+  }
+  const qs = query.toString()
+  return request<TrendingRating>(`/api/trending/rating${qs ? `?${qs}` : ""}`)
+}
+
+export function addTrending(payload: AddTrendingPayload): Promise<TrendingAddResult> {
+  return postJson<TrendingAddResult>("/api/trending/add", payload)
+}
+
+/**
+ * Build the deep link to a trending item's dedicated page on its source site, or
+ * `null` when it cannot be resolved. TMDB items link to themoviedb.org by TMDB id
+ * (the bare id redirects to the slug page); Trakt items link to trakt.tv by their
+ * slug (the only reliable Trakt web route); Seer items link to the configured
+ * Overseerr/Seer instance's media page via {@link seerMediaUrl}.
+ */
+export function trendingSourceUrl(
+  item: TrendingItem,
+  seerBaseUrl?: string,
+): string | null {
+  if (item.source === "tmdb") {
+    if (item.tmdb === null) return null
+    const path = item.media_type === "movie" ? "movie" : "tv"
+    return `https://www.themoviedb.org/${path}/${item.tmdb}`
+  }
+  if (item.source === "trakt") {
+    if (!item.slug) return null
+    const path = item.media_type === "movie" ? "movies" : "shows"
+    return `https://trakt.tv/${path}/${item.slug}`
+  }
+  // source === "seer"
+  if (!seerBaseUrl || item.tmdb === null) return null
+  return seerMediaUrl(seerBaseUrl, item.media_type, item.tmdb)
+}

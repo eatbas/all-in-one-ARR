@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest"
 
 import {
   addTraktList,
+  addTrending,
   ApiError,
   checkServiceStatuses,
   clearActivity,
@@ -10,6 +11,9 @@ import {
   getActivity,
   getBandwidthStatus,
   getDatabaseStats,
+  getFindarrHistory,
+  getFindarrSettings,
+  getFindarrStatus,
   getGeneralSettings,
   getItems,
   getLists,
@@ -19,23 +23,49 @@ import {
   getTraktAuthStatus,
   getTraktLists,
   getTraktSettings,
+  getTrending,
+  getTrendingRating,
+  trendingSourceUrl,
   seerMediaUrl,
   posterUrl,
   removeAvailable,
   removeItem,
   removeTraktList,
+  resetFindarrState,
+  runFindarr,
   startTraktAuth,
   testService,
   testTrakt,
   triggerSync,
   updateBandwidthSettings,
+  updateFindarrSettings,
   updateGeneralSettings,
   updateServiceSettings,
   updateTraktSettings,
   type BandwidthStatus,
   type DatabaseStats,
   type Status,
+  type TrendingItem,
 } from "@/shared/lib/api"
+
+/** Build a TrendingItem fixture for the source-URL helper tests. */
+function trendingItem(over: Partial<TrendingItem>): TrendingItem {
+  return {
+    source: "tmdb",
+    media_type: "movie",
+    tmdb: 603,
+    imdb: null,
+    tvdb: null,
+    trakt: null,
+    slug: null,
+    title: "X",
+    year: 2000,
+    seer_status: null,
+    already_tracked: false,
+    in_library: false,
+    ...over,
+  }
+}
 
 /** Spy on the global fetch and resolve it with a ready-made Response. */
 function mockFetch(response: Response) {
@@ -444,5 +474,170 @@ describe("request error and empty-body handling", () => {
     mockFetch(new Response("", { status: 202 }))
 
     await expect(triggerSync()).resolves.toBeUndefined()
+  })
+})
+
+describe("getTrending", () => {
+  it("builds the query string from the source/media/category", async () => {
+    const fetchSpy = mockFetch(jsonResponse([]))
+
+    await expect(
+      getTrending({ source: "trakt", media: "movie", category: "trending" }),
+    ).resolves.toEqual([])
+    const url = fetchSpy.mock.calls[0][0] as string
+    expect(url).toContain("source=trakt")
+    expect(url).toContain("media=movie")
+    expect(url).toContain("category=trending")
+    // The time window was removed, so no `window` param is ever sent.
+    expect(url).not.toContain("window=")
+  })
+})
+
+describe("getTrendingRating", () => {
+  it("sends the imdb id when present", async () => {
+    const fetchSpy = mockFetch(jsonResponse({ imdb_rating: 8.6, imdb_votes: 10 }))
+
+    await expect(getTrendingRating({ imdb: "tt1" })).resolves.toEqual({
+      imdb_rating: 8.6,
+      imdb_votes: 10,
+    })
+    expect(fetchSpy.mock.calls[0][0]).toBe("/api/trending/rating?imdb=tt1")
+  })
+
+  it("falls back to media+tmdb when no imdb id is given", async () => {
+    const fetchSpy = mockFetch(jsonResponse({ imdb_rating: null, imdb_votes: null }))
+
+    await getTrendingRating({ media: "movie", tmdb: 603 })
+    const url = fetchSpy.mock.calls[0][0] as string
+    expect(url).toContain("media=movie")
+    expect(url).toContain("tmdb=603")
+  })
+
+  it("omits the query string when nothing is identifiable", async () => {
+    const fetchSpy = mockFetch(jsonResponse({ imdb_rating: null, imdb_votes: null }))
+
+    await getTrendingRating({})
+    expect(fetchSpy.mock.calls[0][0]).toBe("/api/trending/rating")
+  })
+})
+
+describe("addTrending", () => {
+  it("POSTs the payload as JSON", async () => {
+    const fetchSpy = mockFetch(jsonResponse({ status: "added" }))
+
+    await expect(
+      addTrending({ media_type: "movie", owner_user: "me", slug: "my-list", tmdb: 100 }),
+    ).resolves.toEqual({ status: "added" })
+    expect(fetchSpy).toHaveBeenCalledWith(
+      "/api/trending/add",
+      expect.objectContaining({
+        method: "POST",
+        body: JSON.stringify({
+          media_type: "movie",
+          owner_user: "me",
+          slug: "my-list",
+          tmdb: 100,
+        }),
+      }),
+    )
+  })
+})
+
+describe("trendingSourceUrl", () => {
+  it("links TMDB movies and shows by TMDB id", () => {
+    expect(trendingSourceUrl(trendingItem({ source: "tmdb", tmdb: 603 }))).toBe(
+      "https://www.themoviedb.org/movie/603",
+    )
+    expect(
+      trendingSourceUrl(trendingItem({ source: "tmdb", media_type: "show", tmdb: 1399 })),
+    ).toBe("https://www.themoviedb.org/tv/1399")
+  })
+
+  it("returns null for a TMDB item with no TMDB id", () => {
+    expect(trendingSourceUrl(trendingItem({ source: "tmdb", tmdb: null }))).toBeNull()
+  })
+
+  it("links Trakt movies and shows by slug", () => {
+    expect(
+      trendingSourceUrl(trendingItem({ source: "trakt", slug: "dune-2021" })),
+    ).toBe("https://trakt.tv/movies/dune-2021")
+    expect(
+      trendingSourceUrl(
+        trendingItem({ source: "trakt", media_type: "show", slug: "severance" }),
+      ),
+    ).toBe("https://trakt.tv/shows/severance")
+  })
+
+  it("returns null for a Trakt item without a slug", () => {
+    expect(trendingSourceUrl(trendingItem({ source: "trakt", slug: null }))).toBeNull()
+  })
+
+  it("links Seer items to the configured instance via seerMediaUrl", () => {
+    expect(
+      trendingSourceUrl(
+        trendingItem({ source: "seer", tmdb: 42 }),
+        "https://seer.example.com/",
+      ),
+    ).toBe("https://seer.example.com/movie/42")
+  })
+
+  it("returns null for a Seer item with no base URL or no TMDB id", () => {
+    expect(trendingSourceUrl(trendingItem({ source: "seer", tmdb: 42 }))).toBeNull()
+    expect(
+      trendingSourceUrl(trendingItem({ source: "seer", tmdb: null }), "https://seer.example.com"),
+    ).toBeNull()
+  })
+})
+
+describe("findarr", () => {
+  it("GETs the Findarr status", async () => {
+    const fetchSpy = mockFetch(jsonResponse({ running: false }))
+    await getFindarrStatus()
+    expect(fetchSpy).toHaveBeenCalledWith("/api/findarr/status", expect.anything())
+  })
+
+  it("GETs the Findarr settings", async () => {
+    const fetchSpy = mockFetch(jsonResponse({ enabled: false }))
+    await getFindarrSettings()
+    expect(fetchSpy).toHaveBeenCalledWith("/api/findarr/settings", expect.anything())
+  })
+
+  it("PUTs Findarr settings", async () => {
+    const fetchSpy = mockFetch(jsonResponse({ running: false }))
+    await updateFindarrSettings({ enabled: true })
+    expect(fetchSpy).toHaveBeenCalledWith(
+      "/api/findarr/settings",
+      expect.objectContaining({
+        method: "PUT",
+        body: JSON.stringify({ enabled: true }),
+      }),
+    )
+  })
+
+  it("POSTs a manual run with the app", async () => {
+    const fetchSpy = mockFetch(jsonResponse({ status: "completed" }))
+    await runFindarr("sonarr")
+    expect(fetchSpy).toHaveBeenCalledWith(
+      "/api/findarr/run",
+      expect.objectContaining({
+        method: "POST",
+        body: JSON.stringify({ app: "sonarr" }),
+      }),
+    )
+  })
+
+  it("POSTs a reset of processed state", async () => {
+    const fetchSpy = mockFetch(jsonResponse({ status: "reset", removed: 0 }))
+    await resetFindarrState()
+    expect(fetchSpy).toHaveBeenCalledWith(
+      "/api/findarr/reset",
+      expect.objectContaining({ method: "POST" }),
+    )
+  })
+
+  it("GETs the Findarr history", async () => {
+    const fetchSpy = mockFetch(jsonResponse([]))
+    await expect(getFindarrHistory()).resolves.toEqual([])
+    expect(fetchSpy).toHaveBeenCalledWith("/api/findarr/history", expect.anything())
   })
 })

@@ -121,6 +121,8 @@ def test_lifespan_serves_built_frontend(_env, monkeypatch, tmp_path) -> None:
     with TestClient(create_app()) as client:
         assert "built spa" in client.get("/").text
         assert "built spa" in client.get("/findarr").text
+        # The Trending page's SPA route is served so a hard refresh on /trending works.
+        assert "built spa" in client.get("/trending").text
         assert client.get("/api/status").status_code == 200
 
 

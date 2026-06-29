@@ -68,6 +68,72 @@ class TmdbClient:
             return {"ok": True, "detail": "Connected to TMDB"}
         return {"ok": False, "detail": f"TMDB returned HTTP {response.status_code}"}
 
+    @staticmethod
+    def _discovery_row(item: dict[str, Any], media_type: str) -> dict[str, Any]:
+        """Normalise a TMDB result into a uniform discovery row.
+
+        Movies carry ``title``/``release_date``; TV carries ``name``/
+        ``first_air_date``. The shape matches the Trakt and Seer clients' rows so
+        :mod:`core.trending` maps every source the same way. TMDB results carry only
+        a TMDB id, so ``imdb``/``tvdb``/``trakt`` are absent here.
+        """
+        date = item.get("release_date") or item.get("first_air_date") or ""
+        year = int(date[:4]) if date[:4].isdigit() else None
+        return {
+            "media_type": media_type,
+            "tmdb": item.get("id"),
+            "title": item.get("title") or item.get("name"),
+            "year": year,
+        }
+
+    async def _discover(
+        self, url: str, *, media_type: str, limit: int
+    ) -> list[dict[str, Any]]:
+        """Fetch and normalise a TMDB discovery endpoint's ``results`` array."""
+        response = await self._client.get(url, **self._auth_kwargs())
+        response.raise_for_status()
+        results = response.json().get("results") or []
+        return [self._discovery_row(item, media_type) for item in results[:limit]]
+
+    async def get_trending(
+        self, *, media_type: str, window: str = "week", limit: int = 20
+    ) -> list[dict[str, Any]]:
+        """Return TMDB trending movies or shows as uniform discovery rows.
+
+        ``media_type`` is ``movie`` or ``show``; ``window`` is ``day`` or ``week``.
+        """
+        endpoint = "movie" if media_type == "movie" else "tv"
+        url = f"{_BASE_URL}/3/trending/{endpoint}/{window}"
+        return await self._discover(url, media_type=media_type, limit=limit)
+
+    async def get_popular(
+        self, *, media_type: str, limit: int = 20
+    ) -> list[dict[str, Any]]:
+        """Return TMDB popular movies or shows as uniform discovery rows."""
+        endpoint = "movie" if media_type == "movie" else "tv"
+        url = f"{_BASE_URL}/3/{endpoint}/popular"
+        return await self._discover(url, media_type=media_type, limit=limit)
+
+    async def fetch_external_ids(
+        self, *, media_type: str, tmdb_id: int
+    ) -> str | None:
+        """Return the IMDb id for a TMDB item, or ``None`` if unavailable.
+
+        Used to resolve an IMDb id for the rating overlay on items that only carry a
+        TMDB id (TMDB/Seer sources). Never raises: any error (network, non-200,
+        missing id) degrades to ``None`` so the caller can fall back.
+        """
+        endpoint = "movie" if media_type == "movie" else "tv"
+        url = f"{_BASE_URL}/3/{endpoint}/{tmdb_id}/external_ids"
+        try:
+            response = await self._client.get(url, **self._auth_kwargs())
+        except httpx.HTTPError as exc:
+            self._log.debug("TMDB external ids fetch failed for %s: %s", url, exc)
+            return None
+        if response.status_code != 200:
+            return None
+        return response.json().get("imdb_id") or None
+
     async def fetch_poster(self, *, media_type: str, tmdb_id: int) -> bytes | None:
         """Return poster image bytes for an item, or ``None`` if unavailable.
 
