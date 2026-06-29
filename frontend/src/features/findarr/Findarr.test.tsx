@@ -32,6 +32,8 @@ const SETTINGS: FindarrSettings = {
   interval_minutes: 30,
   hourly_cap: 20,
   queue_limit: -1,
+  command_sleep_seconds: 0,
+  state_reset_hours: 168,
   apps: {
     sonarr: {
       enabled: true,
@@ -39,6 +41,8 @@ const SETTINGS: FindarrSettings = {
       upgrade_limit: 5,
       monitored_only: true,
       skip_future: true,
+      missing_mode: "episodes",
+      upgrade_mode: "episodes",
     },
     radarr: {
       enabled: true,
@@ -46,6 +50,8 @@ const SETTINGS: FindarrSettings = {
       upgrade_limit: 5,
       monitored_only: true,
       skip_future: true,
+      missing_mode: "episodes",
+      upgrade_mode: "episodes",
     },
   },
 }
@@ -56,6 +62,7 @@ const STATUS: FindarrStatus = {
   last_run_at: "2026-06-26T20:00:00Z",
   last_run_status: "completed",
   last_run_detail: "Processed 0 Findarr item(s)",
+  state: { created_at: "2026-06-26T20:00:00Z", reset_at: "2026-07-03T20:00:00Z", reset_hours: 168 },
   apps: {
     sonarr: {
       detail: "Connected to Sonarr 4.0.1",

@@ -429,6 +429,13 @@ export interface BandwidthSettingsUpdate {
   check_interval_seconds?: number
 }
 
+/**
+ * Sonarr search granularity. `episodes` searches each episode, `seasons`
+ * issues one season-pack search per season, and `shows` searches a whole
+ * series at once. Radarr (movies) ignores this.
+ */
+export type FindarrSearchMode = "episodes" | "seasons" | "shows"
+
 /** Per-app Findarr settings for Sonarr or Radarr. */
 export interface FindarrAppSettings {
   enabled: boolean
@@ -436,6 +443,8 @@ export interface FindarrAppSettings {
   upgrade_limit: number
   monitored_only: boolean
   skip_future: boolean
+  missing_mode: FindarrSearchMode
+  upgrade_mode: FindarrSearchMode
 }
 
 export type FindarrAppName = "sonarr" | "radarr"
@@ -446,6 +455,8 @@ export interface FindarrSettings {
   interval_minutes: number
   hourly_cap: number
   queue_limit: number
+  command_sleep_seconds: number
+  state_reset_hours: number
   apps: Record<FindarrAppName, FindarrAppSettings>
 }
 
@@ -455,7 +466,16 @@ export interface FindarrSettingsUpdate {
   interval_minutes?: number
   hourly_cap?: number
   queue_limit?: number
+  command_sleep_seconds?: number
+  state_reset_hours?: number
   apps?: Partial<Record<FindarrAppName, Partial<FindarrAppSettings>>>
+}
+
+/** The Findarr stateful-management window, mirroring the backend `state` block. */
+export interface FindarrStateWindow {
+  created_at: string | null
+  reset_at: string | null
+  reset_hours: number
 }
 
 /**
@@ -481,6 +501,7 @@ export interface FindarrStatus {
   last_run_at: string | null
   last_run_status: string | null
   last_run_detail: string | null
+  state: FindarrStateWindow
   apps: Record<FindarrAppName, FindarrAppStatus>
   hourly: {
     limit: number

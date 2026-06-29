@@ -32,6 +32,8 @@ const settings = {
   interval_minutes: 30,
   hourly_cap: 20,
   queue_limit: -1,
+  command_sleep_seconds: 0,
+  state_reset_hours: 168,
   apps: {
     sonarr: {
       enabled: true,
@@ -39,6 +41,8 @@ const settings = {
       upgrade_limit: 5,
       monitored_only: true,
       skip_future: true,
+      missing_mode: "episodes",
+      upgrade_mode: "episodes",
     },
     radarr: {
       enabled: true,
@@ -46,6 +50,8 @@ const settings = {
       upgrade_limit: 5,
       monitored_only: true,
       skip_future: true,
+      missing_mode: "episodes",
+      upgrade_mode: "episodes",
     },
   },
 } as const
@@ -56,6 +62,7 @@ const status = {
   last_run_at: null,
   last_run_status: null,
   last_run_detail: null,
+  state: { created_at: null, reset_at: null, reset_hours: 168 },
   apps: {
     sonarr: {
       detail: "ok",

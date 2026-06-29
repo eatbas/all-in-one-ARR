@@ -1,19 +1,9 @@
-import { PlayIcon, RotateCcwIcon } from "lucide-react"
+import { PlayIcon } from "lucide-react"
 
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogTrigger,
-} from "@/shared/components/ui/alert-dialog"
 import { Button } from "@/shared/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/shared/components/ui/card"
 import { FindarrAppCard } from "@/features/findarr/components/app-card"
+import { FindarrResetDialog } from "@/features/findarr/components/reset-dialog"
 import type { FindarrAppName, FindarrStatus } from "@/shared/lib/api"
 
 const APPS: readonly FindarrAppName[] = ["sonarr", "radarr"]
@@ -54,28 +44,12 @@ export function LiveFindsPanel({
             <PlayIcon className="size-4" />
             Run all
           </Button>
-          <AlertDialog>
-            <AlertDialogTrigger asChild>
-              <Button size="sm" variant="destructive" disabled={isResetting}>
-                <RotateCcwIcon className="size-4" />
-                Reset
-              </Button>
-            </AlertDialogTrigger>
-            <AlertDialogContent>
-              <AlertDialogHeader>
-                <AlertDialogTitle>Reset Findarr processed state?</AlertDialogTitle>
-                <AlertDialogDescription>
-                  This allows Findarr to consider previously processed Sonarr and
-                  Radarr items again. It does not delete media or change Arr
-                  libraries.
-                </AlertDialogDescription>
-              </AlertDialogHeader>
-              <AlertDialogFooter>
-                <AlertDialogCancel>Cancel</AlertDialogCancel>
-                <AlertDialogAction onClick={onReset}>Reset</AlertDialogAction>
-              </AlertDialogFooter>
-            </AlertDialogContent>
-          </AlertDialog>
+          <FindarrResetDialog
+            triggerLabel="Reset"
+            description="This allows Findarr to consider previously processed Sonarr and Radarr items again. It does not delete media or change Arr libraries."
+            onConfirm={onReset}
+            disabled={isResetting}
+          />
         </div>
       </CardHeader>
       <CardContent className="grid gap-6 lg:grid-cols-2">
