@@ -72,7 +72,7 @@ function Field({
 }: {
   label: string
   hint: string
-  helpText?: ReactNode
+  helpText: ReactNode
   children: ReactNode
 }) {
   return (
@@ -80,7 +80,7 @@ function Field({
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-1.5">
           <label className="text-sm font-medium">{label}</label>
-          {helpText ? <SettingsHelp label={label}>{helpText}</SettingsHelp> : null}
+          <SettingsHelp label={label}>{helpText}</SettingsHelp>
         </div>
         <span className="text-xs text-muted-foreground">{hint}</span>
       </div>
