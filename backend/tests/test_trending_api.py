@@ -244,7 +244,84 @@ def test_add_movie_triggers_sync(db) -> None:
     assert response.json() == {"status": "added"}
     assert ran["sync"] is True
     ctx.trakt.add_items.assert_awaited_once()
+    # No trakt id in the body, so the tmdb id is resolved to one before the add.
+    ctx.trakt.lookup_ids_by_tmdb.assert_awaited_once()
+    assert ctx.trakt.add_items.await_args.kwargs["movies"] == [{"trakt": 500, "tmdb": 100}]
+
+
+def test_add_resolves_tmdb_only_item(db) -> None:
+    # A TMDB/Seer-tab card carries only a tmdb id; it must still be added.
+    ctx = _owned_ctx(db)
+
+    async def sync_now():
+        return None
+
+    ctx.sync_now = sync_now
+    response = build_client(ctx).post(
+        "/api/trending/add",
+        json={"media_type": "movie", "owner_user": "me", "slug": "my-list", "tmdb": 100},
+    )
+    assert response.json() == {"status": "added"}
+    assert ctx.trakt.add_items.await_args.kwargs["movies"] == [{"trakt": 500, "tmdb": 100}]
+
+
+def test_add_skips_lookup_when_trakt_id_present(db) -> None:
+    # Trakt-tab cards already carry a trakt id, so no lookup is needed.
+    ctx = _owned_ctx(db)
+
+    async def sync_now():
+        return None
+
+    ctx.sync_now = sync_now
+    response = build_client(ctx).post(
+        "/api/trending/add",
+        json={
+            "media_type": "movie", "owner_user": "me", "slug": "my-list",
+            "tmdb": 100, "trakt": 7,
+        },
+    )
+    assert response.json() == {"status": "added"}
+    ctx.trakt.lookup_ids_by_tmdb.assert_not_awaited()
+    assert ctx.trakt.add_items.await_args.kwargs["movies"] == [{"trakt": 7, "tmdb": 100}]
+
+
+def test_add_lookup_failure_falls_back_to_tmdb(db) -> None:
+    # A dead lookup must not break the add: it degrades to a bare-tmdb add.
+    ctx = _owned_ctx(db)
+    ctx.trakt.lookup_ids_by_tmdb.side_effect = RuntimeError("search down")
+
+    async def sync_now():
+        return None
+
+    ctx.sync_now = sync_now
+    response = build_client(ctx).post(
+        "/api/trending/add",
+        json={"media_type": "movie", "owner_user": "me", "slug": "my-list", "tmdb": 100},
+    )
+    assert response.json() == {"status": "added"}
     assert ctx.trakt.add_items.await_args.kwargs["movies"] == [{"tmdb": 100}]
+
+
+def test_add_not_found_is_502(db) -> None:
+    # Trakt returns 201 even when nothing resolved; a no-op add must surface as 502.
+    ctx = _owned_ctx(db)
+    ctx.trakt.add_items.return_value = {
+        "added": {"movies": 0},
+        "not_found": {"movies": [{"ids": {"tmdb": 100}}]},
+    }
+    ran = {"sync": False}
+
+    async def sync_now():
+        ran["sync"] = True
+
+    ctx.sync_now = sync_now
+    response = build_client(ctx).post(
+        "/api/trending/add",
+        json={"media_type": "movie", "owner_user": "me", "slug": "my-list", "tmdb": 100},
+    )
+    assert response.status_code == 502
+    assert "could not find" in response.json()["detail"].lower()
+    assert ran["sync"] is False
 
 
 def test_add_show_with_all_ids(db) -> None:
@@ -258,12 +335,12 @@ def test_add_show_with_all_ids(db) -> None:
         "/api/trending/add",
         json={
             "media_type": "show", "owner_user": "me", "slug": "my-list",
-            "tmdb": 200, "imdb": "tt9", "trakt": 7,
+            "tmdb": 200, "imdb": "tt9", "trakt": 7, "tvdb": 42,
         },
     )
     assert response.json() == {"status": "added"}
     assert ctx.trakt.add_items.await_args.kwargs["shows"] == [
-        {"tmdb": 200, "imdb": "tt9", "trakt": 7}
+        {"trakt": 7, "imdb": "tt9", "tvdb": 42, "tmdb": 200}
     ]
 
 

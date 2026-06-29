@@ -63,6 +63,21 @@ class TrendingAddRequest(BaseModel):
     title: str | None = None
 
 
+def _added_anything(summary: dict) -> bool:
+    """Whether Trakt actually added (or already had) the requested item.
+
+    Trakt returns ``201`` even when an item is unresolved (it lands in
+    ``not_found``); ``added`` and ``existing`` carry the per-type counts that
+    indicate real success.
+    """
+    total = 0
+    for bucket in ("added", "existing"):
+        counts = summary.get(bucket)
+        if isinstance(counts, dict):
+            total += sum(value for value in counts.values() if isinstance(value, int))
+    return total > 0
+
+
 class TrendingAddResponse(BaseModel):
     status: str
 
@@ -211,12 +226,27 @@ def create_trending_router(ctx: "AppContext") -> APIRouter:
                 content={"detail": "List is not an owned, syncable Trakt list"},
             )
         ids: dict[str, int | str] = {}
-        if body.tmdb is not None:
-            ids["tmdb"] = body.tmdb
-        if body.imdb:
-            ids["imdb"] = body.imdb
         if body.trakt is not None:
             ids["trakt"] = body.trakt
+        if body.imdb:
+            ids["imdb"] = body.imdb
+        if body.tvdb is not None:
+            ids["tvdb"] = body.tvdb
+        if body.tmdb is not None:
+            ids["tmdb"] = body.tmdb
+        # TMDB/Seer cards carry only a TMDB id, which Trakt's list-add resolves
+        # unreliably (the title lands in not_found); resolve it to a Trakt id first
+        # so the add lands deterministically.
+        if "trakt" not in ids and body.tmdb is not None:
+            try:
+                resolved = await ctx.trakt.lookup_ids_by_tmdb(
+                    media_type=body.media_type, tmdb_id=body.tmdb
+                )
+            except Exception as exc:  # noqa: BLE001 - a failed lookup degrades to a bare-tmdb add
+                log.warning("trending tmdb lookup failed for %s: %s", body.tmdb, exc)
+                resolved = None
+            if resolved:
+                ids = {**resolved, **ids}  # add trakt/imdb/tvdb; keep explicit body values
         if not ids:
             return JSONResponse(
                 status_code=422, content={"detail": "No usable media id supplied"}
@@ -224,7 +254,7 @@ def create_trending_router(ctx: "AppContext") -> APIRouter:
         movies = [ids] if body.media_type == "movie" else None
         shows = [ids] if body.media_type == "show" else None
         try:
-            await ctx.trakt.add_items(
+            summary = await ctx.trakt.add_items(
                 movies=movies,
                 shows=shows,
                 list_id=body.slug,
@@ -234,6 +264,17 @@ def create_trending_router(ctx: "AppContext") -> APIRouter:
             log.warning("trending add failed for list %s: %s", body.slug, exc)
             return JSONResponse(
                 status_code=502, content={"detail": f"Trakt add failed: {exc}"}
+            )
+        if not _added_anything(summary):
+            log.warning(
+                "trending add resolved nothing for list %s (ids=%s, summary=%s)",
+                body.slug,
+                ids,
+                summary,
+            )
+            return JSONResponse(
+                status_code=502,
+                content={"detail": "Trakt could not find this title to add"},
             )
         ctx.db.add_activity(
             "Trending add", f"Added {body.title or ids} to {target.name}"

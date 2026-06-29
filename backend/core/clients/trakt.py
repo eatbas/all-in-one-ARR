@@ -329,6 +329,37 @@ class TraktClient:
             if isinstance(entry, dict)
         ]
 
+    async def lookup_ids_by_tmdb(
+        self, *, media_type: str, tmdb_id: int
+    ) -> dict[str, int | str] | None:
+        """Resolve a TMDB id to a Trakt item's id set via the ID-lookup search.
+
+        TMDB and Seer discovery rows carry only a TMDB id, which Trakt's list-add
+        resolves unreliably (the title can land in ``not_found``). Looking the id
+        up first yields the ``trakt`` id (plus ``imdb``/``tvdb``) so the add can use
+        a strong id. Uses the public (API-key-only) headers, like the discovery
+        endpoints. Returns the matched item's id mapping, or ``None`` when nothing
+        matches.
+        """
+        search_type = "movie" if media_type == "movie" else "show"
+        response = await self._client.get(
+            f"/search/tmdb/{tmdb_id}",
+            headers=self._public_headers(),
+            params={"type": search_type},
+        )
+        response.raise_for_status()
+        for entry in response.json():
+            if entry.get("type") == search_type:
+                ids = (entry.get(search_type) or {}).get("ids") or {}
+                wanted = {
+                    key: ids[key]
+                    for key in ("trakt", "imdb", "tvdb", "tmdb")
+                    if ids.get(key) is not None
+                }
+                if wanted:
+                    return wanted
+        return None
+
     async def test_connection(self) -> dict[str, Any]:
         """Verify the saved token by reading the account settings.
 

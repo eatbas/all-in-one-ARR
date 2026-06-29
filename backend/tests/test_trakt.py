@@ -295,6 +295,60 @@ async def test_get_popular_shows_uses_flat_objects(tmp_path) -> None:
 
 
 @respx.mock
+async def test_lookup_ids_by_tmdb_returns_ids(tmp_path) -> None:
+    route = respx.get(f"{TRAKT_BASE_URL}/search/tmdb/100").mock(
+        return_value=httpx.Response(
+            200,
+            json=[
+                {
+                    "type": "movie",
+                    "movie": {"ids": {"trakt": 1, "tmdb": 100, "imdb": "tt1", "slug": "dune"}},
+                }
+            ],
+        )
+    )
+    client = make_client(tmp_path)
+    result = await client.lookup_ids_by_tmdb(media_type="movie", tmdb_id=100)
+    # Only the strong id fields are kept (slug is dropped); type filter is sent.
+    assert result == {"trakt": 1, "tmdb": 100, "imdb": "tt1"}
+    assert route.calls.last.request.url.params["type"] == "movie"
+    # Lookup is a public endpoint: API key only, no OAuth bearer token.
+    assert "Authorization" not in route.calls.last.request.headers
+    assert route.calls.last.request.headers["trakt-api-key"] == "cid"
+
+
+@respx.mock
+async def test_lookup_ids_by_tmdb_show_type(tmp_path) -> None:
+    route = respx.get(f"{TRAKT_BASE_URL}/search/tmdb/200").mock(
+        return_value=httpx.Response(
+            200,
+            json=[{"type": "show", "show": {"ids": {"trakt": 2, "tmdb": 200, "tvdb": 300}}}],
+        )
+    )
+    client = make_client(tmp_path)
+    result = await client.lookup_ids_by_tmdb(media_type="show", tmdb_id=200)
+    assert result == {"trakt": 2, "tvdb": 300, "tmdb": 200}
+    assert route.calls.last.request.url.params["type"] == "show"
+
+
+@respx.mock
+async def test_lookup_ids_by_tmdb_no_match_returns_none(tmp_path) -> None:
+    respx.get(f"{TRAKT_BASE_URL}/search/tmdb/999").mock(
+        return_value=httpx.Response(
+            200,
+            # A wrong-type entry and one with no usable ids: neither matches.
+            json=[
+                {"type": "person", "person": {"ids": {"trakt": 9}}},
+                {"type": "movie", "movie": {"ids": {}}},
+            ],
+        )
+    )
+    client = make_client(tmp_path)
+    result = await client.lookup_ids_by_tmdb(media_type="movie", tmdb_id=999)
+    assert result is None
+
+
+@respx.mock
 async def test_add_items_movie_returns_summary(tmp_path) -> None:
     route = respx.post(f"{TRAKT_BASE_URL}/users/me/lists/my-list/items").mock(
         return_value=httpx.Response(201, json={"added": {"movies": 1}})
