@@ -215,6 +215,24 @@ export class ApiError extends Error {
   }
 }
 
+/**
+ * Build the message for a non-2xx response, preferring the backend's
+ * `{ "detail": "..." }` body (FastAPI's convention) so the surfaced error carries
+ * the server's reason. Falls back to a generic status message when the body is
+ * empty, not JSON, or carries no string detail (e.g. a 422 validation array).
+ */
+async function errorMessage(input: string, response: Response): Promise<string> {
+  try {
+    const { detail } = (await response.json()) as { detail?: unknown }
+    if (typeof detail === "string") {
+      return detail
+    }
+  } catch {
+    // Empty or non-JSON body: fall through to the generic status message.
+  }
+  return `Request to ${input} failed with status ${response.status}`
+}
+
 async function request<T>(input: string, init?: RequestInit): Promise<T> {
   const response = await fetch(input, {
     ...init,
@@ -224,10 +242,7 @@ async function request<T>(input: string, init?: RequestInit): Promise<T> {
   })
 
   if (!response.ok) {
-    throw new ApiError(
-      response.status,
-      `Request to ${input} failed with status ${response.status}`,
-    )
+    throw new ApiError(response.status, await errorMessage(input, response))
   }
 
   // 202/204 responses may carry an empty body; guard against that.

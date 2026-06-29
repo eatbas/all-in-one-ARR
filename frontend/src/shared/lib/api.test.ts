@@ -470,6 +470,34 @@ describe("request error and empty-body handling", () => {
     expect((error as ApiError).message).toContain("503")
   })
 
+  it("surfaces the backend's JSON detail as the error message", async () => {
+    mockFetch(
+      new Response(JSON.stringify({ detail: "Trakt could not find this title to add" }), {
+        status: 502,
+        headers: { "Content-Type": "application/json" },
+      }),
+    )
+
+    const error = await getStatus().catch((caught: unknown) => caught)
+    expect(error).toBeInstanceOf(ApiError)
+    expect((error as ApiError).status).toBe(502)
+    expect((error as ApiError).message).toBe("Trakt could not find this title to add")
+  })
+
+  it("falls back to the status message when detail is not a string", async () => {
+    // FastAPI validation errors return `detail` as an array, not a string.
+    mockFetch(
+      new Response(JSON.stringify({ detail: [{ msg: "bad" }] }), {
+        status: 422,
+        headers: { "Content-Type": "application/json" },
+      }),
+    )
+
+    const error = await getStatus().catch((caught: unknown) => caught)
+    expect((error as ApiError).message).toContain("/api/status")
+    expect((error as ApiError).message).toContain("422")
+  })
+
   it("resolves to undefined when the response body is empty", async () => {
     mockFetch(new Response("", { status: 202 }))
 
