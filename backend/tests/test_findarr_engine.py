@@ -2,15 +2,15 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+from datetime import datetime, timedelta, timezone
 
 from fastapi import FastAPI
 
 from core.db import Database
 from modules.findarr import engine, findarr_job, register_context, setup
 from modules.findarr.client import FindarrClientError
-from modules.findarr.models import FindarrItem
-from modules.findarr.models import Compatibility
+from modules.findarr.models import Compatibility, SearchUnit
 from tests.conftest import StubSettingsStore, make_ctx
 
 
@@ -20,6 +20,8 @@ class StubFindarrClient:
     compatible: bool = True
     queue_size_value: int = 0
     command_error: Exception | None = None
+    sonarr_records: list[dict] | None = None
+    triggered: list = field(default_factory=list)
 
     async def compatibility(self) -> Compatibility:
         return Compatibility(
@@ -34,24 +36,28 @@ class StubFindarrClient:
 
     async def wanted(self, kind: str) -> list[dict]:
         if self.app == "sonarr":
+            if self.sonarr_records is not None:
+                return list(self.sonarr_records)
             return [
                 {
                     "id": 10 if kind == "missing" else 11,
                     "title": "Pilot",
+                    "seriesId": 5,
                     "seasonNumber": 1,
                     "episodeNumber": 1,
                     "airDateUtc": "2020-01-01T00:00:00Z",
                     "monitored": True,
-                    "series": {"title": "Series", "monitored": True},
+                    "series": {"id": 5, "title": "Series", "monitored": True},
                 },
                 {
                     "id": 12,
                     "title": "Future",
+                    "seriesId": 5,
                     "seasonNumber": 1,
                     "episodeNumber": 2,
                     "airDateUtc": "2999-01-01T00:00:00Z",
                     "monitored": True,
-                    "series": {"title": "Series", "monitored": True},
+                    "series": {"id": 5, "title": "Series", "monitored": True},
                 },
             ]
         return [
@@ -64,12 +70,27 @@ class StubFindarrClient:
             }
         ]
 
-    async def trigger_search(self, *, item_id: str) -> None:
+    async def trigger_search(self, unit: SearchUnit) -> None:
+        self.triggered.append(unit)
         if self.command_error is not None:
             raise self.command_error
 
     async def aclose(self) -> None:
         pass
+
+
+def _sonarr_record(episode_id: int, *, series_id: int, season: int, episode: int, future: bool = False) -> dict:
+    air = "2999-01-01T00:00:00Z" if future else "2020-01-01T00:00:00Z"
+    return {
+        "id": episode_id,
+        "title": f"E{episode}",
+        "seriesId": series_id,
+        "seasonNumber": season,
+        "episodeNumber": episode,
+        "airDateUtc": air,
+        "monitored": True,
+        "series": {"id": series_id, "title": "Show", "monitored": True},
+    }
 
 
 def _enabled_store(**overrides) -> StubSettingsStore:
@@ -188,12 +209,13 @@ async def test_run_records_connection_error_and_queue_limit_passes(db, monkeypat
     assert any(row["detail"] == "network down" for row in db.findarr_recent_history())
 
 
-async def test_reset_state_clears_processed(db) -> None:
+async def test_reset_state_clears_processed_and_restarts_window(db) -> None:
     ctx = make_ctx(db=db, settings_store=_enabled_store())
     db.findarr_mark_processed(app="radarr", mode="missing", item_id="7", title="Seven")
     result = await engine.reset_state(ctx)
     assert result == {"status": "reset", "removed": 1}
     assert db.findarr_counts()["radarr"]["missing"] == 0
+    assert "state_created_at" in db.findarr_run_state()
 
 
 async def test_history_returns_recent_rows(db) -> None:
@@ -203,27 +225,34 @@ async def test_history_returns_recent_rows(db) -> None:
     assert rows[0]["title"] == "One"
 
 
-def test_item_allowed_filters_monitored_future_and_processed(db) -> None:
+def _episode_unit(key: str, *, monitored: bool = True, is_future: bool = False) -> SearchUnit:
+    return SearchUnit(
+        app="sonarr",
+        mode="missing",
+        command="EpisodeSearch",
+        key=key,
+        title=key,
+        monitored=monitored,
+        is_future=is_future,
+        episode_ids=(int(key),),
+    )
+
+
+def test_unit_allowed_filters_monitored_future_and_processed(db) -> None:
     database = Database(":memory:")
     ctx = make_ctx(db=database)
     ctx.db.init_db()
     try:
-        base = FindarrItem(app="sonarr", mode="missing", item_id="1", title="One", monitored=True, is_future=False)
-        assert engine._item_allowed(ctx, base, monitored_only=True, skip_future=True) is True
-        assert engine._item_allowed(
-            ctx,
-            FindarrItem(app="sonarr", mode="missing", item_id="2", title="Two", monitored=False, is_future=False),
-            monitored_only=True,
-            skip_future=True,
+        base = _episode_unit("1")
+        assert engine._unit_allowed(ctx, base, monitored_only=True, skip_future=True) is True
+        assert engine._unit_allowed(
+            ctx, _episode_unit("2", monitored=False), monitored_only=True, skip_future=True
         ) is False
-        assert engine._item_allowed(
-            ctx,
-            FindarrItem(app="sonarr", mode="missing", item_id="3", title="Three", monitored=True, is_future=True),
-            monitored_only=True,
-            skip_future=True,
+        assert engine._unit_allowed(
+            ctx, _episode_unit("3", is_future=True), monitored_only=True, skip_future=True
         ) is False
         ctx.db.findarr_mark_processed(app="sonarr", mode="missing", item_id="1", title="One")
-        assert engine._item_allowed(ctx, base, monitored_only=False, skip_future=False) is False
+        assert engine._unit_allowed(ctx, base, monitored_only=False, skip_future=False) is False
     finally:
         ctx.db.close()
 
@@ -241,3 +270,121 @@ def test_client_for_uses_context_connection_fields(db) -> None:
 
 def test_normalise_items_skips_invalid_records() -> None:
     assert engine._normalise_items("sonarr", "missing", [{}]) == []
+
+
+def _sonarr_only_store(**app_overrides) -> StubSettingsStore:
+    """Enabled store with Radarr disabled and the given Sonarr app overrides."""
+    store = _enabled_store(hourly_cap=20)
+    settings = store.findarr_settings()
+    settings["apps"]["radarr"]["enabled"] = False
+    settings["apps"]["sonarr"].update(app_overrides)
+    store.update_findarr_settings(settings)
+    return store
+
+
+async def test_run_sonarr_seasons_mode_issues_season_searches(db, monkeypatch) -> None:
+    store = _sonarr_only_store(missing_mode="seasons", upgrade_mode="seasons")
+    ctx = make_ctx(db=db, settings_store=store)
+    records = [
+        _sonarr_record(1, series_id=5, season=1, episode=1),
+        _sonarr_record(2, series_id=5, season=1, episode=2),
+        _sonarr_record(3, series_id=5, season=2, episode=1),
+    ]
+    client = StubFindarrClient("sonarr", sonarr_records=records)
+    monkeypatch.setattr(engine, "_client_for", lambda _ctx, app: client)
+    result = await engine.run(ctx, app="sonarr", manual=True)
+    # Two seasons × two modes = four season-pack searches.
+    assert result["processed"] == 4
+    assert {unit.command for unit in client.triggered} == {"SeasonSearch"}
+    assert db.findarr_is_processed(app="sonarr", mode="missing", item_id="5:s1") is True
+    assert db.findarr_is_processed(app="sonarr", mode="upgrade", item_id="5:s2") is True
+
+
+async def test_run_sonarr_shows_mode_issues_series_searches(db, monkeypatch) -> None:
+    store = _sonarr_only_store(missing_mode="shows", upgrade_mode="shows")
+    ctx = make_ctx(db=db, settings_store=store)
+    records = [
+        _sonarr_record(1, series_id=5, season=1, episode=1),
+        _sonarr_record(3, series_id=5, season=2, episode=1),
+    ]
+    client = StubFindarrClient("sonarr", sonarr_records=records)
+    monkeypatch.setattr(engine, "_client_for", lambda _ctx, app: client)
+    result = await engine.run(ctx, app="sonarr")
+    # One series → one series search per mode.
+    assert result["processed"] == 2
+    assert {unit.command for unit in client.triggered} == {"SeriesSearch"}
+    assert db.findarr_is_processed(app="sonarr", mode="missing", item_id="5") is True
+
+
+async def test_run_sleeps_between_successive_commands(db, monkeypatch) -> None:
+    store = _sonarr_only_store()
+    settings = store.findarr_settings()
+    settings["command_sleep_seconds"] = 2
+    store.update_findarr_settings(settings)
+    ctx = make_ctx(db=db, settings_store=store)
+    records = [
+        _sonarr_record(1, series_id=5, season=1, episode=1),
+        _sonarr_record(2, series_id=5, season=1, episode=2),
+    ]
+    client = StubFindarrClient("sonarr", sonarr_records=records)
+    monkeypatch.setattr(engine, "_client_for", lambda _ctx, app: client)
+    sleeps: list[int] = []
+
+    async def fake_sleep(seconds: int) -> None:
+        sleeps.append(seconds)
+
+    monkeypatch.setattr(engine.asyncio, "sleep", fake_sleep)
+    result = await engine.run(ctx, app="sonarr")
+    # Two episodes per mode → one inter-command sleep per mode (not before the first).
+    assert result["processed"] == 4
+    assert sleeps == [2, 2]
+
+
+async def test_run_seeds_state_anchor_on_first_enabled_run(db, monkeypatch) -> None:
+    ctx = make_ctx(db=db, settings_store=_enabled_store(hourly_cap=10))
+    monkeypatch.setattr(engine, "_client_for", lambda _ctx, app: StubFindarrClient(app))
+    assert "state_created_at" not in db.findarr_run_state()
+    await engine.run(ctx)
+    assert "state_created_at" in db.findarr_run_state()
+
+
+async def test_run_auto_resets_state_when_window_elapses(db, monkeypatch) -> None:
+    store = _enabled_store(hourly_cap=10, state_reset_hours=1)
+    ctx = make_ctx(db=db, settings_store=store)
+    db.findarr_mark_processed(app="sonarr", mode="missing", item_id="old", title="Old")
+    past = engine._format_iso(datetime.now(timezone.utc) - timedelta(hours=2))
+    db.findarr_set_run_state("state_created_at", past)
+    monkeypatch.setattr(engine, "_client_for", lambda _ctx, app: StubFindarrClient(app))
+    await engine.run(ctx)
+    assert db.findarr_is_processed(app="sonarr", mode="missing", item_id="old") is False
+    assert any("auto-reset" in row["detail"] for row in db.findarr_recent_history())
+    assert any(row["action"] == "Findarr state auto-reset" for row in db.recent_activity())
+    assert db.findarr_run_state()["state_created_at"] != past
+
+
+async def test_run_keeps_state_when_window_not_elapsed(db, monkeypatch) -> None:
+    store = _enabled_store(hourly_cap=10, state_reset_hours=24)
+    ctx = make_ctx(db=db, settings_store=store)
+    db.findarr_mark_processed(app="sonarr", mode="missing", item_id="keep", title="Keep")
+    recent = engine._format_iso(datetime.now(timezone.utc) - timedelta(hours=1))
+    db.findarr_set_run_state("state_created_at", recent)
+    monkeypatch.setattr(engine, "_client_for", lambda _ctx, app: StubFindarrClient(app))
+    await engine.run(ctx)
+    assert db.findarr_is_processed(app="sonarr", mode="missing", item_id="keep") is True
+    assert db.findarr_run_state()["state_created_at"] == recent
+
+
+async def test_status_exposes_state_window(db) -> None:
+    ctx = make_ctx(db=db, settings_store=_enabled_store(state_reset_hours=24))
+    db.findarr_set_run_state("state_created_at", "2026-01-01T00:00:00Z")
+    body = await engine.status(ctx)
+    assert body["state"]["created_at"] == "2026-01-01T00:00:00Z"
+    assert body["state"]["reset_at"] == "2026-01-02T00:00:00Z"
+    assert body["state"]["reset_hours"] == 24
+
+
+async def test_status_state_window_without_anchor(db) -> None:
+    ctx = make_ctx(db=db, settings_store=_enabled_store())
+    body = await engine.status(ctx)
+    assert body["state"]["created_at"] is None
+    assert body["state"]["reset_at"] is None

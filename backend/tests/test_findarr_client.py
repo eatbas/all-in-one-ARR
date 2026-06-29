@@ -7,6 +7,21 @@ import pytest
 import respx
 
 from modules.findarr.client import FindarrArrClient, FindarrClientError, parse_version
+from modules.findarr.models import SearchUnit
+
+
+def _unit(command: str, **kwargs) -> SearchUnit:
+    base = {
+        "app": "sonarr",
+        "mode": "missing",
+        "command": command,
+        "key": "k",
+        "title": "t",
+        "monitored": True,
+        "is_future": False,
+    }
+    base.update(kwargs)
+    return SearchUnit(**base)
 
 
 def test_parse_version_handles_suffixes_and_short_values() -> None:
@@ -125,17 +140,34 @@ async def test_wanted_accepts_list_payload_and_rejects_invalid_records() -> None
 
 
 @respx.mock
-async def test_trigger_search_uses_app_specific_command_payload() -> None:
+async def test_trigger_search_uses_episode_and_movie_payloads() -> None:
     sonarr_route = respx.post("http://sonarr/api/v3/command").mock(return_value=httpx.Response(201, json={}))
-    await FindarrArrClient(app="sonarr", base_url="http://sonarr", api_key="k").trigger_search(item_id="12")
+    await FindarrArrClient(app="sonarr", base_url="http://sonarr", api_key="k").trigger_search(
+        _unit("EpisodeSearch", episode_ids=(12,))
+    )
     assert sonarr_route.calls.last.request.content == b'{"name":"EpisodeSearch","episodeIds":[12]}'
 
     radarr_route = respx.post("http://radarr/api/v3/command").mock(return_value=httpx.Response(201, json={}))
-    await FindarrArrClient(app="radarr", base_url="http://radarr", api_key="k").trigger_search(item_id="34")
+    await FindarrArrClient(app="radarr", base_url="http://radarr", api_key="k").trigger_search(
+        _unit("MoviesSearch", app="radarr", movie_ids=(34,))
+    )
     assert radarr_route.calls.last.request.content == b'{"name":"MoviesSearch","movieIds":[34]}'
+
+
+@respx.mock
+async def test_trigger_search_builds_season_and_series_payloads() -> None:
+    season_route = respx.post("http://sonarr/api/v3/command").mock(return_value=httpx.Response(201, json={}))
+    client = FindarrArrClient(app="sonarr", base_url="http://sonarr", api_key="k")
+    await client.trigger_search(_unit("SeasonSearch", series_id=7, season_number=2))
+    assert season_route.calls.last.request.content == b'{"name":"SeasonSearch","seriesId":7,"seasonNumber":2}'
+
+    await client.trigger_search(_unit("SeriesSearch", series_id=9))
+    assert season_route.calls.last.request.content == b'{"name":"SeriesSearch","seriesId":9}'
 
 
 @respx.mock
 async def test_trigger_search_accepts_empty_response() -> None:
     respx.post("http://sonarr/api/v3/command").mock(return_value=httpx.Response(204))
-    await FindarrArrClient(app="sonarr", base_url="http://sonarr", api_key="k").trigger_search(item_id="1")
+    await FindarrArrClient(app="sonarr", base_url="http://sonarr", api_key="k").trigger_search(
+        _unit("EpisodeSearch", episode_ids=(1,))
+    )

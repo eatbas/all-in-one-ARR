@@ -7,10 +7,28 @@ from dataclasses import dataclass
 APP_NAMES = ("sonarr", "radarr")
 MODES = ("missing", "upgrade")
 
+# Sonarr search-mode granularities offered per mode and the native Sonarr v3
+# command each one issues. ``episodes`` searches individual episodes,
+# ``seasons`` issues one season-pack search per (series, season), and ``shows``
+# issues one search per series. Radarr has no season/show concept, so it always
+# uses the movie command regardless of these settings.
+SEARCH_MODES = ("episodes", "seasons", "shows")
+SONARR_COMMANDS = {
+    "episodes": "EpisodeSearch",
+    "seasons": "SeasonSearch",
+    "shows": "SeriesSearch",
+}
+RADARR_COMMAND = "MoviesSearch"
+
 
 @dataclass(frozen=True)
 class FindarrItem:
-    """One Sonarr/Radarr item eligible for a Findarr search."""
+    """One normalised Sonarr/Radarr wanted record eligible for a search.
+
+    For Sonarr this is a single episode; ``series_id``/``season_number``/
+    ``series_title`` carry the grouping keys used to build season-pack and
+    series-level searches. For Radarr (a movie) those stay ``None``.
+    """
 
     app: str
     mode: str
@@ -18,6 +36,32 @@ class FindarrItem:
     title: str
     monitored: bool
     is_future: bool
+    series_id: int | None = None
+    season_number: int | None = None
+    series_title: str | None = None
+
+
+@dataclass(frozen=True)
+class SearchUnit:
+    """A single grouped Findarr search command and its processed-state identity.
+
+    ``key`` is the processed-state identifier for the chosen granularity
+    (an episode id, ``"<seriesId>:s<season>"``, a bare ``"<seriesId>"``, or a
+    movie id) so dedup and history operate at the same granularity as the
+    command that is sent.
+    """
+
+    app: str
+    mode: str
+    command: str
+    key: str
+    title: str
+    monitored: bool
+    is_future: bool
+    episode_ids: tuple[int, ...] = ()
+    movie_ids: tuple[int, ...] = ()
+    series_id: int | None = None
+    season_number: int | None = None
 
 
 @dataclass(frozen=True)

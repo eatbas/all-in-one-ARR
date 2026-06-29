@@ -6,11 +6,26 @@ from typing import Any
 
 import httpx
 
-from modules.findarr.models import Compatibility
+from modules.findarr.models import Compatibility, SearchUnit
 
 
 class FindarrClientError(RuntimeError):
     """Raised when a Sonarr/Radarr API request cannot be completed."""
+
+
+def _command_payload(unit: SearchUnit) -> dict[str, Any]:
+    """Build the Sonarr/Radarr command body for a grouped search unit."""
+    if unit.command == "EpisodeSearch":
+        return {"name": "EpisodeSearch", "episodeIds": list(unit.episode_ids)}
+    if unit.command == "SeasonSearch":
+        return {
+            "name": "SeasonSearch",
+            "seriesId": unit.series_id,
+            "seasonNumber": unit.season_number,
+        }
+    if unit.command == "SeriesSearch":
+        return {"name": "SeriesSearch", "seriesId": unit.series_id}
+    return {"name": "MoviesSearch", "movieIds": list(unit.movie_ids)}
 
 
 def parse_version(value: str) -> tuple[int, int, int]:
@@ -148,13 +163,9 @@ class FindarrArrClient:
             page += 1
         return records
 
-    async def trigger_search(self, *, item_id: str) -> None:
-        """Trigger a Sonarr/Radarr search command for one item."""
-        if self.app == "sonarr":
-            payload = {"name": "EpisodeSearch", "episodeIds": [int(item_id)]}
-        else:
-            payload = {"name": "MoviesSearch", "movieIds": [int(item_id)]}
-        await self._request("POST", "/api/v3/command", json=payload)
+    async def trigger_search(self, unit: SearchUnit) -> None:
+        """Trigger the Sonarr/Radarr search command for one grouped unit."""
+        await self._request("POST", "/api/v3/command", json=_command_payload(unit))
 
     async def aclose(self) -> None:
         """Close the underlying HTTP client."""

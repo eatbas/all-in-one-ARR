@@ -26,6 +26,30 @@ def test_sonarr_normalise_handles_edge_cases() -> None:
     assert nested.monitored is False
 
 
+def test_sonarr_normalise_captures_series_grouping_fields() -> None:
+    item = sonarr.normalise(
+        {
+            "id": 9,
+            "seriesId": 5,
+            "seasonNumber": 3,
+            "episodeNumber": 4,
+            "monitored": True,
+            "series": {"id": 5, "title": "Show", "monitored": True},
+        },
+        mode="missing",
+    )
+    assert item is not None
+    assert item.series_id == 5
+    assert item.season_number == 3
+    assert item.series_title == "Show"
+    # Falls back to the embedded series id when the episode record omits seriesId.
+    fallback = sonarr.normalise(
+        {"id": 10, "seasonNumber": 1, "series": {"id": 7, "title": "Other"}}, mode="missing"
+    )
+    assert fallback is not None
+    assert fallback.series_id == 7
+
+
 def test_radarr_normalise_handles_edge_cases() -> None:
     assert radarr.normalise({}, mode="missing") is None
     assert radarr.normalise({"id": 1, "digitalRelease": "bad"}, mode="missing").is_future is False

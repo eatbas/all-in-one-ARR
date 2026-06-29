@@ -20,6 +20,8 @@ class FindarrAppSettings(BaseModel):
     upgrade_limit: int
     monitored_only: bool
     skip_future: bool
+    missing_mode: str
+    upgrade_mode: str
 
 
 class FindarrSettings(BaseModel):
@@ -27,6 +29,8 @@ class FindarrSettings(BaseModel):
     interval_minutes: int
     hourly_cap: int
     queue_limit: int
+    command_sleep_seconds: int
+    state_reset_hours: int
     apps: dict[str, FindarrAppSettings]
 
 
@@ -36,6 +40,8 @@ class FindarrAppSettingsUpdate(BaseModel):
     upgrade_limit: int | None = None
     monitored_only: bool | None = None
     skip_future: bool | None = None
+    missing_mode: str | None = None
+    upgrade_mode: str | None = None
 
 
 class FindarrSettingsUpdate(BaseModel):
@@ -43,6 +49,8 @@ class FindarrSettingsUpdate(BaseModel):
     interval_minutes: int | None = None
     hourly_cap: int | None = None
     queue_limit: int | None = None
+    command_sleep_seconds: int | None = None
+    state_reset_hours: int | None = None
     apps: dict[str, FindarrAppSettingsUpdate] | None = None
 
 
@@ -84,6 +92,7 @@ class FindarrStatusResponse(BaseModel):
     last_run_at: str | None
     last_run_status: str | None
     last_run_detail: str | None
+    state: dict
     apps: dict
     hourly: dict[str, int]
 

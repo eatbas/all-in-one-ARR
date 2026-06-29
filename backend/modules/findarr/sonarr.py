@@ -8,6 +8,13 @@ from typing import Any
 from modules.findarr.models import FindarrItem
 
 
+def _as_int(value: Any) -> int | None:
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
+
+
 def _is_future(value: str | None) -> bool:
     if not value:
         return False
@@ -29,7 +36,7 @@ def normalise(record: dict[str, Any], *, mode: str) -> FindarrItem | None:
     series = record.get("series") if isinstance(record.get("series"), dict) else episode.get("series", {})
     series_title = series.get("title") if isinstance(series, dict) else None
     title = episode.get("title") or "Episode"
-    season = episode.get("seasonNumber")
+    season = _as_int(episode.get("seasonNumber"))
     episode_number = episode.get("episodeNumber")
     label = f"{series_title or 'Unknown series'}"
     if season is not None and episode_number is not None:
@@ -38,6 +45,9 @@ def normalise(record: dict[str, Any], *, mode: str) -> FindarrItem | None:
     monitored = bool(episode.get("monitored", True)) and bool(
         series.get("monitored", True) if isinstance(series, dict) else True
     )
+    series_id = _as_int(episode.get("seriesId"))
+    if series_id is None and isinstance(series, dict):
+        series_id = _as_int(series.get("id"))
     return FindarrItem(
         app="sonarr",
         mode=mode,
@@ -45,4 +55,7 @@ def normalise(record: dict[str, Any], *, mode: str) -> FindarrItem | None:
         title=label,
         monitored=monitored,
         is_future=_is_future(episode.get("airDateUtc")),
+        series_id=series_id,
+        season_number=season,
+        series_title=series_title,
     )

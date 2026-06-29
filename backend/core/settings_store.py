@@ -42,13 +42,21 @@ VALID_BANDWIDTH_INTERVALS: frozenset[int] = frozenset({10, 15, 30, 60})
 # Allowed Findarr scheduler intervals in minutes offered by the dashboard.
 VALID_FINDARR_INTERVALS: frozenset[int] = frozenset({15, 30, 45, 60})
 
+# Allowed Sonarr search-mode granularities (Radarr ignores them — movies only).
+VALID_FINDARR_SEARCH_MODES: frozenset[str] = frozenset({"episodes", "seasons", "shows"})
+
 _FINDARR_LIMIT_MAX = 100
+_FINDARR_SLEEP_MAX = 60
+_FINDARR_RESET_HOURS_MIN = 1
+_FINDARR_RESET_HOURS_MAX = 8760
 
 DEFAULT_FINDARR_SETTINGS: dict[str, Any] = {
     "enabled": False,
     "interval_minutes": 30,
     "hourly_cap": 20,
     "queue_limit": -1,
+    "command_sleep_seconds": 0,
+    "state_reset_hours": 168,
     "apps": {
         "sonarr": {
             "enabled": True,
@@ -56,6 +64,8 @@ DEFAULT_FINDARR_SETTINGS: dict[str, Any] = {
             "upgrade_limit": 5,
             "monitored_only": True,
             "skip_future": True,
+            "missing_mode": "episodes",
+            "upgrade_mode": "episodes",
         },
         "radarr": {
             "enabled": True,
@@ -63,6 +73,8 @@ DEFAULT_FINDARR_SETTINGS: dict[str, Any] = {
             "upgrade_limit": 5,
             "monitored_only": True,
             "skip_future": True,
+            "missing_mode": "episodes",
+            "upgrade_mode": "episodes",
         },
     },
 }
@@ -114,6 +126,29 @@ def _normalise_findarr_queue_limit(value: Any) -> int:
     return -1 if parsed < 0 else min(parsed, _FINDARR_LIMIT_MAX)
 
 
+def _normalise_findarr_search_mode(value: Any, *, default: str = "episodes") -> str:
+    """Return a valid Sonarr search-mode granularity, defaulting to episodes."""
+    return value if value in VALID_FINDARR_SEARCH_MODES else default
+
+
+def _normalise_findarr_sleep_seconds(value: Any) -> int:
+    """Return a bounded inter-command sleep in seconds, defaulting to 0."""
+    try:
+        parsed = int(value)
+    except (TypeError, ValueError):
+        return 0
+    return max(0, min(parsed, _FINDARR_SLEEP_MAX))
+
+
+def _normalise_findarr_reset_hours(value: Any) -> int:
+    """Return a bounded stateful-reset window in hours, defaulting to 168."""
+    try:
+        parsed = int(value)
+    except (TypeError, ValueError):
+        return 168
+    return max(_FINDARR_RESET_HOURS_MIN, min(parsed, _FINDARR_RESET_HOURS_MAX))
+
+
 def _coerce_int(value: Any, default: int) -> int:
     try:
         return int(value)
@@ -137,6 +172,12 @@ def _normalise_findarr_settings(raw: dict[str, Any] | None = None) -> dict[str, 
             default=defaults["hourly_cap"],
         ),
         "queue_limit": _normalise_findarr_queue_limit(raw.get("queue_limit", defaults["queue_limit"])),
+        "command_sleep_seconds": _normalise_findarr_sleep_seconds(
+            raw.get("command_sleep_seconds", defaults["command_sleep_seconds"])
+        ),
+        "state_reset_hours": _normalise_findarr_reset_hours(
+            raw.get("state_reset_hours", defaults["state_reset_hours"])
+        ),
         "apps": {},
     }
 
@@ -154,6 +195,12 @@ def _normalise_findarr_settings(raw: dict[str, Any] | None = None) -> dict[str, 
             ),
             "monitored_only": bool(raw_app.get("monitored_only", app_defaults["monitored_only"])),
             "skip_future": bool(raw_app.get("skip_future", app_defaults["skip_future"])),
+            "missing_mode": _normalise_findarr_search_mode(
+                raw_app.get("missing_mode", app_defaults["missing_mode"])
+            ),
+            "upgrade_mode": _normalise_findarr_search_mode(
+                raw_app.get("upgrade_mode", app_defaults["upgrade_mode"])
+            ),
         }
     return normalised
 
@@ -472,7 +519,14 @@ class SettingsStore:
         """Merge, validate, persist, and return Findarr settings."""
         with self._lock:
             merged = copy.deepcopy(self._findarr_settings)
-            for key in ("enabled", "interval_minutes", "hourly_cap", "queue_limit"):
+            for key in (
+                "enabled",
+                "interval_minutes",
+                "hourly_cap",
+                "queue_limit",
+                "command_sleep_seconds",
+                "state_reset_hours",
+            ):
                 if key in updates and updates[key] is not None:
                     merged[key] = updates[key]
             app_updates = updates.get("apps")

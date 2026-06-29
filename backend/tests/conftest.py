@@ -92,6 +92,8 @@ class StubSettingsStore:
             "interval_minutes": 30,
             "hourly_cap": 20,
             "queue_limit": -1,
+            "command_sleep_seconds": 0,
+            "state_reset_hours": 168,
             "apps": {
                 "sonarr": {
                     "enabled": True,
@@ -99,6 +101,8 @@ class StubSettingsStore:
                     "upgrade_limit": 5,
                     "monitored_only": True,
                     "skip_future": True,
+                    "missing_mode": "episodes",
+                    "upgrade_mode": "episodes",
                 },
                 "radarr": {
                     "enabled": True,
@@ -106,6 +110,8 @@ class StubSettingsStore:
                     "upgrade_limit": 5,
                     "monitored_only": True,
                     "skip_future": True,
+                    "missing_mode": "episodes",
+                    "upgrade_mode": "episodes",
                 },
             },
         }
@@ -211,7 +217,14 @@ class StubSettingsStore:
         return int(self._findarr_settings["interval_minutes"])
 
     def update_findarr_settings(self, updates: dict[str, Any]) -> dict[str, Any]:
-        for key in ("enabled", "interval_minutes", "hourly_cap", "queue_limit"):
+        for key in (
+            "enabled",
+            "interval_minutes",
+            "hourly_cap",
+            "queue_limit",
+            "command_sleep_seconds",
+            "state_reset_hours",
+        ):
             if key in updates and updates[key] is not None:
                 self._findarr_settings[key] = updates[key]
         apps = updates.get("apps", {})
