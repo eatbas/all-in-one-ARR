@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from fastapi.testclient import TestClient
@@ -11,6 +11,7 @@ from core import app as app_mod
 from core.app import (
     _maybe_start_device_auth,
     _mount_frontend,
+    _start_poster_churn,
     build_context,
     create_app,
 )
@@ -178,6 +179,53 @@ async def test_maybe_start_device_auth_swallows_errors(db, monkeypatch) -> None:
         app_mod, "start_device_auth", AsyncMock(side_effect=RuntimeError("net down"))
     )
     await _maybe_start_device_auth(ctx)  # caught, does not raise
+
+
+async def test_start_poster_churn_schedules_interval(db) -> None:
+    ctx = make_ctx(db=db)
+    poster_cache = MagicMock()
+    poster_cache.evict = MagicMock(return_value=None)
+    ctx.poster_cache = poster_cache
+    settings = Settings(
+        _env_file=None,
+        POSTER_CACHE_TTL_DAYS=10,
+        POSTER_CACHE_MAX_MB=2,
+        POSTER_CACHE_CHURN_INTERVAL_MIN=90,
+        **_SECRETS,
+    )
+    await _start_poster_churn(ctx, settings)
+
+    ctx.scheduler.add_interval.assert_awaited_once()
+    call = ctx.scheduler.add_interval.await_args
+    assert call.kwargs["id"] == "poster_cache_churn"
+    assert call.kwargs["minutes"] == 90
+    # The registered coroutine evicts with the settings-derived bounds (TTL in
+    # days → seconds, cap in MB → bytes).
+    job = call.args[0]
+    await job()
+    poster_cache.evict.assert_called_once_with(
+        max_age_seconds=10 * 86_400, max_total_bytes=2 * 1024 * 1024
+    )
+
+
+async def test_start_poster_churn_skips_without_cache(db) -> None:
+    ctx = make_ctx(db=db)
+    ctx.poster_cache = None
+    settings = Settings(_env_file=None, **_SECRETS)
+    await _start_poster_churn(ctx, settings)
+    ctx.scheduler.add_interval.assert_not_awaited()
+
+
+async def test_start_poster_churn_warns_on_low_ttl(db, monkeypatch) -> None:
+    # A TTL within the 7-day browser poster cache risks evicting actively-viewed
+    # posters, so start-up warns — but still schedules the job.
+    ctx = make_ctx(db=db)
+    ctx.poster_cache = MagicMock()
+    monkeypatch.setattr(app_mod, "_log", MagicMock())
+    settings = Settings(_env_file=None, POSTER_CACHE_TTL_DAYS=3, **_SECRETS)
+    await _start_poster_churn(ctx, settings)
+    app_mod._log.warning.assert_called_once()
+    ctx.scheduler.add_interval.assert_awaited_once()
 
 
 def test_mount_frontend_present(tmp_path, monkeypatch) -> None:

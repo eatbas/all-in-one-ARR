@@ -98,6 +98,15 @@ class Settings(BaseSettings):
     # Disk cache for fetched poster thumbnails; lives inside the gitignored
     # data/ volume so each poster is downloaded from TMDB/OMDb at most once.
     POSTER_CACHE_PATH: str = "data/posters"
+    # Poster-cache churn: a scheduled job evicts posters not served within the TTL
+    # (by file mtime, bumped on each cache hit) and caps the total cache size,
+    # evicting oldest-first. The TTL must exceed the 7-day browser cache
+    # (posters are served with ``Cache-Control: max-age=604800``) so a
+    # continuously-viewed poster is not evicted mid-use. Set TTL or the size cap
+    # to ``0`` to disable that pass; both ``0`` makes the job a no-op.
+    POSTER_CACHE_TTL_DAYS: int = 30
+    POSTER_CACHE_MAX_MB: int = 256
+    POSTER_CACHE_CHURN_INTERVAL_MIN: int = 360
 
     @property
     def service_seeds(self) -> dict[str, dict[str, str]]:

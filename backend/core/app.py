@@ -8,6 +8,7 @@ API/webhook routers and finally serves the built React SPA.
 
 from __future__ import annotations
 
+import asyncio
 from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import AsyncIterator
@@ -44,6 +45,12 @@ from core.webhooks import WebhookRegistry
 
 # Location of the built frontend bundle (overridable in tests).
 FRONTEND_DIST = Path("frontend/dist")
+
+# The browser caches posters for this many days (Cache-Control: max-age=604800 in
+# core.api). A churn TTL at or below this window can evict a poster the browser is
+# still serving from its own cache, forcing a needless re-fetch, so a TTL this low
+# is warned about at start-up.
+_BROWSER_POSTER_CACHE_DAYS = 7
 
 _log = get_logger("app")
 
@@ -126,6 +133,38 @@ async def _maybe_start_device_auth(ctx: AppContext) -> None:
         _log.exception("Trakt device auth failed to start: %s", exc)
 
 
+async def _start_poster_churn(ctx: AppContext, settings: Settings) -> None:
+    """Schedule the periodic poster-cache eviction (age + size bounded).
+
+    The eviction itself is filesystem work, so it runs in a worker thread to keep
+    the event loop free. Skipped when no poster cache is configured.
+    """
+    if ctx.poster_cache is None:
+        return
+    if 0 < settings.POSTER_CACHE_TTL_DAYS <= _BROWSER_POSTER_CACHE_DAYS:
+        _log.warning(
+            "POSTER_CACHE_TTL_DAYS=%d is within the %d-day browser poster cache; "
+            "actively-viewed posters may be evicted and re-fetched — use a larger TTL.",
+            settings.POSTER_CACHE_TTL_DAYS,
+            _BROWSER_POSTER_CACHE_DAYS,
+        )
+    ttl_seconds = settings.POSTER_CACHE_TTL_DAYS * 86_400
+    max_bytes = settings.POSTER_CACHE_MAX_MB * 1024 * 1024
+
+    async def _churn() -> None:
+        await asyncio.to_thread(
+            ctx.poster_cache.evict,
+            max_age_seconds=ttl_seconds,
+            max_total_bytes=max_bytes,
+        )
+
+    await ctx.scheduler.add_interval(
+        _churn,
+        minutes=settings.POSTER_CACHE_CHURN_INTERVAL_MIN,
+        id="poster_cache_churn",
+    )
+
+
 def _mount_frontend(app: FastAPI) -> None:
     """Serve the built SPA at ``/`` if present; otherwise serve a placeholder."""
     if FRONTEND_DIST.is_dir():
@@ -175,6 +214,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     await _maybe_start_device_auth(ctx)
 
     await registry.load_modules(ctx.scheduler, app, ctx)
+
+    await _start_poster_churn(ctx, app.state.settings)
 
     try:
         yield

@@ -111,6 +111,9 @@ cp .env.example .env
 | `TOKEN_STORE_PATH` | `data/trakt_tokens.json` | Trakt token store (persist via volume) |
 | `SETTINGS_STORE_PATH` | `data/app_settings.json` | UI-managed Trakt settings (persist via volume) |
 | `POSTER_CACHE_PATH` | `data/posters` | On-disk poster thumbnail cache (persist via volume) |
+| `POSTER_CACHE_TTL_DAYS` | `30` | Evict posters not served within this many days (must exceed the 7-day browser cache; `0` disables) |
+| `POSTER_CACHE_MAX_MB` | `256` | Hard cap on total poster-cache size; oldest evicted first (`0` disables) |
+| `POSTER_CACHE_CHURN_INTERVAL_MIN` | `360` | How often the poster-cache eviction job runs |
 
 The Trakt credentials and list selection are **seeded** from these variables on
 first start and then managed from the dashboard **Settings** page; the resolved
@@ -157,7 +160,8 @@ touching `.env`. All values are persisted server-side in `SETTINGS_STORE_PATH`.
 WAL/SHM sidecars) and the poster cache, plus row counts for tracked items,
 activity entries, and synced lists. It also provides danger-zone actions to
 **clear the activity log**, **clear synced items & sync state**, or **clear the
-poster cache**. Credentials, Trakt tokens, and tracked-list configuration are
+poster cache** (which removes **all** cached posters — both list and Trending —
+in one action). Credentials, Trakt tokens, and tracked-list configuration are
 never deleted; clearing items only removes the mirrored rows — the next poll
 rebuilds them. SQLite does not shrink the database file immediately after a
 delete, so the reported size may not drop right away.
@@ -371,7 +375,9 @@ cd frontend && npm run build
 - `GET /api/lists` – synced lists with item counts and last/next sync times.
 - `GET /api/posters/{media_type}/{tmdb_id}[?imdb=]` – cached poster thumbnail
   (`media_type` is `movie` or `show`); resolved from TMDB, falling back to OMDb,
-  and stored under `POSTER_CACHE_PATH` so each is fetched only once.
+  and stored under `POSTER_CACHE_PATH` so each is fetched only once. The list and
+  Trending pages share this one cache; a scheduled job evicts posters not served
+  within `POSTER_CACHE_TTL_DAYS` and caps the cache at `POSTER_CACHE_MAX_MB`.
 - `GET /api/activity` – recent meaningful app activity and sync outcomes from the last 15 days (a concise, human-friendly feed, not every read-only API call).
 - `POST /api/sync` – trigger an immediate sync and wait for it to complete; returns `409` if a sync is already running.
 - `GET /api/settings/trakt` – Trakt settings; the client id and URL/hint are
@@ -396,8 +402,9 @@ cd frontend && npm run build
   return refreshed stats.
 - `POST /api/settings/database/clear-items` – delete every tracked item and list
   sync state, preserving tracked-list configuration; returns refreshed stats.
-- `POST /api/settings/database/clear-posters` – delete cached poster thumbnails;
-  returns refreshed stats.
+- `POST /api/settings/database/clear-posters` – delete every cached poster
+  thumbnail (list and Trending share one cache); returns refreshed stats. Stale
+  posters are also evicted automatically by the scheduled churn job.
 - `GET /api/bandwidth/status` – live Bandwidth-Controllarr state: enabled flag,
   control status, last-check timestamp, configured interval, and current
   qBittorrent/SABnzbd stats.

@@ -3,9 +3,19 @@
 from __future__ import annotations
 
 import asyncio
+import os
 from unittest.mock import AsyncMock
 
-from core.posters import PosterCache
+from core.posters import PosterCache, PosterEvictionResult
+
+
+def _seed(cache_dir, name: str, data: bytes, *, mtime: float):
+    """Write a cache file with a fixed mtime, creating the dir on demand."""
+    cache_dir.mkdir(parents=True, exist_ok=True)
+    path = cache_dir / name
+    path.write_bytes(data)
+    os.utime(path, (mtime, mtime))
+    return path
 
 
 def _cache(tmp_path, *, tmdb_bytes=None, omdb_bytes=None) -> PosterCache:
@@ -138,3 +148,114 @@ def test_clear_skips_non_file_matches(tmp_path) -> None:
     (cache_dir / "show-2.jpg").mkdir()
     assert cache.clear() == 3
     assert list(cache_dir.glob("*.jpg")) == [cache_dir / "show-2.jpg"]
+
+
+async def test_cache_hit_touches_mtime(tmp_path) -> None:
+    # A served poster's mtime is bumped to now so the churn pass treats it as
+    # fresh; this is what keeps actively-viewed posters out of eviction.
+    cache = _cache(tmp_path)
+    cache_dir = tmp_path / "posters"
+    poster = _seed(cache_dir, "movie-1.jpg", b"IMG", mtime=1_000.0)
+    path = await cache.get_poster(media_type="movie", tmdb_id=1)
+    assert path == poster
+    assert poster.stat().st_mtime > 1_000.0
+    cache._tmdb.fetch_poster.assert_not_awaited()
+
+
+async def test_cache_hit_touch_failure_is_non_fatal(tmp_path, monkeypatch) -> None:
+    # The mtime bump is best-effort: if it fails (e.g. the file is evicted mid-serve),
+    # the cached poster is still returned rather than erroring the request.
+    cache = _cache(tmp_path)
+    cache_dir = tmp_path / "posters"
+    poster = _seed(cache_dir, "movie-1.jpg", b"IMG", mtime=1_000.0)
+
+    def _raise(*_args, **_kwargs):
+        raise OSError("utime failed")
+
+    monkeypatch.setattr("core.posters.os.utime", _raise)
+    path = await cache.get_poster(media_type="movie", tmdb_id=1)
+    assert path == poster
+
+
+def test_evict_removes_aged_jpg_only(tmp_path, monkeypatch) -> None:
+    monkeypatch.setattr("core.posters._now", lambda: 1_000_000.0)
+    cache = _cache(tmp_path)
+    cache_dir = tmp_path / "posters"
+    fresh = _seed(cache_dir, "movie-1.jpg", b"abc", mtime=1_000_000.0 - 100)
+    stale = _seed(cache_dir, "show-2.jpg", b"defgh", mtime=1_000_000.0 - 10_000)
+    result = cache.evict(max_age_seconds=1_000, max_total_bytes=0)
+    assert result == PosterEvictionResult(removed_files=1, freed_bytes=5)
+    assert fresh.exists()
+    assert not stale.exists()
+
+
+def test_evict_size_cap_deletes_oldest_first(tmp_path, monkeypatch) -> None:
+    monkeypatch.setattr("core.posters._now", lambda: 1_000_000.0)
+    cache = _cache(tmp_path)
+    cache_dir = tmp_path / "posters"
+    # All within the TTL; the cap forces the two oldest (a, b) out, newest survives.
+    a = _seed(cache_dir, "movie-1.jpg", b"aaaa", mtime=1_000_000.0 - 30)
+    b = _seed(cache_dir, "movie-2.jpg", b"bbbb", mtime=1_000_000.0 - 20)
+    c = _seed(cache_dir, "movie-3.jpg", b"cccc", mtime=1_000_000.0 - 10)
+    result = cache.evict(max_age_seconds=0, max_total_bytes=5)
+    assert result == PosterEvictionResult(removed_files=2, freed_bytes=8)
+    assert not a.exists() and not b.exists()
+    assert c.exists()
+
+
+def test_evict_size_cap_below_smallest_clears_all(tmp_path, monkeypatch) -> None:
+    monkeypatch.setattr("core.posters._now", lambda: 1_000_000.0)
+    cache = _cache(tmp_path)
+    cache_dir = tmp_path / "posters"
+    a = _seed(cache_dir, "movie-1.jpg", b"aaaa", mtime=1_000_000.0 - 20)
+    b = _seed(cache_dir, "movie-2.jpg", b"bbbb", mtime=1_000_000.0 - 10)
+    # A cap below the smallest file forces every poster out, so the size loop
+    # exhausts naturally rather than breaking early.
+    result = cache.evict(max_age_seconds=0, max_total_bytes=1)
+    assert result == PosterEvictionResult(removed_files=2, freed_bytes=8)
+    assert not a.exists() and not b.exists()
+
+
+def test_evict_cleans_orphaned_tmp_without_counting(tmp_path, monkeypatch) -> None:
+    monkeypatch.setattr("core.posters._now", lambda: 1_000_000.0)
+    cache = _cache(tmp_path)
+    cache_dir = tmp_path / "posters"
+    fresh_tmp = _seed(cache_dir, "movie-1.jpg.tmp", b"x", mtime=1_000_000.0 - 100)
+    stale_tmp = _seed(cache_dir, "movie-2.jpg.tmp", b"y", mtime=1_000_000.0 - 10_000)
+    result = cache.evict(max_age_seconds=1_000, max_total_bytes=0)
+    # Temp cleanup is housekeeping: it never contributes to the result counters.
+    assert result == PosterEvictionResult(removed_files=0, freed_bytes=0)
+    assert fresh_tmp.exists()
+    assert not stale_tmp.exists()
+
+
+def test_evict_tolerates_missing_directory(tmp_path) -> None:
+    cache = _cache(tmp_path)
+    assert cache.evict(max_age_seconds=1, max_total_bytes=1) == PosterEvictionResult(
+        removed_files=0, freed_bytes=0
+    )
+
+
+def test_evict_disabled_passes_are_noop(tmp_path, monkeypatch) -> None:
+    monkeypatch.setattr("core.posters._now", lambda: 1_000_000.0)
+    cache = _cache(tmp_path)
+    cache_dir = tmp_path / "posters"
+    aged = _seed(cache_dir, "movie-1.jpg", b"abc", mtime=1_000_000.0 - 10_000)
+    aged_tmp = _seed(cache_dir, "movie-1.jpg.tmp", b"z", mtime=1_000_000.0 - 10_000)
+    result = cache.evict(max_age_seconds=0, max_total_bytes=0)
+    assert result == PosterEvictionResult(removed_files=0, freed_bytes=0)
+    assert aged.exists()
+    # The tmp pass is gated on the age pass, so it is skipped when the TTL is off.
+    assert aged_tmp.exists()
+
+
+def test_evict_skips_non_file_matches(tmp_path, monkeypatch) -> None:
+    monkeypatch.setattr("core.posters._now", lambda: 1_000_000.0)
+    cache = _cache(tmp_path)
+    cache_dir = tmp_path / "posters"
+    cache_dir.mkdir(parents=True, exist_ok=True)
+    # A directory whose name matches the glob must be ignored, not statted/deleted.
+    (cache_dir / "movie-2.jpg").mkdir()
+    result = cache.evict(max_age_seconds=1, max_total_bytes=0)
+    assert result == PosterEvictionResult(removed_files=0, freed_bytes=0)
+    assert (cache_dir / "movie-2.jpg").exists()

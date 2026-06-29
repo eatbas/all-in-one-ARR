@@ -18,6 +18,23 @@ def test_valid_settings_defaults() -> None:
     assert settings.POSTER_CACHE_PATH == "data/posters"
     assert settings.BANDWIDTH_CONTROL_ENABLED is False
     assert settings.BANDWIDTH_CHECK_INTERVAL_SEC == 15
+    # Poster-cache churn defaults: TTL comfortably exceeds the 7-day browser cache.
+    assert settings.POSTER_CACHE_TTL_DAYS == 30
+    assert settings.POSTER_CACHE_MAX_MB == 256
+    assert settings.POSTER_CACHE_CHURN_INTERVAL_MIN == 360
+
+
+def test_poster_cache_churn_overrides_from_env() -> None:
+    settings = Settings(
+        _env_file=None,
+        POSTER_CACHE_TTL_DAYS="14",
+        POSTER_CACHE_MAX_MB="64",
+        POSTER_CACHE_CHURN_INTERVAL_MIN="120",
+        **_VALID,
+    )
+    assert settings.POSTER_CACHE_TTL_DAYS == 14
+    assert settings.POSTER_CACHE_MAX_MB == 64
+    assert settings.POSTER_CACHE_CHURN_INTERVAL_MIN == 120
 
 
 def test_all_service_credentials_are_optional() -> None:

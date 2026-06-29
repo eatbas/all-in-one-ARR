@@ -572,7 +572,8 @@ function DatabaseCard() {
                   {formatBytes(stats.poster_cache_bytes)}
                 </span>
                 <span className="text-xs text-muted-foreground">
-                  Cached *.jpg thumbnails fetched on demand.
+                  Cached *.jpg thumbnails for list and Trending posters, fetched
+                  on demand and evicted automatically once stale.
                 </span>
               </div>
             </div>
@@ -619,9 +620,9 @@ function DatabaseCard() {
                 />
                 <ClearAction
                   label="Clear poster cache"
-                  description="Delete all cached poster thumbnails. They will be re-fetched on demand."
+                  description="Delete every cached poster thumbnail (both list and Trending posters). They will be re-fetched on demand. Stale posters are also evicted automatically."
                   confirmLabel="Clear"
-                  helpText="Deletes cached poster thumbnails. They are fetched again on demand."
+                  helpText="Deletes all cached poster thumbnails (list and Trending). They are fetched again on demand."
                   disabled={clearPosters.isPending}
                   onConfirm={() => clearPosters.mutate()}
                 />
