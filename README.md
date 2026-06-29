@@ -231,15 +231,30 @@ commands for the already-configured **Sonarr** and **Radarr** connections:
   connected versions as unsupported.
 - **Search modes** — missing media and quality-cutoff upgrades for Sonarr and
   Radarr.
+- **Sonarr search granularity** — the **Missing search mode** and **Upgrade
+  mode** selectors choose how Sonarr content is searched: **Episodes** (one
+  `EpisodeSearch` per episode), **Seasons** (one `SeasonSearch` per season —
+  season packs, recommended for torrent users), or **Shows** (one `SeriesSearch`
+  per series, upgrading a whole show at once). In Seasons/Shows mode the
+  per-cycle limit and the counters apply to seasons/series rather than episodes.
+  Radarr has no season/show concept, so these selectors are Sonarr-only.
 - **Safety boundaries** — Findarr only triggers native Arr search commands. It
   does not delete media files, remove Seer requests, alter download clients, or
   change Trakt lists.
 - **Safe defaults** — the master switch is off by default. Per-cycle limits, an
-  hourly command cap, monitored-only filtering, skip-future filtering, and an
-  optional queue-size guard bound the side effects.
+  hourly command cap, monitored-only filtering, skip-future filtering, an
+  optional queue-size guard, and a **sleep duration** (seconds to wait between
+  successive Arr search commands, `0` to disable) bound the side effects.
 - **State and history** — processed items are recorded so Findarr does not
   repeatedly search the same item. The page shows recent Findarr actions and
   provides an explicit reset control for processed state.
+- **Stateful management** — processed-media ids are cleared automatically after
+  the **State reset (hours)** window (default `168` = 7 days) so items become
+  eligible again ("re-look where we left off and renew"); the Settings tab shows
+  the **Initial state created** time and the derived **State reset date**, and an
+  **Emergency reset** clears the state immediately and restarts the window.
+  Resets only clear Findarr's own bookkeeping — media and Arr libraries are never
+  touched.
 
 Connections are not configured on this page; configure **Sonarr** and
 **Radarr** in **Settings** first.
