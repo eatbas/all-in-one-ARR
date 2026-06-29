@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import asyncio
 from contextlib import asynccontextmanager
+from dataclasses import dataclass
 from pathlib import Path
 from typing import AsyncIterator
 
@@ -133,11 +134,46 @@ async def _maybe_start_device_auth(ctx: AppContext) -> None:
         _log.exception("Trakt device auth failed to start: %s", exc)
 
 
+@dataclass
+class _PosterChurnConfig:
+    """Cache + eviction bounds for the scheduled poster-churn job.
+
+    APScheduler 4 cannot serialise a reference to a nested function, so the
+    scheduled job must be the module-level :func:`_poster_churn_job`, which reads
+    the active cache and bounds from this holder (populated by
+    :func:`_start_poster_churn`). This mirrors the module-level job pattern used
+    across ``backend/modules/*`` (e.g. ``bandwidth_controllarr.control_job``).
+    """
+
+    cache: PosterCache | None = None
+    ttl_seconds: int = 0
+    max_bytes: int = 0
+
+
+_poster_churn = _PosterChurnConfig()
+
+
+async def _poster_churn_job() -> None:
+    """Scheduled entrypoint: evict aged/oversized posters in a worker thread.
+
+    Filesystem work runs off the event loop via :func:`asyncio.to_thread`.
+    """
+    cache = _poster_churn.cache
+    if cache is None:  # pragma: no cover - cache is set before the job is scheduled
+        return
+    await asyncio.to_thread(
+        cache.evict,
+        max_age_seconds=_poster_churn.ttl_seconds,
+        max_total_bytes=_poster_churn.max_bytes,
+    )
+
+
 async def _start_poster_churn(ctx: AppContext, settings: Settings) -> None:
     """Schedule the periodic poster-cache eviction (age + size bounded).
 
-    The eviction itself is filesystem work, so it runs in a worker thread to keep
-    the event loop free. Skipped when no poster cache is configured.
+    Records the cache and settings-derived bounds on :data:`_poster_churn` so the
+    module-level :func:`_poster_churn_job` can run them, then schedules that job.
+    Skipped when no poster cache is configured.
     """
     if ctx.poster_cache is None:
         return
@@ -148,18 +184,12 @@ async def _start_poster_churn(ctx: AppContext, settings: Settings) -> None:
             settings.POSTER_CACHE_TTL_DAYS,
             _BROWSER_POSTER_CACHE_DAYS,
         )
-    ttl_seconds = settings.POSTER_CACHE_TTL_DAYS * 86_400
-    max_bytes = settings.POSTER_CACHE_MAX_MB * 1024 * 1024
-
-    async def _churn() -> None:
-        await asyncio.to_thread(
-            ctx.poster_cache.evict,
-            max_age_seconds=ttl_seconds,
-            max_total_bytes=max_bytes,
-        )
+    _poster_churn.cache = ctx.poster_cache
+    _poster_churn.ttl_seconds = settings.POSTER_CACHE_TTL_DAYS * 86_400
+    _poster_churn.max_bytes = settings.POSTER_CACHE_MAX_MB * 1024 * 1024
 
     await ctx.scheduler.add_interval(
-        _churn,
+        _poster_churn_job,
         minutes=settings.POSTER_CACHE_CHURN_INTERVAL_MIN,
         id="poster_cache_churn",
     )

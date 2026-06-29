@@ -22,6 +22,9 @@ cd "$ROOT_DIR"
 
 BACKEND_HOST="${BACKEND_HOST:-127.0.0.1}"
 BACKEND_PORT="${BACKEND_PORT:-3223}"
+# Vite's default dev port (frontend/vite.config.ts pins no `server.port`); freed
+# alongside the backend port before start-up and shown in the banner below.
+FRONTEND_PORT="${FRONTEND_PORT:-5173}"
 
 # --- Locate the virtual environment's Python (Unix vs Windows/Git Bash) -------
 # IS_WINDOWS selects the backend reload strategy below: uvicorn's own --reload
@@ -158,6 +161,42 @@ ENV_TEMPLATE
   echo "     (see the README 'Configuration' section)." >&2
 fi
 
+# --- Free the dev ports left bound by a previous run --------------------------
+# A hard exit — or a Ctrl+C that does not fully reap the children, which happens
+# on Windows where uvicorn/Vite can be orphaned — leaves a server holding its
+# port, so the next start fails to bind. Stop whatever is still listening on the
+# backend/frontend ports first so re-running `bash dev.sh` restarts a clean stack.
+free_port() {
+  local port="$1" label="$2" pids pid
+  if [[ "$IS_WINDOWS" == 1 ]]; then
+    # netstat columns: Proto Local-Address Foreign-Address State PID. Keep the
+    # PID (last column) of every LISTENING socket whose local address ends in
+    # ":PORT" (matches 127.0.0.1, 0.0.0.0 and [::1] forms alike).
+    pids="$(netstat -ano 2>/dev/null \
+      | awk -v port="$port" \
+          '$1 == "TCP" && $4 == "LISTENING" && $2 ~ (":" port "$") { print $NF }' \
+      | sort -u || true)"
+  else
+    # lsof is the portable port→owner lookup on macOS/Linux; without it this
+    # yields nothing and start-up proceeds unchanged.
+    pids="$(lsof -ti "tcp:$port" -sTCP:LISTEN 2>/dev/null | sort -u || true)"
+  fi
+  [[ -z "$pids" ]] && return 0
+  echo "Port $port ($label) is busy — stopping leftover process(es): $(echo $pids | tr '\n' ' ')"
+  for pid in $pids; do
+    if [[ "$IS_WINDOWS" == 1 ]]; then
+      taskkill //PID "$pid" //T //F >/dev/null 2>&1 || true
+    else
+      kill "$pid" 2>/dev/null || true
+    fi
+  done
+  # Give the OS a moment to release the socket before we rebind it.
+  sleep 1 || true
+}
+
+free_port "$BACKEND_PORT" backend
+free_port "$FRONTEND_PORT" frontend
+
 # --- Start both servers and shut them down together ---------------------------
 pids=()
 cleaned=0
@@ -205,7 +244,7 @@ pids+=("$!")
 
 echo
 echo "Dev environment is up — press Ctrl+C to stop both servers."
-echo "  Frontend: http://localhost:5173  (proxies /api and /webhook to the backend)"
+echo "  Frontend: http://localhost:${FRONTEND_PORT}  (proxies /api and /webhook to the backend)"
 echo "  Backend:  http://${BACKEND_HOST}:${BACKEND_PORT}"
 echo
 
