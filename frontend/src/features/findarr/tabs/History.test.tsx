@@ -53,6 +53,20 @@ const ROWS: FindarrHistoryEntry[] = [
 
 let clearMutate: Mock<() => void>
 
+/** A run of sonarr rows titled `Show 0…Show n-1`, for pagination assertions. */
+function manyRows(count: number): FindarrHistoryEntry[] {
+  return Array.from({ length: count }, (_, index) => ({
+    id: index + 1,
+    ts: "2026-06-29T20:00:00Z",
+    app: "sonarr",
+    mode: "missing",
+    item_id: String(index),
+    title: `Show ${index}`,
+    status: "success",
+    detail: "ok",
+  }))
+}
+
 function render(ui: ReactElement) {
   return rtlRender(<TooltipProvider>{ui}</TooltipProvider>)
 }
@@ -130,27 +144,77 @@ describe("Findarr History tab", () => {
     expect(screen.getByText("No entries match your filters.")).toBeInTheDocument()
   })
 
-  it("limits visible rows to the selected count", async () => {
-    const many: FindarrHistoryEntry[] = Array.from({ length: 12 }, (_, index) => ({
-      id: index + 1,
-      ts: "2026-06-29T20:00:00Z",
-      app: "sonarr",
-      mode: "missing",
-      item_id: String(index),
-      title: `Show ${index}`,
-      status: "success",
-      detail: "ok",
-    }))
-    vi.mocked(useFindarrHistory).mockReturnValue(queryResult<FindarrHistoryEntry[]>(many))
+  it("pages through history at the selected page size", async () => {
+    vi.mocked(useFindarrHistory).mockReturnValue(
+      queryResult<FindarrHistoryEntry[]>(manyRows(25)),
+    )
     const user = userEvent.setup()
     render(<History />)
-    // Default cap is 20, so all 12 rows show.
-    expect(screen.getByText("Show 11")).toBeInTheDocument()
+
+    // Drop the page size to 10, giving three pages over 25 rows.
+    await user.click(screen.getByRole("combobox", { name: "Rows to show" }))
+    await user.click(screen.getByRole("option", { name: "10" }))
+    expect(screen.getByText("Page 1 of 3")).toBeInTheDocument()
+    expect(screen.getByText("Show 0")).toBeInTheDocument()
+    expect(screen.queryByText("Show 10")).not.toBeInTheDocument()
+
+    await user.click(screen.getByRole("button", { name: "Next page" }))
+    expect(screen.getByText("Page 2 of 3")).toBeInTheDocument()
+    expect(screen.getByText("Show 10")).toBeInTheDocument()
+    expect(screen.queryByText("Show 0")).not.toBeInTheDocument()
+
+    await user.click(screen.getByRole("button", { name: "Previous page" }))
+    expect(screen.getByText("Page 1 of 3")).toBeInTheDocument()
+    expect(screen.getByText("Show 0")).toBeInTheDocument()
+  })
+
+  it("returns to the first page when the page size changes", async () => {
+    vi.mocked(useFindarrHistory).mockReturnValue(
+      queryResult<FindarrHistoryEntry[]>(manyRows(25)),
+    )
+    const user = userEvent.setup()
+    render(<History />)
+
+    // Default size 20 → two pages; advance to the second, then resize to 10.
+    await user.click(screen.getByRole("button", { name: "Next page" }))
+    expect(screen.getByText("Show 20")).toBeInTheDocument()
 
     await user.click(screen.getByRole("combobox", { name: "Rows to show" }))
     await user.click(screen.getByRole("option", { name: "10" }))
+    expect(screen.getByText("Page 1 of 3")).toBeInTheDocument()
     expect(screen.getByText("Show 0")).toBeInTheDocument()
-    expect(screen.queryByText("Show 11")).not.toBeInTheDocument()
+    expect(screen.queryByText("Show 20")).not.toBeInTheDocument()
+  })
+
+  it("returns to the first page when the instance filter changes", async () => {
+    vi.mocked(useFindarrHistory).mockReturnValue(
+      queryResult<FindarrHistoryEntry[]>(manyRows(25)),
+    )
+    const user = userEvent.setup()
+    render(<History />)
+
+    await user.click(screen.getByRole("button", { name: "Next page" }))
+    expect(screen.getByText("Page 2 of 2")).toBeInTheDocument()
+
+    await user.click(screen.getByRole("combobox", { name: "Filter by instance" }))
+    await user.click(screen.getByRole("option", { name: "Sonarr" }))
+    expect(screen.getByText("Page 1 of 2")).toBeInTheDocument()
+    expect(screen.getByText("Show 0")).toBeInTheDocument()
+  })
+
+  it("returns to the first page when the search text changes", async () => {
+    vi.mocked(useFindarrHistory).mockReturnValue(
+      queryResult<FindarrHistoryEntry[]>(manyRows(25)),
+    )
+    const user = userEvent.setup()
+    render(<History />)
+
+    await user.click(screen.getByRole("button", { name: "Next page" }))
+    expect(screen.queryByText("Show 0")).not.toBeInTheDocument()
+
+    await user.type(screen.getByLabelText("Search history"), "Show")
+    expect(screen.getByText("Page 1 of 2")).toBeInTheDocument()
+    expect(screen.getByText("Show 0")).toBeInTheDocument()
   })
 
   it("clears the history after confirmation", async () => {

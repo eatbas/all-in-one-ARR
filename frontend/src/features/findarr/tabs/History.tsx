@@ -9,6 +9,8 @@ import {
   TableRow,
 } from "@/shared/components/ui/table"
 import { HistoryRow } from "@/features/findarr/components/history-row"
+import { HistoryPagination } from "@/features/findarr/components/history-pagination"
+import { pageCount } from "@/features/findarr/components/history-pagination-utils"
 import { processedInformation } from "@/features/findarr/components/history-format"
 import {
   HistoryToolbar,
@@ -24,7 +26,8 @@ export function History() {
   const clearHistory = useClearFindarrHistory()
   const [instanceFilter, setInstanceFilter] = useState<InstanceFilter>("all")
   const [search, setSearch] = useState("")
-  const [showCount, setShowCount] = useState(20)
+  const [pageSize, setPageSize] = useState(20)
+  const [page, setPage] = useState(1)
 
   if (isLoading || !history) {
     return <p className="text-sm text-muted-foreground">Loading history…</p>
@@ -34,23 +37,37 @@ export function History() {
   }
 
   const query = search.trim().toLowerCase()
-  const visible = history
+  const filtered = history
     .filter((entry) => instanceFilter === "all" || entry.app === instanceFilter)
     .filter(
       (entry) =>
         query === "" || processedInformation(entry).toLowerCase().includes(query),
     )
-    .slice(0, showCount)
+
+  // Clamp the page so a filter that shrinks the result set never strands the
+  // user on a now-empty page, even before the reset-on-change handlers fire.
+  const totalPages = pageCount(filtered.length, pageSize)
+  const currentPage = Math.min(page, totalPages)
+  const visible = filtered.slice((currentPage - 1) * pageSize, currentPage * pageSize)
 
   return (
     <div className="flex flex-col gap-4">
       <HistoryToolbar
         instanceFilter={instanceFilter}
-        onInstanceFilterChange={setInstanceFilter}
+        onInstanceFilterChange={(value) => {
+          setInstanceFilter(value)
+          setPage(1)
+        }}
         search={search}
-        onSearchChange={setSearch}
-        showCount={showCount}
-        onShowCountChange={setShowCount}
+        onSearchChange={(value) => {
+          setSearch(value)
+          setPage(1)
+        }}
+        showCount={pageSize}
+        onShowCountChange={(value) => {
+          setPageSize(value)
+          setPage(1)
+        }}
         onClear={() => clearHistory.mutate()}
         isClearing={clearHistory.isPending}
       />
@@ -86,6 +103,15 @@ export function History() {
           </TableBody>
         </Table>
       </div>
+
+      {filtered.length > 0 && (
+        <HistoryPagination
+          page={currentPage}
+          pageSize={pageSize}
+          totalItems={filtered.length}
+          onPageChange={setPage}
+        />
+      )}
     </div>
   )
 }
