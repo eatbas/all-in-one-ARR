@@ -126,6 +126,31 @@ async def test_wanted_paginates_records() -> None:
 
 
 @respx.mock
+async def test_wanted_paginates_when_total_records_absent() -> None:
+    # Older Arr builds omit ``totalRecords``; pagination must then continue until
+    # an empty page rather than stopping after the first (which dropped records).
+    respx.get("http://radarr/api/v3/wanted/missing", params={"page": 1, "pageSize": 100}).mock(
+        return_value=httpx.Response(200, json={"records": [{"id": 1}]})
+    )
+    respx.get("http://radarr/api/v3/wanted/missing", params={"page": 2, "pageSize": 100}).mock(
+        return_value=httpx.Response(200, json={"records": [{"id": 2}]})
+    )
+    respx.get("http://radarr/api/v3/wanted/missing", params={"page": 3, "pageSize": 100}).mock(
+        return_value=httpx.Response(200, json={"records": []})
+    )
+    items = await FindarrArrClient(app="radarr", base_url="http://radarr", api_key="k").wanted("missing")
+    assert items == [{"id": 1}, {"id": 2}]
+
+
+@respx.mock
+async def test_wanted_without_total_records_stops_on_empty_first_page() -> None:
+    respx.get("http://radarr/api/v3/wanted/missing", params={"page": 1, "pageSize": 100}).mock(
+        return_value=httpx.Response(200, json={"records": []})
+    )
+    assert await FindarrArrClient(app="radarr", base_url="http://radarr", api_key="k").wanted("missing") == []
+
+
+@respx.mock
 async def test_wanted_requests_embedded_series_for_sonarr_only() -> None:
     sonarr_route = respx.get("http://sonarr/api/v3/wanted/missing").mock(
         return_value=httpx.Response(200, json={"totalRecords": 0, "records": []})

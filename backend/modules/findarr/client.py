@@ -161,8 +161,12 @@ class FindarrArrClient:
                 if not isinstance(page_records, list):
                     raise FindarrClientError(f"{self.app} wanted payload has invalid records")
                 records.extend([record for record in page_records if isinstance(record, dict)])
-                total = int(data.get("totalRecords", len(records)))
-                if len(records) >= total or not page_records:
+                # ``totalRecords`` is authoritative when present. When an older
+                # Arr build omits it, fall back to "stop on the first empty page"
+                # rather than treating the first page as the whole set — the
+                # latter silently drops every record beyond page one.
+                total = data.get("totalRecords")
+                if (total is not None and len(records) >= int(total)) or not page_records:
                     break
             elif isinstance(data, list):
                 records.extend([record for record in data if isinstance(record, dict)])
