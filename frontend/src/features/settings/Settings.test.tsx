@@ -24,6 +24,7 @@ vi.mock("@/shared/lib/queries", () => ({
   useTestService: vi.fn(),
   useGeneralSettings: vi.fn(),
   useUpdateStatusInterval: vi.fn(),
+  useUpdateTrendingInterval: vi.fn(),
   useDatabaseStats: vi.fn(),
   useClearActivity: vi.fn(),
   useClearItems: vi.fn(),
@@ -51,6 +52,7 @@ import {
   useUpdateServiceSettings,
   useUpdateStatusInterval,
   useUpdateTraktSettings,
+  useUpdateTrendingInterval,
 } from "@/shared/lib/queries"
 import { Settings } from "@/features/settings/Settings"
 import { TooltipProvider } from "@/shared/components/ui/tooltip"
@@ -135,6 +137,7 @@ let testMutate: ReturnType<typeof vi.fn>
 let serviceUpdateMutate: ReturnType<typeof vi.fn>
 let serviceTestMutate: ReturnType<typeof vi.fn>
 let updateStatusIntervalMutate: ReturnType<typeof vi.fn>
+let updateTrendingIntervalMutate: ReturnType<typeof vi.fn>
 let clearActivityMutate: ReturnType<typeof vi.fn>
 let clearItemsMutate: ReturnType<typeof vi.fn>
 let clearPostersMutate: ReturnType<typeof vi.fn>
@@ -156,6 +159,7 @@ beforeEach(() => {
   serviceUpdateMutate = vi.fn()
   serviceTestMutate = vi.fn()
   updateStatusIntervalMutate = vi.fn()
+  updateTrendingIntervalMutate = vi.fn()
   clearActivityMutate = vi.fn()
   clearItemsMutate = vi.fn()
   clearPostersMutate = vi.fn()
@@ -179,11 +183,15 @@ beforeEach(() => {
     queryResult({
       interval_seconds: 60,
       sync_interval_minutes: 15,
+      trending_sync_interval_minutes: 60,
       auto_remove_when_available: false,
     }),
   )
   vi.mocked(useUpdateStatusInterval).mockReturnValue(
     mutation(updateStatusIntervalMutate),
+  )
+  vi.mocked(useUpdateTrendingInterval).mockReturnValue(
+    mutation(updateTrendingIntervalMutate),
   )
   vi.mocked(useDatabaseStats).mockReturnValue(queryResult(DATABASE_STATS))
   vi.mocked(useClearActivity).mockReturnValue(mutation(clearActivityMutate))
@@ -607,6 +615,7 @@ describe("Settings — general", () => {
       queryResult({
         interval_seconds: 45,
         sync_interval_minutes: 15,
+        trending_sync_interval_minutes: 60,
         auto_remove_when_available: false,
       }),
     )
@@ -661,6 +670,42 @@ describe("Settings — general", () => {
       "Explain Status check interval",
       "How often the dashboard refreshes connection status for configured integrations.",
     )
+  })
+
+  it("shows the configured trending sync interval", () => {
+    vi.mocked(useGeneralSettings).mockReturnValue(
+      queryResult({
+        interval_seconds: 60,
+        sync_interval_minutes: 15,
+        trending_sync_interval_minutes: 120,
+        auto_remove_when_available: false,
+      }),
+    )
+    render(<Settings />)
+    expect(screen.getByText("App scheduler")).toBeInTheDocument()
+    expect(
+      screen.getByRole("combobox", { name: "Trending sync interval" }),
+    ).toHaveTextContent("2 hours")
+  })
+
+  it("falls back to the default trending interval when general settings are unset", () => {
+    vi.mocked(useGeneralSettings).mockReturnValue(
+      queryResult<GeneralSettings>(undefined),
+    )
+    render(<Settings />)
+    expect(
+      screen.getByRole("combobox", { name: "Trending sync interval" }),
+    ).toHaveTextContent("1 hour")
+  })
+
+  it("updates the trending sync interval", async () => {
+    const user = userEvent.setup()
+    render(<Settings />)
+    await user.click(
+      screen.getByRole("combobox", { name: "Trending sync interval" }),
+    )
+    await user.click(screen.getByRole("option", { name: "2 hours" }))
+    expect(updateTrendingIntervalMutate).toHaveBeenCalledWith(120)
   })
 })
 

@@ -80,6 +80,9 @@ class StubSettingsStore:
         auto_remove_when_available: bool = True,
         bandwidth_control_enabled: bool = False,
         bandwidth_check_interval_seconds: int = 15,
+        trending_sync_interval_minutes: int = 60,
+        deletarr_movies_path: str = "/media/movies",
+        deletarr_tv_path: str = "/media/tv",
     ) -> None:
         # Defaults to True (unlike the real store, which seeds False) so the
         # availability-removal tests exercise the enabled path without having to opt
@@ -87,6 +90,11 @@ class StubSettingsStore:
         self._auto_remove_when_available = auto_remove_when_available
         self._bandwidth_control_enabled = bandwidth_control_enabled
         self._bandwidth_check_interval_seconds = bandwidth_check_interval_seconds
+        self._trending_sync_interval_minutes = trending_sync_interval_minutes
+        self._deletarr_settings = {
+            "movies_path": deletarr_movies_path,
+            "tv_path": deletarr_tv_path,
+        }
         self._findarr_settings = {
             "enabled": False,
             "interval_minutes": 30,
@@ -204,6 +212,15 @@ class StubSettingsStore:
         self._bandwidth_check_interval_seconds = seconds
         return seconds
 
+    def trending_sync_interval_minutes(self) -> int:
+        return self._trending_sync_interval_minutes
+
+    def update_trending_sync_interval(self, minutes: int) -> int:
+        if minutes not in {30, 60, 120}:
+            minutes = 60
+        self._trending_sync_interval_minutes = minutes
+        return minutes
+
     def findarr_settings(self) -> dict[str, Any]:
         return {
             **self._findarr_settings,
@@ -235,6 +252,18 @@ class StubSettingsStore:
                         {key: value for key, value in values.items() if value is not None}
                     )
         return self.findarr_settings()
+
+    def deletarr_settings(self) -> dict[str, str]:
+        return dict(self._deletarr_settings)
+
+    def update_deletarr_settings(
+        self, *, movies_path: str | None = None, tv_path: str | None = None
+    ) -> dict[str, str]:
+        if movies_path is not None:
+            self._deletarr_settings["movies_path"] = movies_path.strip() or self._deletarr_settings["movies_path"]
+        if tv_path is not None:
+            self._deletarr_settings["tv_path"] = tv_path.strip() or self._deletarr_settings["tv_path"]
+        return self.deletarr_settings()
 
     def masked_services(self) -> dict[str, dict[str, Any]]:
         return {

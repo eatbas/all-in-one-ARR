@@ -185,6 +185,7 @@ export interface ServicesStatusResponse {
 export interface UpdateGeneralSettings {
   interval_seconds?: number
   sync_interval_minutes?: number
+  trending_sync_interval_minutes?: number
   auto_remove_when_available?: boolean
 }
 
@@ -192,6 +193,7 @@ export interface UpdateGeneralSettings {
 export interface GeneralSettings {
   interval_seconds: number
   sync_interval_minutes: number
+  trending_sync_interval_minutes: number
   auto_remove_when_available: boolean
 }
 
@@ -202,6 +204,89 @@ export interface DatabaseStats {
   item_count: number
   activity_count: number
   list_state_count: number
+}
+
+/** Media library handled by Deletarr. */
+export type DeletarrLibraryType = "movies" | "tv"
+
+/** Filesystem entry type returned by a Deletarr scan. */
+export type DeletarrItemType = "file" | "folder"
+
+/** Protected video context for a junk item inside a movie folder. */
+export interface DeletarrVideoRef {
+  name: string
+  size: number
+}
+
+/** A single Deletarr scan candidate. */
+export interface DeletarrScanItem {
+  path: string
+  name: string
+  type: DeletarrItemType
+  size: number
+  reason: string
+  parent: string
+  movie_folder: string | null
+  movie_folder_path: string | null
+  is_checked: boolean
+  videos_in_folder: DeletarrVideoRef[]
+}
+
+/** Per-library Deletarr scan statistics. */
+export interface DeletarrStats {
+  total_files: number
+  total_folders: number
+  total_size: number
+  is_scanning: boolean
+  scan_progress: number
+}
+
+/** Status for one configured Deletarr library. */
+export interface DeletarrLibraryStatus {
+  type: DeletarrLibraryType
+  path: string
+  last_scan_at: string | null
+  last_error: string | null
+  results_count: number
+  stats: DeletarrStats
+}
+
+/** Deletarr path settings. */
+export interface DeletarrSettings {
+  movies_path: string
+  tv_path: string
+}
+
+/** Full Deletarr status response. */
+export interface DeletarrStatus {
+  settings: DeletarrSettings
+  libraries: Record<DeletarrLibraryType, DeletarrLibraryStatus>
+}
+
+/** Deletarr results response for one library. */
+export interface DeletarrResults {
+  type: DeletarrLibraryType
+  path: string
+  results: DeletarrScanItem[]
+  stats: DeletarrStats
+}
+
+/** Response returned after deleting reviewed Deletarr candidates. */
+export interface DeletarrDeleteResult {
+  success: boolean
+  deleted: number
+  failed: number
+  freed_bytes: number
+  freed_mb: number
+  freed_formatted: string
+  deleted_paths: string[]
+  errors: Array<{ path: string; error: string }>
+}
+
+/** Partial Deletarr settings update. */
+export interface DeletarrSettingsUpdate {
+  movies_path?: string
+  tv_path?: string
 }
 
 /** Error raised when the backend returns a non-2xx response. */
@@ -402,6 +487,44 @@ export function clearItems(): Promise<DatabaseStats> {
 
 export function clearPosters(): Promise<DatabaseStats> {
   return postJson<DatabaseStats>("/api/settings/database/clear-posters", {})
+}
+
+export function getDeletarrStatus(): Promise<DeletarrStatus> {
+  return request<DeletarrStatus>("/api/deletarr/status")
+}
+
+export function getDeletarrSettings(): Promise<DeletarrSettings> {
+  return request<DeletarrSettings>("/api/deletarr/settings")
+}
+
+export function updateDeletarrSettings(
+  body: DeletarrSettingsUpdate,
+): Promise<DeletarrStatus> {
+  return request<DeletarrStatus>("/api/deletarr/settings", {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  })
+}
+
+export function getDeletarrResults(
+  type: DeletarrLibraryType,
+): Promise<DeletarrResults> {
+  const params = new URLSearchParams({ type })
+  return request<DeletarrResults>(`/api/deletarr/results?${params.toString()}`)
+}
+
+export function scanDeletarr(
+  type: DeletarrLibraryType,
+): Promise<DeletarrResults> {
+  return postJson<DeletarrResults>("/api/deletarr/scan", { type })
+}
+
+export function deleteDeletarrItems(
+  type: DeletarrLibraryType,
+  paths: string[],
+): Promise<DeletarrDeleteResult> {
+  return postJson<DeletarrDeleteResult>("/api/deletarr/delete", { type, paths })
 }
 
 /** Statistics for one download client shown on the Bandwidth-Controllarr page. */
@@ -650,6 +773,12 @@ export interface TrendingItem {
   already_tracked: boolean
   /** Whether this item is already present in Radarr (movies) or Sonarr (shows). */
   in_library: boolean
+  /**
+   * Whether the item's media is actually downloaded (Radarr `hasFile`; Sonarr at
+   * least one episode file). An `in_library` item with this `false` has a record but
+   * the media is still missing — shown amber rather than green.
+   */
+  in_library_available: boolean
 }
 
 /** Query parameters for `GET /api/trending`. */
@@ -680,6 +809,17 @@ export interface AddTrendingPayload {
 /** Response of `POST /api/trending/add`. */
 export interface TrendingAddResult {
   status: "added" | "added_pending_sync"
+}
+
+/** Refresh state of the scheduled trending sync, from `GET /api/trending/status`. */
+export interface TrendingStatus {
+  last_synced_at: string | null
+  interval_minutes: number
+  next_sync_at: string | null
+}
+
+export function getTrendingStatus(): Promise<TrendingStatus> {
+  return request<TrendingStatus>("/api/trending/status")
 }
 
 export function getTrending(query: TrendingQuery): Promise<TrendingItem[]> {

@@ -39,6 +39,10 @@ VALID_SYNC_INTERVALS: frozenset[int] = frozenset({15, 30, 45, 60})
 # Allowed Bandwidth-Controllarr check intervals in seconds offered by the dashboard.
 VALID_BANDWIDTH_INTERVALS: frozenset[int] = frozenset({10, 15, 30, 60})
 
+# Allowed trending-sync intervals in minutes offered by the dashboard's App scheduler.
+VALID_TRENDING_SYNC_INTERVALS: frozenset[int] = frozenset({30, 60, 120})
+DEFAULT_TRENDING_SYNC_INTERVAL = 60
+
 # Allowed Findarr scheduler intervals in minutes offered by the dashboard.
 VALID_FINDARR_INTERVALS: frozenset[int] = frozenset({15, 30, 45, 60})
 
@@ -79,6 +83,11 @@ DEFAULT_FINDARR_SETTINGS: dict[str, Any] = {
     },
 }
 
+DEFAULT_DELETARR_SETTINGS: dict[str, str] = {
+    "movies_path": "/media/movies",
+    "tv_path": "/media/tv",
+}
+
 
 def _service_seed(
     desc: ServiceDescriptor, seed: dict[str, str] | None
@@ -101,6 +110,15 @@ def _normalise_sync_interval(value: int) -> int:
 def _normalise_bandwidth_interval(value: int) -> int:
     """Return a valid Bandwidth-Controllarr interval in seconds, defaulting to 15."""
     return value if value in VALID_BANDWIDTH_INTERVALS else 15
+
+
+def _normalise_trending_sync_interval(value: int) -> int:
+    """Return a valid trending-sync interval in minutes, defaulting to 60."""
+    return (
+        value
+        if value in VALID_TRENDING_SYNC_INTERVALS
+        else DEFAULT_TRENDING_SYNC_INTERVAL
+    )
 
 
 def _normalise_findarr_interval(value: int) -> int:
@@ -205,6 +223,28 @@ def _normalise_findarr_settings(raw: dict[str, Any] | None = None) -> dict[str, 
     return normalised
 
 
+def _normalise_deletarr_path(value: Any, *, default: str) -> str:
+    """Return a non-empty Deletarr path string, falling back to ``default``."""
+    path = str(value).strip() if value is not None else ""
+    return path or default
+
+
+def _normalise_deletarr_settings(
+    raw: dict[str, Any] | None = None,
+    *,
+    movies_path: str = DEFAULT_DELETARR_SETTINGS["movies_path"],
+    tv_path: str = DEFAULT_DELETARR_SETTINGS["tv_path"],
+) -> dict[str, str]:
+    """Merge and validate persisted Deletarr paths with environment seeds."""
+    raw = raw or {}
+    return {
+        "movies_path": _normalise_deletarr_path(
+            raw.get("movies_path", movies_path), default=movies_path
+        ),
+        "tv_path": _normalise_deletarr_path(raw.get("tv_path", tv_path), default=tv_path),
+    }
+
+
 @dataclass(frozen=True)
 class TrackedList:
     """A Trakt list selected for syncing.
@@ -247,7 +287,9 @@ class SettingsStore:
         self._auto_remove_when_available = False
         self._bandwidth_control_enabled = False
         self._bandwidth_check_interval_seconds = 15
+        self._trending_sync_interval_minutes = DEFAULT_TRENDING_SYNC_INTERVAL
         self._findarr_settings = copy.deepcopy(DEFAULT_FINDARR_SETTINGS)
+        self._deletarr_settings = copy.deepcopy(DEFAULT_DELETARR_SETTINGS)
         self._services: dict[str, dict[str, str]] = {
             desc.name: empty_values(desc) for desc in SERVICES
         }
@@ -265,6 +307,9 @@ class SettingsStore:
         auto_remove_when_available: bool = False,
         bandwidth_control_enabled: bool = False,
         bandwidth_check_interval_seconds: int = 15,
+        trending_sync_interval_minutes: int = DEFAULT_TRENDING_SYNC_INTERVAL,
+        deletarr_movies_path: str = DEFAULT_DELETARR_SETTINGS["movies_path"],
+        deletarr_tv_path: str = DEFAULT_DELETARR_SETTINGS["tv_path"],
     ) -> None:
         """Load persisted settings, or seed from the supplied defaults.
 
@@ -274,8 +319,14 @@ class SettingsStore:
         is populated from the dashboard (discovered lists or added by URL).
         """
         with self._lock:
+            deletarr_seed = {
+                "movies_path": deletarr_movies_path,
+                "tv_path": deletarr_tv_path,
+            }
             if self._path.exists():
-                self._load_locked(seed_services=services or {})
+                self._load_locked(
+                    seed_services=services or {}, seed_deletarr=deletarr_seed
+                )
                 self._log.info("loaded persisted settings")
             else:
                 self._client_id = client_id
@@ -292,7 +343,15 @@ class SettingsStore:
                 self._bandwidth_check_interval_seconds = _normalise_bandwidth_interval(
                     bandwidth_check_interval_seconds
                 )
+                self._trending_sync_interval_minutes = (
+                    _normalise_trending_sync_interval(trending_sync_interval_minutes)
+                )
                 self._findarr_settings = _normalise_findarr_settings()
+                self._deletarr_settings = _normalise_deletarr_settings(
+                    deletarr_seed,
+                    movies_path=deletarr_movies_path,
+                    tv_path=deletarr_tv_path,
+                )
                 for desc in SERVICES:
                     self._services[desc.name] = _service_seed(
                         desc, (services or {}).get(desc.name)
@@ -300,8 +359,13 @@ class SettingsStore:
                 self._save_locked()
                 self._log.info("seeded settings from environment")
 
-    def _load_locked(self, seed_services: dict[str, dict[str, str]] | None = None) -> None:
+    def _load_locked(
+        self,
+        seed_services: dict[str, dict[str, str]] | None = None,
+        seed_deletarr: dict[str, str] | None = None,
+    ) -> None:
         data = json.loads(self._path.read_text(encoding="utf-8"))
+        seed_deletarr = seed_deletarr or copy.deepcopy(DEFAULT_DELETARR_SETTINGS)
         trakt = data.get("trakt") or {}
         self._client_id = trakt.get("client_id", "")
         self._client_secret = trakt.get("client_secret", "")
@@ -321,8 +385,20 @@ class SettingsStore:
         self._bandwidth_check_interval_seconds = _normalise_bandwidth_interval(
             data.get("bandwidth_check_interval_seconds", 15)
         )
+        migrated_trending = "trending_sync_interval_minutes" not in data
+        self._trending_sync_interval_minutes = _normalise_trending_sync_interval(
+            data.get("trending_sync_interval_minutes", DEFAULT_TRENDING_SYNC_INTERVAL)
+        )
         migrated_findarr = "findarr" not in data
         self._findarr_settings = _normalise_findarr_settings(data.get("findarr"))
+        migrated_deletarr = "deletarr" not in data
+        self._deletarr_settings = _normalise_deletarr_settings(
+            data.get("deletarr"),
+            movies_path=seed_deletarr.get(
+                "movies_path", DEFAULT_DELETARR_SETTINGS["movies_path"]
+            ),
+            tv_path=seed_deletarr.get("tv_path", DEFAULT_DELETARR_SETTINGS["tv_path"]),
+        )
         # Migration: the flag was historically persisted as ``auto_remove_on_import``
         # (remove when Radarr/Sonarr imported the title). It now means "remove from
         # Trakt once Seer reports the item available". An existing store is read
@@ -363,16 +439,26 @@ class SettingsStore:
             else:
                 self._services[name] = _service_seed(desc, seed.get(name))
                 backfilled = True
-        if backfilled or migrated_auto_remove or migrated_bandwidth or migrated_findarr:
+        if (
+            backfilled
+            or migrated_auto_remove
+            or migrated_bandwidth
+            or migrated_trending
+            or migrated_findarr
+            or migrated_deletarr
+        ):
             self._save_locked()
             self._log.info(
                 "persisted store migration (services_backfilled=%s "
                 "auto_remove_key_migrated=%s bandwidth_keys_migrated=%s "
-                "findarr_keys_migrated=%s)",
+                "trending_key_migrated=%s findarr_keys_migrated=%s "
+                "deletarr_keys_migrated=%s)",
                 backfilled,
                 migrated_auto_remove,
                 migrated_bandwidth,
+                migrated_trending,
                 migrated_findarr,
+                migrated_deletarr,
             )
 
     def _save_locked(self) -> None:
@@ -386,7 +472,9 @@ class SettingsStore:
             "auto_remove_when_available": self._auto_remove_when_available,
             "bandwidth_control_enabled": self._bandwidth_control_enabled,
             "bandwidth_check_interval_seconds": self._bandwidth_check_interval_seconds,
+            "trending_sync_interval_minutes": self._trending_sync_interval_minutes,
             "findarr": self._findarr_settings,
+            "deletarr": self._deletarr_settings,
             "lists": [item.to_dict() for item in self._lists],
             "services": self._services,
         }
@@ -503,6 +591,22 @@ class SettingsStore:
             self._log.info("updated bandwidth check interval to %s seconds", seconds)
             return seconds
 
+    # ---- trending sync interval ----
+
+    def trending_sync_interval_minutes(self) -> int:
+        """Return the configured trending-sync interval in minutes."""
+        with self._lock:
+            return self._trending_sync_interval_minutes
+
+    def update_trending_sync_interval(self, minutes: int) -> int:
+        """Update the trending-sync interval; invalid values fall back to 60 min."""
+        minutes = _normalise_trending_sync_interval(minutes)
+        with self._lock:
+            self._trending_sync_interval_minutes = minutes
+            self._save_locked()
+            self._log.info("updated trending sync interval to %s minutes", minutes)
+            return minutes
+
     # ---- Findarr ----
 
     def findarr_settings(self) -> dict[str, Any]:
@@ -542,6 +646,32 @@ class SettingsStore:
             self._save_locked()
             self._log.info("updated Findarr settings")
             return copy.deepcopy(self._findarr_settings)
+
+    # ---- Deletarr ----
+
+    def deletarr_settings(self) -> dict[str, str]:
+        """Return a copy of the persisted Deletarr media roots."""
+        with self._lock:
+            return dict(self._deletarr_settings)
+
+    def update_deletarr_settings(
+        self, *, movies_path: str | None = None, tv_path: str | None = None
+    ) -> dict[str, str]:
+        """Update Deletarr media roots; ``None`` leaves a field unchanged."""
+        with self._lock:
+            merged = dict(self._deletarr_settings)
+            if movies_path is not None:
+                merged["movies_path"] = movies_path
+            if tv_path is not None:
+                merged["tv_path"] = tv_path
+            self._deletarr_settings = _normalise_deletarr_settings(
+                merged,
+                movies_path=self._deletarr_settings["movies_path"],
+                tv_path=self._deletarr_settings["tv_path"],
+            )
+            self._save_locked()
+            self._log.info("updated Deletarr paths")
+            return dict(self._deletarr_settings)
 
     # ---- tracked lists ----
 
@@ -654,7 +784,9 @@ class SettingsStore:
                 "auto_remove_when_available": self._auto_remove_when_available,
                 "bandwidth_control_enabled": self._bandwidth_control_enabled,
                 "bandwidth_check_interval_seconds": self._bandwidth_check_interval_seconds,
+                "trending_sync_interval_minutes": self._trending_sync_interval_minutes,
                 "findarr": copy.deepcopy(self._findarr_settings),
+                "deletarr": dict(self._deletarr_settings),
                 "lists": [item.to_dict() for item in self._lists],
                 "services": self.masked_services(),
             }

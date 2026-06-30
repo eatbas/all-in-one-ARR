@@ -23,6 +23,7 @@ from core.posters import PosterCache
 from core.scheduler import SchedulerService
 from core.settings_store import SettingsStore
 from core.status_checker import StatusChecker
+from core.trending import TrendingStore
 from core.trakt_auth import TraktAuthSession
 from core.webhooks import WebhookRegistry
 
@@ -100,6 +101,12 @@ class AppContext:
     settings_store: SettingsStore
     status_checker: StatusChecker = field(default_factory=lambda: None)  # type: ignore[arg-type]
     poster_cache: PosterCache | None = field(default=None)
+    # In-process snapshot of the trending/popular feeds, kept warm by the scheduled
+    # refresh so the Trending page is served without per-request provider calls.
+    trending_store: TrendingStore = field(default_factory=TrendingStore)
+    # Re-points the trending-sync interval job; set by start_trending_sync during
+    # start-up (mirrors reschedule_sync / findarr_reschedule).
+    reschedule_trending: Callable[[int], Awaitable[Any]] | None = field(default=None)
     trakt_auth: TraktAuthSession = field(default_factory=TraktAuthSession)
     sync_now: Callable[[], Awaitable[Any]] | None = field(default=None)
     # Coordinates manual and scheduled list-syncarr sync runs so they do not
@@ -128,3 +135,15 @@ class AppContext:
     findarr_clear_history: Callable[[], Awaitable[dict]] | None = field(default=None)
     findarr_reschedule: Callable[[int], Awaitable[Any]] | None = field(default=None)
     findarr_gate: SyncGate = field(default_factory=SyncGate)
+    # Deletarr callables, set by the module during setup(); core routes stay
+    # decoupled from filesystem-scanning implementation details.
+    deletarr_status: Callable[[], Awaitable[dict]] | None = field(default=None)
+    deletarr_scan: Callable[[str], Awaitable[dict]] | None = field(default=None)
+    deletarr_results: Callable[[str], Awaitable[dict]] | None = field(default=None)
+    deletarr_delete: Callable[[str, list[str]], Awaitable[dict]] | None = field(
+        default=None
+    )
+    deletarr_update_settings: Callable[..., Awaitable[dict]] | None = field(
+        default=None
+    )
+    deletarr_gate: SyncGate = field(default_factory=SyncGate)

@@ -15,9 +15,13 @@ import {
   clearFindarrHistory,
   clearItems,
   clearPosters,
+  deleteDeletarrItems,
   getActivity,
   getBandwidthStatus,
   getDatabaseStats,
+  getDeletarrResults,
+  getDeletarrSettings,
+  getDeletarrStatus,
   getFindarrHistory,
   getFindarrSettings,
   getFindarrStatus,
@@ -32,16 +36,19 @@ import {
   getTraktSettings,
   getTrending,
   getTrendingRating,
+  getTrendingStatus,
   removeAvailable,
   removeItem,
   removeTraktList,
   resetFindarrState,
   runFindarr,
+  scanDeletarr,
   startTraktAuth,
   testService,
   testTrakt,
   triggerSync,
   updateBandwidthSettings,
+  updateDeletarrSettings,
   updateFindarrSettings,
   updateGeneralSettings,
   updateServiceSettings,
@@ -51,6 +58,12 @@ import {
   type BandwidthSettingsUpdate,
   type BandwidthStatus,
   type DatabaseStats,
+  type DeletarrDeleteResult,
+  type DeletarrLibraryType,
+  type DeletarrResults,
+  type DeletarrSettings,
+  type DeletarrSettingsUpdate,
+  type DeletarrStatus,
   type FindarrAppName,
   type FindarrCountResult,
   type FindarrHistoryEntry,
@@ -77,6 +90,7 @@ import {
   type TrendingItem,
   type TrendingQuery,
   type TrendingRating,
+  type TrendingStatus,
   type UpdateGeneralSettings,
   type UpdateServicePayload,
   type UpdateTraktSettings,
@@ -102,12 +116,17 @@ export const queryKeys = {
   generalSettings: ["general", "settings"] as const,
   database: ["database", "stats"] as const,
   bandwidthStatus: ["bandwidth", "status"] as const,
+  deletarrStatus: ["deletarr", "status"] as const,
+  deletarrSettings: ["deletarr", "settings"] as const,
+  deletarrResults: (type: DeletarrLibraryType) =>
+    ["deletarr", "results", type] as const,
   findarrStatus: ["findarr", "status"] as const,
   findarrSettings: ["findarr", "settings"] as const,
   findarrHistory: ["findarr", "history"] as const,
   trending: (query: TrendingQuery) =>
     ["trending", query.source, query.media, query.category] as const,
   trendingRating: (key: string) => ["trending", "rating", key] as const,
+  trendingStatus: ["trending", "status"] as const,
 }
 
 export function useStatus(): UseQueryResult<Status> {
@@ -426,6 +445,32 @@ export function useUpdateSyncInterval(): UseMutationResult<
   })
 }
 
+export function useUpdateTrendingInterval(): UseMutationResult<
+  GeneralSettings,
+  Error,
+  number
+> {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: (minutes) =>
+      updateGeneralSettings({ trending_sync_interval_minutes: minutes }),
+    onSuccess: (result) => {
+      toast.success("Trending sync interval updated", {
+        description: `Refreshing trending every ${result.trending_sync_interval_minutes} minutes`,
+      })
+      void queryClient.invalidateQueries({ queryKey: queryKeys.generalSettings })
+      void queryClient.invalidateQueries({ queryKey: queryKeys.trendingStatus })
+      void queryClient.invalidateQueries({ queryKey: queryKeys.activity })
+    },
+    onError: (error) => {
+      toast.error("Could not update trending sync interval", {
+        description: error.message,
+      })
+    },
+  })
+}
+
 export function useUpdateAutoRemoveWhenAvailable(): UseMutationResult<
   GeneralSettings,
   Error,
@@ -707,6 +752,118 @@ export function useClearPosters(): UseMutationResult<DatabaseStats, Error, void>
   })
 }
 
+const DELETARR_REFETCH_INTERVAL = 5_000
+
+export function useDeletarrStatus(): UseQueryResult<DeletarrStatus> {
+  return useQuery({
+    queryKey: queryKeys.deletarrStatus,
+    queryFn: getDeletarrStatus,
+    refetchInterval: DELETARR_REFETCH_INTERVAL,
+  })
+}
+
+export function useDeletarrSettings(): UseQueryResult<DeletarrSettings> {
+  return useQuery({
+    queryKey: queryKeys.deletarrSettings,
+    queryFn: getDeletarrSettings,
+  })
+}
+
+export function useDeletarrResults(
+  type: DeletarrLibraryType,
+): UseQueryResult<DeletarrResults> {
+  return useQuery({
+    queryKey: queryKeys.deletarrResults(type),
+    queryFn: () => getDeletarrResults(type),
+    refetchInterval: DELETARR_REFETCH_INTERVAL,
+  })
+}
+
+function invalidateDeletarr(
+  queryClient: ReturnType<typeof useQueryClient>,
+  type?: DeletarrLibraryType,
+) {
+  void queryClient.invalidateQueries({ queryKey: queryKeys.deletarrStatus })
+  void queryClient.invalidateQueries({ queryKey: queryKeys.deletarrSettings })
+  if (type) {
+    void queryClient.invalidateQueries({ queryKey: queryKeys.deletarrResults(type) })
+  } else {
+    void queryClient.invalidateQueries({ queryKey: ["deletarr", "results"] })
+  }
+  void queryClient.invalidateQueries({ queryKey: queryKeys.activity })
+}
+
+export function useUpdateDeletarrSettings(): UseMutationResult<
+  DeletarrStatus,
+  Error,
+  DeletarrSettingsUpdate
+> {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: updateDeletarrSettings,
+    onSuccess: () => {
+      toast.success("Deletarr settings saved")
+      invalidateDeletarr(queryClient)
+    },
+    onError: (error) => {
+      toast.error("Could not save Deletarr settings", {
+        description: error.message,
+      })
+    },
+  })
+}
+
+export function useScanDeletarr(): UseMutationResult<
+  DeletarrResults,
+  Error,
+  DeletarrLibraryType
+> {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: scanDeletarr,
+    onSuccess: (result) => {
+      toast.success("Deletarr scan complete", {
+        description: `${result.results.length} candidate(s) found.`,
+      })
+      invalidateDeletarr(queryClient, result.type)
+    },
+    onError: (error) => {
+      toast.error("Could not scan library", { description: error.message })
+    },
+  })
+}
+
+export function useDeleteDeletarrItems(): UseMutationResult<
+  DeletarrDeleteResult,
+  Error,
+  { type: DeletarrLibraryType; paths: string[] }
+> {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: ({ type, paths }) => deleteDeletarrItems(type, paths),
+    onSuccess: (result, variables) => {
+      if (result.failed > 0) {
+        toast.error("Some Deletarr items could not be deleted", {
+          description: `${result.deleted} deleted, ${result.failed} failed.`,
+        })
+      } else {
+        toast.success("Deletarr items deleted", {
+          description: `${result.deleted} item(s), ${result.freed_formatted} reclaimed.`,
+        })
+      }
+      invalidateDeletarr(queryClient, variables.type)
+    },
+    onError: (error) => {
+      toast.error("Could not delete selected items", {
+        description: error.message,
+      })
+    },
+  })
+}
+
 /**
  * Trending feeds change slowly, so they are cached for several minutes rather
  * than polled on the shared dashboard interval (which would hammer the external
@@ -719,6 +876,19 @@ export function useTrending(query: TrendingQuery): UseQueryResult<TrendingItem[]
     queryKey: queryKeys.trending(query),
     queryFn: () => getTrending(query),
     staleTime: TRENDING_STALE_TIME,
+  })
+}
+
+/**
+ * Poll the scheduled trending-sync status so the Trending page can show when the
+ * snapshot was last refreshed. Refetched on the shared interval (the relative-time
+ * label should not drift far from the real refresh time).
+ */
+export function useTrendingStatus(): UseQueryResult<TrendingStatus> {
+  return useQuery({
+    queryKey: queryKeys.trendingStatus,
+    queryFn: getTrendingStatus,
+    refetchInterval: REFETCH_INTERVAL,
   })
 }
 

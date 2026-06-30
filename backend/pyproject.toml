@@ -39,6 +39,7 @@ packages = [
     "modules.list_syncarr",
     "modules.bandwidth_controllarr",
     "modules.findarr",
+    "modules.deletarr",
 ]
 
 [tool.pytest.ini_options]

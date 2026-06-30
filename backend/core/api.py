@@ -7,7 +7,6 @@ authoritative contract that the frontend TypeScript types mirror.
 from __future__ import annotations
 
 import asyncio
-from datetime import datetime, timedelta
 from typing import TYPE_CHECKING
 
 from fastapi import APIRouter, Query, Response
@@ -16,6 +15,7 @@ from pydantic import BaseModel
 
 from core.context import SyncAlreadyRunning
 from core.logging import get_logger
+from core.timefmt import next_sync_at
 
 if TYPE_CHECKING:  # pragma: no cover
     from core.context import AppContext
@@ -106,12 +106,14 @@ class GeneralSettingsRequest(BaseModel):
     # ``None`` field is left unchanged.
     interval_seconds: int | None = None
     sync_interval_minutes: int | None = None
+    trending_sync_interval_minutes: int | None = None
     auto_remove_when_available: bool | None = None
 
 
 class GeneralSettingsResponse(BaseModel):
     interval_seconds: int
     sync_interval_minutes: int
+    trending_sync_interval_minutes: int
     auto_remove_when_available: bool
 
 
@@ -121,20 +123,6 @@ class DatabaseStatsResponse(BaseModel):
     item_count: int
     activity_count: int
     list_state_count: int
-
-
-def _next_sync_at(last_synced_at: str | None, interval_minutes: int) -> str | None:
-    """Derive the next poll time from the last sync plus the poll interval.
-
-    This is an approximation of the scheduler's next fire time (the APScheduler 4
-    wrapper does not expose it); ``None`` when the list has never been polled.
-    """
-    if last_synced_at is None:
-        return None
-    # last_synced_at is always written by db.utcnow_iso() (valid ISO-8601), so
-    # fromisoformat cannot fail here.
-    last = datetime.fromisoformat(last_synced_at)
-    return (last + timedelta(minutes=interval_minutes)).isoformat()
 
 
 def _services_status_response(snapshot: "StatusResult") -> ServicesStatusResponse:
@@ -187,7 +175,7 @@ def create_api_router(ctx: "AppContext") -> APIRouter:
                     item_count=counts.get(tracked.slug, 0),
                     removed_count=removed.get(tracked.slug, 0),
                     last_synced_at=last,
-                    next_sync_at=_next_sync_at(last, interval),
+                    next_sync_at=next_sync_at(last, interval),
                     interval_minutes=interval,
                 )
             )
@@ -240,6 +228,9 @@ def create_api_router(ctx: "AppContext") -> APIRouter:
         return GeneralSettingsResponse(
             interval_seconds=ctx.settings_store.status_check_interval_seconds(),
             sync_interval_minutes=ctx.settings_store.sync_interval_minutes(),
+            trending_sync_interval_minutes=(
+                ctx.settings_store.trending_sync_interval_minutes()
+            ),
             auto_remove_when_available=ctx.settings_store.auto_remove_when_available(),
         )
 
@@ -321,6 +312,18 @@ def create_api_router(ctx: "AppContext") -> APIRouter:
                 )
             if ctx.reschedule_sync is not None:
                 await ctx.reschedule_sync(minutes)
+        if body.trending_sync_interval_minutes is not None:
+            previous = ctx.settings_store.trending_sync_interval_minutes()
+            minutes = ctx.settings_store.update_trending_sync_interval(
+                body.trending_sync_interval_minutes
+            )
+            if minutes != previous:
+                ctx.db.add_activity(
+                    "Trending sync interval updated",
+                    f"Trending sync interval updated to {minutes} minutes",
+                )
+            if ctx.reschedule_trending is not None:
+                await ctx.reschedule_trending(minutes)
         if body.auto_remove_when_available is not None:
             previous = ctx.settings_store.auto_remove_when_available()
             enabled = ctx.settings_store.update_auto_remove_when_available(

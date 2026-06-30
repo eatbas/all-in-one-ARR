@@ -98,6 +98,8 @@ def test_lifespan_authenticated_placeholder_frontend(_env, monkeypatch, tmp_path
         assert "bw_check_status" in metrics.text
         # Bandwidth router is reachable through the assembled app.
         assert client.get("/api/bandwidth/status").status_code == 200
+        # Deletarr router is registered through the assembled app.
+        assert client.get("/api/deletarr/settings").status_code == 200
         # Placeholder served at root.
         assert "All-in-One ARR" in client.get("/").text
 
@@ -122,6 +124,7 @@ def test_lifespan_serves_built_frontend(_env, monkeypatch, tmp_path) -> None:
     with TestClient(create_app()) as client:
         assert "built spa" in client.get("/").text
         assert "built spa" in client.get("/findarr").text
+        assert "built spa" in client.get("/deletarr").text
         # The Trending page's SPA route is served so a hard refresh on /trending works.
         assert "built spa" in client.get("/trending").text
         assert client.get("/api/status").status_code == 200

@@ -35,6 +35,60 @@ vi.mock("@/shared/lib/queries", () => ({
   useTestService: vi.fn(() => ({ mutate: vi.fn(), isPending: false })),
   useBandwidthStatus: vi.fn(() => ({ data: undefined, isLoading: false })),
   useUpdateBandwidthSettings: vi.fn(() => ({ mutate: vi.fn(), isPending: false })),
+  useDeletarrStatus: vi.fn(() => ({
+    data: {
+      settings: { movies_path: "/media/movies", tv_path: "/media/tv" },
+      libraries: {
+        movies: {
+          type: "movies",
+          path: "/media/movies",
+          last_scan_at: null,
+          last_error: null,
+          results_count: 0,
+          stats: {
+            total_files: 0,
+            total_folders: 0,
+            total_size: 0,
+            is_scanning: false,
+            scan_progress: 0,
+          },
+        },
+        tv: {
+          type: "tv",
+          path: "/media/tv",
+          last_scan_at: null,
+          last_error: null,
+          results_count: 0,
+          stats: {
+            total_files: 0,
+            total_folders: 0,
+            total_size: 0,
+            is_scanning: false,
+            scan_progress: 0,
+          },
+        },
+      },
+    },
+    isLoading: false,
+  })),
+  useDeletarrResults: vi.fn(() => ({
+    data: {
+      type: "movies",
+      path: "/media/movies",
+      results: [],
+      stats: {
+        total_files: 0,
+        total_folders: 0,
+        total_size: 0,
+        is_scanning: false,
+        scan_progress: 0,
+      },
+    },
+    isLoading: false,
+  })),
+  useUpdateDeletarrSettings: vi.fn(() => ({ mutate: vi.fn(), isPending: false })),
+  useScanDeletarr: vi.fn(() => ({ mutate: vi.fn(), isPending: false })),
+  useDeleteDeletarrItems: vi.fn(() => ({ mutate: vi.fn(), isPending: false })),
   useFindarrStatus: vi.fn(() => ({
     data: {
       settings: {
@@ -42,6 +96,8 @@ vi.mock("@/shared/lib/queries", () => ({
         interval_minutes: 30,
         hourly_cap: 20,
         queue_limit: -1,
+        command_sleep_seconds: 0,
+        state_reset_hours: 168,
         apps: {
           sonarr: {
             enabled: true,
@@ -49,6 +105,8 @@ vi.mock("@/shared/lib/queries", () => ({
             upgrade_limit: 5,
             monitored_only: true,
             skip_future: true,
+            missing_mode: "episodes",
+            upgrade_mode: "episodes",
           },
           radarr: {
             enabled: true,
@@ -56,6 +114,8 @@ vi.mock("@/shared/lib/queries", () => ({
             upgrade_limit: 5,
             monitored_only: true,
             skip_future: true,
+            missing_mode: "episodes",
+            upgrade_mode: "episodes",
           },
         },
       },
@@ -99,10 +159,37 @@ vi.mock("@/shared/lib/queries", () => ({
   useAddTrending: vi.fn(() => ({ mutate: vi.fn(), isPending: false })),
 }))
 
+vi.mock("@/features/findarr/Findarr", () => ({
+  Findarr: () => <div>Findarr route</div>,
+}))
+
+vi.mock("@/features/dashboard/Dashboard", () => ({
+  Dashboard: () => <div>Dashboard route</div>,
+}))
+
+vi.mock("@/features/trending/Trending", () => ({
+  Trending: () => <div>Trending route</div>,
+}))
+
+vi.mock("@/features/list-syncarr/ListSyncarr", () => ({
+  ListSyncarr: () => <div>List-Syncarr route</div>,
+}))
+
+vi.mock("@/features/bandwidth-controllarr/BandwidthControllarr", () => ({
+  BandwidthControllarr: () => <div>Bandwidth-Controllarr route</div>,
+}))
+
+vi.mock("@/features/deletarr/Deletarr", () => ({
+  Deletarr: () => <div>Deletarr route</div>,
+}))
+
+vi.mock("@/features/settings/Settings", () => ({
+  Settings: () => <div>Settings route</div>,
+}))
+
 import App from "@/App"
 import { ThemeProvider } from "@/shared/components/theme-provider"
 import { TooltipProvider } from "@/shared/components/ui/tooltip"
-import { SETTINGS_TAB_STORAGE_KEY } from "@/features/settings/settings-tab"
 
 function renderAt(path: string) {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
@@ -120,77 +207,58 @@ function renderAt(path: string) {
 }
 
 beforeEach(() => {
-  localStorage.removeItem(SETTINGS_TAB_STORAGE_KEY)
+  localStorage.clear()
 })
 
 describe("App routing", () => {
   it("renders the dashboard at /", () => {
     renderAt("/")
-    expect(screen.getByText("Recent activity")).toBeInTheDocument()
+    expect(screen.getByText("Dashboard route")).toBeInTheDocument()
   })
 
-  it("renders the Trending page with per-source tabs at /trending", () => {
+  it("renders the Trending page at /trending", () => {
     renderAt("/trending")
-    expect(screen.getByRole("tab", { name: "Trakt" })).toBeInTheDocument()
-    expect(screen.getByRole("tab", { name: "TMDB" })).toBeInTheDocument()
-    expect(screen.getByRole("tab", { name: "Seer" })).toBeInTheDocument()
+    expect(screen.getByText("Trending route")).toBeInTheDocument()
   })
 
-  it("renders the List-Syncarr page with Lists and Settings tabs at /list-syncarr", () => {
+  it("renders the List-Syncarr page at /list-syncarr", () => {
     renderAt("/list-syncarr")
-    expect(screen.getByRole("tab", { name: "Lists" })).toBeInTheDocument()
-    expect(screen.getByRole("tab", { name: "Settings" })).toBeInTheDocument()
-    // Lists is the default tab, so its content is shown first.
-    expect(
-      screen.getByText("Trakt lists kept in sync by the engine."),
-    ).toBeInTheDocument()
+    expect(screen.getByText("List-Syncarr route")).toBeInTheDocument()
   })
 
   it("renders the settings page at /settings", () => {
     renderAt("/settings")
-    // The General tab is the default landing tab.
-    expect(screen.getByText("Status check interval")).toBeInTheDocument()
+    expect(screen.getByText("Settings route")).toBeInTheDocument()
   })
 
   it("renders the Bandwidth-Controllarr page at /bandwidth-controllarr", () => {
     renderAt("/bandwidth-controllarr")
-    expect(screen.getByRole("tab", { name: "Status" })).toBeInTheDocument()
-    expect(screen.getByRole("tab", { name: "Settings" })).toBeInTheDocument()
-    expect(
-      screen.getByText((text) =>
-        text.includes("Prioritise BitTorrent over Usenet by pausing SABnzbd while"),
-      ),
-    ).toBeInTheDocument()
+    expect(screen.getByText("Bandwidth-Controllarr route")).toBeInTheDocument()
   })
 
   it("renders the Findarr page at /findarr", () => {
     renderAt("/findarr")
-    expect(screen.getByRole("tab", { name: "Status" })).toBeInTheDocument()
-    expect(screen.getByRole("tab", { name: "Settings" })).toBeInTheDocument()
-    expect(screen.getByRole("tab", { name: "History" })).toBeInTheDocument()
-    expect(
-      screen.getByText("Search missing and cutoff-unmet media in Sonarr 4+ and Radarr 6+."),
-    ).toBeInTheDocument()
+    expect(screen.getByText("Findarr route")).toBeInTheDocument()
+  })
+
+  it("renders the Deletarr page at /deletarr", () => {
+    renderAt("/deletarr")
+    expect(screen.getByText("Deletarr route")).toBeInTheDocument()
   })
 
   it("redirects unknown routes back to the dashboard", () => {
     renderAt("/does-not-exist")
-    expect(screen.getByText("Recent activity")).toBeInTheDocument()
+    expect(screen.getByText("Dashboard route")).toBeInTheDocument()
   })
 })
 
-describe("Settings tab persistence across navigation", () => {
-  it("remembers the active tab when leaving and returning to Settings", async () => {
+describe("route navigation", () => {
+  it("navigates between sidebar links", async () => {
     const user = userEvent.setup()
     renderAt("/settings")
-    await user.click(screen.getByRole("tab", { name: "Trakt" }))
     await user.click(screen.getByRole("link", { name: "Dashboard" }))
-    expect(screen.getByText("Recent activity")).toBeInTheDocument()
+    expect(screen.getByText("Dashboard route")).toBeInTheDocument()
     await user.click(screen.getByRole("link", { name: "Settings" }))
-    expect(screen.getByRole("tab", { name: "Trakt" })).toHaveAttribute(
-      "aria-selected",
-      "true",
-    )
-    expect(screen.getByText("Trakt credentials")).toBeInTheDocument()
+    expect(screen.getByText("Settings route")).toBeInTheDocument()
   })
 })

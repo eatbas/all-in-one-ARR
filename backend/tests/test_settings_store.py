@@ -30,6 +30,10 @@ def test_seeds_and_persists_on_first_run(tmp_path) -> None:
     assert path.exists()
     assert store.trakt_credentials() == ("cid", "secret")
     assert [item.slug for item in store.tracked_lists()] == ["movies"]
+    assert store.deletarr_settings() == {
+        "movies_path": "/media/movies",
+        "tv_path": "/media/tv",
+    }
 
 
 def test_loads_existing_and_ignores_seed(tmp_path) -> None:
@@ -155,6 +159,65 @@ def test_seeds_and_round_trips_services(tmp_path) -> None:
     reopened = SettingsStore(str(path))
     reopened.load_or_seed(client_id="x", client_secret="x", services=None)
     assert reopened.service_connection("seer") == ("http://js", "jk")
+
+
+def test_seeds_updates_and_reloads_deletarr_paths(tmp_path) -> None:
+    path = tmp_path / "settings.json"
+    store = SettingsStore(str(path))
+    store.load_or_seed(
+        client_id="c",
+        client_secret="s",
+        deletarr_movies_path="/mnt/movies",
+        deletarr_tv_path="/mnt/tv",
+    )
+    assert store.deletarr_settings() == {
+        "movies_path": "/mnt/movies",
+        "tv_path": "/mnt/tv",
+    }
+
+    store.update_deletarr_settings(movies_path="/new/movies")
+    assert store.deletarr_settings() == {
+        "movies_path": "/new/movies",
+        "tv_path": "/mnt/tv",
+    }
+    store.update_deletarr_settings(tv_path="/new/tv")
+    assert store.deletarr_settings() == {
+        "movies_path": "/new/movies",
+        "tv_path": "/new/tv",
+    }
+
+    reopened = SettingsStore(str(path))
+    reopened.load_or_seed(
+        client_id="x",
+        client_secret="x",
+        deletarr_movies_path="/ignored",
+        deletarr_tv_path="/ignored-tv",
+    )
+    assert reopened.deletarr_settings() == {
+        "movies_path": "/new/movies",
+        "tv_path": "/new/tv",
+    }
+
+
+def test_backfills_deletarr_paths_from_seed_on_upgrade(tmp_path) -> None:
+    path = tmp_path / "settings.json"
+    path.write_text(json.dumps({"trakt": {"client_id": "c", "client_secret": "s"}}))
+    store = SettingsStore(str(path))
+    store.load_or_seed(
+        client_id="x",
+        client_secret="x",
+        deletarr_movies_path="/seed/movies",
+        deletarr_tv_path="/seed/tv",
+    )
+
+    assert store.deletarr_settings() == {
+        "movies_path": "/seed/movies",
+        "tv_path": "/seed/tv",
+    }
+    assert json.loads(path.read_text())["deletarr"] == {
+        "movies_path": "/seed/movies",
+        "tv_path": "/seed/tv",
+    }
 
 
 def test_backfills_new_services_from_seed_on_upgrade(tmp_path) -> None:
@@ -466,3 +529,55 @@ def test_legacy_store_without_bandwidth_keys_defaults(tmp_path) -> None:
     saved = json.loads(path.read_text())
     assert saved["bandwidth_control_enabled"] is False
     assert saved["bandwidth_check_interval_seconds"] == 15
+
+
+def test_trending_sync_interval_defaults_to_sixty(tmp_path) -> None:
+    store = SettingsStore(str(tmp_path / "settings.json"))
+    _seed(store)
+    assert store.trending_sync_interval_minutes() == 60
+
+
+def test_trending_sync_interval_seed_and_reload(tmp_path) -> None:
+    path = tmp_path / "settings.json"
+    store = SettingsStore(str(path))
+    store.load_or_seed(
+        client_id="cid",
+        client_secret="sec",
+        trending_sync_interval_minutes=120,
+    )
+    assert store.trending_sync_interval_minutes() == 120
+    assert json.loads(path.read_text())["trending_sync_interval_minutes"] == 120
+
+    reopened = SettingsStore(str(path))
+    reopened.load_or_seed(client_id="x", client_secret="x")
+    assert reopened.trending_sync_interval_minutes() == 120
+
+
+def test_trending_sync_interval_invalid_value_falls_back(tmp_path) -> None:
+    store = SettingsStore(str(tmp_path / "settings.json"))
+    _seed(store)
+    assert store.update_trending_sync_interval(30) == 30
+    assert store.update_trending_sync_interval(7) == 60
+    assert store.trending_sync_interval_minutes() == 60
+
+
+def test_trending_sync_interval_in_masked(tmp_path) -> None:
+    store = SettingsStore(str(tmp_path / "settings.json"))
+    _seed(store)
+    store.update_trending_sync_interval(120)
+    assert store.masked()["trending_sync_interval_minutes"] == 120
+
+
+def test_legacy_store_without_trending_key_defaults(tmp_path) -> None:
+    # A store created before the App scheduler existed loads without the new key and
+    # falls back to the default, persisting it on the next save.
+    path = tmp_path / "settings.json"
+    SettingsStore(str(path)).load_or_seed(client_id="cid", client_secret="sec")
+    data = json.loads(path.read_text())
+    data.pop("trending_sync_interval_minutes", None)
+    path.write_text(json.dumps(data), encoding="utf-8")
+
+    reopened = SettingsStore(str(path))
+    reopened.load_or_seed(client_id="x", client_secret="x")
+    assert reopened.trending_sync_interval_minutes() == 60
+    assert json.loads(path.read_text())["trending_sync_interval_minutes"] == 60

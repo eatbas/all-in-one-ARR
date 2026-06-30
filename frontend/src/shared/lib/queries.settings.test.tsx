@@ -37,6 +37,7 @@ import {
   useUpdateStatusInterval,
   useUpdateSyncInterval,
   useUpdateTraktSettings,
+  useUpdateTrendingInterval,
 } from "@/shared/lib/queries"
 import { setup } from "@/shared/test/query-provider"
 
@@ -73,6 +74,7 @@ beforeEach(() => {
   vi.mocked(api.getGeneralSettings).mockResolvedValue({
     interval_seconds: 60,
     sync_interval_minutes: 15,
+    trending_sync_interval_minutes: 60,
     auto_remove_when_available: false,
   })
 })
@@ -382,6 +384,7 @@ describe("general settings hooks", () => {
     vi.mocked(api.updateGeneralSettings).mockResolvedValue({
       interval_seconds: 30,
       sync_interval_minutes: 15,
+      trending_sync_interval_minutes: 60,
       auto_remove_when_available: false,
     })
     const { queryClient, wrapper } = setup()
@@ -417,6 +420,7 @@ describe("general settings hooks", () => {
     vi.mocked(api.updateGeneralSettings).mockResolvedValue({
       interval_seconds: 60,
       sync_interval_minutes: 30,
+      trending_sync_interval_minutes: 60,
       auto_remove_when_available: false,
     })
     const { queryClient, wrapper } = setup()
@@ -447,10 +451,50 @@ describe("general settings hooks", () => {
     })
   })
 
+  it("useUpdateTrendingInterval saves the interval and invalidates queries", async () => {
+    vi.mocked(api.updateGeneralSettings).mockResolvedValue({
+      interval_seconds: 60,
+      sync_interval_minutes: 15,
+      trending_sync_interval_minutes: 120,
+      auto_remove_when_available: false,
+    })
+    const { queryClient, wrapper } = setup()
+    const invalidate = vi.spyOn(queryClient, "invalidateQueries")
+    const { result } = renderHook(() => useUpdateTrendingInterval(), { wrapper })
+
+    act(() => result.current.mutate(120))
+
+    await waitFor(() => expect(result.current.isSuccess).toBe(true))
+    expect(api.updateGeneralSettings).toHaveBeenCalledWith({
+      trending_sync_interval_minutes: 120,
+    })
+    expect(toast.success).toHaveBeenCalledWith(
+      "Trending sync interval updated",
+      expect.objectContaining({ description: expect.any(String) }),
+    )
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: queryKeys.generalSettings })
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: queryKeys.trendingStatus })
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: queryKeys.activity })
+  })
+
+  it("useUpdateTrendingInterval toasts on error", async () => {
+    vi.mocked(api.updateGeneralSettings).mockRejectedValue(new Error("boom"))
+    const { wrapper } = setup()
+    const { result } = renderHook(() => useUpdateTrendingInterval(), { wrapper })
+
+    act(() => result.current.mutate(30))
+
+    await waitFor(() => expect(result.current.isError).toBe(true))
+    expect(toast.error).toHaveBeenCalledWith("Could not update trending sync interval", {
+      description: "boom",
+    })
+  })
+
   it("useUpdateAutoRemoveWhenAvailable announces enabled and invalidates general settings", async () => {
     vi.mocked(api.updateGeneralSettings).mockResolvedValue({
       interval_seconds: 60,
       sync_interval_minutes: 15,
+      trending_sync_interval_minutes: 60,
       auto_remove_when_available: true,
     })
     const { queryClient, wrapper } = setup()
@@ -477,6 +521,7 @@ describe("general settings hooks", () => {
     vi.mocked(api.updateGeneralSettings).mockResolvedValue({
       interval_seconds: 60,
       sync_interval_minutes: 15,
+      trending_sync_interval_minutes: 60,
       auto_remove_when_available: false,
     })
     const { wrapper } = setup()

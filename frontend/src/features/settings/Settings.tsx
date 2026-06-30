@@ -56,6 +56,7 @@ import {
   useUpdateServiceSettings,
   useUpdateStatusInterval,
   useUpdateTraktSettings,
+  useUpdateTrendingInterval,
 } from "@/shared/lib/queries"
 import type {
   UpdateServicePayload,
@@ -719,6 +720,66 @@ function GeneralCard() {
   )
 }
 
+const TRENDING_INTERVAL_OPTIONS = [
+  { value: 30, label: "30 minutes" },
+  { value: 60, label: "1 hour" },
+  { value: 120, label: "2 hours" },
+] as const
+
+/** App scheduler: how often the Trending page's feeds are refreshed in the background. */
+function AppSchedulerCard() {
+  const { data: general } = useGeneralSettings()
+  const updateTrendingInterval = useUpdateTrendingInterval()
+
+  const interval = general?.trending_sync_interval_minutes ?? 60
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>App scheduler</CardTitle>
+        <CardDescription>
+          Background refresh of the Trending page's feeds, so opening it does not call
+          Trakt, TMDB and Seer on every click.
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <div className="flex items-center gap-1.5">
+              <label htmlFor="trending-interval" className="text-sm font-medium">
+                Trending sync interval
+              </label>
+              <SettingsHelp label="Trending sync interval">
+                How often the background job refreshes the trending and popular feeds
+                from Trakt, TMDB and Seer.
+              </SettingsHelp>
+            </div>
+            <p className="text-sm text-muted-foreground">
+              How often trending and popular feeds are refreshed.
+            </p>
+          </div>
+          <Select
+            value={String(interval)}
+            onValueChange={(value) => updateTrendingInterval.mutate(Number(value))}
+            disabled={updateTrendingInterval.isPending}
+          >
+            <SelectTrigger id="trending-interval" className="w-full sm:w-40">
+              <SelectValue placeholder="Select interval" />
+            </SelectTrigger>
+            <SelectContent>
+              {TRENDING_INTERVAL_OPTIONS.map((option) => (
+                <SelectItem key={option.value} value={String(option.value)}>
+                  {option.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+      </CardContent>
+    </Card>
+  )
+}
+
 /**
  * Settings page: a header (title and one-line description) above a tab per area —
  * General, Database, Trakt, then one per managed service (Seer, Sonarr, Radarr,
@@ -761,7 +822,10 @@ export function Settings() {
           ))}
         </TabsList>
         <TabsContent value="general">
-          <GeneralCard />
+          <div className="flex flex-col gap-6">
+            <GeneralCard />
+            <AppSchedulerCard />
+          </div>
         </TabsContent>
         <TabsContent value="database">
           <DatabaseCard />

@@ -32,6 +32,7 @@ from core.clients.trakt import TraktClient
 from core.config import Settings
 from core.context import AppContext
 from core.db import Database
+from core.deletarr_api import create_deletarr_router
 from core.findarr_api import create_findarr_router
 from core.logging import configure_logging, get_logger
 from core.posters import PosterCache
@@ -41,6 +42,7 @@ from core.settings_store import SettingsStore
 from core.status_checker import StatusChecker
 from core.trakt_api import create_trakt_router
 from core.trending_api import create_trending_router
+from core.trending_sync import start_trending_sync
 from core.trakt_auth import cancel_device_auth, start_device_auth
 from core.webhooks import WebhookRegistry
 
@@ -71,6 +73,9 @@ def build_context(settings: Settings) -> AppContext:
         auto_remove_when_available=settings.AUTO_REMOVE_WHEN_AVAILABLE,
         bandwidth_control_enabled=settings.BANDWIDTH_CONTROL_ENABLED,
         bandwidth_check_interval_seconds=settings.BANDWIDTH_CHECK_INTERVAL_SEC,
+        trending_sync_interval_minutes=settings.TRENDING_SYNC_INTERVAL_MIN,
+        deletarr_movies_path=settings.DELETARR_MOVIES_PATH,
+        deletarr_tv_path=settings.DELETARR_TV_PATH,
     )
     client_id, client_secret = settings_store.trakt_credentials()
 
@@ -205,6 +210,7 @@ def _mount_frontend(app: FastAPI) -> None:
         @app.get("/list-syncarr", response_class=HTMLResponse)
         @app.get("/bandwidth-controllarr", response_class=HTMLResponse)
         @app.get("/findarr", response_class=HTMLResponse)
+        @app.get("/deletarr", response_class=HTMLResponse)
         @app.get("/settings", response_class=HTMLResponse)
         async def _spa_entry() -> FileResponse:
             return FileResponse(index_file)
@@ -246,6 +252,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     await registry.load_modules(ctx.scheduler, app, ctx)
 
     await _start_poster_churn(ctx, app.state.settings)
+
+    await start_trending_sync(ctx)
 
     try:
         yield
@@ -289,6 +297,7 @@ def create_app() -> FastAPI:
     app.include_router(create_services_router(ctx))
     app.include_router(create_bandwidth_router(ctx))
     app.include_router(create_findarr_router(ctx))
+    app.include_router(create_deletarr_router(ctx))
     app.include_router(create_trending_router(ctx))
     app.include_router(ctx.webhooks.router)
 

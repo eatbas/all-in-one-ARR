@@ -85,6 +85,7 @@ beforeEach(() => {
     queryResult({
       interval_seconds: 60,
       sync_interval_minutes: 15,
+      trending_sync_interval_minutes: 60,
       auto_remove_when_available: false,
     }),
   )

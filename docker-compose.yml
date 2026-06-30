@@ -9,6 +9,10 @@ services:
       # Persists the SQLite database and the Trakt token store so the one-time
       # device authorisation survives restarts.
       - ./data:/app/data
+      # Mount media libraries if you use Deletarr. Keep these examples
+      # read-write only when you intend to delete reviewed junk from the UI.
+      # - /path/to/movies:/media/movies
+      # - /path/to/tv:/media/tv
     restart: unless-stopped
     # To reach Radarr/Sonarr/Seer on the same Docker network, either set
     # the *arr URLs to host-reachable addresses, or attach this service to your

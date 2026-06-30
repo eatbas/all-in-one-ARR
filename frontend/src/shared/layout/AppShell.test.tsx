@@ -28,6 +28,7 @@ function renderAt(path: string) {
             path="/list-syncarr"
             element={<div>list-syncarr-page</div>}
           />
+          <Route path="/deletarr" element={<div>deletarr-page</div>} />
         </Route>
       </Routes>
     </MemoryRouter>,
@@ -55,6 +56,16 @@ describe("AppShell", () => {
     expect(
       screen.getByRole("link", { name: /list-syncarr/i }),
     ).toHaveAttribute("aria-current", "page")
+  })
+
+  it("marks the Deletarr link active on its route", () => {
+    renderAt("/deletarr")
+
+    expect(screen.getByText("deletarr-page")).toBeInTheDocument()
+    expect(screen.getByRole("link", { name: /deletarr/i })).toHaveAttribute(
+      "aria-current",
+      "page",
+    )
   })
 
   it("collapses the sidebar to a rail and persists the choice", async () => {

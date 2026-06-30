@@ -9,9 +9,13 @@ import {
   clearFindarrHistory,
   clearItems,
   clearPosters,
+  deleteDeletarrItems,
   getActivity,
   getBandwidthStatus,
   getDatabaseStats,
+  getDeletarrResults,
+  getDeletarrSettings,
+  getDeletarrStatus,
   getFindarrHistory,
   getFindarrSettings,
   getFindarrStatus,
@@ -26,6 +30,7 @@ import {
   getTraktSettings,
   getTrending,
   getTrendingRating,
+  getTrendingStatus,
   trendingSourceUrl,
   seerMediaUrl,
   posterUrl,
@@ -34,11 +39,13 @@ import {
   removeTraktList,
   resetFindarrState,
   runFindarr,
+  scanDeletarr,
   startTraktAuth,
   testService,
   testTrakt,
   triggerSync,
   updateBandwidthSettings,
+  updateDeletarrSettings,
   updateFindarrSettings,
   updateGeneralSettings,
   updateServiceSettings,
@@ -64,6 +71,7 @@ function trendingItem(over: Partial<TrendingItem>): TrendingItem {
     seer_status: null,
     already_tracked: false,
     in_library: false,
+    in_library_available: false,
     ...over,
   }
 }
@@ -417,6 +425,77 @@ describe("database settings", () => {
   })
 })
 
+describe("deletarr", () => {
+  it("GETs the Deletarr status and settings", async () => {
+    const fetchSpy = vi
+      .spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(jsonResponse({ settings: {}, libraries: {} }))
+      .mockResolvedValueOnce(jsonResponse({ movies_path: "/media/movies" }))
+
+    await getDeletarrStatus()
+    expect(fetchSpy).toHaveBeenCalledWith("/api/deletarr/status", expect.anything())
+
+    await getDeletarrSettings()
+    expect(fetchSpy).toHaveBeenCalledWith(
+      "/api/deletarr/settings",
+      expect.anything(),
+    )
+  })
+
+  it("PUTs Deletarr settings", async () => {
+    const fetchSpy = mockFetch(jsonResponse({ settings: {}, libraries: {} }))
+
+    await updateDeletarrSettings({ movies_path: "/srv/movies" })
+
+    expect(fetchSpy).toHaveBeenCalledWith(
+      "/api/deletarr/settings",
+      expect.objectContaining({
+        method: "PUT",
+        body: JSON.stringify({ movies_path: "/srv/movies" }),
+      }),
+    )
+  })
+
+  it("GETs results for the requested library", async () => {
+    const fetchSpy = mockFetch(jsonResponse({ type: "movies", results: [] }))
+
+    await getDeletarrResults("movies")
+
+    expect(fetchSpy).toHaveBeenCalledWith(
+      "/api/deletarr/results?type=movies",
+      expect.anything(),
+    )
+  })
+
+  it("POSTs scan and delete requests", async () => {
+    const fetchSpy = vi
+      .spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(jsonResponse({ type: "movies", results: [] }))
+      .mockResolvedValueOnce(jsonResponse({ success: true, deleted: 1 }))
+
+    await scanDeletarr("movies")
+    expect(fetchSpy).toHaveBeenCalledWith(
+      "/api/deletarr/scan",
+      expect.objectContaining({
+        method: "POST",
+        body: JSON.stringify({ type: "movies" }),
+      }),
+    )
+
+    await deleteDeletarrItems("tv", ["/media/tv/Show/sample.txt"])
+    expect(fetchSpy).toHaveBeenCalledWith(
+      "/api/deletarr/delete",
+      expect.objectContaining({
+        method: "POST",
+        body: JSON.stringify({
+          type: "tv",
+          paths: ["/media/tv/Show/sample.txt"],
+        }),
+      }),
+    )
+  })
+})
+
 const sampleBandwidthStatus: BandwidthStatus = {
   enabled: false,
   status: "Monitoring only",
@@ -519,6 +598,25 @@ describe("getTrending", () => {
     expect(url).toContain("category=trending")
     // The time window was removed, so no `window` param is ever sent.
     expect(url).not.toContain("window=")
+  })
+})
+
+describe("getTrendingStatus", () => {
+  it("fetches the scheduled-sync status", async () => {
+    const fetchSpy = mockFetch(
+      jsonResponse({
+        last_synced_at: "2026-06-30T12:00:00+00:00",
+        interval_minutes: 60,
+        next_sync_at: "2026-06-30T13:00:00+00:00",
+      }),
+    )
+
+    await expect(getTrendingStatus()).resolves.toEqual({
+      last_synced_at: "2026-06-30T12:00:00+00:00",
+      interval_minutes: 60,
+      next_sync_at: "2026-06-30T13:00:00+00:00",
+    })
+    expect(fetchSpy.mock.calls[0][0]).toBe("/api/trending/status")
   })
 })
 

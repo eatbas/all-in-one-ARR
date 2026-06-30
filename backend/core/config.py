@@ -74,6 +74,18 @@ class Settings(BaseSettings):
     # ---- Bandwidth-Controllarr ----
     BANDWIDTH_CONTROL_ENABLED: bool = False
     BANDWIDTH_CHECK_INTERVAL_SEC: int = 15
+
+    # ---- Trending discovery ----
+    # The background App scheduler refreshes the trending/popular feeds on this
+    # interval (minutes); seeds the store on first run, then UI-managed.
+    TRENDING_SYNC_INTERVAL_MIN: int = 60
+
+    # ---- Deletarr ----
+    # Seed the media-library roots on first run; thereafter they are managed from
+    # the dashboard and persisted in the settings store.
+    DELETARR_MOVIES_PATH: str = "/media/movies"
+    DELETARR_TV_PATH: str = "/media/tv"
+
     # Whether the poll removes an item from its Trakt list once Seer reports
     # it available (the list entry only — media files are untouched). Off by default
     # so removal is fully manual (via the dashboard); seeds the store on first run,

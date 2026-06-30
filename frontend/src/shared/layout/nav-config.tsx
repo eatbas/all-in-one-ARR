@@ -4,6 +4,7 @@ import {
   ListChecksIcon,
   SearchIcon,
   SettingsIcon,
+  Trash2Icon,
   TrendingUpIcon,
   type LucideIcon,
 } from "lucide-react"
@@ -54,6 +55,12 @@ export const NAV_ITEMS: ReadonlyArray<NavItem> = [
     to: "/findarr",
     icon: SearchIcon,
     description: "Search missing and upgradeable Sonarr/Radarr media",
+  },
+  {
+    title: "Deletarr",
+    to: "/deletarr",
+    icon: Trash2Icon,
+    description: "Review and delete junk files from media libraries",
   },
   {
     title: "Settings",
