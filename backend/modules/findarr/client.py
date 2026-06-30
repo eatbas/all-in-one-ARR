@@ -137,15 +137,24 @@ class FindarrArrClient:
         return 0
 
     async def wanted(self, kind: str) -> list[dict[str, Any]]:
-        """Fetch every wanted page for `missing` or `cutoff`."""
+        """Fetch every wanted page for `missing` or `cutoff`.
+
+        Sonarr's `/wanted` records omit the embedded ``series`` object unless
+        ``includeSeries=true`` is requested, leaving the episode normaliser with
+        no series title to label rows ("Unknown series ..."). Radarr wanted
+        records already carry the movie title, so the flag is Sonarr-only.
+        """
         records: list[dict[str, Any]] = []
         page = 1
         page_size = 100
         while True:
+            params: dict[str, Any] = {"page": page, "pageSize": page_size}
+            if self.app == "sonarr":
+                params["includeSeries"] = "true"
             data = await self._request(
                 "GET",
                 f"/api/v3/wanted/{kind}",
-                params={"page": page, "pageSize": page_size},
+                params=params,
             )
             if isinstance(data, dict):
                 page_records = data.get("records", [])

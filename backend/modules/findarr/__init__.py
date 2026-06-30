@@ -47,6 +47,7 @@ async def setup(scheduler: "SchedulerService", app: FastAPI, ctx: "AppContext") 
     ctx.findarr_status = lambda: engine.status(ctx)
     ctx.findarr_history = lambda: engine.history(ctx)
     ctx.findarr_reset_state = lambda: engine.reset_state(ctx)
+    ctx.findarr_clear_history = lambda: engine.clear_history(ctx)
     ctx.findarr_run_now = _make_run_now(ctx)
     ctx.findarr_update_settings = _make_update_settings(scheduler, ctx)
     ctx.findarr_reschedule = lambda minutes: scheduler.reschedule_interval(

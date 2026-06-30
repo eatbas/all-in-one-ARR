@@ -31,23 +31,37 @@ def test_sonarr_normalise_captures_series_grouping_fields() -> None:
         {
             "id": 9,
             "seriesId": 5,
-            "seasonNumber": 3,
-            "episodeNumber": 4,
+            "seasonNumber": 1,
+            "episodeNumber": 6,
+            "title": "Masks",
             "monitored": True,
-            "series": {"id": 5, "title": "Show", "monitored": True},
+            "series": {
+                "id": 5,
+                "title": "Avatar: The Last Airbender",
+                "year": 2024,
+                "monitored": True,
+            },
         },
         mode="missing",
     )
     assert item is not None
     assert item.series_id == 5
-    assert item.season_number == 3
-    assert item.series_title == "Show"
-    # Falls back to the embedded series id when the episode record omits seriesId.
+    assert item.season_number == 1
+    assert item.series_title == "Avatar: The Last Airbender"
+    # The resolved series title and year flow into the displayed label, matching the
+    # reference "<Series> (<year>) - S..E.. - <episode>" format and replacing the
+    # "Unknown series" fallback once the client embeds the series.
+    assert item.title == "Avatar: The Last Airbender (2024) - S01E06 - Masks"
+    # Falls back to the embedded series id when the episode record omits seriesId;
+    # with the episode number absent the label carries no SxxExx and no dangling
+    # separator, and the year stays None when the series omits one.
     fallback = sonarr.normalise(
         {"id": 10, "seasonNumber": 1, "series": {"id": 7, "title": "Other"}}, mode="missing"
     )
     assert fallback is not None
     assert fallback.series_id == 7
+    assert fallback.series_year is None
+    assert fallback.title == "Other - Episode"
 
 
 def test_radarr_normalise_handles_edge_cases() -> None:

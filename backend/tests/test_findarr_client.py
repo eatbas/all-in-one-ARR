@@ -113,14 +113,31 @@ async def test_queue_size_accepts_dict_and_list_payloads() -> None:
 
 @respx.mock
 async def test_wanted_paginates_records() -> None:
-    respx.get("http://sonarr/api/v3/wanted/missing", params={"page": 1, "pageSize": 100}).mock(
-        return_value=httpx.Response(200, json={"totalRecords": 2, "records": [{"id": 1}]})
-    )
-    respx.get("http://sonarr/api/v3/wanted/missing", params={"page": 2, "pageSize": 100}).mock(
-        return_value=httpx.Response(200, json={"totalRecords": 2, "records": [{"id": 2}]})
-    )
+    respx.get(
+        "http://sonarr/api/v3/wanted/missing",
+        params={"page": 1, "pageSize": 100, "includeSeries": "true"},
+    ).mock(return_value=httpx.Response(200, json={"totalRecords": 2, "records": [{"id": 1}]}))
+    respx.get(
+        "http://sonarr/api/v3/wanted/missing",
+        params={"page": 2, "pageSize": 100, "includeSeries": "true"},
+    ).mock(return_value=httpx.Response(200, json={"totalRecords": 2, "records": [{"id": 2}]}))
     items = await FindarrArrClient(app="sonarr", base_url="http://sonarr", api_key="k").wanted("missing")
     assert items == [{"id": 1}, {"id": 2}]
+
+
+@respx.mock
+async def test_wanted_requests_embedded_series_for_sonarr_only() -> None:
+    sonarr_route = respx.get("http://sonarr/api/v3/wanted/missing").mock(
+        return_value=httpx.Response(200, json={"totalRecords": 0, "records": []})
+    )
+    await FindarrArrClient(app="sonarr", base_url="http://sonarr", api_key="k").wanted("missing")
+    assert sonarr_route.calls.last.request.url.params["includeSeries"] == "true"
+
+    radarr_route = respx.get("http://radarr/api/v3/wanted/missing").mock(
+        return_value=httpx.Response(200, json={"totalRecords": 0, "records": []})
+    )
+    await FindarrArrClient(app="radarr", base_url="http://radarr", api_key="k").wanted("missing")
+    assert "includeSeries" not in radarr_route.calls.last.request.url.params
 
 
 @respx.mock

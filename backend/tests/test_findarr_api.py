@@ -33,6 +33,7 @@ def test_mutating_routes_unavailable_without_callbacks(db) -> None:
     assert client.get("/api/findarr/history").status_code == 503
     assert client.post("/api/findarr/run", json={}).status_code == 503
     assert client.post("/api/findarr/reset").status_code == 503
+    assert client.post("/api/findarr/history/clear").status_code == 503
 
 
 def test_status_history_run_reset_and_settings_callbacks(db) -> None:
@@ -58,6 +59,7 @@ def test_status_history_run_reset_and_settings_callbacks(db) -> None:
     )
     ctx.findarr_run_now = lambda app=None: _async({"status": "completed", "detail": str(app), "processed": 0, "results": []})
     ctx.findarr_reset_state = lambda: _async({"status": "reset", "removed": 0})
+    ctx.findarr_clear_history = lambda: _async({"status": "cleared", "removed": 3})
     captured: dict = {}
 
     def update_settings(updates):
@@ -71,6 +73,7 @@ def test_status_history_run_reset_and_settings_callbacks(db) -> None:
     assert client.get("/api/findarr/history").json()[0]["mode"] == "system"
     assert client.post("/api/findarr/run", json={"app": "sonarr"}).json()["detail"] == "sonarr"
     assert client.post("/api/findarr/reset").json() == {"status": "reset", "removed": 0}
+    assert client.post("/api/findarr/history/clear").json() == {"status": "cleared", "removed": 3}
     assert client.put("/api/findarr/settings", json={"enabled": True}).status_code == 200
     # The new search-mode/sleep/reset fields must survive validation and be
     # forwarded verbatim (no None pollution from exclude_none).

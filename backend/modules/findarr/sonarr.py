@@ -35,12 +35,15 @@ def normalise(record: dict[str, Any], *, mode: str) -> FindarrItem | None:
         return None
     series = record.get("series") if isinstance(record.get("series"), dict) else episode.get("series", {})
     series_title = series.get("title") if isinstance(series, dict) else None
+    series_year = _as_int(series.get("year")) if isinstance(series, dict) else None
     title = episode.get("title") or "Episode"
     season = _as_int(episode.get("seasonNumber"))
-    episode_number = episode.get("episodeNumber")
+    episode_number = _as_int(episode.get("episodeNumber"))
     label = f"{series_title or 'Unknown series'}"
+    if series_year:
+        label += f" ({series_year})"
     if season is not None and episode_number is not None:
-        label += f" S{int(season):02d}E{int(episode_number):02d}"
+        label += f" - S{season:02d}E{episode_number:02d}"
     label += f" - {title}"
     monitored = bool(episode.get("monitored", True)) and bool(
         series.get("monitored", True) if isinstance(series, dict) else True
@@ -58,4 +61,5 @@ def normalise(record: dict[str, Any], *, mode: str) -> FindarrItem | None:
         series_id=series_id,
         season_number=season,
         series_title=series_title,
+        series_year=series_year,
     )

@@ -83,15 +83,15 @@ def _grouped_units(
     units: list[SearchUnit] = []
     for series_id, season in order:
         members = groups[(series_id, season)]
-        series_title = _series_title(members)
+        series_label = _series_label(members)
         if by_season:
             command = SONARR_COMMANDS["seasons"]
             key = f"{series_id}:s{season}"
-            title = f"{series_title} — Season {season}"
+            title = f"{series_label} — Season {season}"
         else:
             command = SONARR_COMMANDS["shows"]
             key = str(series_id)
-            title = series_title
+            title = series_label
         units.append(
             SearchUnit(
                 app="sonarr",
@@ -108,8 +108,19 @@ def _grouped_units(
     return units
 
 
-def _series_title(members: list[FindarrItem]) -> str:
+def _series_label(members: list[FindarrItem]) -> str:
+    """Series title with its year when known (e.g. ``"Show (2024)"``).
+
+    Falls back to ``"Unknown series"`` when no member carries a title; the year
+    is appended only when a member resolves it, keeping seasons/shows unit titles
+    consistent with the per-episode label built in :mod:`modules.findarr.sonarr`.
+    """
+    title: str | None = None
+    year: int | None = None
     for member in members:
-        if member.series_title:
-            return member.series_title
-    return "Unknown series"
+        if title is None and member.series_title:
+            title = member.series_title
+        if year is None and member.series_year:
+            year = member.series_year
+    base = title or "Unknown series"
+    return f"{base} ({year})" if year is not None else base

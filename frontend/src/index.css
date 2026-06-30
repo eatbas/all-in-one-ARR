@@ -4,6 +4,11 @@
 @custom-variant dark (&:where(.dark, .dark *));
 
 :root {
+  /* Tell the UA which palette native form controls (the `<select>` popup,
+     `<option>` lists, scrollbars) should render with. Without this, a `.dark`
+     theme leaves native menus on the browser's light defaults — light popup,
+     light inherited text — so the options read as blank. */
+  color-scheme: light;
   --radius: 0.625rem;
   --background: oklch(1 0 0);
   --foreground: oklch(0.145 0 0);
@@ -39,6 +44,9 @@
 }
 
 .dark {
+  /* Switch native controls (select popups, option lists, scrollbars) to their
+     dark palette so option text is light-on-dark instead of light-on-white. */
+  color-scheme: dark;
   --background: oklch(0.145 0 0);
   --foreground: oklch(0.985 0 0);
   --card: oklch(0.205 0 0);

@@ -83,6 +83,7 @@ vi.mock("@/shared/lib/queries", () => ({
   })),
   useFindarrSettings: vi.fn(() => ({ data: undefined, isLoading: false })),
   useFindarrHistory: vi.fn(() => ({ data: [], isLoading: false })),
+  useClearFindarrHistory: vi.fn(() => ({ mutate: vi.fn(), isPending: false })),
   useUpdateFindarrSettings: vi.fn(() => ({ mutate: vi.fn(), isPending: false })),
   useRunFindarr: vi.fn(() => ({ mutate: vi.fn(), isPending: false })),
   useResetFindarrState: vi.fn(() => ({ mutate: vi.fn(), isPending: false })),

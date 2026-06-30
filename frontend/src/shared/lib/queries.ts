@@ -12,6 +12,7 @@ import {
   addTrending,
   checkServiceStatuses,
   clearActivity,
+  clearFindarrHistory,
   clearItems,
   clearPosters,
   getActivity,
@@ -51,8 +52,8 @@ import {
   type BandwidthStatus,
   type DatabaseStats,
   type FindarrAppName,
+  type FindarrCountResult,
   type FindarrHistoryEntry,
-  type FindarrResetResult,
   type FindarrRunResult,
   type FindarrSettings,
   type FindarrSettingsUpdate,
@@ -610,7 +611,7 @@ export function useRunFindarr(): UseMutationResult<
 }
 
 export function useResetFindarrState(): UseMutationResult<
-  FindarrResetResult,
+  FindarrCountResult,
   Error,
   void
 > {
@@ -626,6 +627,27 @@ export function useResetFindarrState(): UseMutationResult<
     },
     onError: (error) => {
       toast.error("Could not reset Findarr state", { description: error.message })
+    },
+  })
+}
+
+export function useClearFindarrHistory(): UseMutationResult<
+  FindarrCountResult,
+  Error,
+  void
+> {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: clearFindarrHistory,
+    onSuccess: (result) => {
+      toast.success("Findarr history cleared", {
+        description: `${result.removed} history entries removed.`,
+      })
+      invalidateFindarr(queryClient)
+    },
+    onError: (error) => {
+      toast.error("Could not clear Findarr history", { description: error.message })
     },
   })
 }

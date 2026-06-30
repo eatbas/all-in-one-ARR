@@ -541,8 +541,11 @@ export interface FindarrHistoryEntry {
   detail: string
 }
 
-/** Findarr reset response. */
-export interface FindarrResetResult {
+/**
+ * Result of a Findarr mutation reporting how many rows it removed. Shared by the
+ * processed-state reset and the history clear, which return the same shape.
+ */
+export interface FindarrCountResult {
   status: string
   removed: number
 }
@@ -596,12 +599,16 @@ export function runFindarr(app?: FindarrAppName): Promise<FindarrRunResult> {
   return postJson<FindarrRunResult>("/api/findarr/run", { app })
 }
 
-export function resetFindarrState(): Promise<FindarrResetResult> {
-  return postJson<FindarrResetResult>("/api/findarr/reset", {})
+export function resetFindarrState(): Promise<FindarrCountResult> {
+  return postJson<FindarrCountResult>("/api/findarr/reset", {})
 }
 
 export function getFindarrHistory(): Promise<FindarrHistoryEntry[]> {
   return request<FindarrHistoryEntry[]>("/api/findarr/history")
+}
+
+export function clearFindarrHistory(): Promise<FindarrCountResult> {
+  return postJson<FindarrCountResult>("/api/findarr/history/clear", {})
 }
 
 /** A discovery source backing one tab of the Trending page. */

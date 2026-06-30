@@ -125,5 +125,6 @@ class AppContext:
     findarr_history: Callable[[], Awaitable[list[dict]]] | None = field(default=None)
     findarr_update_settings: Callable[..., Awaitable[dict]] | None = field(default=None)
     findarr_reset_state: Callable[[], Awaitable[dict]] | None = field(default=None)
+    findarr_clear_history: Callable[[], Awaitable[dict]] | None = field(default=None)
     findarr_reschedule: Callable[[int], Awaitable[Any]] | None = field(default=None)
     findarr_gate: SyncGate = field(default_factory=SyncGate)

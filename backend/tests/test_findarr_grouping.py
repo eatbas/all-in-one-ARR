@@ -76,3 +76,17 @@ def test_build_units_shows_groups_by_series() -> None:
 def test_build_units_falls_back_to_unknown_series_title() -> None:
     units = grouping.build_units("sonarr", "missing", [_item(series_title=None)], "shows")
     assert units[0].title == "Unknown series"
+
+
+def test_build_units_qualifies_grouped_titles_with_series_year() -> None:
+    # Two members so the year is read once and skipped on the second pass; the
+    # year-qualified title must match the per-episode "<Series> (<year>)" format
+    # in both seasons and shows granularities.
+    items = [
+        _item(item_id="1", season_number=1, series_year=2024),
+        _item(item_id="2", season_number=1, series_year=2024),
+    ]
+    seasons = grouping.build_units("sonarr", "missing", items, "seasons")
+    assert seasons[0].title == "Show (2024) — Season 1"
+    shows = grouping.build_units("sonarr", "missing", items, "shows")
+    assert shows[0].title == "Show (2024)"

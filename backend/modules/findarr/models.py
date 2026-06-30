@@ -39,6 +39,7 @@ class FindarrItem:
     series_id: int | None = None
     season_number: int | None = None
     series_title: str | None = None
+    series_year: int | None = None
 
 
 @dataclass(frozen=True)

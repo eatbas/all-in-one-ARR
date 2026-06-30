@@ -7,6 +7,7 @@ vi.mock("@/shared/lib/queries", () => ({
   useFindarrStatus: vi.fn(),
   useFindarrSettings: vi.fn(),
   useFindarrHistory: vi.fn(),
+  useClearFindarrHistory: vi.fn(),
   useUpdateFindarrSettings: vi.fn(),
   useRunFindarr: vi.fn(),
   useResetFindarrState: vi.fn(),
@@ -17,6 +18,7 @@ import { Findarr } from "@/features/findarr/Findarr"
 import { FINDARR_TAB_STORAGE_KEY } from "@/features/findarr/findarr-tab"
 import { TooltipProvider } from "@/shared/components/ui/tooltip"
 import {
+  useClearFindarrHistory,
   useFindarrHistory,
   useFindarrSettings,
   useFindarrStatus,
@@ -107,6 +109,7 @@ beforeEach(() => {
   )
   vi.mocked(useRunFindarr).mockReturnValue(mutationResult(vi.fn(), false))
   vi.mocked(useResetFindarrState).mockReturnValue(mutationResult(vi.fn(), false))
+  vi.mocked(useClearFindarrHistory).mockReturnValue(mutationResult(vi.fn(), false))
 })
 
 afterEach(() => {
@@ -158,7 +161,10 @@ describe("Findarr", () => {
     render(<Findarr />)
     await user.click(screen.getByRole("tab", { name: "History" }))
     expect(screen.getByText("Series S01E01 - Pilot")).toBeInTheDocument()
-    expect(screen.getByText("Triggered Sonarr missing search")).toBeInTheDocument()
+    // The detail moved into the per-row info tooltip; the visible columns now
+    // carry the operation and instance.
+    expect(screen.getByText("Missing")).toBeInTheDocument()
+    expect(screen.getByText("Sonarr - Default")).toBeInTheDocument()
   })
 
   it("ignores bad stored tabs and survives missing localStorage", async () => {

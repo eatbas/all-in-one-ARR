@@ -456,6 +456,18 @@ class Database:
         ).fetchall()
         return [dict(row) for row in rows]
 
+    def findarr_clear_history(self) -> int:
+        """Delete every Findarr history row and return the count removed.
+
+        Clears only the audit log (``findarr_history``); processed-state
+        bookkeeping (``findarr_processed``) is untouched — that is the separate
+        concern of :meth:`findarr_reset_state`.
+        """
+        with self._lock:
+            cursor = self._conn.execute("DELETE FROM findarr_history")
+            self._conn.commit()
+            return cursor.rowcount
+
     def findarr_counts(self) -> dict[str, dict[str, int]]:
         """Return processed counts by app and mode."""
         counts = {

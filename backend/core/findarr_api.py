@@ -97,7 +97,13 @@ class FindarrStatusResponse(BaseModel):
     hourly: dict[str, int]
 
 
-class FindarrResetResponse(BaseModel):
+class FindarrCountResponse(BaseModel):
+    """Result of a Findarr mutation reporting how many rows it removed.
+
+    Shared by the processed-state reset and the history clear; both report a
+    status string and a removed-row count.
+    """
+
     status: str
     removed: int
 
@@ -146,10 +152,16 @@ def create_findarr_router(ctx: "AppContext") -> APIRouter:
             return JSONResponse(status_code=409, content={"detail": "Findarr is already running"})
         return FindarrRunResponse(**result)
 
-    @router.post("/reset", response_model=FindarrResetResponse)
-    async def post_reset() -> JSONResponse | FindarrResetResponse:
+    @router.post("/reset", response_model=FindarrCountResponse)
+    async def post_reset() -> JSONResponse | FindarrCountResponse:
         if ctx.findarr_reset_state is None:
             return _unavailable()
-        return FindarrResetResponse(**await ctx.findarr_reset_state())
+        return FindarrCountResponse(**await ctx.findarr_reset_state())
+
+    @router.post("/history/clear", response_model=FindarrCountResponse)
+    async def post_clear_history() -> JSONResponse | FindarrCountResponse:
+        if ctx.findarr_clear_history is None:
+            return _unavailable()
+        return FindarrCountResponse(**await ctx.findarr_clear_history())
 
     return router

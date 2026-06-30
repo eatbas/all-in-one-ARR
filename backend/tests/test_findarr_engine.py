@@ -225,6 +225,21 @@ async def test_history_returns_recent_rows(db) -> None:
     assert rows[0]["title"] == "One"
 
 
+async def test_clear_history_empties_log_and_records_audit(db) -> None:
+    ctx = make_ctx(db=db, settings_store=_enabled_store())
+    db.findarr_mark_processed(app="radarr", mode="missing", item_id="7", title="Seven")
+    db.findarr_add_history(app="sonarr", mode="missing", item_id="1", title="One", status="success", detail="done")
+    result = await engine.clear_history(ctx)
+    assert result == {"status": "cleared", "removed": 1}
+    # Only the audit row documenting the clearance itself remains.
+    rows = db.findarr_recent_history()
+    assert len(rows) == 1
+    assert "history cleared" in rows[0]["detail"]
+    assert any(row["action"] == "Findarr history cleared" for row in db.recent_activity())
+    # A history clear must not touch processed-state bookkeeping (that is reset_state).
+    assert db.findarr_is_processed(app="radarr", mode="missing", item_id="7") is True
+
+
 def _episode_unit(key: str, *, monitored: bool = True, is_future: bool = False) -> SearchUnit:
     return SearchUnit(
         app="sonarr",

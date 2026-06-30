@@ -6,6 +6,7 @@ import {
   ApiError,
   checkServiceStatuses,
   clearActivity,
+  clearFindarrHistory,
   clearItems,
   clearPosters,
   getActivity,
@@ -667,5 +668,14 @@ describe("findarr", () => {
     const fetchSpy = mockFetch(jsonResponse([]))
     await expect(getFindarrHistory()).resolves.toEqual([])
     expect(fetchSpy).toHaveBeenCalledWith("/api/findarr/history", expect.anything())
+  })
+
+  it("POSTs a clear of the Findarr history", async () => {
+    const fetchSpy = mockFetch(jsonResponse({ status: "cleared", removed: 3 }))
+    await expect(clearFindarrHistory()).resolves.toEqual({ status: "cleared", removed: 3 })
+    expect(fetchSpy).toHaveBeenCalledWith(
+      "/api/findarr/history/clear",
+      expect.objectContaining({ method: "POST" }),
+    )
   })
 })

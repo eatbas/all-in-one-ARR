@@ -103,6 +103,26 @@ async def reset_state(ctx: "AppContext") -> dict:
     return {"status": "reset", "removed": removed}
 
 
+async def clear_history(ctx: "AppContext") -> dict:
+    """Empty the Findarr history log and record an audit entry of the clearance.
+
+    Removes only the history rows (the audit log surfaced on the History tab);
+    processed-media bookkeeping is left intact — that is :func:`reset_state`'s
+    job. The single audit row appended afterwards documents the clearance itself.
+    """
+    removed = ctx.db.findarr_clear_history()
+    ctx.db.findarr_add_history(
+        app="sonarr",
+        mode="system",
+        item_id=None,
+        title=None,
+        status="success",
+        detail=f"Findarr history cleared ({removed} rows removed)",
+    )
+    ctx.db.add_activity("Findarr history cleared", f"Removed {removed} history entries")
+    return {"status": "cleared", "removed": removed}
+
+
 def _state_snapshot(run_state: dict, settings: dict) -> dict:
     """Describe the stateful-management window for the status response."""
     reset_hours = int(settings["state_reset_hours"])

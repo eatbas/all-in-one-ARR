@@ -246,8 +246,17 @@ commands for the already-configured **Sonarr** and **Radarr** connections:
   optional queue-size guard, and a **sleep duration** (seconds to wait between
   successive Arr search commands, `0` to disable) bound the side effects.
 - **State and history** — processed items are recorded so Findarr does not
-  repeatedly search the same item. The page shows recent Findarr actions and
-  provides an explicit reset control for processed state.
+  repeatedly search the same item, and provides an explicit reset control for
+  processed state. The **History** tab lists recent Findarr actions —
+  resolving full Sonarr series titles (for example `Avatar: The Last Airbender
+  (2024) - S01E06 - Masks`) rather than "Unknown series" — with the operation,
+  item id, instance, and how long ago, plus an instance filter, a search box, a
+  row-count selector, and a **Clear** control that empties the history log
+  (distinct from the processed-state reset; neither touches Arr libraries). Each
+  history row captures its title at search time, so rows written before a title
+  fix are **not** relabelled retroactively, and items already in processed state
+  are skipped (no fresh row). To refresh titles after upgrading, reset processed
+  state and run again, then optionally clear the old history.
 - **Stateful management** — processed-media ids are cleared automatically after
   the **State reset (hours)** window (default `168` = 7 days) so items become
   eligible again ("re-look where we left off and renew"); the Settings tab shows
