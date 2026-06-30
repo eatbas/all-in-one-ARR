@@ -51,7 +51,7 @@ export function HistoryRow({ entry }: HistoryRowProps) {
   return (
     <TableRow>
       <TableCell>
-        <div className="flex items-center gap-2">
+        <div className="flex min-w-0 items-center gap-2">
           <Tooltip>
             <TooltipTrigger asChild>
               <button
@@ -72,7 +72,9 @@ export function HistoryRow({ entry }: HistoryRowProps) {
               {entry.title === null ? "" : ` — ${entry.detail}`}
             </TooltipContent>
           </Tooltip>
-          <span className="font-medium">{information}</span>
+          <span className="truncate max-w-[34ch] font-medium" title={information}>
+            {information}
+          </span>
         </div>
       </TableCell>
       <TableCell>

@@ -25,6 +25,19 @@ const emptyServiceStatuses = {
 
 const checkNowMutate = vi.fn()
 
+function activityEntries(count: number): ActivityEntry[] {
+  return Array.from({ length: count }, (_, index) => {
+    const id = index + 1
+
+    return {
+      id,
+      ts: `2024-01-${String(id).padStart(2, "0")}T10:00:00Z`,
+      action: `Action ${id}`,
+      detail: `Detail ${id}`,
+    }
+  })
+}
+
 describe("Dashboard", () => {
   beforeEach(() => {
     checkNowMutate.mockClear()
@@ -48,6 +61,20 @@ describe("Dashboard", () => {
 
     render(<Dashboard />)
 
+    expect(screen.getByRole("heading", { name: "Dashboard" })).toBeInTheDocument()
+    expect(
+      screen.getByText(
+        "All-in-one ARR coordinates Trakt lists, Seer requests, Sonarr/Radarr searches, and download-client controls from one dashboard.",
+      ),
+    ).toBeInTheDocument()
+    expect(screen.getByRole("heading", { name: "Integrations" })).toHaveClass(
+      "text-2xl",
+    )
+    expect(
+      screen.getByText(
+        "Review the current connection status for every configured service.",
+      ),
+    ).toBeInTheDocument()
     const header = screen.getByRole("button", { name: /recent activity/i })
     expect(header).toHaveAttribute("aria-expanded", "false")
     expect(screen.getByText("Show")).toBeInTheDocument()
@@ -92,6 +119,72 @@ describe("Dashboard", () => {
     expect(within(entries[1]).getByText("Older")).toBeInTheDocument()
     // An unparseable timestamp falls back to the raw string.
     expect(screen.getByText("not-a-date")).toBeInTheDocument()
+  })
+
+  it("shows five activity entries per page", () => {
+    vi.mocked(useActivity).mockReturnValue(
+      queryResult<ActivityEntry[]>(activityEntries(6), false),
+    )
+
+    render(<Dashboard />)
+    fireEvent.click(screen.getByRole("button", { name: /recent activity/i }))
+
+    const entries = screen.getAllByRole("listitem")
+    expect(entries).toHaveLength(5)
+    expect(within(entries[0]).getByText("Action 6")).toBeInTheDocument()
+    expect(within(entries[4]).getByText("Action 2")).toBeInTheDocument()
+    expect(screen.queryByText("Action 1")).not.toBeInTheDocument()
+    expect(screen.getByText("Showing 1–5 of 6")).toBeInTheDocument()
+    expect(screen.getByText("Page 1 of 2")).toBeInTheDocument()
+  })
+
+  it("pages through activity entries", async () => {
+    const user = userEvent.setup()
+    vi.mocked(useActivity).mockReturnValue(
+      queryResult<ActivityEntry[]>(activityEntries(6), false),
+    )
+
+    render(<Dashboard />)
+    await user.click(screen.getByRole("button", { name: /recent activity/i }))
+    await user.click(screen.getByRole("button", { name: "Next activity page" }))
+
+    const entries = screen.getAllByRole("listitem")
+    expect(entries).toHaveLength(1)
+    expect(within(entries[0]).getByText("Action 1")).toBeInTheDocument()
+    expect(screen.getByText("Showing 6–6 of 6")).toBeInTheDocument()
+    expect(screen.getByText("Page 2 of 2")).toBeInTheDocument()
+    expect(screen.getByRole("button", { name: "Next activity page" })).toBeDisabled()
+
+    await user.click(screen.getByRole("button", { name: "Previous activity page" }))
+
+    expect(screen.getAllByRole("listitem")).toHaveLength(5)
+    expect(screen.getByText("Page 1 of 2")).toBeInTheDocument()
+    expect(
+      screen.getByRole("button", { name: "Previous activity page" }),
+    ).toBeDisabled()
+  })
+
+  it("clamps the activity page when the activity feed shrinks", async () => {
+    const user = userEvent.setup()
+    vi.mocked(useActivity).mockReturnValue(
+      queryResult<ActivityEntry[]>(activityEntries(6), false),
+    )
+
+    const { rerender } = render(<Dashboard />)
+    await user.click(screen.getByRole("button", { name: /recent activity/i }))
+    await user.click(screen.getByRole("button", { name: "Next activity page" }))
+    expect(screen.getByText("Page 2 of 2")).toBeInTheDocument()
+
+    vi.mocked(useActivity).mockReturnValue(
+      queryResult<ActivityEntry[]>(activityEntries(2), false),
+    )
+    rerender(<Dashboard />)
+
+    const entries = screen.getAllByRole("listitem")
+    expect(entries).toHaveLength(2)
+    expect(within(entries[0]).getByText("Action 2")).toBeInTheDocument()
+    expect(within(entries[1]).getByText("Action 1")).toBeInTheDocument()
+    expect(screen.queryByText("Page 2 of 2")).not.toBeInTheDocument()
   })
 
   it("collapses and expands the activity feed when the header is clicked", async () => {
@@ -170,6 +263,12 @@ describe("Dashboard", () => {
     expect(screen.getByText("Integrations")).toBeInTheDocument()
     expect(screen.getByText("Trakt")).toBeInTheDocument()
     expect(screen.getByText("Seer")).toBeInTheDocument()
+    const lastChecked = screen.getByText(/Last checked/)
+    const checkNow = screen.getByRole("button", { name: /check now/i })
+    expect(
+      lastChecked.compareDocumentPosition(checkNow) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy()
   })
 
   it("triggers a fresh check when 'Check now' is clicked", async () => {
