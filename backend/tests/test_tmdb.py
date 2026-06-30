@@ -176,6 +176,43 @@ async def test_get_popular_movie_handles_missing_results() -> None:
 
 
 @respx.mock
+async def test_get_popular_fetches_and_concatenates_pages() -> None:
+    respx.get(_POPULAR_MOVIE).mock(
+        side_effect=[
+            httpx.Response(
+                200,
+                json={"results": [{"id": 1, "title": "A", "release_date": "2020-01-01"}]},
+            ),
+            httpx.Response(
+                200,
+                json={"results": [{"id": 2, "title": "B", "release_date": "2021-01-01"}]},
+            ),
+        ]
+    )
+    rows = await TmdbClient(api_key="v3key").get_popular(
+        media_type="movie", limit=40, pages=2
+    )
+    assert [row["tmdb"] for row in rows] == [1, 2]
+
+
+@respx.mock
+async def test_get_trending_stops_on_empty_page() -> None:
+    respx.get(_TRENDING_MOVIE).mock(
+        side_effect=[
+            httpx.Response(
+                200,
+                json={"results": [{"id": 1, "title": "A", "release_date": "2020-01-01"}]},
+            ),
+            httpx.Response(200, json={"results": []}),
+        ]
+    )
+    rows = await TmdbClient(api_key="v3key").get_trending(
+        media_type="movie", limit=40, pages=3
+    )
+    assert [row["tmdb"] for row in rows] == [1]
+
+
+@respx.mock
 async def test_fetch_external_ids_returns_imdb_id() -> None:
     respx.get(_EXTERNAL_IDS_MOVIE).mock(
         return_value=httpx.Response(200, json={"imdb_id": "tt0133093"})

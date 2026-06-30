@@ -7,6 +7,7 @@ from core.trending import (
     LibraryCache,
     LibraryIndex,
     RatingCache,
+    TrendingStore,
     build_library_index,
     to_trending_items,
 )
@@ -41,11 +42,13 @@ def test_to_trending_items_tags_source_and_tracked() -> None:
         "seer_status": None,
         "already_tracked": True,
         "in_library": False,
+        "in_library_available": False,
     }
     assert items[1]["already_tracked"] is False
     assert items[1]["seer_status"] == 5
     assert items[1]["imdb"] is None
     assert items[1]["in_library"] is False
+    assert items[1]["in_library_available"] is False
 
 
 def test_to_trending_items_untracked_tmdb() -> None:
@@ -76,6 +79,34 @@ def test_to_trending_items_flags_in_library() -> None:
     assert flags == [True, False, True, True, False]
 
 
+def test_to_trending_items_flags_in_library_available() -> None:
+    rows = [
+        {"media_type": "movie", "tmdb": 603},  # downloaded in Radarr
+        {"media_type": "movie", "tmdb": 604},  # in Radarr, no file yet
+        {"media_type": "show", "tmdb": 1, "tvdb": 121361},  # downloaded in Sonarr
+        {"media_type": "show", "tmdb": 7, "tvdb": 8},  # in Sonarr, no episodes yet
+    ]
+    library = LibraryIndex(
+        radarr_tmdb=frozenset({603, 604}),
+        sonarr_tvdb=frozenset({121361, 8}),
+        radarr_available_tmdb=frozenset({603}),
+        sonarr_available_tvdb=frozenset({121361}),
+    )
+    items = to_trending_items(
+        rows, source="trakt", tracked_tmdbs=set(), library=library
+    )
+    assert [item["in_library"] for item in items] == [True, True, True, True]
+    assert [item["in_library_available"] for item in items] == [True, False, True, False]
+
+
+def test_is_available_defaults_false_without_library() -> None:
+    # A row with no library passed in is never "available".
+    items = to_trending_items(
+        [{"media_type": "movie", "tmdb": 1}], source="tmdb", tracked_tmdbs=set()
+    )
+    assert items[0]["in_library_available"] is False
+
+
 def test_build_library_index_collects_int_ids() -> None:
     index = build_library_index(
         radarr_items=[{"tmdbId": 603}, {"tmdbId": None}, {"title": "no id"}],
@@ -84,6 +115,26 @@ def test_build_library_index_collects_int_ids() -> None:
     assert index.radarr_tmdb == frozenset({603})
     assert index.sonarr_tvdb == frozenset({1})
     assert index.sonarr_tmdb == frozenset({2})
+
+
+def test_build_library_index_collects_available_ids() -> None:
+    # hasFile / episodeFileCount drive the available subsets; absent or zero excludes.
+    index = build_library_index(
+        radarr_items=[
+            {"tmdbId": 603, "hasFile": True},
+            {"tmdbId": 604, "hasFile": False},
+            {"tmdbId": 605},  # no hasFile key
+        ],
+        sonarr_items=[
+            {"tvdbId": 1, "tmdbId": 11, "statistics": {"episodeFileCount": 4}},
+            {"tvdbId": 2, "tmdbId": 12, "statistics": {"episodeFileCount": 0}},
+            {"tvdbId": 3, "tmdbId": 13},  # no statistics
+        ],
+    )
+    assert index.radarr_tmdb == frozenset({603, 604, 605})
+    assert index.radarr_available_tmdb == frozenset({603})
+    assert index.sonarr_available_tvdb == frozenset({1})
+    assert index.sonarr_available_tmdb == frozenset({11})
 
 
 def test_rating_cache_miss_then_hit() -> None:
@@ -117,6 +168,20 @@ def test_rating_cache_evicts_oldest_when_full() -> None:
     # Updating an existing key does not trigger eviction.
     cache.set("tt2", {"imdb_rating": 9.0, "imdb_votes": 9})
     assert cache.get("tt2") == {"imdb_rating": 9.0, "imdb_votes": 9}
+
+
+def test_trending_store_all_rows_flattens_every_feed() -> None:
+    store = TrendingStore()
+    assert store.all_rows() == []
+    store.set(
+        source="trakt", media="movie", category="trending", window="week",
+        rows=[{"tmdb": 1}],
+    )
+    store.set(
+        source="tmdb", media="show", category="popular", window="week",
+        rows=[{"tmdb": 2}, {"tmdb": 3}],
+    )
+    assert sorted(row["tmdb"] for row in store.all_rows()) == [1, 2, 3]
 
 
 def test_library_cache_miss_set_and_ttl(monkeypatch) -> None:

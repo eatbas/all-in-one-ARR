@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest"
 vi.mock("@/shared/lib/api", () => ({
   getTrending: vi.fn(),
   getTrendingRating: vi.fn(),
+  getTrendingStatus: vi.fn(),
   addTrending: vi.fn(),
 }))
 
@@ -18,6 +19,7 @@ import {
   useAddTrending,
   useTrending,
   useTrendingRating,
+  useTrendingStatus,
 } from "@/shared/lib/queries"
 import type { TrendingItem, TrendingQuery } from "@/shared/lib/api"
 import { setup } from "@/shared/test/query-provider"
@@ -37,6 +39,7 @@ const ITEM: TrendingItem = {
   seer_status: null,
   already_tracked: false,
   in_library: false,
+  in_library_available: false,
 }
 
 beforeEach(() => {
@@ -52,6 +55,21 @@ describe("useTrending", () => {
     await waitFor(() => expect(hook.result.current.isSuccess).toBe(true))
     expect(api.getTrending).toHaveBeenCalledWith(QUERY)
     expect(hook.result.current.data).toEqual([ITEM])
+  })
+})
+
+describe("useTrendingStatus", () => {
+  it("fetches the scheduled-sync status", async () => {
+    vi.mocked(api.getTrendingStatus).mockResolvedValue({
+      last_synced_at: "2026-06-30T12:00:00+00:00",
+      interval_minutes: 60,
+      next_sync_at: "2026-06-30T13:00:00+00:00",
+    })
+    const { wrapper } = setup()
+    const hook = renderHook(() => useTrendingStatus(), { wrapper })
+    await waitFor(() => expect(hook.result.current.isSuccess).toBe(true))
+    expect(api.getTrendingStatus).toHaveBeenCalled()
+    expect(hook.result.current.data?.interval_minutes).toBe(60)
   })
 })
 

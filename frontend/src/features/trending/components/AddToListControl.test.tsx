@@ -30,6 +30,7 @@ const ITEM: TrendingItem = {
   seer_status: null,
   already_tracked: false,
   in_library: false,
+  in_library_available: false,
 }
 
 function listSummary(over: Partial<ListSummary>): ListSummary {

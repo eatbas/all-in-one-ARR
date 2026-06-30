@@ -294,6 +294,49 @@ async def test_discover_popular_tv_endpoint_and_cap() -> None:
 
 
 @respx.mock
+async def test_discover_popular_concatenates_pages_and_stops_when_empty() -> None:
+    respx.get(f"{_BASE}/api/v1/discover/movies").mock(
+        side_effect=[
+            httpx.Response(
+                200,
+                json={"results": [{"id": 1, "title": "A", "release_date": "2020-01-01"}]},
+            ),
+            httpx.Response(
+                200,
+                json={"results": [{"id": 2, "title": "B", "release_date": "2021-01-01"}]},
+            ),
+            httpx.Response(200, json={"results": []}),
+        ]
+    )
+    rows = await make_client().discover_popular(media_type="movie", limit=40, pages=3)
+    assert [row["tmdb"] for row in rows] == [1, 2]
+
+
+@respx.mock
+async def test_discover_trending_stops_on_empty_page() -> None:
+    respx.get(f"{_BASE}/api/v1/discover/trending").mock(
+        side_effect=[
+            httpx.Response(
+                200,
+                json={
+                    "results": [
+                        {
+                            "id": 1,
+                            "mediaType": "movie",
+                            "title": "A",
+                            "releaseDate": "2020-01-01",
+                        }
+                    ]
+                },
+            ),
+            httpx.Response(200, json={"results": []}),
+        ]
+    )
+    rows = await make_client().discover_trending(limit=40, pages=3)
+    assert [row["tmdb"] for row in rows] == [1]
+
+
+@respx.mock
 async def test_discover_non_200_raises() -> None:
     respx.get(f"{_BASE}/api/v1/discover/trending").mock(return_value=httpx.Response(500))
     with pytest.raises(SeerError):

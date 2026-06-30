@@ -150,29 +150,46 @@ class SeerClient:
             raise SeerError(f"Seer discover returned {response.status_code} for {path}")
         return response.json().get("results") or []
 
-    async def discover_trending(self, *, limit: int = 20) -> list[dict[str, Any]]:
+    async def discover_trending(
+        self, *, limit: int = 20, pages: int = 1
+    ) -> list[dict[str, Any]]:
         """Return Seer's trending feed (mixed movies and shows) as discovery rows.
 
         People entries are dropped; each row carries its own ``media_type`` from the
-        ``mediaType`` discriminator, so the caller can filter by type.
+        ``mediaType`` discriminator, so the caller can filter by type. ``pages``
+        consecutive pages are fetched and concatenated before the ``limit`` cap (an
+        empty page short-circuits the rest); ``pages=1`` is the single-page default.
         """
-        results = await self._discover("discover/trending", params={"page": 1})
-        rows = [self._normalise_discover(result) for result in results]
+        rows: list[dict[str, Any] | None] = []
+        for page in range(1, pages + 1):
+            results = await self._discover("discover/trending", params={"page": page})
+            if not results:
+                break
+            rows.extend(self._normalise_discover(result) for result in results)
         return [row for row in rows if row is not None][:limit]
 
     async def discover_popular(
-        self, *, media_type: str, limit: int = 20
+        self, *, media_type: str, limit: int = 20, pages: int = 1
     ) -> list[dict[str, Any]]:
-        """Return Seer's popular movies or shows (sorted by popularity) as rows."""
+        """Return Seer's popular movies or shows (sorted by popularity) as rows.
+
+        ``pages`` consecutive pages are fetched and concatenated before the ``limit``
+        cap (an empty page short-circuits the rest); ``pages=1`` is the default.
+        """
         endpoint = "movies" if media_type == "movie" else "tv"
         default = "movie" if media_type == "movie" else "tv"
-        results = await self._discover(
-            f"discover/{endpoint}", params={"sortBy": "popularity.desc", "page": 1}
-        )
-        rows = [
-            self._normalise_discover(result, default_media_type=default)
-            for result in results
-        ]
+        rows: list[dict[str, Any] | None] = []
+        for page in range(1, pages + 1):
+            results = await self._discover(
+                f"discover/{endpoint}",
+                params={"sortBy": "popularity.desc", "page": page},
+            )
+            if not results:
+                break
+            rows.extend(
+                self._normalise_discover(result, default_media_type=default)
+                for result in results
+            )
         return [row for row in rows if row is not None][:limit]
 
     async def create_request(self, *, media_type: str, tmdb_id: int) -> int | None:

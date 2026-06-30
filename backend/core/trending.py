@@ -17,6 +17,11 @@ from typing import Any, Callable, Iterable
 
 # Default per-tab item cap and IMDb-rating cache bounds.
 TRENDING_ITEM_LIMIT = 20
+# The scheduled refresh fetches a deeper grid than a single live page, since it
+# runs off the request path. ``TRENDING_SYNC_PAGES`` bounds the upstream paging so
+# the deeper fetch stays predictable (TMDB/Seer return ~20 rows per page).
+SCHEDULED_TRENDING_LIMIT = 40
+TRENDING_SYNC_PAGES = 2
 _RATING_TTL_SECONDS = 24 * 60 * 60
 _RATING_CACHE_MAX = 512
 # The combined Radarr/Sonarr library is re-listed at most this often.
@@ -39,35 +44,90 @@ class LibraryIndex:
     radarr_tmdb: frozenset[int] = field(default_factory=frozenset)
     sonarr_tvdb: frozenset[int] = field(default_factory=frozenset)
     sonarr_tmdb: frozenset[int] = field(default_factory=frozenset)
+    # The subset of the above that is actually downloaded (a movie with a file, or a
+    # show with at least one episode file) — used to colour an "in library but the
+    # media is still missing" item differently from a downloaded one.
+    radarr_available_tmdb: frozenset[int] = field(default_factory=frozenset)
+    sonarr_available_tvdb: frozenset[int] = field(default_factory=frozenset)
+    sonarr_available_tmdb: frozenset[int] = field(default_factory=frozenset)
 
     def contains(
         self, *, media_type: str | None, tmdb: int | None, tvdb: int | None
     ) -> bool:
-        """Whether an item is already in the relevant Arr library."""
+        """Whether an item is already present (by id) in the relevant Arr library."""
         if media_type == "movie":
             return tmdb is not None and tmdb in self.radarr_tmdb
         return (tvdb is not None and tvdb in self.sonarr_tvdb) or (
             tmdb is not None and tmdb in self.sonarr_tmdb
         )
 
+    def is_available(
+        self, *, media_type: str | None, tmdb: int | None, tvdb: int | None
+    ) -> bool:
+        """Whether the item's media is downloaded in the relevant Arr library.
 
-def _int_ids(items: Iterable[dict[str, Any]], field_name: str) -> frozenset[int]:
-    """Collect the integer values of ``field_name`` across Arr library items."""
+        Parallels :meth:`contains` but matches only the *available* id sets (Radarr
+        ``hasFile``; Sonarr ``episodeFileCount > 0``), so a monitored-but-not-yet-
+        downloaded title is ``in library`` without being available.
+        """
+        if media_type == "movie":
+            return tmdb is not None and tmdb in self.radarr_available_tmdb
+        return (tvdb is not None and tvdb in self.sonarr_available_tvdb) or (
+            tmdb is not None and tmdb in self.sonarr_available_tmdb
+        )
+
+
+def _int_ids(
+    items: Iterable[dict[str, Any]],
+    field_name: str,
+    predicate: Callable[[dict[str, Any]], bool] | None = None,
+) -> frozenset[int]:
+    """Collect the integer ``field_name`` values across Arr items.
+
+    When ``predicate`` is given, only items it accepts contribute their id — used to
+    build the "available" (downloaded) subsets from the same raw payloads.
+    """
     return frozenset(
         item[field_name]
         for item in items
         if isinstance(item.get(field_name), int)
+        and (predicate is None or predicate(item))
     )
+
+
+def _radarr_has_file(item: dict[str, Any]) -> bool:
+    """Whether a raw Radarr movie has its file downloaded."""
+    return item.get("hasFile") is True
+
+
+def _sonarr_has_episode(item: dict[str, Any]) -> bool:
+    """Whether a raw Sonarr series has at least one downloaded episode file.
+
+    ``statistics`` is read defensively (a series payload may omit it).
+    """
+    statistics = item.get("statistics")
+    if not isinstance(statistics, dict):
+        return False
+    count = statistics.get("episodeFileCount")
+    return isinstance(count, int) and count > 0
 
 
 def build_library_index(
     *, radarr_items: list[dict[str, Any]], sonarr_items: list[dict[str, Any]]
 ) -> LibraryIndex:
-    """Build a :class:`LibraryIndex` from raw Radarr/Sonarr library payloads."""
+    """Build a :class:`LibraryIndex` from raw Radarr/Sonarr library payloads.
+
+    Each list is scanned for both presence ids (every item) and availability ids
+    (only downloaded items), so a single pass yields the in-library and
+    truly-available sets.
+    """
     return LibraryIndex(
         radarr_tmdb=_int_ids(radarr_items, "tmdbId"),
         sonarr_tvdb=_int_ids(sonarr_items, "tvdbId"),
         sonarr_tmdb=_int_ids(sonarr_items, "tmdbId"),
+        radarr_available_tmdb=_int_ids(radarr_items, "tmdbId", _radarr_has_file),
+        sonarr_available_tvdb=_int_ids(sonarr_items, "tvdbId", _sonarr_has_episode),
+        sonarr_available_tmdb=_int_ids(sonarr_items, "tmdbId", _sonarr_has_episode),
     )
 
 
@@ -106,6 +166,9 @@ def to_trending_items(
                 "seer_status": row.get("seer_status"),
                 "already_tracked": tmdb is not None and tmdb in tracked_tmdbs,
                 "in_library": library.contains(
+                    media_type=media_type, tmdb=tmdb, tvdb=tvdb
+                ),
+                "in_library_available": library.is_available(
                     media_type=media_type, tmdb=tmdb, tvdb=tvdb
                 ),
             }
@@ -172,3 +235,55 @@ class LibraryCache:
         """Cache an index until ``ttl_seconds`` from now."""
         self._value = value
         self._expires_at = _now() + self._ttl
+
+
+class TrendingStore:
+    """In-process snapshot of discovery rows per feed, filled by the scheduler.
+
+    Keyed by ``(source, media, category, window)``. It deliberately holds the raw
+    discovery rows — not built ``TrendingItem``s — so the API re-applies the
+    ``already_tracked``/``in_library`` overlay with fresh local state on every read
+    (those flags change independently of the upstream feed). The Trending page is
+    served from this snapshot rather than calling a provider on each request; the
+    scheduled refresh keeps it warm. Single-process, single-event-loop use only
+    (like :class:`RatingCache`/:class:`LibraryCache`), so no lock is needed.
+    """
+
+    def __init__(self) -> None:
+        self._rows: dict[tuple[str, str, str, str], list[dict[str, Any]]] = {}
+        self._last_synced_at: str | None = None
+
+    def get(
+        self, *, source: str, media: str, category: str, window: str
+    ) -> list[dict[str, Any]] | None:
+        """Return the stored rows for a feed, or ``None`` if it was never synced.
+
+        A feed that synced successfully but returned nothing yields ``[]`` (a valid
+        snapshot); an absent key yields ``None`` so the API can fall back to a live
+        fetch for a feed the scheduler does not keep warm (e.g. the ``day`` window).
+        """
+        return self._rows.get((source, media, category, window))
+
+    def set(
+        self,
+        *,
+        source: str,
+        media: str,
+        category: str,
+        window: str,
+        rows: Iterable[dict[str, Any]],
+    ) -> None:
+        """Replace the stored rows for a feed."""
+        self._rows[(source, media, category, window)] = list(rows)
+
+    def all_rows(self) -> list[dict[str, Any]]:
+        """Return every stored row across all feeds (for poster pre-warming)."""
+        return [row for rows in self._rows.values() for row in rows]
+
+    def mark_synced(self, when: str) -> None:
+        """Record the ISO-8601 timestamp at which a refresh cycle completed."""
+        self._last_synced_at = when
+
+    def last_synced_at(self) -> str | None:
+        """Return the last refresh-cycle timestamp, or ``None`` before the first."""
+        return self._last_synced_at

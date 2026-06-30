@@ -26,6 +26,7 @@ function item(over: Partial<TrendingItem>): TrendingItem {
     seer_status: null,
     already_tracked: false,
     in_library: false,
+    in_library_available: false,
     ...over,
   }
 }
@@ -60,9 +61,14 @@ describe("TrendingCard", () => {
     expect(screen.getByText("Tracked")).toBeInTheDocument()
   })
 
-  it("shows the Seer status badge for a known status", () => {
+  it("shows a green Seer status badge when the title is Available", () => {
     render(<ul><TrendingCard item={item({ seer_status: 5 })} /></ul>)
-    expect(screen.getByText("Available")).toBeInTheDocument()
+    expect(screen.getByText("Available")).toHaveClass("bg-emerald-500")
+  })
+
+  it("shows an amber Seer status badge while Processing", () => {
+    render(<ul><TrendingCard item={item({ seer_status: 3 })} /></ul>)
+    expect(screen.getByText("Processing")).toHaveClass("bg-amber-500")
   })
 
   it("shows no status badge for an unknown Seer status", () => {
@@ -76,9 +82,24 @@ describe("TrendingCard", () => {
     expect(screen.getByText("— · show")).toBeInTheDocument()
   })
 
-  it("marks items already in Sonarr/Radarr with a green In-library badge", () => {
-    render(<ul><TrendingCard item={item({ in_library: true })} /></ul>)
-    expect(screen.getByText("In library")).toBeInTheDocument()
+  it("marks a downloaded library item with a green In-library badge", () => {
+    render(
+      <ul>
+        <TrendingCard item={item({ in_library: true, in_library_available: true })} />
+      </ul>,
+    )
+    expect(screen.getByLabelText("In library")).toHaveClass("bg-emerald-500")
+  })
+
+  it("marks an in-library-but-undownloaded item with an amber badge", () => {
+    render(
+      <ul>
+        <TrendingCard item={item({ in_library: true, in_library_available: false })} />
+      </ul>,
+    )
+    const badge = screen.getByLabelText("In library, media not downloaded")
+    expect(badge).toHaveTextContent("In library")
+    expect(badge).toHaveClass("bg-amber-500")
   })
 
   it("omits the In-library badge when the item is not in the library", () => {

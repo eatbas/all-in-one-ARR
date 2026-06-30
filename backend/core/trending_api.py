@@ -18,6 +18,7 @@ from pydantic import BaseModel
 from core.context import SyncAlreadyRunning
 from core.db import Database
 from core.logging import get_logger
+from core.timefmt import next_sync_at
 from core.trending import (
     TRENDING_ITEM_LIMIT,
     LibraryCache,
@@ -45,11 +46,55 @@ class TrendingItem(BaseModel):
     seer_status: int | None
     already_tracked: bool
     in_library: bool
+    in_library_available: bool
 
 
 class TrendingRating(BaseModel):
     imdb_rating: float | None
     imdb_votes: int | None
+
+
+class TrendingStatus(BaseModel):
+    # When the scheduled refresh last completed (ISO-8601), the configured interval,
+    # and the derived next-refresh time. ``last_synced_at``/``next_sync_at`` are null
+    # until the first refresh completes.
+    last_synced_at: str | None
+    interval_minutes: int
+    next_sync_at: str | None
+
+
+async def fetch_feed(
+    ctx: "AppContext",
+    *,
+    source: str,
+    media: str,
+    category: str,
+    window: str,
+    limit: int,
+    pages: int = 1,
+) -> list[dict]:
+    """Fetch and normalise one ``(source, media, category)`` discovery feed.
+
+    Shared by the live cold-feed fallback in the router (``pages=1``) and the
+    scheduled refresh (deeper ``pages``/``limit``). The Seer trending feed mixes
+    media types on a single page, so it is over-fetched and filtered to the
+    requested type.
+    """
+    if source == "trakt":
+        if category == "trending":
+            return await ctx.trakt.get_trending(media_type=media, limit=limit)
+        return await ctx.trakt.get_popular(media_type=media, limit=limit)
+    if source == "tmdb":
+        if category == "trending":
+            return await ctx.tmdb.get_trending(
+                media_type=media, window=window, limit=limit, pages=pages
+            )
+        return await ctx.tmdb.get_popular(media_type=media, limit=limit, pages=pages)
+    # source == "seer"
+    if category == "trending":
+        rows = await ctx.seer.discover_trending(limit=limit * 2, pages=pages)
+        return [row for row in rows if row["media_type"] == media][:limit]
+    return await ctx.seer.discover_popular(media_type=media, limit=limit, pages=pages)
 
 
 class TrendingAddRequest(BaseModel):
@@ -135,41 +180,6 @@ def create_trending_router(ctx: "AppContext") -> APIRouter:
         library_cache.set(index)
         return index
 
-    async def _fetch_rows(
-        source: str, media: str, category: str, window: str
-    ) -> list[dict]:
-        """Dispatch to the right source/category client call and return rows."""
-        if source == "trakt":
-            if category == "trending":
-                return await ctx.trakt.get_trending(
-                    media_type=media, limit=TRENDING_ITEM_LIMIT
-                )
-            return await ctx.trakt.get_popular(
-                media_type=media, limit=TRENDING_ITEM_LIMIT
-            )
-        if source == "tmdb":
-            if category == "trending":
-                return await ctx.tmdb.get_trending(
-                    media_type=media, window=window, limit=TRENDING_ITEM_LIMIT
-                )
-            return await ctx.tmdb.get_popular(
-                media_type=media, limit=TRENDING_ITEM_LIMIT
-            )
-        # source == "seer"
-        if category == "trending":
-            # Seer's trending feed mixes movies and shows (and people) on one page,
-            # so it is fetched once and filtered to the requested media type. This is
-            # intentional: it yields roughly half a page (~10 of one type) rather than
-            # a full TRENDING_ITEM_LIMIT grid, trading completeness for a single
-            # upstream call. Use the type-specific Popular feed for a full grid.
-            rows = await ctx.seer.discover_trending(limit=TRENDING_ITEM_LIMIT * 2)
-            return [row for row in rows if row["media_type"] == media][
-                :TRENDING_ITEM_LIMIT
-            ]
-        return await ctx.seer.discover_popular(
-            media_type=media, limit=TRENDING_ITEM_LIMIT
-        )
-
     @router.get("", response_model=list[TrendingItem])
     async def get_trending(
         source: Literal["trakt", "tmdb", "seer"],
@@ -177,17 +187,36 @@ def create_trending_router(ctx: "AppContext") -> APIRouter:
         category: Literal["trending", "popular"] = "trending",
         window: Literal["day", "week"] = "week",
     ) -> list[TrendingItem]:
-        try:
-            rows = await _fetch_rows(source, media, category, window)
-        except Exception as exc:  # noqa: BLE001 - a dead source must not break the page
-            log.warning(
-                "trending fetch failed (source=%s media=%s category=%s): %s",
-                source,
-                media,
-                category,
-                exc,
+        # Serve from the scheduler-warmed snapshot. A feed the scheduler does not keep
+        # warm (e.g. the rarely-used "day" window) is absent from the store, so it is
+        # fetched live once and cached; a dead source degrades to an empty grid.
+        rows = ctx.trending_store.get(
+            source=source, media=media, category=category, window=window
+        )
+        if rows is None:
+            try:
+                rows = await fetch_feed(
+                    ctx,
+                    source=source,
+                    media=media,
+                    category=category,
+                    window=window,
+                    limit=TRENDING_ITEM_LIMIT,
+                )
+            except Exception as exc:  # noqa: BLE001 - a dead source must not break the page
+                log.warning(
+                    "trending fetch failed (source=%s media=%s category=%s): %s",
+                    source,
+                    media,
+                    category,
+                    exc,
+                )
+                return []
+            ctx.trending_store.set(
+                source=source, media=media, category=category, window=window, rows=rows
             )
-            return []
+        # Overlay flags depend on fast-changing local state, so they are recomputed on
+        # every read rather than cached alongside the rows.
         tracked = _tracked_tmdbs(ctx.db)
         library = await _library_index()
         return [
@@ -196,6 +225,17 @@ def create_trending_router(ctx: "AppContext") -> APIRouter:
                 rows, source=source, tracked_tmdbs=tracked, library=library
             )
         ]
+
+    @router.get("/status", response_model=TrendingStatus)
+    async def get_trending_status() -> TrendingStatus:
+        """Return when the trending snapshot last refreshed and when it next will."""
+        last = ctx.trending_store.last_synced_at()
+        interval = ctx.settings_store.trending_sync_interval_minutes()
+        return TrendingStatus(
+            last_synced_at=last,
+            interval_minutes=interval,
+            next_sync_at=next_sync_at(last, interval),
+        )
 
     @router.get("/rating", response_model=TrendingRating)
     async def get_rating(

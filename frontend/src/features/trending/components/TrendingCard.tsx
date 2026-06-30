@@ -8,7 +8,16 @@ import { cn } from "@/shared/lib/utils"
 import { displayTitle, formatYear } from "@/shared/lib/format"
 import { AddToListControl } from "@/features/trending/components/AddToListControl"
 import { ImdbRatingBadge } from "@/features/trending/components/ImdbRatingBadge"
+import {
+  isAvailable,
+  isPending,
+  SEER_AVAILABLE_STATUS,
+} from "@/features/trending/trending-item-status"
 import { SOURCE_LABELS } from "@/features/trending/trending-tab"
+
+/** Badge styling for a downloaded/available title (green) and a pending one (amber). */
+const AVAILABLE_BADGE = "gap-1 border-transparent bg-emerald-500 text-white shadow-sm"
+const PENDING_BADGE = "gap-1 border-transparent bg-amber-500 text-white shadow-sm"
 
 /** Labels for the Seer library statuses worth surfacing on a card. */
 const SEER_STATUS_LABELS: Record<number, string> = {
@@ -37,15 +46,20 @@ export function TrendingCard({
     item.seer_status !== null ? SEER_STATUS_LABELS[item.seer_status] : undefined
   const sourceUrl = trendingSourceUrl(item, seerUrl)
   const sourceLabel = SOURCE_LABELS[item.source]
+  // Green = available to watch now (downloaded or Seer-Available); amber = on its way
+  // (library record without the file yet, or requested/processing/partial).
+  const available = isAvailable(item)
+  const pending = isPending(item)
 
   return (
     <li className="flex flex-col gap-1">
-      {/* A thick green ring marks titles already in Radarr (movies) / Sonarr
-          (shows), so they stand out at a glance from new discoveries. */}
+      {/* A thick ring marks library/availability state at a glance: green when the
+          title is available now, amber when it is still on its way. */}
       <div
         className={cn(
           "relative rounded-md",
-          item.in_library && "ring-[3px] ring-emerald-500",
+          available && "ring-[3px] ring-emerald-500",
+          !available && pending && "ring-[3px] ring-amber-500",
         )}
       >
         {item.tmdb === null || posterFailed ? (
@@ -87,19 +101,25 @@ export function TrendingCard({
         ) : null}
         {/* Informational badges stack at the bottom-left, clear of the add control. */}
         <div className="absolute left-1 bottom-1 flex flex-col items-start gap-1">
-          {item.in_library ? (
-            <Badge
-              aria-label="In library"
-              className="gap-1 border-transparent bg-emerald-500 text-white shadow-sm"
-            >
+          {item.in_library_available ? (
+            <Badge aria-label="In library" className={AVAILABLE_BADGE}>
               <CheckIcon className="size-3" />
+              In library
+            </Badge>
+          ) : item.in_library ? (
+            // A library record exists but the media is still missing (downloading).
+            <Badge aria-label="In library, media not downloaded" className={PENDING_BADGE}>
               In library
             </Badge>
           ) : null}
           {seerLabel ? (
             <Badge
-              variant="outline"
-              className="bg-background/85 shadow-sm backdrop-blur-sm"
+              className={cn(
+                "border-transparent text-white shadow-sm",
+                item.seer_status === SEER_AVAILABLE_STATUS
+                  ? "bg-emerald-500"
+                  : "bg-amber-500",
+              )}
             >
               {seerLabel}
             </Badge>

@@ -146,6 +146,26 @@ def test_in_library_flags_radarr_movie_and_sonarr_show(db) -> None:
     assert [s["in_library"] for s in shows] == [True, True, False]
 
 
+def test_in_library_available_reflects_download_state(db) -> None:
+    # 100 is downloaded (hasFile); 200 has a Radarr record but no file yet; 999 absent.
+    ctx = make_ctx(db=db)
+    ctx.radarr.library_items.return_value = [
+        {"tmdbId": 100, "hasFile": True},
+        {"tmdbId": 200, "hasFile": False},
+    ]
+    ctx.trakt.get_trending.return_value = [
+        _row(tmdb=100), _row(tmdb=200), _row(tmdb=999),
+    ]
+    movies = build_client(ctx).get(
+        "/api/trending",
+        params={"source": "trakt", "media": "movie", "category": "trending"},
+    ).json()
+    flags = {
+        m["tmdb"]: (m["in_library"], m["in_library_available"]) for m in movies
+    }
+    assert flags == {100: (True, True), 200: (True, False), 999: (False, False)}
+
+
 def test_in_library_uses_cache_within_ttl(db) -> None:
     ctx = make_ctx(db=db)
     ctx.trakt.get_trending.return_value = [_row(tmdb=100)]
@@ -173,6 +193,51 @@ def test_invalid_source_is_422(db) -> None:
         "/api/trending", params={"source": "imdb"}
     )
     assert response.status_code == 422
+
+
+def test_get_trending_serves_warm_store_without_fetching(db) -> None:
+    # A feed kept warm by the scheduler is served from the store; no provider call.
+    ctx = make_ctx(db=db)
+    ctx.trending_store.set(
+        source="trakt", media="movie", category="trending", window="week",
+        rows=[_row(tmdb=100)],
+    )
+    result = build_client(ctx).get(
+        "/api/trending", params={"source": "trakt", "category": "trending"}
+    ).json()
+    assert [item["tmdb"] for item in result] == [100]
+    ctx.trakt.get_trending.assert_not_awaited()
+
+
+def test_get_trending_caches_cold_fetch_in_store(db) -> None:
+    # A cold feed is fetched live once, then served from the store on the next read.
+    ctx = make_ctx(db=db)
+    ctx.trakt.get_trending.return_value = [_row(tmdb=100)]
+    client = build_client(ctx)
+    client.get("/api/trending", params={"source": "trakt", "category": "trending"})
+    client.get("/api/trending", params={"source": "trakt", "category": "trending"})
+    ctx.trakt.get_trending.assert_awaited_once()
+
+
+# ---- GET /api/trending/status ----
+
+
+def test_trending_status_before_first_sync(db) -> None:
+    body = build_client(make_ctx(db=db)).get("/api/trending/status").json()
+    assert body == {
+        "last_synced_at": None,
+        "interval_minutes": 60,
+        "next_sync_at": None,
+    }
+
+
+def test_trending_status_after_sync_derives_next(db) -> None:
+    ctx = make_ctx(db=db)
+    ctx.trending_store.mark_synced("2026-06-30T12:00:00+00:00")
+    body = build_client(ctx).get("/api/trending/status").json()
+    assert body["last_synced_at"] == "2026-06-30T12:00:00+00:00"
+    assert body["interval_minutes"] == 60
+    assert body["next_sync_at"] == "2026-06-30T13:00:00+00:00"
 
 
 # ---- GET /api/trending/rating ----

@@ -87,32 +87,49 @@ class TmdbClient:
         }
 
     async def _discover(
-        self, url: str, *, media_type: str, limit: int
+        self, url: str, *, media_type: str, limit: int, pages: int = 1
     ) -> list[dict[str, Any]]:
-        """Fetch and normalise a TMDB discovery endpoint's ``results`` array."""
-        response = await self._client.get(url, **self._auth_kwargs())
-        response.raise_for_status()
-        results = response.json().get("results") or []
+        """Fetch and normalise a TMDB discovery endpoint's ``results`` array.
+
+        ``pages`` consecutive pages (1-indexed) are fetched and concatenated before
+        the ``limit`` cap, so the scheduled refresh can build a deeper grid than a
+        single page; an empty page short-circuits the rest. ``pages=1`` preserves
+        the original single-page behaviour for live calls.
+        """
+        results: list[dict[str, Any]] = []
+        for page in range(1, pages + 1):
+            kwargs = self._auth_kwargs()
+            params = {**kwargs.get("params", {}), "page": page}
+            response = await self._client.get(url, **{**kwargs, "params": params})
+            response.raise_for_status()
+            page_results = response.json().get("results") or []
+            results.extend(page_results)
+            if not page_results:
+                break
         return [self._discovery_row(item, media_type) for item in results[:limit]]
 
     async def get_trending(
-        self, *, media_type: str, window: str = "week", limit: int = 20
+        self, *, media_type: str, window: str = "week", limit: int = 20, pages: int = 1
     ) -> list[dict[str, Any]]:
         """Return TMDB trending movies or shows as uniform discovery rows.
 
-        ``media_type`` is ``movie`` or ``show``; ``window`` is ``day`` or ``week``.
+        ``media_type`` is ``movie`` or ``show``; ``window`` is ``day`` or ``week``;
+        ``pages`` is the number of result pages to fetch (see :meth:`_discover`).
         """
         endpoint = "movie" if media_type == "movie" else "tv"
         url = f"{_BASE_URL}/3/trending/{endpoint}/{window}"
-        return await self._discover(url, media_type=media_type, limit=limit)
+        return await self._discover(url, media_type=media_type, limit=limit, pages=pages)
 
     async def get_popular(
-        self, *, media_type: str, limit: int = 20
+        self, *, media_type: str, limit: int = 20, pages: int = 1
     ) -> list[dict[str, Any]]:
-        """Return TMDB popular movies or shows as uniform discovery rows."""
+        """Return TMDB popular movies or shows as uniform discovery rows.
+
+        ``pages`` is the number of result pages to fetch (see :meth:`_discover`).
+        """
         endpoint = "movie" if media_type == "movie" else "tv"
         url = f"{_BASE_URL}/3/{endpoint}/popular"
-        return await self._discover(url, media_type=media_type, limit=limit)
+        return await self._discover(url, media_type=media_type, limit=limit, pages=pages)
 
     async def fetch_external_ids(
         self, *, media_type: str, tmdb_id: int
