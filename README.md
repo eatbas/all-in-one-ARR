@@ -264,6 +264,15 @@ commands for the already-configured **Sonarr** and **Radarr** connections:
   **Emergency reset** clears the state immediately and restarts the window.
   Resets only clear Findarr's own bookkeeping — media and Arr libraries are never
   touched.
+- **Status visibility** — once the wanted list is exhausted, Findarr correctly
+  goes quiet until the reset window elapses, so the Status cards are built to
+  make that legible rather than look broken. Each card's headline is the
+  **all-time** searches/upgrades tally, which is reset-proof and never collapses
+  to `0`; a **this window** sub-line shows how much of the last run's wanted set
+  has been searched; a plain-language **activity** line states what the last run
+  did (*Searched N*, *Caught up*, *Nothing wanted*, *Throttled*, or a connection
+  error); and the panel header shows a **Next sweep** countdown to the reset.
+  These figures reflect the most recent run, not a live Arr query.
 
 Connections are not configured on this page; configure **Sonarr** and
 **Radarr** in **Settings** first.
