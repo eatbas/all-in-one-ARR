@@ -9,8 +9,8 @@ import {
   TableRow,
 } from "@/shared/components/ui/table"
 import { HistoryRow } from "@/features/findarr/components/history-row"
-import { HistoryPagination } from "@/features/findarr/components/history-pagination"
-import { pageCount } from "@/features/findarr/components/history-pagination-utils"
+import { Pagination } from "@/shared/components/pagination/pagination"
+import { pageCount } from "@/shared/components/pagination/pagination-utils"
 import { processedInformation } from "@/features/findarr/components/history-format"
 import {
   HistoryToolbar,
@@ -105,7 +105,7 @@ export function History() {
       </div>
 
       {filtered.length > 0 && (
-        <HistoryPagination
+        <Pagination
           page={currentPage}
           pageSize={pageSize}
           totalItems={filtered.length}
