@@ -113,6 +113,13 @@ class Database:
                     key TEXT PRIMARY KEY,
                     value TEXT NOT NULL
                 );
+
+                CREATE TABLE IF NOT EXISTS findarr_totals (
+                    app TEXT NOT NULL CHECK(app IN ('sonarr','radarr')),
+                    mode TEXT NOT NULL CHECK(mode IN ('missing','upgrade')),
+                    count INTEGER NOT NULL DEFAULT 0,
+                    PRIMARY KEY (app, mode)
+                );
                 """
             )
             self._migrate_items_columns()
@@ -506,11 +513,48 @@ class Database:
         return {row["key"]: row["value"] for row in rows}
 
     def findarr_reset_state(self) -> int:
-        """Clear Findarr processed state and return the number of rows removed."""
+        """Clear Findarr processed state and return the number of rows removed.
+
+        Clears only the dedup bookkeeping (``findarr_processed``). The all-time
+        search tallies in ``findarr_totals`` are deliberately left untouched so
+        the headline "searches triggered" figure survives a window reset.
+        """
         with self._lock:
             cursor = self._conn.execute("DELETE FROM findarr_processed")
             self._conn.commit()
             return cursor.rowcount
+
+    def findarr_increment_total(self, *, app: str, mode: str) -> None:
+        """Increment the all-time Findarr search tally for an app/mode.
+
+        Kept in a separate table from ``findarr_processed`` so the tally is a
+        monotonic, reset-proof count of triggered searches rather than part of
+        the dedup state that :meth:`findarr_reset_state` and the automatic
+        window reset wipe.
+        """
+        with self._lock:
+            self._conn.execute(
+                """
+                INSERT INTO findarr_totals (app, mode, count)
+                VALUES (?, ?, 1)
+                ON CONFLICT(app, mode) DO UPDATE SET count = count + 1
+                """,
+                (app, mode),
+            )
+            self._conn.commit()
+
+    def findarr_totals(self) -> dict[str, dict[str, int]]:
+        """Return all-time triggered counts by app and mode (reset-proof)."""
+        totals = {
+            "sonarr": {"missing": 0, "upgrade": 0},
+            "radarr": {"missing": 0, "upgrade": 0},
+        }
+        rows = self._conn.execute(
+            "SELECT app, mode, count FROM findarr_totals"
+        ).fetchall()
+        for row in rows:
+            totals[row["app"]][row["mode"]] = row["count"]
+        return totals
 
     def close(self) -> None:
         """Close the underlying connection."""

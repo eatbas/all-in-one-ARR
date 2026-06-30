@@ -77,7 +77,14 @@ class Compatibility:
 
 @dataclass
 class ModeResult:
-    """Result of one app/mode processing slice."""
+    """Result of one app/mode processing slice.
+
+    ``filtered`` counts units excluded by the monitored-only / skip-future
+    *preferences* (as opposed to units excluded because they were already
+    searched this window). Keeping the two apart lets the status line say
+    "skipped by your settings" instead of falsely claiming everything was
+    already searched.
+    """
 
     app: str
     mode: str
@@ -85,6 +92,7 @@ class ModeResult:
     selected: int = 0
     processed: int = 0
     skipped: int = 0
+    filtered: int = 0
     detail: str = ""
 
 
