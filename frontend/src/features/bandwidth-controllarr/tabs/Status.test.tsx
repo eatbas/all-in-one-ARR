@@ -73,6 +73,15 @@ describe("Status", () => {
     expect(screen.getByText("RESUMED")).toBeInTheDocument()
   })
 
+  it("uses safe defaults before status data is available", () => {
+    vi.mocked(useBandwidthStatus).mockReturnValue(queryResult<BandwidthStatus>(undefined))
+    render(<Status />)
+    expect(screen.getByText("Monitoring only (Disabled)")).toBeInTheDocument()
+    expect(screen.getByText("Waiting for first check…")).toBeInTheDocument()
+    expect(screen.getAllByText("0.00 MB/s")).toHaveLength(2)
+    expect(screen.getAllByText("0")).toHaveLength(4)
+  })
+
   it("shows the active-torrents danger state", () => {
     vi.mocked(useBandwidthStatus).mockReturnValue(
       queryResult({
