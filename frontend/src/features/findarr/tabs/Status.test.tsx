@@ -45,8 +45,24 @@ const BASE_STATUS: FindarrStatus = {
   last_run_detail: "Processed 0 Findarr item(s)",
   state: { created_at: "2026-06-26T20:00:00Z", reset_at: "2026-07-03T20:00:00Z", reset_hours: 168 },
   apps: {
-    sonarr: { detail: "Connected to Sonarr 4.0.1", version: "4.0.1", compatible: true, processed: { missing: 1, upgrade: 2 } },
-    radarr: { detail: "Connected to Radarr 6.0.0", version: "6.0.0", compatible: true, processed: { missing: 3, upgrade: 4 } },
+    sonarr: {
+      detail: "Connected to Sonarr 4.0.1",
+      version: "4.0.1",
+      compatible: true,
+      processed: { missing: 1, upgrade: 2 },
+      lifetime: { missing: 10, upgrade: 20 },
+      wanted: { missing: 12, upgrade: 8 },
+      activity: "Searched 3 item(s) on the last run",
+    },
+    radarr: {
+      detail: "Connected to Radarr 6.0.0",
+      version: "6.0.0",
+      compatible: true,
+      processed: { missing: 3, upgrade: 4 },
+      lifetime: { missing: 30, upgrade: 40 },
+      wanted: { missing: 5, upgrade: 6 },
+      activity: "Caught up — every wanted item is already searched this window",
+    },
   },
   hourly: { limit: 20, used: 5, remaining: 15 },
 }
@@ -81,6 +97,9 @@ describe("Findarr Status tab", () => {
     expect(screen.getByText(/Last run:/)).toBeInTheDocument()
     expect(screen.getByText("Live Finds Executed")).toBeInTheDocument()
     expect(screen.getByText("20/15 Left")).toBeInTheDocument()
+    // The reset-window countdown is surfaced; the dynamic suffix depends on the
+    // wall clock, so assert only the stable label.
+    expect(screen.getByText(/Next sweep/)).toBeInTheDocument()
   })
 
   it("renders each app card with its logo, pills, and counters", () => {
@@ -94,9 +113,14 @@ describe("Findarr Status tab", () => {
     )
     expect(sonarr.getByText("Active")).toBeInTheDocument()
     expect(sonarr.getByText("API 5 / 20")).toBeInTheDocument()
-    // Pair each counter with its caption so a missing<->upgrade swap is caught.
-    expect(sonarr.getByText("Searches Triggered").closest("div")).toHaveTextContent("1")
-    expect(sonarr.getByText("Upgrades Triggered").closest("div")).toHaveTextContent("2")
+    // Headline is the reset-proof lifetime tally; pair each counter with its
+    // caption so a missing<->upgrade swap is caught.
+    expect(sonarr.getByText("Searches Triggered").closest("div")).toHaveTextContent("10")
+    expect(sonarr.getByText("Upgrades Triggered").closest("div")).toHaveTextContent("20")
+    // The "this window" sub-line and the last-run activity explain a 0.
+    expect(sonarr.getByText("1 searched · 11 left this window")).toBeInTheDocument()
+    expect(sonarr.getByText("2 searched · 6 left this window")).toBeInTheDocument()
+    expect(sonarr.getByText("Searched 3 item(s) on the last run")).toBeInTheDocument()
 
     const radarrRegion = screen.getByRole("region", { name: "Radarr" })
     const radarr = within(radarrRegion)
@@ -105,8 +129,33 @@ describe("Findarr Status tab", () => {
       "/brand/radarr.svg",
     )
     expect(radarr.getByText("API 5 / 20")).toBeInTheDocument()
-    expect(radarr.getByText("Searches Triggered").closest("div")).toHaveTextContent("3")
-    expect(radarr.getByText("Upgrades Triggered").closest("div")).toHaveTextContent("4")
+    expect(radarr.getByText("Searches Triggered").closest("div")).toHaveTextContent("30")
+    expect(radarr.getByText("Upgrades Triggered").closest("div")).toHaveTextContent("40")
+    expect(radarr.getByText("3 searched · 2 left this window")).toBeInTheDocument()
+    expect(radarr.getByText("4 searched · 2 left this window")).toBeInTheDocument()
+    expect(radarr.getByText(/Caught up/)).toBeInTheDocument()
+  })
+
+  it("drops the wanted total from the sub-line before anything is scanned", () => {
+    vi.mocked(useFindarrStatus).mockReturnValue(
+      queryResult({
+        ...BASE_STATUS,
+        apps: {
+          ...BASE_STATUS.apps,
+          sonarr: {
+            ...BASE_STATUS.apps.sonarr,
+            processed: { missing: 0, upgrade: 0 },
+            wanted: { missing: 0, upgrade: 0 },
+            activity: "Not run yet",
+          },
+        },
+      }),
+    )
+    render(<Status />)
+    const sonarr = within(screen.getByRole("region", { name: "Sonarr" }))
+    // wanted === 0 → the "left" clause is dropped, leaving a bare "0 searched".
+    expect(sonarr.getAllByText("0 searched this window")).toHaveLength(2)
+    expect(sonarr.getByText("Not run yet")).toBeInTheDocument()
   })
 
   it("shows the waiting placeholder and pauses a disabled app", () => {

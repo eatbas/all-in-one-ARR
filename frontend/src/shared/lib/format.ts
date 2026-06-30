@@ -83,14 +83,17 @@ export function formatBytes(bytes: number): string {
 }
 
 /**
- * Format the next-sync ISO timestamp as a short, minute-granular countdown
- * ("in 12 min", "in 2 hours", "due now" when overdue, "—" when unknown).
- * Re-evaluated against a fresh `now` each second so it counts down live without
- * a page refresh; the displayed value changes on each minute boundary. `now` is
- * injectable for deterministic tests; an unparseable value falls back to its raw
- * form.
+ * Shared countdown core for {@link formatNextSync} and {@link formatCountdown}:
+ * formats the gap to a future `iso` as "in N min" / "in N hours" / "in N days"
+ * ("due now" when overdue, "—" when null, the raw value when unparseable).
+ * `maxUnit` caps the coarsest unit used — "hour" keeps the minute-scale sync
+ * cadence terse, "day" suits the multi-day Findarr reset window.
  */
-export function formatNextSync(iso: string | null, now: Date = new Date()): string {
+function formatCountdownTo(
+  iso: string | null,
+  now: Date,
+  maxUnit: "hour" | "day",
+): string {
   if (iso === null) {
     return "—"
   }
@@ -105,6 +108,30 @@ export function formatNextSync(iso: string | null, now: Date = new Date()): stri
   if (diff < HOUR) {
     return `in ${Math.max(1, Math.floor(diff / MINUTE))} min`
   }
+  if (maxUnit === "day" && diff >= DAY) {
+    const days = Math.floor(diff / DAY)
+    return `in ${days} ${days === 1 ? "day" : "days"}`
+  }
   const hours = Math.floor(diff / HOUR)
   return `in ${hours} ${hours === 1 ? "hour" : "hours"}`
+}
+
+/**
+ * Format the next-sync ISO timestamp as a short, minute-granular countdown
+ * ("in 12 min", "in 2 hours", "due now" when overdue, "—" when unknown). Tops
+ * out at hours for the minute-scale sync cadence. Re-evaluated against a fresh
+ * `now` each second so it counts down live; `now` is injectable for tests.
+ */
+export function formatNextSync(iso: string | null, now: Date = new Date()): string {
+  return formatCountdownTo(iso, now, "hour")
+}
+
+/**
+ * Format a future ISO timestamp as a coarse, day-granular countdown ("in 5
+ * days", "in 6 hours", "in 12 min", "due now", "—" when unknown). Used for the
+ * Findarr stateful-reset window, whose horizon spans days. `now` is injectable
+ * for deterministic tests; an unparseable value falls back to its raw form.
+ */
+export function formatCountdown(iso: string | null, now: Date = new Date()): string {
+  return formatCountdownTo(iso, now, "day")
 }

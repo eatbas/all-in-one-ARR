@@ -480,9 +480,15 @@ export interface FindarrStateWindow {
 
 /**
  * Status for one Findarr-managed app, mirroring the backend
- * `GET /api/findarr/status` response. `detail`, `version`, and `compatible` are
- * part of that wire contract but are not currently surfaced in the UI — the
- * Status cards render only `processed`.
+ * `GET /api/findarr/status` response.
+ *
+ * - `processed` counts the current reset window (wiped on reset).
+ * - `lifetime` is the reset-proof all-time tally that drives the headline so it
+ *   never collapses to 0 once a window is exhausted.
+ * - `wanted` is how many items the last run scanned per mode ("as of last run",
+ *   not a live figure).
+ * - `activity` is a short summary of what the last run did, so an idle 0 is
+ *   explained rather than looking broken.
  */
 export interface FindarrAppStatus {
   detail: string
@@ -492,6 +498,15 @@ export interface FindarrAppStatus {
     missing: number
     upgrade: number
   }
+  lifetime: {
+    missing: number
+    upgrade: number
+  }
+  wanted: {
+    missing: number
+    upgrade: number
+  }
+  activity: string
 }
 
 /** Full Findarr status response. */

@@ -4,6 +4,7 @@ import { Button } from "@/shared/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/shared/components/ui/card"
 import { FindarrAppCard } from "@/features/findarr/components/app-card"
 import { FindarrResetDialog } from "@/features/findarr/components/reset-dialog"
+import { formatCountdown } from "@/shared/lib/format"
 import type { FindarrAppName, FindarrStatus } from "@/shared/lib/api"
 
 const APPS: readonly FindarrAppName[] = ["sonarr", "radarr"]
@@ -30,13 +31,16 @@ export function LiveFindsPanel({
   onReset,
   isResetting,
 }: LiveFindsPanelProps) {
-  const { hourly } = status
+  const { hourly, state } = status
 
   return (
     <Card>
       <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-3 space-y-0">
         <CardTitle>Live Finds Executed</CardTitle>
         <div className="flex flex-wrap items-center gap-3">
+          <span className="text-sm text-muted-foreground">
+            {`Next sweep ${formatCountdown(state.reset_at)}`}
+          </span>
           <span className="text-sm text-muted-foreground">
             {`${hourly.limit}/${hourly.remaining} Left`}
           </span>
@@ -57,7 +61,7 @@ export function LiveFindsPanel({
           <FindarrAppCard
             key={app}
             app={app}
-            processed={status.apps[app].processed}
+            status={status.apps[app]}
             hourly={hourly}
             enabled={status.settings.enabled && status.settings.apps[app].enabled}
             onRun={() => onRunApp(app)}

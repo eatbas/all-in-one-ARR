@@ -67,8 +67,8 @@ const STATUS: FindarrStatus = {
     reset_hours: 168,
   },
   apps: {
-    sonarr: { detail: "ok", version: "4.0.1", compatible: true, processed: { missing: 0, upgrade: 0 } },
-    radarr: { detail: "ok", version: "6.0.0", compatible: true, processed: { missing: 0, upgrade: 0 } },
+    sonarr: { detail: "ok", version: "4.0.1", compatible: true, processed: { missing: 0, upgrade: 0 }, lifetime: { missing: 0, upgrade: 0 }, wanted: { missing: 0, upgrade: 0 }, activity: "Not run yet" },
+    radarr: { detail: "ok", version: "6.0.0", compatible: true, processed: { missing: 0, upgrade: 0 }, lifetime: { missing: 0, upgrade: 0 }, wanted: { missing: 0, upgrade: 0 }, activity: "Not run yet" },
   },
   hourly: { limit: 20, used: 0, remaining: 20 },
 }

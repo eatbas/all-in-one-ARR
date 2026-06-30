@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest"
 import {
   displayTitle,
   formatBytes,
+  formatCountdown,
   formatNextSync,
   formatRelativeTime,
   formatTimestamp,
@@ -120,5 +121,37 @@ describe("formatNextSync", () => {
   it("reports hours with singular and plural units", () => {
     expect(formatNextSync(ahead(HOUR), NOW)).toBe("in 1 hour")
     expect(formatNextSync(ahead(3 * HOUR), NOW)).toBe("in 3 hours")
+  })
+})
+
+describe("formatCountdown", () => {
+  it("renders an em dash when the reset time is unknown", () => {
+    expect(formatCountdown(null, NOW)).toBe("—")
+  })
+
+  it("returns the raw value when the timestamp cannot be parsed", () => {
+    expect(formatCountdown("not-a-date", NOW)).toBe("not-a-date")
+  })
+
+  it("reports an elapsed window as 'due now'", () => {
+    expect(formatCountdown(ago(MIN), NOW)).toBe("due now")
+  })
+
+  it("rounds a sub-minute countdown up to one minute", () => {
+    expect(formatCountdown(ahead(30_000), NOW)).toBe("in 1 min")
+  })
+
+  it("reports minutes below the hour", () => {
+    expect(formatCountdown(ahead(12 * MIN), NOW)).toBe("in 12 min")
+  })
+
+  it("reports hours with singular and plural units", () => {
+    expect(formatCountdown(ahead(HOUR), NOW)).toBe("in 1 hour")
+    expect(formatCountdown(ahead(3 * HOUR), NOW)).toBe("in 3 hours")
+  })
+
+  it("reports days with singular and plural units", () => {
+    expect(formatCountdown(ahead(DAY), NOW)).toBe("in 1 day")
+    expect(formatCountdown(ahead(5 * DAY), NOW)).toBe("in 5 days")
   })
 })
