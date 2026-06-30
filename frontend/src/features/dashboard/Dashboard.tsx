@@ -26,7 +26,7 @@ export function Dashboard() {
   const { data: serviceStatuses, isLoading: servicesLoading } =
     useServiceStatuses()
   const checkNow = useCheckServiceStatuses()
-  const [activityOpen, setActivityOpen] = useState(true)
+  const [activityOpen, setActivityOpen] = useState(false)
 
   // Newest first, capped at the most recent 50 entries.
   const recentActivity = (activity ?? [])

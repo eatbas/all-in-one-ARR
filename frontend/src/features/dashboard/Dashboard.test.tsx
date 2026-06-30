@@ -28,6 +28,7 @@ const checkNowMutate = vi.fn()
 describe("Dashboard", () => {
   beforeEach(() => {
     checkNowMutate.mockClear()
+    vi.mocked(useActivity).mockReturnValue(queryResult<ActivityEntry[]>([], false))
     vi.mocked(useServiceStatuses).mockReturnValue(
       queryResult(emptyServiceStatuses, false),
     )
@@ -36,10 +37,28 @@ describe("Dashboard", () => {
       isPending: false,
     } as never)
   })
+
+  it("starts with the activity feed collapsed", () => {
+    vi.mocked(useActivity).mockReturnValue(
+      queryResult<ActivityEntry[]>(
+        [{ id: 1, ts: "2024-01-01T10:00:00Z", action: "Requested", detail: "Dune" }],
+        false,
+      ),
+    )
+
+    render(<Dashboard />)
+
+    const header = screen.getByRole("button", { name: /recent activity/i })
+    expect(header).toHaveAttribute("aria-expanded", "false")
+    expect(screen.getByText("Show")).toBeInTheDocument()
+    expect(screen.queryByRole("listitem")).not.toBeInTheDocument()
+  })
+
   it("shows a loading placeholder while the activity query is loading", () => {
     vi.mocked(useActivity).mockReturnValue(queryResult<ActivityEntry[]>(undefined, true))
 
     render(<Dashboard />)
+    fireEvent.click(screen.getByRole("button", { name: /recent activity/i }))
 
     expect(screen.getByText("Loading activity…")).toBeInTheDocument()
   })
@@ -48,6 +67,7 @@ describe("Dashboard", () => {
     vi.mocked(useActivity).mockReturnValue(queryResult<ActivityEntry[]>([], false))
 
     render(<Dashboard />)
+    fireEvent.click(screen.getByRole("button", { name: /recent activity/i }))
 
     expect(screen.getByText("No activity recorded yet.")).toBeInTheDocument()
   })
@@ -64,6 +84,7 @@ describe("Dashboard", () => {
     )
 
     render(<Dashboard />)
+    fireEvent.click(screen.getByRole("button", { name: /recent activity/i }))
 
     const entries = screen.getAllByRole("listitem")
     // Sorted by id descending: entry 2 ("Newer") comes first.
@@ -83,7 +104,13 @@ describe("Dashboard", () => {
     )
 
     render(<Dashboard />)
+    expect(screen.queryByRole("listitem")).not.toBeInTheDocument()
+    expect(screen.getByText("Show")).toBeInTheDocument()
+
+    await user.click(screen.getByRole("button", { name: /recent activity/i }))
+
     expect(screen.getByRole("listitem")).toBeInTheDocument()
+    expect(screen.getByText("Hide")).toBeInTheDocument()
 
     await user.click(screen.getByRole("button", { name: /recent activity/i }))
 
@@ -101,19 +128,23 @@ describe("Dashboard", () => {
 
     render(<Dashboard />)
     const header = screen.getByRole("button", { name: /recent activity/i })
-    expect(screen.getByRole("listitem")).toBeInTheDocument()
-
-    // A non-activating key leaves the feed open.
-    fireEvent.keyDown(header, { key: "a" })
-    expect(screen.getByRole("listitem")).toBeInTheDocument()
-
-    // Enter collapses it.
-    fireEvent.keyDown(header, { key: "Enter" })
+    expect(header).toHaveAttribute("aria-expanded", "false")
     expect(screen.queryByRole("listitem")).not.toBeInTheDocument()
 
-    // Space expands it again.
-    fireEvent.keyDown(header, { key: " " })
+    // A non-activating key leaves the feed closed.
+    fireEvent.keyDown(header, { key: "a" })
+    expect(header).toHaveAttribute("aria-expanded", "false")
+    expect(screen.queryByRole("listitem")).not.toBeInTheDocument()
+
+    // Enter expands it.
+    fireEvent.keyDown(header, { key: "Enter" })
+    expect(header).toHaveAttribute("aria-expanded", "true")
     expect(screen.getByRole("listitem")).toBeInTheDocument()
+
+    // Space collapses it again.
+    fireEvent.keyDown(header, { key: " " })
+    expect(header).toHaveAttribute("aria-expanded", "false")
+    expect(screen.queryByRole("listitem")).not.toBeInTheDocument()
   })
 
   it("renders integration status cards", () => {
