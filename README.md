@@ -8,11 +8,14 @@ entry and the Seer request, never the media files in Radarr/Sonarr). It also inc
 has active torrents and resume it when the torrents go idle (off by default).
 It also includes **Findarr**, which can trigger bounded missing-media and
 quality-cutoff searches in **Sonarr 4+** and **Radarr 6+** (off by default).
+It also includes **Deletarr**, which scans mounted media folders for junk files
+and deletes only explicitly selected current scan results under the configured
+library roots.
 It uses **official REST APIs only** (no scraping).
 
-This is the plugin **core** plus three modules, **`list_syncarr`**,
-**`bandwidth_controllarr`**, and **`findarr`**. Future modules drop into
-`backend/modules/` and auto-load — see [Adding a module](#adding-a-module).
+This is the plugin **core** plus four modules, **`list_syncarr`**,
+**`bandwidth_controllarr`**, **`findarr`**, and **`deletarr`**. Future modules
+drop into `backend/modules/` and auto-load — see [Adding a module](#adding-a-module).
 
 ## How it works
 
@@ -61,6 +64,7 @@ backend/
     list_syncarr/         # poll/request, availability-driven removal, reconcile
     bandwidth_controllarr/  # pause SABnzbd while qBittorrent has active torrents
     findarr/              # bounded Sonarr/Radarr missing and upgrade searches
+    deletarr/             # reviewed junk-file scans and validated deletion
   main.py            # entrypoint: `uvicorn main:app --app-dir backend`
   pyproject.toml     # packaging + pytest + coverage config
   tests/             # backend test suite (100% coverage)
@@ -104,6 +108,8 @@ cp .env.example .env
 | `AUTO_REMOVE_WHEN_AVAILABLE` | `false` | Auto-remove items from their Trakt list once Seer reports them available or partially available; deletes the Trakt entry and the Seer request, never the media files (seeds the store, settable in the UI). The legacy `AUTO_REMOVE_ON_IMPORT` name is still accepted. |
 | `BANDWIDTH_CONTROL_ENABLED` | `false` | Enable the Bandwidth-Controllarr loop (seeds the store; toggleable in the UI). Off by default so SABnzbd is never paused without opt-in. |
 | `BANDWIDTH_CHECK_INTERVAL_SEC` | `15` | How often Bandwidth-Controllarr polls qBittorrent and SABnzbd, in seconds (seeds the store; settable in the UI). |
+| `DELETARR_MOVIES_PATH` | `/media/movies` | Movies library root for Deletarr scans and deletion validation (seeds the store on first run only; settable in the Deletarr Settings tab). |
+| `DELETARR_TV_PATH` | `/media/tv` | TV library root for Deletarr scans and deletion validation (seeds the store on first run only; settable in the Deletarr Settings tab). |
 | `WEBHOOK_PORT` | `3223` | Port the service listens on |
 | `TZ` | `Europe/Istanbul` | Timezone for the scheduler |
 | `LOG_LEVEL` | `INFO` | Log level |
@@ -132,6 +138,10 @@ docker compose up --build
 
 The dashboard is then at <http://localhost:3223/>. The `./data` volume persists
 the SQLite database and the Trakt token store across restarts.
+
+If you use **Deletarr** in Docker, mount your media libraries at the configured
+container paths (defaults: `/media/movies` and `/media/tv`). Use read-write
+mounts only when you intend to delete reviewed junk from the dashboard.
 
 ### One-time Trakt device authorisation
 
@@ -276,6 +286,30 @@ commands for the already-configured **Sonarr** and **Radarr** connections:
 
 Connections are not configured on this page; configure **Sonarr** and
 **Radarr** in **Settings** first.
+
+### Deletarr page
+
+The dashboard **Deletarr** page (left menu) scans mounted media folders for
+reviewed junk candidates and deletes only what you explicitly confirm:
+
+- **Libraries** — Movies and TV Shows have separate scan tabs. Each tab shows the
+  current configured root as read-only context.
+- **Settings** — the Deletarr Settings tab edits the Movies and TV library roots.
+  The defaults are `/media/movies` and `/media/tv`, seeded from
+  `DELETARR_MOVIES_PATH` and `DELETARR_TV_PATH` on first run; later changes are
+  persisted in the settings store.
+- **Read-only scans** — scans inspect filenames, folders, and sizes only. They
+  flag common sidecars, metadata that does not match the protected video, junk
+  folders, duplicate or misplaced movie videos, and unexpected TV season content.
+- **Reviewed deletion** — scan candidates are rendered with checkboxes, grouped
+  by folder, and deletion requires an explicit confirmation showing the selected
+  count and reclaimable size.
+- **Server-side safety** — the backend deletes only paths present in the current
+  scan results for that library, and it revalidates each resolved path remains
+  under the configured movies or TV root. Missing files and rejected paths are
+  reported as failures rather than aborting the whole request.
+- **Container paths** — when running in Docker, the media paths must be mounted
+  into the container at the same paths Deletarr is configured to scan.
 
 ### Trending page
 
@@ -444,6 +478,17 @@ cd frontend && npm run build
 - `PUT /api/bandwidth/settings` – update `{ enabled?, check_interval_seconds? }`;
   persists the change, reschedules the control loop on interval change, and
   returns the updated state.
+- `GET /api/deletarr/settings` – current Deletarr movies and TV library roots.
+- `PUT /api/deletarr/settings` – update `{ movies_path?, tv_path? }`, persist
+  the paths, and refresh the live Deletarr state.
+- `GET /api/deletarr/status` – Deletarr settings plus per-library scan status,
+  last scan timestamp, last error, result count, and stats.
+- `GET /api/deletarr/results?type=movies|tv` – current scan results for one
+  Deletarr library.
+- `POST /api/deletarr/scan` – run a read-only scan for `{ type }`; returns `409`
+  if another Deletarr operation is already running.
+- `POST /api/deletarr/delete` – delete `{ type, paths }` after validating each
+  path is a current scan result and resolves under that library root.
 - `GET /metrics` – Prometheus-compatible text exposition of the
   Bandwidth-Controllarr gauges (`bw_qbit_*`, `bw_sab_*`, `bw_check_status`).
 - `GET /api/trending?source=&media=&category=[&window=]` – normalised trending or
