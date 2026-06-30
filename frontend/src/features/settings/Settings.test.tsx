@@ -219,6 +219,20 @@ async function renderDatabase() {
   return user
 }
 
+describe("Settings — header", () => {
+  it("renders the page header above the tabs", () => {
+    render(<Settings />)
+    expect(
+      screen.getByRole("heading", { name: "Settings" }),
+    ).toBeInTheDocument()
+    expect(
+      screen.getByText((text) =>
+        text.includes("Connect Trakt and your media services"),
+      ),
+    ).toBeInTheDocument()
+  })
+})
+
 describe("Settings — credentials", () => {
   it("shows a loading state while the settings load", async () => {
     vi.mocked(useTraktSettings).mockReturnValue(

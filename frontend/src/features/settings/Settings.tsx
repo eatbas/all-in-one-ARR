@@ -720,9 +720,10 @@ function GeneralCard() {
 }
 
 /**
- * Settings page: a tab per area — General, Trakt, then one per managed service
- * (Seer, Sonarr, Radarr, TMDB, OMDb, SABnzbd, qBittorrent), driven by
- * {@link SERVICE_TABS}.
+ * Settings page: a header (title and one-line description) above a tab per area —
+ * General, Database, Trakt, then one per managed service (Seer, Sonarr, Radarr,
+ * TMDB, OMDb, SABnzbd, qBittorrent), driven by {@link SERVICE_TABS}. The header
+ * mirrors the other top-level pages so the layout stays consistent.
  */
 export function Settings() {
   const [activeTab, setActiveTab] = useState(() => {
@@ -739,36 +740,46 @@ export function Settings() {
   }
 
   return (
-    <Tabs value={activeTab} onValueChange={handleTabChange}>
-      <TabsList className="h-auto max-w-full flex-wrap justify-start">
-        <TabsTrigger value="general">General</TabsTrigger>
-        <TabsTrigger value="database">Database</TabsTrigger>
-        <TabsTrigger value="trakt">Trakt</TabsTrigger>
-        {SERVICE_TABS.map((tab) => (
-          <TabsTrigger key={tab.name} value={tab.name}>
-            {tab.label}
-          </TabsTrigger>
-        ))}
-      </TabsList>
-      <TabsContent value="general">
-        <GeneralCard />
-      </TabsContent>
-      <TabsContent value="database">
-        <DatabaseCard />
-      </TabsContent>
-      <TabsContent value="trakt">
-        <CredentialsCard />
-      </TabsContent>
-      {SERVICE_TABS.map((tab) => (
-        <TabsContent key={tab.name} value={tab.name}>
-          <ServiceConnectionCard
-            key={tab.name}
-            name={tab.name}
-            label={tab.label}
-            fields={tab.fields}
-          />
+    <div className="flex flex-col gap-6">
+      <div>
+        <h1 className="text-2xl font-semibold tracking-tight">Settings</h1>
+        <p className="text-sm text-muted-foreground">
+          Connect Trakt and your media services, tune app-wide preferences, and
+          manage local data.
+        </p>
+      </div>
+
+      <Tabs value={activeTab} onValueChange={handleTabChange}>
+        <TabsList className="h-auto max-w-full flex-wrap justify-start">
+          <TabsTrigger value="general">General</TabsTrigger>
+          <TabsTrigger value="database">Database</TabsTrigger>
+          <TabsTrigger value="trakt">Trakt</TabsTrigger>
+          {SERVICE_TABS.map((tab) => (
+            <TabsTrigger key={tab.name} value={tab.name}>
+              {tab.label}
+            </TabsTrigger>
+          ))}
+        </TabsList>
+        <TabsContent value="general">
+          <GeneralCard />
         </TabsContent>
-      ))}
-    </Tabs>
+        <TabsContent value="database">
+          <DatabaseCard />
+        </TabsContent>
+        <TabsContent value="trakt">
+          <CredentialsCard />
+        </TabsContent>
+        {SERVICE_TABS.map((tab) => (
+          <TabsContent key={tab.name} value={tab.name}>
+            <ServiceConnectionCard
+              key={tab.name}
+              name={tab.name}
+              label={tab.label}
+              fields={tab.fields}
+            />
+          </TabsContent>
+        ))}
+      </Tabs>
+    </div>
   )
 }
