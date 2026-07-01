@@ -132,17 +132,127 @@ the client id/secret.
 
 ## Running with Docker (recommended)
 
+Prebuilt multi-arch images (`linux/amd64` + `linux/arm64`) are published to
+Docker Hub at [`erenatbas/aio-arr`](https://hub.docker.com/r/erenatbas/aio-arr),
+so most users never build from source.
+
+### Quick start — pull the image
+
 ```bash
-cp .env.example .env   # then fill in the required values
-docker compose up --build
+mkdir aio-arr && cd aio-arr
+curl -fsSLO https://raw.githubusercontent.com/eatbas/all-in-one-ARR/main/docker-compose.yml
+curl -fsSL  https://raw.githubusercontent.com/eatbas/all-in-one-ARR/main/.env.example -o .env
+# edit .env — set at least TRAKT_CLIENT_ID / TRAKT_CLIENT_SECRET
+docker compose up -d
 ```
 
-The dashboard is then at <http://localhost:3223/>. The `./data` volume persists
-the SQLite database and the Trakt token store across restarts.
+The bundled `docker-compose.yml` references `erenatbas/aio-arr:latest`, so
+`docker compose up -d` pulls the image; no local build is needed. The dashboard
+is then at <http://localhost:3223/>, and the `./data` volume persists the SQLite
+database and the Trakt token store across restarts. Pin a specific version with
+`AIO_ARR_IMAGE=erenatbas/aio-arr:0.1.0 docker compose up -d`.
+
+> **Prerequisite:** this quick start needs the published release — the
+> `erenatbas/aio-arr` image on Docker Hub and these files on the `main` branch. If
+> you cloned the repository instead, use **Build from source** below.
+
+### Plain `docker run`
+
+```bash
+docker run -d --name aio-arr \
+  -p 3223:3223 \
+  --env-file .env \
+  -v "$PWD/data:/app/data" \
+  --restart unless-stopped \
+  erenatbas/aio-arr:latest
+```
+
+### Build from source (developers)
+
+```bash
+cp .env.example .env   # then fill in the required values
+docker compose -f docker-compose.yml -f docker-compose.build.yml up --build
+```
+
+### Image tags
+
+| Tag | Meaning |
+| --- | --- |
+| `latest` | Tip of `main`, rebuilt on every push |
+| `X.Y.Z` (e.g. `0.1.0`) | Immutable release, published from the `vX.Y.Z` git tag |
+| `X.Y` (e.g. `0.1`) | Latest patch of that minor release |
+| `sha-xxxxxxx` | Exact commit build |
+
+Every tag is a multi-arch manifest covering `linux/amd64` and `linux/arm64`, so
+the same reference runs on x86-64 NAS boxes, ARM boards, and Apple Silicon.
+
+### Deletarr media mounts
 
 If you use **Deletarr** in Docker, mount your media libraries at the configured
 container paths (defaults: `/media/movies` and `/media/tv`). Use read-write
 mounts only when you intend to delete reviewed junk from the dashboard.
+
+### Deploying on a NAS (Synology / QNAP / Portainer)
+
+On a NAS the container runs as a fixed non-root user, so set `user:` to the
+UID:GID that owns your `data` and media folders (find it with `id <nas-user>`).
+Attach it to your existing media Docker network so the *arr services resolve by
+container name. This single container replaces separate list-sync, Deletarr, and
+bandwidth-control containers — all four modules share the one dashboard on 3223.
+
+```yaml
+services:
+  aio-arr:
+    image: erenatbas/aio-arr:latest
+    container_name: aio-arr
+    user: "1000:1000"                # UID:GID that owns ./data and the media dirs
+    env_file: .env                   # TRAKT_* plus any other secrets
+    environment:
+      - TZ=Europe/Istanbul
+      # Reach the *arr services by container name on your shared network:
+      - SEER_URL=http://jellyseerr:5055
+      - SONARR_URL=http://sonarr:8989
+      - RADARR_URL=http://radarr:7878
+    ports:
+      - "3223:3223"
+    volumes:
+      - ./data:/app/data
+      - /volume1/media/movies:/media/movies   # rw only if deleting junk
+      - /volume1/media/tv:/media/tv
+    networks:
+      - media
+    restart: unless-stopped
+
+networks:
+  media:
+    external: true
+```
+
+Import this via Synology **Container Manager** / **Portainer**, or run
+`docker compose up -d` over SSH. Everything else (service URLs, API keys) can also
+be configured later from the dashboard **Settings** page instead of the
+environment.
+
+### Updating
+
+```bash
+docker compose pull && docker compose up -d
+```
+
+In Container Manager, re-pull the image and recreate the container. If you run
+[Watchtower](https://containrrr.dev/watchtower/), label the service
+`com.centurylinklabs.watchtower.enable=true` to update it automatically.
+
+### How the images are built
+
+Images are built and pushed automatically by GitHub Actions
+(`.github/workflows/docker-publish.yml`) on every push to `main` and every
+`vX.Y.Z` tag. Maintainers can also publish a multi-arch image by hand:
+
+```bash
+docker buildx build --platform linux/amd64,linux/arm64 \
+  -t erenatbas/aio-arr:0.1.0 -t erenatbas/aio-arr:latest --push .
+```
 
 ### One-time Trakt device authorisation
 
