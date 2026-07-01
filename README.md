@@ -110,6 +110,7 @@ cp .env.example .env
 | `BANDWIDTH_CHECK_INTERVAL_SEC` | `15` | How often Bandwidth-Controllarr polls qBittorrent and SABnzbd, in seconds (seeds the store; settable in the UI). |
 | `DELETARR_MOVIES_PATH` | `/media/movies` | Movies library root for Deletarr scans and deletion validation (seeds the store on first run only; settable in the Deletarr Settings tab). |
 | `DELETARR_TV_PATH` | `/media/tv` | TV library root for Deletarr scans and deletion validation (seeds the store on first run only; settable in the Deletarr Settings tab). |
+| `DELETARR_USE_ARR_SOURCE` | `true` | Use Radarr/Sonarr as the source of truth for which files belong on disk (falls back to the heuristic scan when unreachable). Seeds the store on first run only; toggleable in the Deletarr Settings tab. |
 | `WEBHOOK_PORT` | `3223` | Port the service listens on |
 | `TZ` | `Europe/Istanbul` | Timezone for the scheduler |
 | `LOG_LEVEL` | `INFO` | Log level |
@@ -294,13 +295,23 @@ reviewed junk candidates and deletes only what you explicitly confirm:
 
 - **Libraries** — Movies and TV Shows have separate scan tabs. Each tab shows the
   current configured root as read-only context.
-- **Settings** — the Deletarr Settings tab edits the Movies and TV library roots.
-  The defaults are `/media/movies` and `/media/tv`, seeded from
-  `DELETARR_MOVIES_PATH` and `DELETARR_TV_PATH` on first run; later changes are
-  persisted in the settings store.
-- **Read-only scans** — scans inspect filenames, folders, and sizes only. They
-  flag common sidecars, metadata that does not match the protected video, junk
-  folders, duplicate or misplaced movie videos, and unexpected TV season content.
+- **Settings** — the Deletarr Settings tab edits the Movies and TV library roots
+  and the **Use Radarr and Sonarr as the source of truth** toggle. The path
+  defaults are `/media/movies` and `/media/tv`, seeded from `DELETARR_MOVIES_PATH`
+  and `DELETARR_TV_PATH` on first run; the toggle is seeded from
+  `DELETARR_USE_ARR_SOURCE` (default on). Later changes are persisted in the
+  settings store.
+- **Source of truth** — with the toggle on and Radarr (movies) / Sonarr (TV)
+  connected, Deletarr fetches the managed inventory (each title's on-disk folder
+  and the files the app tracks) and flags only files the library manager does not
+  track, plus folders it does not know about (surfaced separately and unchecked by
+  default). The scan-mode banner shows *Verified against Radarr/Sonarr* in this
+  mode. When the matching app is unconfigured or unreachable it falls back to the
+  heuristic scan and the banner explains why.
+- **Read-only scans** — scans inspect filenames, folders, and sizes only. The
+  heuristic fallback flags common sidecars, metadata that does not match the
+  protected video, junk folders, duplicate or misplaced movie videos, and
+  unexpected TV season content.
 - **Reviewed deletion** — scan candidates are rendered with checkboxes, grouped
   by folder, and deletion requires an explicit confirmation showing the selected
   count and reclaimable size.
@@ -478,17 +489,21 @@ cd frontend && npm run build
 - `PUT /api/bandwidth/settings` – update `{ enabled?, check_interval_seconds? }`;
   persists the change, reschedules the control loop on interval change, and
   returns the updated state.
-- `GET /api/deletarr/settings` – current Deletarr movies and TV library roots.
-- `PUT /api/deletarr/settings` – update `{ movies_path?, tv_path? }`, persist
-  the paths, and refresh the live Deletarr state.
+- `GET /api/deletarr/settings` – current Deletarr movies/TV library roots and the
+  `use_arr_source` flag.
+- `PUT /api/deletarr/settings` – update `{ movies_path?, tv_path?, use_arr_source? }`,
+  persist them, and refresh the live Deletarr state.
 - `GET /api/deletarr/status` – Deletarr settings plus per-library scan status,
-  last scan timestamp, last error, result count, and stats.
+  last scan timestamp, last error, scan mode (`arr`/`heuristic`), Arr availability,
+  result count, and stats.
 - `GET /api/deletarr/results?type=movies|tv` – current scan results for one
-  Deletarr library.
-- `POST /api/deletarr/scan` – run a read-only scan for `{ type }`; returns `409`
+  Deletarr library, including the scan mode used.
+- `POST /api/deletarr/scan` – run a read-only scan for `{ type }`; uses Radarr/Sonarr
+  as the source of truth when connected, otherwise the heuristic scan. Returns `409`
   if another Deletarr operation is already running.
 - `POST /api/deletarr/delete` – delete `{ type, paths }` after validating each
-  path is a current scan result and resolves under that library root.
+  path is a current scan result, resolves under that library root, and (for
+  Arr-backed scans) is not a file the library manager now tracks.
 - `GET /metrics` – Prometheus-compatible text exposition of the
   Bandwidth-Controllarr gauges (`bw_qbit_*`, `bw_sab_*`, `bw_check_status`).
 - `GET /api/trending?source=&media=&category=[&window=]` – normalised trending or
