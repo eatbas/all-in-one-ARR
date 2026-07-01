@@ -38,7 +38,29 @@ elif [[ -f "$ROOT_DIR/.venv/Scripts/python.exe" ]]; then
   IS_WINDOWS=1
 else
   echo "No virtual environment found at .venv/ — creating one now…"
-  python3 -m venv "$ROOT_DIR/.venv"
+  # Pick an interpreter to bootstrap the venv. Its name differs by platform:
+  # macOS/Linux expose `python3`, while Git Bash on Windows ships the `py`
+  # launcher (invoked as `py -3`) and/or a bare `python` rather than `python3`.
+  # Probe in that order so a first run never dies with "python3: command not
+  # found". `py` is preferred over a bare `python` because it unambiguously
+  # resolves to a real Python 3 rather than a Microsoft Store stub.
+  BOOTSTRAP_PY=""
+  if command -v python3 >/dev/null 2>&1; then
+    BOOTSTRAP_PY="python3"
+  elif command -v py >/dev/null 2>&1; then
+    BOOTSTRAP_PY="py -3"
+  elif command -v python >/dev/null 2>&1; then
+    BOOTSTRAP_PY="python"
+  fi
+  # Require Python 3.11+ (backend/pyproject.toml `requires-python`, and this
+  # script's own `tomllib` use below both need it) before trusting the pick.
+  if [[ -z "$BOOTSTRAP_PY" ]] \
+     || ! $BOOTSTRAP_PY -c 'import sys; raise SystemExit(0 if sys.version_info >= (3, 11) else 1)' >/dev/null 2>&1; then
+    echo "Error: no suitable Python interpreter found (need Python 3.11+ on PATH)." >&2
+    echo "  Tried: python3, py, python. Install Python 3.11+ and re-run: bash dev.sh" >&2
+    exit 1
+  fi
+  $BOOTSTRAP_PY -m venv "$ROOT_DIR/.venv"
   # Determine the pip path (Unix vs Windows/Git Bash).
   if [[ -f "$ROOT_DIR/.venv/bin/pip" ]]; then
     VENV_PIP="$ROOT_DIR/.venv/bin/pip"
