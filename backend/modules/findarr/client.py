@@ -4,12 +4,11 @@ from __future__ import annotations
 
 from typing import Any
 
-import httpx
-
+from core.clients.servarr import ServarrClient, ServarrClientError
 from modules.findarr.models import Compatibility, SearchUnit
 
 
-class FindarrClientError(RuntimeError):
+class FindarrClientError(ServarrClientError):
     """Raised when a Sonarr/Radarr API request cannot be completed."""
 
 
@@ -49,43 +48,10 @@ def _normalise_app_name(value: str) -> str:
     return value.strip().lower().replace(" ", "")
 
 
-class FindarrArrClient:
+class FindarrArrClient(ServarrClient):
     """Small client for the Sonarr/Radarr endpoints Findarr needs."""
 
-    def __init__(
-        self,
-        *,
-        app: str,
-        base_url: str,
-        api_key: str,
-        http_client: httpx.AsyncClient | None = None,
-    ) -> None:
-        self.app = app
-        self.base_url = base_url.rstrip("/")
-        self.api_key = api_key
-        self._client = http_client or httpx.AsyncClient(timeout=30.0)
-
-    @property
-    def configured(self) -> bool:
-        """Whether this client has enough connection data to make requests."""
-        return bool(self.base_url and self.api_key)
-
-    async def _request(self, method: str, path: str, **kwargs: Any) -> Any:
-        if not self.configured:
-            raise FindarrClientError(f"{self.app} connection is not configured")
-        try:
-            response = await self._client.request(
-                method,
-                f"{self.base_url}{path}",
-                headers={"X-Api-Key": self.api_key},
-                **kwargs,
-            )
-            response.raise_for_status()
-        except httpx.HTTPError as exc:
-            raise FindarrClientError(f"{self.app} API request failed: {exc}") from exc
-        if not response.content:
-            return None
-        return response.json()
+    error_class = FindarrClientError
 
     async def system_status(self) -> dict[str, Any]:
         """Return `/api/v3/system/status`."""
@@ -179,7 +145,3 @@ class FindarrArrClient:
     async def trigger_search(self, unit: SearchUnit) -> None:
         """Trigger the Sonarr/Radarr search command for one grouped unit."""
         await self._request("POST", "/api/v3/command", json=_command_payload(unit))
-
-    async def aclose(self) -> None:
-        """Close the underlying HTTP client."""
-        await self._client.aclose()
