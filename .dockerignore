@@ -17,4 +17,11 @@ frontend/dist
 review_request_*.md
 plan_request_*.md
 plan_review_*.md
+commit_plan.md
 analysis.md
+
+# Not needed inside the runtime image (build-context trim only)
+tests
+.github
+README.md
+dev.sh

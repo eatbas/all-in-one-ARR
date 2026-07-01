@@ -31,5 +31,18 @@ RUN useradd --create-home appuser \
     && chown -R appuser /app
 USER appuser
 
+# Image metadata; CI (docker/metadata-action) also injects these on published tags.
+LABEL org.opencontainers.image.title="all-in-one-ARR" \
+      org.opencontainers.image.description="Self-hosted Trakt-to-Seer sync with List-Syncarr, Bandwidth-Controllarr, Findarr and Deletarr modules" \
+      org.opencontainers.image.source="https://github.com/eatbas/all-in-one-ARR" \
+      org.opencontainers.image.licenses="MIT"
+
 EXPOSE 3223
+
+# python:3.11-slim ships python3 only (no `python` symlink) and no curl/wget, so
+# the healthcheck probes /health with the standard library; any error exits 1
+# quietly (no traceback in the container health log).
+HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
+    CMD ["python3", "-c", "import urllib.request, sys\ntry: sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:3223/health', timeout=3).status == 200 else 1)\nexcept Exception: sys.exit(1)"]
+
 CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "3223"]
