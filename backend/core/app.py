@@ -76,6 +76,7 @@ def build_context(settings: Settings) -> AppContext:
         trending_sync_interval_minutes=settings.TRENDING_SYNC_INTERVAL_MIN,
         deletarr_movies_path=settings.DELETARR_MOVIES_PATH,
         deletarr_tv_path=settings.DELETARR_TV_PATH,
+        deletarr_use_arr_source=settings.DELETARR_USE_ARR_SOURCE,
     )
     client_id, client_secret = settings_store.trakt_credentials()
 

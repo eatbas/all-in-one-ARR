@@ -21,7 +21,11 @@ def build_client(ctx) -> TestClient:
 def test_settings_are_available_without_module_callbacks(db) -> None:
     ctx = make_ctx(db=db)
     body = build_client(ctx).get("/api/deletarr/settings").json()
-    assert body == {"movies_path": "/media/movies", "tv_path": "/media/tv"}
+    assert body == {
+        "movies_path": "/media/movies",
+        "tv_path": "/media/tv",
+        "use_arr_source": False,
+    }
 
 
 def test_runtime_routes_return_503_without_callbacks(db) -> None:
@@ -111,6 +115,7 @@ async def test_status_results_scan_delete_and_settings_callbacks(db) -> None:
     ctx.deletarr_update_settings.assert_awaited_once_with(
         movies_path="/movies2",
         tv_path="/tv2",
+        use_arr_source=None,
     )
 
 

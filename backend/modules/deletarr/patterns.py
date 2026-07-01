@@ -108,7 +108,9 @@ class JunkPatterns:
             return {"is_junk": False, "reason": None}
 
         for pattern in cls.JUNK_PATTERNS:
-            if re.match(pattern, filename_lower):
+            # ``re.IGNORECASE`` so the uppercase scene tags (RARBG/YTS/YIFY/Proxies)
+            # still match after ``filename`` has been lower-cased.
+            if re.match(pattern, filename_lower, re.IGNORECASE):
                 return {
                     "is_junk": True,
                     "reason": f'Junk pattern: {pattern.replace(".*", "")}',
@@ -123,9 +125,7 @@ class JunkPatterns:
         )
         if file_ext is not None:
             file_basename = filename[: -len(file_ext)]
-            if any(file_basename == video_base for video_base in video_basenames):
-                return {"is_junk": False, "reason": None}
-            if folder_name and file_basename == folder_name:
+            if cls._is_kept_metadata(file_basename, video_basenames, folder_name):
                 return {"is_junk": False, "reason": None}
             return {
                 "is_junk": True,
@@ -133,6 +133,79 @@ class JunkPatterns:
             }
 
         return {"is_junk": False, "reason": None}
+
+    # Artwork the media managers (Kodi/Plex/Jellyfin/Emby) create with a fixed name
+    # rather than the title, plus the "<title>-<suffix>" sidecar convention.
+    ARTWORK_NAMES = {
+        "fanart",
+        "banner",
+        "backdrop",
+        "clearart",
+        "clearlogo",
+        "logo",
+        "disc",
+        "discart",
+        "landscape",
+        "thumb",
+        "keyart",
+        "characterart",
+        "cover",
+        "poster",
+        "folder",
+    }
+
+    ARTWORK_SUFFIXES = {
+        "poster",
+        "fanart",
+        "banner",
+        "thumb",
+        "landscape",
+        "clearlogo",
+        "clearart",
+        "logo",
+        "disc",
+        "discart",
+        "backdrop",
+        "keyart",
+    }
+
+    _SEASON_ARTWORK = re.compile(
+        r"^season(?:\d{1,3}|-all|-specials)(?:-(?:poster|banner|fanart|landscape))?$"
+    )
+
+    @classmethod
+    def _is_kept_metadata(
+        cls,
+        file_basename: str,
+        video_basenames: list[str],
+        folder_name: str | None,
+    ) -> bool:
+        """Return whether an image/xml sidecar is a recognised companion to keep.
+
+        Comparisons are case-insensitive. A file is kept when its basename matches a
+        video basename or the folder name, is a well-known artwork name (e.g.
+        ``fanart``), a season-poster style name, or follows the ``<title>-<suffix>``
+        artwork convention (e.g. ``Movie-poster``).
+        """
+        base = file_basename.lower()
+        videos = {video.lower() for video in video_basenames}
+        folder = folder_name.lower() if folder_name else None
+
+        if base in videos:
+            return True
+        if folder is not None and base == folder:
+            return True
+        if base in cls.ARTWORK_NAMES:
+            return True
+        if cls._SEASON_ARTWORK.match(base):
+            return True
+        for suffix in cls.ARTWORK_SUFFIXES:
+            marker = f"-{suffix}"
+            if base.endswith(marker):
+                stem = base[: -len(marker)]
+                if stem in videos or (folder is not None and stem == folder):
+                    return True
+        return False
 
     @classmethod
     def is_video_file(cls, filename: str) -> bool:
@@ -145,50 +218,111 @@ class JunkPatterns:
         """Return whether ``folder_name`` should be flagged as junk."""
         return folder_name.lower() in cls.JUNK_FOLDERS
 
+    # Common title stop-words dropped before word-overlap so a terse scene name
+    # still clears the bar (e.g. "LOTR" for "The Lord of the Rings").
+    _STOP_WORDS = {
+        "the",
+        "and",
+        "for",
+        "with",
+        "from",
+        "into",
+        "over",
+        "a",
+        "an",
+        "of",
+        "to",
+        "in",
+        "on",
+        "by",
+        "at",
+    }
+
     @classmethod
     def video_matches_folder(cls, video_filename: str, folder_name: str) -> bool:
         """Return whether a movie filename appears to belong to its folder."""
         folder_clean = folder_name.lower()
-        folder_clean = re.sub(r"\{tmdb-\d+\}", "", folder_clean)
+        video_lower = video_filename.lower()
+
+        # A matching release year is a near-certain identity signal, so accept it
+        # before any word matching (handles abbreviated/foreign/tagged names).
+        year_match = re.search(r"\b(?:19|20)\d{2}\b", folder_clean)
+        if year_match and year_match.group(0) in video_lower:
+            return True
+
+        # Strip every brace tag ({tmdb-..}/{imdb-..}/{edition-..}) and the year so
+        # they cannot pad the denominator, then drop stop-words.
+        folder_clean = re.sub(r"\{[^}]*\}", "", folder_clean)
         folder_clean = re.sub(r"\(\d{4}\)", "", folder_clean)
         folder_clean = re.sub(r"[{}\[\]()]", "", folder_clean).strip()
-        folder_words = [word.strip() for word in folder_clean.split() if len(word.strip()) > 2]
+        folder_words = [
+            word
+            for word in folder_clean.split()
+            if len(word) > 2 and word not in cls._STOP_WORDS
+        ]
         if not folder_words:
             return True
 
-        video_lower = video_filename.lower()
         matches = sum(1 for word in folder_words if word in video_lower)
         return matches / len(folder_words) >= 0.5
 
+    # Localised "season" words plus the short "S01" form; trailing text after the
+    # number is tolerated (e.g. "Season 01 - Title", "Season 1 (2019)", "Staffel 1").
+    _SEASON_FOLDER = re.compile(
+        r"^(?:season|series|saison|staffel|temporada|stagione|seizoen|sezon)"
+        r"[ ._-]*\d{1,3}\b",
+        re.IGNORECASE,
+    )
+    _SEASON_SHORT = re.compile(r"^s\d{1,3}$", re.IGNORECASE)
+    _SPECIALS_FOLDER = re.compile(r"^season[ ._-]*0+$", re.IGNORECASE)
+
     @classmethod
     def is_tv_season_folder(cls, folder_name: str) -> bool:
-        """Return whether ``folder_name`` looks like a TV season folder."""
-        return bool(re.match(r"^Season \d+$", folder_name, re.IGNORECASE))
+        """Return whether ``folder_name`` looks like a TV season folder.
+
+        Accepts the English ``Season NN`` plus common localised words, the short
+        ``S01`` form, no-space/underscore variants, and trailing suffixes.
+        """
+        return bool(
+            cls._SEASON_FOLDER.match(folder_name)
+            or cls._SEASON_SHORT.match(folder_name)
+        )
 
     @classmethod
     def is_tv_specials_folder(cls, folder_name: str) -> bool:
-        """Return whether ``folder_name`` looks like a TV specials folder."""
+        """Return whether ``folder_name`` looks like a TV specials folder.
+
+        Recognises any all-zero season number (``Season 0``, ``Season 00``), the
+        word ``specials`` in any variant that contains it, and the localised
+        ``especiales``/``especiais`` spellings.
+        """
         name_lower = folder_name.lower()
         return (
-            name_lower == "specials"
-            or name_lower == "season 00"
-            or "specials" in name_lower
+            "specials" in name_lower
+            or "especiales" in name_lower
+            or "especiais" in name_lower
+            or bool(cls._SPECIALS_FOLDER.match(folder_name))
         )
+
+    # Episode-number signatures Sonarr/Jellyfin actually produce. A filename
+    # carrying any of these is treated as a validly-named episode; the show name is
+    # no longer required to match, so terse/abbreviated but correct names are kept
+    # instead of being flagged (a video is never worth an auto-delete on a fuzzy
+    # name miss).
+    _EPISODE_SIGNATURES = (
+        re.compile(r"s\d{1,4}[ ._-]?e\d{1,4}", re.IGNORECASE),  # S01E01, S1E1, S01 E01
+        re.compile(r"\b\d{1,2}x\d{2,3}\b", re.IGNORECASE),  # 1x05, 12x005
+        re.compile(r"\b\d{4}[ ._-]\d{1,2}[ ._-]\d{1,2}\b"),  # 2024-06-01 daily
+        re.compile(r"[ ._]-[ ._]?\d{1,4}\b"),  # "Show - 1071" anime absolute
+    )
 
     @classmethod
     def is_valid_tv_episode(cls, filename: str, show_folder_name: str) -> bool:
-        """Return whether an episode filename matches the show and SxxExx pattern."""
-        if not re.search(r"S\d+E\d+", filename, re.IGNORECASE):
-            return False
+        """Return whether a filename carries a recognised episode signature.
 
-        clean_show = re.sub(
-            r"\{(?:tmdb|tvdb)-\d+\}", "", show_folder_name, flags=re.IGNORECASE
-        )
-        clean_show = re.sub(r"\(\d{4}\)", "", clean_show).strip()
-        show_words = [word.lower() for word in clean_show.split() if len(word) > 2]
-        if not show_words:
-            return True
-
-        filename_lower = filename.lower()
-        matches = sum(1 for word in show_words if word in filename_lower)
-        return matches / len(show_words) >= 0.75
+        Accepts ``SxxExx``, ``NxNN``, date-based (daily), and the ``Show - 1071``
+        absolute-numbering convention. The show name is not required to match, so a
+        correctly-numbered but terse filename is kept rather than flagged.
+        """
+        del show_folder_name  # kept for source parity; no longer used for matching
+        return any(pattern.search(filename) for pattern in cls._EPISODE_SIGNATURES)

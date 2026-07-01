@@ -6,6 +6,7 @@ import os
 from pathlib import Path
 
 from core.logging import get_logger
+from modules.deletarr.manifest import LibraryManifest, ManagedFolder
 from modules.deletarr.models import (
     LibraryType,
     ScanItem,
@@ -101,7 +102,9 @@ class MediaScanner:
                                 parent=root,
                                 movie_folder=f"{folder_name} (Show Root)",
                                 movie_folder_path=root,
-                                is_checked=True,
+                                # A whole folder is never auto-selected on a
+                                # name-shape miss (it could be a real season).
+                                is_checked=False,
                             )
                         )
                         strict_remove.append(dir_name)
@@ -139,7 +142,8 @@ class MediaScanner:
                                 parent=root,
                                 movie_folder=group_name,
                                 movie_folder_path=root,
-                                is_checked=not is_specials,
+                                # A video is never auto-selected on a name miss.
+                                is_checked=False,
                             )
                         )
                 else:
@@ -169,7 +173,8 @@ class MediaScanner:
                         parent=root,
                         movie_folder=group_name,
                         movie_folder_path=root,
-                        is_checked=not is_specials,
+                        # A whole folder is never auto-selected for deletion.
+                        is_checked=False,
                     )
                 )
                 dirs_to_remove.append(dir_name)
@@ -261,6 +266,7 @@ class MediaScanner:
                 else:
                     video_info["is_video"] = False
                     video_info["reason"] = "Misplaced video (filename does not match folder)"
+                    video_info["demoted_video"] = True
                     junk_files.append(video_info)
 
             if len(valid_videos) > 1:
@@ -269,6 +275,7 @@ class MediaScanner:
                 for duplicate in valid_videos[1:]:
                     duplicate["is_video"] = False
                     duplicate["reason"] = f'Duplicate video (smaller than {largest["name"]})'
+                    duplicate["demoted_video"] = True
                     junk_files.append(duplicate)
                 valid_videos = [largest]
 
@@ -277,6 +284,9 @@ class MediaScanner:
                 for video in valid_videos
             ]
             for junk_file in junk_files:
+                # A demoted video (misplaced/duplicate) is large and irreplaceable, so
+                # a fuzzy-name miss must never pre-select it for deletion; it surfaces
+                # unchecked. Sidecar junk keeps the default checked state.
                 self.scan_results.append(
                     ScanItem(
                         path=str(junk_file["path"]),
@@ -287,9 +297,177 @@ class MediaScanner:
                         parent=str(junk_file["parent"]),
                         movie_folder=folder_name,
                         movie_folder_path=root,
+                        is_checked=not bool(junk_file.get("demoted_video")),
                         videos_in_folder=list(videos),
                     )
                 )
+
+    def scan_arr(self, manifest: LibraryManifest) -> list[ScanItem]:
+        """Scan using a Radarr/Sonarr manifest as the source of truth.
+
+        Files tracked by the Arr are kept; anything else inside a managed folder is
+        flagged as unnecessary, and folders the Arr does not know about are surfaced
+        as orphaned (unchecked by default).
+        """
+        app_label = "Radarr" if manifest.library_type == "movies" else "Sonarr"
+        self.is_scanning = True
+        self.scan_results = []
+        self.scan_progress = 0
+        try:
+            for media_path in self.media_paths:
+                if not os.path.exists(media_path):
+                    _log.warning("media path does not exist: %s", media_path)
+                    continue
+                _log.info(
+                    "scanning %s library against %s", manifest.library_type, app_label
+                )
+                self._scan_with_manifest(media_path, manifest, app_label)
+            self.scan_progress = 100
+            _log.info("arr scan complete; found %d item(s)", len(self.scan_results))
+        finally:
+            self.is_scanning = False
+        return self.scan_results
+
+    def _scan_with_manifest(
+        self, directory: str, manifest: LibraryManifest, app_label: str
+    ) -> None:
+        """Walk the top level of ``directory`` against the Arr manifest."""
+        try:
+            entries = sorted(os.scandir(directory), key=lambda entry: entry.name)
+        except OSError as exc:  # pragma: no cover - defensive
+            _log.warning("could not list %s: %s", directory, exc)
+            return
+
+        for entry in entries:
+            if entry.name in JunkPatterns.IGNORED_FOLDERS:
+                continue
+            if entry.is_dir():
+                folder = manifest.folder_for(entry.path)
+                if folder is not None:
+                    self._clean_managed_folder(entry.path, folder, app_label)
+                elif manifest.is_known_folder(entry.path):
+                    continue  # known to the Arr but no tracked file yet — leave alone
+                else:
+                    self.scan_results.append(
+                        ScanItem(
+                            path=entry.path,
+                            name=entry.name,
+                            type="folder",
+                            size=self._get_folder_size(entry.path),
+                            reason=f"Orphaned folder (not in {app_label})",
+                            parent=directory,
+                            movie_folder=entry.name,
+                            movie_folder_path=entry.path,
+                            is_checked=False,
+                            origin="arr",
+                        )
+                    )
+            else:
+                try:
+                    size = os.path.getsize(entry.path)
+                except OSError:  # pragma: no cover - defensive
+                    continue
+                self.scan_results.append(
+                    ScanItem(
+                        path=entry.path,
+                        name=entry.name,
+                        type="file",
+                        size=size,
+                        reason=f"Loose file (not in {app_label})",
+                        parent=directory,
+                        is_checked=False,
+                        origin="arr",
+                    )
+                )
+
+    def _clean_managed_folder(
+        self, folder_dir: str, folder: ManagedFolder, app_label: str
+    ) -> None:
+        """Flag every non-tracked file/folder inside one managed media folder."""
+        videos = self._folder_videos(folder)
+        start = len(self.scan_results)
+        display_name = os.path.basename(folder_dir)
+
+        for root, dirs, files in os.walk(folder_dir):
+            dirs[:] = [name for name in dirs if name not in JunkPatterns.IGNORED_FOLDERS]
+
+            junk_dirs: list[str] = []
+            for dir_name in dirs:
+                if JunkPatterns.is_junk_folder(dir_name):
+                    folder_path = os.path.join(root, dir_name)
+                    self.scan_results.append(
+                        ScanItem(
+                            path=folder_path,
+                            name=dir_name,
+                            type="folder",
+                            size=self._get_folder_size(folder_path),
+                            reason="Junk folder",
+                            parent=root,
+                            movie_folder=display_name,
+                            movie_folder_path=folder_dir,
+                            origin="arr",
+                        )
+                    )
+                    junk_dirs.append(dir_name)
+            for dir_name in junk_dirs:
+                dirs.remove(dir_name)
+
+            for filename in files:
+                if filename in JunkPatterns.IGNORED_FOLDERS:
+                    continue
+                filepath = os.path.join(root, filename)
+                if os.path.normpath(filepath) in folder.media_paths:
+                    continue  # tracked media — keep
+                try:
+                    size = os.path.getsize(filepath)
+                except OSError:
+                    continue
+
+                is_video = JunkPatterns.is_video_file(filename)
+                if is_video:
+                    reason = f"Untracked video (not in {app_label})"
+                else:
+                    check = JunkPatterns.is_junk_file(
+                        filename,
+                        filepath,
+                        list(folder.media_basenames),
+                        os.path.basename(root),
+                    )
+                    if not check["is_junk"]:
+                        continue  # recognised companion (artwork/subtitle) — keep
+                    reason = str(check["reason"])
+
+                self.scan_results.append(
+                    ScanItem(
+                        path=filepath,
+                        name=filename,
+                        type="file",
+                        size=size,
+                        reason=reason,
+                        parent=root,
+                        movie_folder=display_name,
+                        movie_folder_path=folder_dir,
+                        # An untracked video may simply be not-yet-imported, so never
+                        # auto-select it; sidecar junk keeps the default checked state.
+                        is_checked=not is_video,
+                        origin="arr",
+                    )
+                )
+
+        for item in self.scan_results[start:]:
+            item.videos_in_folder = list(videos)
+
+    @staticmethod
+    def _folder_videos(folder: ManagedFolder) -> list[VideoReference]:
+        """Build the protected-video context for a managed folder from disk sizes."""
+        videos: list[VideoReference] = []
+        for media_path in sorted(folder.media_paths):
+            try:
+                size = os.path.getsize(media_path)
+            except OSError:
+                size = 0
+            videos.append(VideoReference(name=os.path.basename(media_path), size=size))
+        return videos
 
     def _get_folder_size(self, folder_path: str) -> int:
         """Return the total byte size of ``folder_path``."""

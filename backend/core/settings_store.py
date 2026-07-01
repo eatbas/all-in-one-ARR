@@ -83,9 +83,13 @@ DEFAULT_FINDARR_SETTINGS: dict[str, Any] = {
     },
 }
 
-DEFAULT_DELETARR_SETTINGS: dict[str, str] = {
+DEFAULT_DELETARR_SETTINGS: dict[str, Any] = {
     "movies_path": "/media/movies",
     "tv_path": "/media/tv",
+    # When true, Deletarr consults Radarr/Sonarr as the source of truth for which
+    # files belong on disk; it falls back to the heuristic scan when the matching
+    # app is unconfigured or unreachable.
+    "use_arr_source": True,
 }
 
 
@@ -234,14 +238,16 @@ def _normalise_deletarr_settings(
     *,
     movies_path: str = DEFAULT_DELETARR_SETTINGS["movies_path"],
     tv_path: str = DEFAULT_DELETARR_SETTINGS["tv_path"],
-) -> dict[str, str]:
-    """Merge and validate persisted Deletarr paths with environment seeds."""
+    use_arr_source: bool = DEFAULT_DELETARR_SETTINGS["use_arr_source"],
+) -> dict[str, Any]:
+    """Merge and validate persisted Deletarr settings with environment seeds."""
     raw = raw or {}
     return {
         "movies_path": _normalise_deletarr_path(
             raw.get("movies_path", movies_path), default=movies_path
         ),
         "tv_path": _normalise_deletarr_path(raw.get("tv_path", tv_path), default=tv_path),
+        "use_arr_source": bool(raw.get("use_arr_source", use_arr_source)),
     }
 
 
@@ -310,6 +316,7 @@ class SettingsStore:
         trending_sync_interval_minutes: int = DEFAULT_TRENDING_SYNC_INTERVAL,
         deletarr_movies_path: str = DEFAULT_DELETARR_SETTINGS["movies_path"],
         deletarr_tv_path: str = DEFAULT_DELETARR_SETTINGS["tv_path"],
+        deletarr_use_arr_source: bool = DEFAULT_DELETARR_SETTINGS["use_arr_source"],
     ) -> None:
         """Load persisted settings, or seed from the supplied defaults.
 
@@ -322,6 +329,7 @@ class SettingsStore:
             deletarr_seed = {
                 "movies_path": deletarr_movies_path,
                 "tv_path": deletarr_tv_path,
+                "use_arr_source": deletarr_use_arr_source,
             }
             if self._path.exists():
                 self._load_locked(
@@ -351,6 +359,7 @@ class SettingsStore:
                     deletarr_seed,
                     movies_path=deletarr_movies_path,
                     tv_path=deletarr_tv_path,
+                    use_arr_source=deletarr_use_arr_source,
                 )
                 for desc in SERVICES:
                     self._services[desc.name] = _service_seed(
@@ -362,7 +371,7 @@ class SettingsStore:
     def _load_locked(
         self,
         seed_services: dict[str, dict[str, str]] | None = None,
-        seed_deletarr: dict[str, str] | None = None,
+        seed_deletarr: dict[str, Any] | None = None,
     ) -> None:
         data = json.loads(self._path.read_text(encoding="utf-8"))
         seed_deletarr = seed_deletarr or copy.deepcopy(DEFAULT_DELETARR_SETTINGS)
@@ -398,6 +407,9 @@ class SettingsStore:
                 "movies_path", DEFAULT_DELETARR_SETTINGS["movies_path"]
             ),
             tv_path=seed_deletarr.get("tv_path", DEFAULT_DELETARR_SETTINGS["tv_path"]),
+            use_arr_source=seed_deletarr.get(
+                "use_arr_source", DEFAULT_DELETARR_SETTINGS["use_arr_source"]
+            ),
         )
         # Migration: the flag was historically persisted as ``auto_remove_on_import``
         # (remove when Radarr/Sonarr imported the title). It now means "remove from
@@ -649,28 +661,35 @@ class SettingsStore:
 
     # ---- Deletarr ----
 
-    def deletarr_settings(self) -> dict[str, str]:
-        """Return a copy of the persisted Deletarr media roots."""
+    def deletarr_settings(self) -> dict[str, Any]:
+        """Return a copy of the persisted Deletarr settings."""
         with self._lock:
             return dict(self._deletarr_settings)
 
     def update_deletarr_settings(
-        self, *, movies_path: str | None = None, tv_path: str | None = None
-    ) -> dict[str, str]:
-        """Update Deletarr media roots; ``None`` leaves a field unchanged."""
+        self,
+        *,
+        movies_path: str | None = None,
+        tv_path: str | None = None,
+        use_arr_source: bool | None = None,
+    ) -> dict[str, Any]:
+        """Update Deletarr settings; ``None`` leaves a field unchanged."""
         with self._lock:
             merged = dict(self._deletarr_settings)
             if movies_path is not None:
                 merged["movies_path"] = movies_path
             if tv_path is not None:
                 merged["tv_path"] = tv_path
+            if use_arr_source is not None:
+                merged["use_arr_source"] = use_arr_source
             self._deletarr_settings = _normalise_deletarr_settings(
                 merged,
                 movies_path=self._deletarr_settings["movies_path"],
                 tv_path=self._deletarr_settings["tv_path"],
+                use_arr_source=self._deletarr_settings["use_arr_source"],
             )
             self._save_locked()
-            self._log.info("updated Deletarr paths")
+            self._log.info("updated Deletarr settings")
             return dict(self._deletarr_settings)
 
     # ---- tracked lists ----

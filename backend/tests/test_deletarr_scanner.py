@@ -11,14 +11,55 @@ from fastapi import FastAPI
 from core.context import SyncAlreadyRunning
 from modules.deletarr import setup
 from modules.deletarr.engine import DeletarrService, format_size
+from modules.deletarr.manifest import (
+    LibraryManifest,
+    ManagedFolder,
+    _basename_without_ext,
+)
+from modules.deletarr.models import LibraryType
 from modules.deletarr.scanner import MediaScanner
-from tests.conftest import StubSettingsStore, make_ctx
+from tests.conftest import FakeDeletarrArr, StubSettingsStore, make_ctx
 
 
 def _write(path: Path, content: bytes = b"x") -> Path:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_bytes(content)
     return path
+
+
+def _manifest(
+    library_type: LibraryType, root, folders: dict[str, list[str]]
+) -> LibraryManifest:
+    """Build a manifest directly from on-disk paths for scanner tests."""
+    import os
+
+    managed: dict[str, ManagedFolder] = {}
+    known: set[str] = set()
+    for folder, media in folders.items():
+        normalised = os.path.normpath(folder)
+        known.add(normalised)
+        if media:
+            managed[normalised] = ManagedFolder(
+                path=normalised,
+                media_paths=frozenset(os.path.normpath(path) for path in media),
+                media_basenames=frozenset(
+                    _basename_without_ext(os.path.basename(path)) for path in media
+                ),
+            )
+    return LibraryManifest(
+        library_type,
+        os.path.normpath(str(root)),
+        available=True,
+        folders=managed,
+        known_folders=frozenset(known),
+    )
+
+
+def _fake_client_factory(fake: FakeDeletarrArr):
+    def _factory(_ctx, _selected):
+        return fake
+
+    return _factory
 
 
 def test_movie_scan_flags_sidecars_duplicates_and_misplaced_videos(tmp_path) -> None:
@@ -400,4 +441,475 @@ async def test_setup_registers_context_callables(db) -> None:
     assert ctx.deletarr_delete is not None
     assert ctx.deletarr_update_settings is not None
     status = await ctx.deletarr_status()
-    assert status["settings"] == {"movies_path": "/media/movies", "tv_path": "/media/tv"}
+    assert status["settings"] == {
+        "movies_path": "/media/movies",
+        "tv_path": "/media/tv",
+        "use_arr_source": False,
+    }
+
+
+# ---- P0 safety: never auto-select a video or whole folder on a fuzzy-name miss ----
+
+
+def test_movie_demoted_videos_unchecked_sidecars_checked(tmp_path) -> None:
+    movie = tmp_path / "Example Movie (2024)"
+    _write(movie / "Example Movie 2024.mkv", b"video" * 10)
+    _write(movie / "Example Movie 2024.small.mp4", b"small")  # duplicate video
+    _write(movie / "Other Film.mkv", b"other")  # misplaced video
+    _write(movie / "Example Movie 2024.nfo")  # sidecar junk
+
+    scanner = MediaScanner([str(tmp_path)])
+    scanner.scan("movies")
+    by = {item.name: item for item in scanner.get_sorted_results()}
+
+    assert by["Other Film.mkv"].is_checked is False
+    assert by["Example Movie 2024.small.mp4"].is_checked is False
+    assert by["Example Movie 2024.nfo"].is_checked is True
+
+
+def test_tv_videos_and_folders_unchecked_on_name_miss(tmp_path) -> None:
+    show = tmp_path / "Example Show"
+    season = show / "Season 01"
+    _write(season / "Example Show S01E01.mkv", b"ep")
+    _write(season / "Bad Name.mkv", b"bad")  # irregular episode (video)
+    _write(season / "notes.nfo")  # non-video junk
+    _write(season / "Subs" / "x.srt")  # unexpected folder inside season
+    _write(show / "Featurettes" / "clip.mkv")  # unexpected show-root folder
+
+    scanner = MediaScanner([str(tmp_path)])
+    scanner.scan("tv")
+    by = {item.name: item for item in scanner.get_sorted_results()}
+
+    assert by["Bad Name.mkv"].is_checked is False
+    assert by["Subs"].is_checked is False
+    assert by["Featurettes"].is_checked is False
+    assert by["notes.nfo"].is_checked is True
+
+
+def test_arr_untracked_video_unchecked_sidecar_checked(tmp_path) -> None:
+    root = tmp_path / "movies"
+    movie = root / "Inception (2010)"
+    video = _write(movie / "Inception.mkv", b"video")
+    _write(movie / "extra.mkv", b"x")  # untracked video
+    _write(movie / "Inception.nfo")  # sidecar junk
+
+    manifest = _manifest("movies", root, {str(movie): [str(video)]})
+    scanner = MediaScanner([str(root)])
+    scanner.scan_arr(manifest)
+    by = {item.name: item for item in scanner.get_sorted_results()}
+
+    assert by["extra.mkv"].is_checked is False
+    assert by["Inception.nfo"].is_checked is True
+
+
+# ---- Arr-backed scanner ----
+
+
+def test_scan_arr_flags_untracked_keeps_tracked_and_companions(tmp_path) -> None:
+    root = tmp_path / "movies"
+    movie = root / "Inception (2010)"
+    video = _write(movie / "Inception.mkv", b"video" * 10)
+    _write(movie / "Inception.nfo")
+    _write(movie / "poster.jpg")  # whitelisted companion — kept
+    _write(movie / "Inception.en.srt")  # subtitle, not junk — kept
+    _write(movie / ".DS_Store")  # ignored filename — skipped
+    _write(movie / "extra.mkv", b"x")  # untracked video — flagged
+    _write(movie / "sample" / "clip.txt")  # junk folder
+    (root / "@eaDir").mkdir()  # ignored top-level folder — skipped
+    _write(root / "Random Junk" / "r.mkv", b"r")  # orphaned folder
+
+    manifest = _manifest("movies", root, {str(movie): [str(video)]})
+    scanner = MediaScanner([str(root)])
+    scanner.scan_arr(manifest)
+    items = {item.name: item for item in scanner.get_sorted_results()}
+
+    assert items["Inception.nfo"].reason == "Junk file extension"
+    assert items["extra.mkv"].reason == "Untracked video (not in Radarr)"
+    assert items["sample"].type == "folder" and items["sample"].reason == "Junk folder"
+    assert items["Random Junk"].reason == "Orphaned folder (not in Radarr)"
+    assert items["Random Junk"].is_checked is False
+    assert "Inception.mkv" not in items  # tracked media kept
+    assert "poster.jpg" not in items  # whitelisted companion kept
+    assert "Inception.en.srt" not in items  # subtitle kept
+    assert ".DS_Store" not in items
+    assert items["Inception.nfo"].videos_in_folder[0].name == "Inception.mkv"
+    assert all(item.origin == "arr" for item in scanner.get_sorted_results())
+
+
+def test_scan_arr_leaves_known_fileless_folder_and_flags_loose_file(tmp_path) -> None:
+    root = tmp_path / "movies"
+    pending = root / "Pending (2025)"
+    _write(pending / "not-yet-imported.txt")  # inside known-but-fileless folder
+    _write(root / "loose.mkv", b"l")  # loose top-level file
+
+    manifest = _manifest("movies", root, {str(pending): []})
+    scanner = MediaScanner([str(root)])
+    scanner.scan_arr(manifest)
+    items = {item.name: item for item in scanner.get_sorted_results()}
+
+    assert "not-yet-imported.txt" not in items  # left alone
+    assert items["loose.mkv"].reason == "Loose file (not in Radarr)"
+    assert items["loose.mkv"].is_checked is False
+
+
+def test_scan_arr_skips_missing_root(tmp_path) -> None:
+    manifest = _manifest("movies", tmp_path / "missing", {})
+    scanner = MediaScanner([str(tmp_path / "missing")])
+    assert scanner.scan_arr(manifest) == []
+
+
+def test_scan_arr_skips_unstattable_junk_file(tmp_path, monkeypatch) -> None:
+    import os
+
+    root = tmp_path / "movies"
+    movie = root / "M (2020)"
+    video = _write(movie / "M.mkv", b"v")
+    broken = _write(movie / "broken.nfo")
+    manifest = _manifest("movies", root, {str(movie): [str(video)]})
+
+    real_getsize = os.path.getsize
+
+    def _getsize(path: str) -> int:
+        if os.path.normpath(path) == os.path.normpath(str(broken)):
+            raise OSError("no stat")
+        return real_getsize(path)
+
+    monkeypatch.setattr("modules.deletarr.scanner.os.path.getsize", _getsize)
+    scanner = MediaScanner([str(root)])
+    scanner.scan_arr(manifest)
+
+    assert all(item.name != "broken.nfo" for item in scanner.get_sorted_results())
+
+
+def test_scan_arr_folder_videos_tolerate_unreadable_media(tmp_path, monkeypatch) -> None:
+    import os
+
+    root = tmp_path / "movies"
+    movie = root / "M (2020)"
+    video = _write(movie / "M.mkv", b"v")
+    _write(movie / "M.nfo")
+    manifest = _manifest("movies", root, {str(movie): [str(video)]})
+
+    real_getsize = os.path.getsize
+
+    def _getsize(path: str) -> int:
+        if os.path.normpath(path) == os.path.normpath(str(video)):
+            raise OSError("no stat")
+        return real_getsize(path)
+
+    monkeypatch.setattr("modules.deletarr.scanner.os.path.getsize", _getsize)
+    scanner = MediaScanner([str(root)])
+    scanner.scan_arr(manifest)
+
+    item = scanner.get_sorted_results()[0]
+    assert item.videos_in_folder[0].size == 0
+
+
+# ---- Engine scan-mode selection and Arr-aware delete ----
+
+
+async def test_scan_uses_arr_mode_when_manifest_available(db, tmp_path, monkeypatch) -> None:
+    root = tmp_path / "movies"
+    movie = root / "Inception (2010)"
+    video = _write(movie / "Inception.mkv", b"video")
+    _write(movie / "Inception.nfo")
+    _write(root / "Random" / "r.mkv", b"r")
+
+    fake = FakeDeletarrArr(
+        movies=[
+            {
+                "path": str(movie),
+                "rootFolderPath": str(root),
+                "movieFile": {"path": str(video)},
+            }
+        ],
+        root_folders=[{"path": str(root)}],
+    )
+    monkeypatch.setattr(
+        "modules.deletarr.engine.client_for", _fake_client_factory(fake)
+    )
+    ctx = make_ctx(
+        db=db,
+        settings_store=StubSettingsStore(
+            deletarr_movies_path=str(root), deletarr_use_arr_source=True
+        ),
+    )
+    service = DeletarrService(ctx)
+    result = await service.scan("movies")
+
+    assert result["scan_mode"] == "arr"
+    assert result["arr_available"] is True
+    names = {item["name"] for item in result["results"]}
+    assert "Inception.nfo" in names
+    assert "Random" in names
+    assert fake.closed is True
+    status = await service.status()
+    assert status["libraries"]["movies"]["scan_mode"] == "arr"
+
+
+async def test_scan_uses_arr_mode_for_tv(db, tmp_path, monkeypatch) -> None:
+    root = tmp_path / "tv"
+    show = root / "Example Show (2019)"
+    season = show / "Season 01"
+    episode = _write(season / "Example Show S01E01.mkv", b"ep")
+    _write(season / "notes.nfo")
+
+    fake = FakeDeletarrArr(
+        series=[{"id": 1, "path": str(show), "rootFolderPath": str(root)}],
+        episode_files={1: [{"path": str(episode)}]},
+        root_folders=[{"path": str(root)}],
+    )
+    monkeypatch.setattr(
+        "modules.deletarr.engine.client_for", _fake_client_factory(fake)
+    )
+    ctx = make_ctx(
+        db=db,
+        settings_store=StubSettingsStore(
+            deletarr_tv_path=str(root), deletarr_use_arr_source=True
+        ),
+    )
+    service = DeletarrService(ctx)
+    result = await service.scan("tv")
+
+    assert result["scan_mode"] == "arr"
+    names = {item["name"]: item["reason"] for item in result["results"]}
+    assert names["notes.nfo"] == "Junk file extension"
+    assert "Example Show S01E01.mkv" not in names
+
+
+async def test_scan_falls_back_to_heuristic_when_arr_unavailable(
+    db, tmp_path, monkeypatch
+) -> None:
+    root = tmp_path / "movies"
+    movie = root / "Example Movie"
+    _write(movie / "Example Movie.mkv", b"video")
+    _write(movie / "Example Movie.nfo")
+
+    fake = FakeDeletarrArr(fail=("movies",))
+    monkeypatch.setattr(
+        "modules.deletarr.engine.client_for", _fake_client_factory(fake)
+    )
+    ctx = make_ctx(
+        db=db,
+        settings_store=StubSettingsStore(
+            deletarr_movies_path=str(root), deletarr_use_arr_source=True
+        ),
+    )
+    service = DeletarrService(ctx)
+    result = await service.scan("movies")
+
+    assert result["scan_mode"] == "heuristic"
+    assert result["arr_available"] is False
+    assert result["arr_detail"] is not None and "boom" in result["arr_detail"]
+    assert any(item["name"] == "Example Movie.nfo" for item in result["results"])
+
+
+async def test_scan_falls_back_when_manifest_has_no_managed_folders(
+    db, tmp_path, monkeypatch
+) -> None:
+    root = tmp_path / "movies"
+    movie = root / "Example Movie"
+    _write(movie / "Example Movie.mkv", b"video")
+    _write(movie / "Example Movie.nfo")
+
+    fake = FakeDeletarrArr(movies=[], root_folders=[{"path": str(root)}])
+    monkeypatch.setattr(
+        "modules.deletarr.engine.client_for", _fake_client_factory(fake)
+    )
+    ctx = make_ctx(
+        db=db,
+        settings_store=StubSettingsStore(
+            deletarr_movies_path=str(root), deletarr_use_arr_source=True
+        ),
+    )
+    service = DeletarrService(ctx)
+    result = await service.scan("movies")
+
+    assert result["scan_mode"] == "heuristic"
+    assert result["arr_available"] is True
+
+
+async def test_scan_disabled_arr_source_never_builds_client(
+    db, tmp_path, monkeypatch
+) -> None:
+    root = tmp_path / "movies"
+    movie = root / "Example Movie"
+    _write(movie / "Example Movie.mkv", b"video")
+    _write(movie / "Example Movie.nfo")
+
+    def _factory(_ctx, _selected):
+        raise AssertionError("client_for should not be called when disabled")
+
+    monkeypatch.setattr("modules.deletarr.engine.client_for", _factory)
+    ctx = make_ctx(
+        db=db,
+        settings_store=StubSettingsStore(
+            deletarr_movies_path=str(root), deletarr_use_arr_source=False
+        ),
+    )
+    service = DeletarrService(ctx)
+    result = await service.scan("movies")
+
+    assert result["scan_mode"] == "heuristic"
+    assert result["arr_detail"] == "Arr source disabled"
+
+
+async def test_arr_mode_delete_succeeds_for_untracked_junk(
+    db, tmp_path, monkeypatch
+) -> None:
+    root = tmp_path / "movies"
+    movie = root / "Inception (2010)"
+    video = _write(movie / "Inception.mkv", b"video")
+    junk = _write(movie / "Inception.nfo")
+
+    fake = FakeDeletarrArr(
+        movies=[
+            {
+                "path": str(movie),
+                "rootFolderPath": str(root),
+                "movieFile": {"path": str(video)},
+            }
+        ],
+        root_folders=[{"path": str(root)}],
+    )
+    monkeypatch.setattr(
+        "modules.deletarr.engine.client_for", _fake_client_factory(fake)
+    )
+    ctx = make_ctx(
+        db=db,
+        settings_store=StubSettingsStore(
+            deletarr_movies_path=str(root), deletarr_use_arr_source=True
+        ),
+    )
+    service = DeletarrService(ctx)
+    await service.scan("movies")
+
+    result = await service.delete("movies", [str(junk)])
+    assert result["deleted"] == 1
+    assert not junk.exists()
+
+
+async def test_arr_mode_delete_blocks_now_tracked_path(db, tmp_path, monkeypatch) -> None:
+    root = tmp_path / "movies"
+    movie = root / "Inception (2010)"
+    video = _write(movie / "Inception.mkv", b"video")
+    junk = _write(movie / "Inception.nfo")
+
+    fake = FakeDeletarrArr(
+        movies=[
+            {
+                "path": str(movie),
+                "rootFolderPath": str(root),
+                "movieFile": {"path": str(video)},
+            }
+        ],
+        root_folders=[{"path": str(root)}],
+    )
+    monkeypatch.setattr(
+        "modules.deletarr.engine.client_for", _fake_client_factory(fake)
+    )
+    ctx = make_ctx(
+        db=db,
+        settings_store=StubSettingsStore(
+            deletarr_movies_path=str(root), deletarr_use_arr_source=True
+        ),
+    )
+    service = DeletarrService(ctx)
+    await service.scan("movies")
+
+    # Radarr now tracks the previously-flagged sidecar; the delete must refuse it.
+    fake._movies[0]["movieFile"]["path"] = str(junk)
+    result = await service.delete("movies", [str(junk)])
+
+    assert result["deleted"] == 0
+    assert result["errors"] == [
+        {"path": str(junk), "error": "Now tracked by Radarr/Sonarr"}
+    ]
+    assert junk.exists()
+
+
+async def test_arr_mode_delete_blocks_folder_containing_tracked_file(
+    db, tmp_path, monkeypatch
+) -> None:
+    root = tmp_path / "movies"
+    movie = root / "Inception (2010)"
+    video = _write(movie / "Inception.mkv", b"video")
+    orphan = root / "Random"
+    orphan_video = _write(orphan / "r.mkv", b"r")
+
+    fake = FakeDeletarrArr(
+        movies=[
+            {
+                "path": str(movie),
+                "rootFolderPath": str(root),
+                "movieFile": {"path": str(video)},
+            }
+        ],
+        root_folders=[{"path": str(root)}],
+    )
+    monkeypatch.setattr(
+        "modules.deletarr.engine.client_for", _fake_client_factory(fake)
+    )
+    ctx = make_ctx(
+        db=db,
+        settings_store=StubSettingsStore(
+            deletarr_movies_path=str(root), deletarr_use_arr_source=True
+        ),
+    )
+    service = DeletarrService(ctx)
+    await service.scan("movies")  # "Random" is orphaned at scan time
+
+    # Radarr now tracks a file inside the orphaned folder; deleting the whole
+    # folder must be refused even though the folder path itself is not tracked.
+    fake._movies.append(
+        {
+            "path": str(orphan),
+            "rootFolderPath": str(root),
+            "movieFile": {"path": str(orphan_video)},
+        }
+    )
+    result = await service.delete("movies", [str(orphan)])
+
+    assert result["deleted"] == 0
+    assert result["errors"] == [
+        {"path": str(orphan), "error": "Now tracked by Radarr/Sonarr"}
+    ]
+    assert orphan.exists()
+
+
+async def test_arr_mode_delete_tolerates_unavailable_manifest(
+    db, tmp_path, monkeypatch
+) -> None:
+    root = tmp_path / "movies"
+    movie = root / "Inception (2010)"
+    video = _write(movie / "Inception.mkv", b"video")
+    junk = _write(movie / "Inception.nfo")
+
+    fake = FakeDeletarrArr(
+        movies=[
+            {
+                "path": str(movie),
+                "rootFolderPath": str(root),
+                "movieFile": {"path": str(video)},
+            }
+        ],
+        root_folders=[{"path": str(root)}],
+    )
+    monkeypatch.setattr(
+        "modules.deletarr.engine.client_for", _fake_client_factory(fake)
+    )
+    ctx = make_ctx(
+        db=db,
+        settings_store=StubSettingsStore(
+            deletarr_movies_path=str(root), deletarr_use_arr_source=True
+        ),
+    )
+    service = DeletarrService(ctx)
+    await service.scan("movies")
+
+    # Arr goes down before the delete: re-verification degrades to the local guards.
+    fake._fail.add("movies")
+    result = await service.delete("movies", [str(junk)])
+
+    assert result["deleted"] == 1
+    assert not junk.exists()

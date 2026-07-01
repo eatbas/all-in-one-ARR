@@ -37,13 +37,16 @@ const stats = {
 }
 
 const status: DeletarrStatus = {
-  settings: { movies_path: "/media/movies", tv_path: "/media/tv" },
+  settings: { movies_path: "/media/movies", tv_path: "/media/tv", use_arr_source: true },
   libraries: {
     movies: {
       type: "movies",
       path: "/media/movies",
       last_scan_at: null,
       last_error: null,
+      scan_mode: "heuristic",
+      arr_available: false,
+      arr_detail: null,
       results_count: 0,
       stats,
     },
@@ -52,6 +55,9 @@ const status: DeletarrStatus = {
       path: "/media/tv",
       last_scan_at: null,
       last_error: null,
+      scan_mode: "heuristic",
+      arr_available: false,
+      arr_detail: null,
       results_count: 0,
       stats,
     },
@@ -61,6 +67,9 @@ const status: DeletarrStatus = {
 const results: DeletarrResults = {
   type: "movies",
   path: "/media/movies",
+  scan_mode: "heuristic",
+  arr_available: false,
+  arr_detail: null,
   results: [],
   stats,
 }

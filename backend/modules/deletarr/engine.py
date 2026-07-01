@@ -12,10 +12,17 @@ from typing import TYPE_CHECKING
 
 from core.context import SyncAlreadyRunning
 from core.logging import get_logger
+from modules.deletarr.arr_source import client_for
+from modules.deletarr.manifest import (
+    LibraryManifest,
+    build_movie_manifest,
+    build_tv_manifest,
+)
 from modules.deletarr.models import (
     LIBRARY_LABELS,
     LibraryType,
     ScanItem,
+    ScanMode,
     normalise_library_type,
     stats_for,
 )
@@ -38,6 +45,10 @@ class LibraryState:
     scan_progress: int = 0
     last_scan_at: str | None = None
     last_error: str | None = None
+    # How the last scan was produced and whether the matching Arr was reachable.
+    scan_mode: ScanMode = "heuristic"
+    arr_available: bool = False
+    arr_detail: str | None = None
 
 
 class DeletarrService:
@@ -67,6 +78,9 @@ class DeletarrService:
         return {
             "type": state.library_type,
             "path": state.path,
+            "scan_mode": state.scan_mode,
+            "arr_available": state.arr_available,
+            "arr_detail": state.arr_detail,
             "results": [item.to_dict() for item in state.results],
             "stats": stats_for(
                 state.results,
@@ -86,13 +100,19 @@ class DeletarrService:
             state.last_error = None
             try:
                 scanner = MediaScanner([state.path])
-                await asyncio.to_thread(scanner.scan, selected)
+                manifest = await self._resolve_manifest(selected, state)
+                if manifest is not None and manifest.folders:
+                    await asyncio.to_thread(scanner.scan_arr, manifest)
+                    state.scan_mode = "arr"
+                else:
+                    await asyncio.to_thread(scanner.scan, selected)
+                    state.scan_mode = "heuristic"
                 state.results = scanner.get_sorted_results()
                 state.scan_progress = 100
                 state.last_scan_at = _now_iso()
                 detail = (
                     f"Found {len(state.results)} junk item(s) in "
-                    f"{LIBRARY_LABELS[selected]}."
+                    f"{LIBRARY_LABELS[selected]} ({state.scan_mode} scan)."
                 )
                 self._ctx.db.add_activity("Deletarr scan completed", detail)
                 return await self.results(selected)
@@ -117,7 +137,12 @@ class DeletarrService:
 
         async def run_delete() -> dict:
             state = self._state(selected)
-            result = await asyncio.to_thread(self._delete_sync, state, paths)
+            tracked: set[str] = set()
+            if state.scan_mode == "arr":
+                manifest = await self._build_manifest(selected, state.path)
+                if manifest.available:
+                    tracked = manifest.media_paths
+            result = await asyncio.to_thread(self._delete_sync, state, paths, tracked)
             self._ctx.db.add_activity(
                 "Deletarr delete completed",
                 (
@@ -137,19 +162,57 @@ class DeletarrService:
         return self._ctx.settings_store.deletarr_settings()
 
     async def update_settings(
-        self, *, movies_path: str | None = None, tv_path: str | None = None
+        self,
+        *,
+        movies_path: str | None = None,
+        tv_path: str | None = None,
+        use_arr_source: bool | None = None,
     ) -> dict:
-        """Persist path settings and update live state paths."""
+        """Persist path/source settings and update live state paths."""
         settings = self._ctx.settings_store.update_deletarr_settings(
             movies_path=movies_path,
             tv_path=tv_path,
+            use_arr_source=use_arr_source,
         )
         self._states["movies"].path = settings["movies_path"]
         self._states["tv"].path = settings["tv_path"]
         self._ctx.db.add_activity("Deletarr settings saved", "Deletarr paths updated")
         return await self.status()
 
-    def _delete_sync(self, state: LibraryState, paths: list[str]) -> dict:
+    async def _resolve_manifest(
+        self, selected: LibraryType, state: LibraryState
+    ) -> LibraryManifest | None:
+        """Build the Arr manifest for a scan, honouring the ``use_arr_source`` toggle.
+
+        Returns the manifest when the matching Arr is reachable, or ``None`` so the
+        caller falls back to the heuristic scan. Records reachability on ``state``.
+        """
+        settings = self._ctx.settings_store.deletarr_settings()
+        if not settings.get("use_arr_source", True):
+            state.arr_available = False
+            state.arr_detail = "Arr source disabled"
+            return None
+        manifest = await self._build_manifest(selected, state.path)
+        state.arr_available = manifest.available
+        state.arr_detail = manifest.detail
+        return manifest if manifest.available else None
+
+    async def _build_manifest(
+        self, selected: LibraryType, local_root: str
+    ) -> LibraryManifest:
+        """Fetch and translate the Radarr/Sonarr keep-set for one library."""
+        client = client_for(self._ctx, selected)
+        try:
+            if selected == "movies":
+                return await build_movie_manifest(client, local_root)
+            return await build_tv_manifest(client, local_root)
+        finally:
+            await client.aclose()
+
+    def _delete_sync(
+        self, state: LibraryState, paths: list[str], tracked: set[str] | None = None
+    ) -> dict:
+        tracked = tracked or set()
         current = {item.path: item for item in state.results}
         deleted: list[str] = []
         failed: list[dict[str, str]] = []
@@ -159,6 +222,11 @@ class DeletarrService:
             item = current.get(path)
             if item is None:
                 failed.append({"path": path, "error": "Not in scan results"})
+                continue
+
+            normalised = os.path.normpath(path)
+            if normalised in tracked or self._covers_tracked(normalised, tracked):
+                failed.append({"path": path, "error": "Now tracked by Radarr/Sonarr"})
                 continue
 
             validation_error = self._validate_delete_path(state.path, path)
@@ -198,6 +266,17 @@ class DeletarrService:
         }
 
     @staticmethod
+    def _covers_tracked(path: str, tracked: set[str]) -> bool:
+        """Whether ``path`` is a directory that contains a currently-tracked file.
+
+        The exact-match case is handled by the caller's ``in tracked`` check; this
+        catches deleting a whole folder that the Arr has begun tracking a file
+        inside of between scan and delete.
+        """
+        candidate = Path(path)
+        return any(Path(entry).is_relative_to(candidate) for entry in tracked)
+
+    @staticmethod
     def _validate_delete_path(root: str, path: str) -> str | None:
         try:
             root_path = Path(root).resolve(strict=True)
@@ -234,6 +313,9 @@ class DeletarrService:
             "path": state.path,
             "last_scan_at": state.last_scan_at,
             "last_error": state.last_error,
+            "scan_mode": state.scan_mode,
+            "arr_available": state.arr_available,
+            "arr_detail": state.arr_detail,
             "results_count": len(state.results),
             "stats": stats_for(
                 state.results,

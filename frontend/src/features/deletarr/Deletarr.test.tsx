@@ -33,6 +33,7 @@ import { mutationResult, queryResult } from "@/shared/test/mock-query"
 const SETTINGS: DeletarrSettings = {
   movies_path: "/media/movies",
   tv_path: "/media/tv",
+  use_arr_source: true,
 }
 
 const STATUS: DeletarrStatus = {
@@ -43,6 +44,9 @@ const STATUS: DeletarrStatus = {
       path: "/media/movies",
       last_scan_at: "2026-06-30T16:12:00Z",
       last_error: null,
+      scan_mode: "heuristic",
+      arr_available: false,
+      arr_detail: null,
       results_count: 3,
       stats: {
         total_files: 2,
@@ -57,6 +61,9 @@ const STATUS: DeletarrStatus = {
       path: "/media/tv",
       last_scan_at: null,
       last_error: null,
+      scan_mode: "heuristic",
+      arr_available: false,
+      arr_detail: null,
       results_count: 0,
       stats: {
         total_files: 0,
@@ -72,6 +79,9 @@ const STATUS: DeletarrStatus = {
 const MOVIE_RESULTS: DeletarrResults = {
   type: "movies",
   path: "/media/movies",
+  scan_mode: "heuristic",
+  arr_available: false,
+  arr_detail: null,
   stats: STATUS.libraries.movies.stats,
   results: [
     {
@@ -85,6 +95,7 @@ const MOVIE_RESULTS: DeletarrResults = {
       movie_folder_path: "/media/movies/Dune",
       is_checked: true,
       videos_in_folder: [{ name: "Dune.mkv", size: 7_000_000_000 }],
+      origin: "heuristic",
     },
     {
       path: "/media/movies/Dune/sample.txt",
@@ -97,6 +108,7 @@ const MOVIE_RESULTS: DeletarrResults = {
       movie_folder_path: "/media/movies/Dune",
       is_checked: false,
       videos_in_folder: [{ name: "Dune.mkv", size: 7_000_000_000 }],
+      origin: "heuristic",
     },
     {
       path: "/media/movies/@eaDir",
@@ -109,6 +121,7 @@ const MOVIE_RESULTS: DeletarrResults = {
       movie_folder_path: null,
       is_checked: true,
       videos_in_folder: [],
+      origin: "heuristic",
     },
   ],
 }
@@ -116,6 +129,9 @@ const MOVIE_RESULTS: DeletarrResults = {
 const TV_RESULTS: DeletarrResults = {
   type: "tv",
   path: "/media/tv",
+  scan_mode: "heuristic",
+  arr_available: false,
+  arr_detail: null,
   stats: STATUS.libraries.tv.stats,
   results: [],
 }
@@ -175,6 +191,89 @@ describe("Deletarr", () => {
     expect(screen.getByText("Protected video: Dune.mkv")).toBeInTheDocument()
     expect(screen.getByLabelText("Select movie.nfo")).toBeChecked()
     expect(screen.getByLabelText("Select sample.txt")).not.toBeChecked()
+  })
+
+  it("shows the heuristic scan-mode banner by default", () => {
+    render(<Deletarr />)
+
+    expect(
+      screen.getByText(/Heuristic scan\. Connect Radarr/),
+    ).toBeInTheDocument()
+  })
+
+  it("shows why the heuristic fallback was used when Arr is unreachable", () => {
+    vi.mocked(useDeletarrStatus).mockReturnValue(
+      queryResult({
+        ...STATUS,
+        libraries: {
+          ...STATUS.libraries,
+          movies: {
+            ...STATUS.libraries.movies,
+            arr_detail: "radarr connection is not configured",
+          },
+        },
+      }),
+    )
+
+    render(<Deletarr />)
+
+    expect(
+      screen.getByText(/radarr connection is not configured/),
+    ).toBeInTheDocument()
+  })
+
+  it("shows the verified banner when scanning against the library manager", () => {
+    vi.mocked(useDeletarrResults).mockImplementation((type) =>
+      queryResult(
+        type === "movies"
+          ? { ...MOVIE_RESULTS, scan_mode: "arr", arr_available: true }
+          : TV_RESULTS,
+      ),
+    )
+
+    render(<Deletarr />)
+
+    expect(screen.getByText(/Verified against/)).toBeInTheDocument()
+    expect(screen.getByText("Radarr")).toBeInTheDocument()
+  })
+
+  it("shows a separate group for orphaned folders not in the library", () => {
+    vi.mocked(useDeletarrResults).mockImplementation((type) =>
+      queryResult(
+        type === "movies"
+          ? {
+              ...MOVIE_RESULTS,
+              scan_mode: "arr",
+              arr_available: true,
+              results: [
+                ...MOVIE_RESULTS.results,
+                {
+                  path: "/media/movies/Unknown Thing",
+                  name: "Unknown Thing",
+                  type: "folder",
+                  size: 4096,
+                  reason: "Orphaned folder (not in Radarr)",
+                  parent: "/media/movies",
+                  movie_folder: "Unknown Thing",
+                  movie_folder_path: "/media/movies/Unknown Thing",
+                  is_checked: false,
+                  videos_in_folder: [],
+                  origin: "arr",
+                },
+              ],
+            }
+          : TV_RESULTS,
+      ),
+    )
+
+    render(<Deletarr />)
+
+    expect(screen.getByText("Not in your movies library")).toBeInTheDocument()
+    expect(
+      screen.getByRole("region", { name: "Unknown Thing" }),
+    ).toBeInTheDocument()
+    // The managed Dune group is still rendered separately.
+    expect(screen.getByRole("region", { name: "Dune" })).toBeInTheDocument()
   })
 
   it("switches to TV Shows and persists the selected tab", async () => {

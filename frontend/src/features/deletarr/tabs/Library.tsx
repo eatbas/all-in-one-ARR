@@ -40,6 +40,11 @@ const LIBRARY_LABELS: Record<DeletarrLibraryType, string> = {
   tv: "TV Shows",
 }
 
+const ARR_LABELS: Record<DeletarrLibraryType, string> = {
+  movies: "Radarr",
+  tv: "Sonarr",
+}
+
 const LIBRARY_PATH_KEYS: Record<DeletarrLibraryType, "movies_path" | "tv_path"> = {
   movies: "movies_path",
   tv: "tv_path",
@@ -73,6 +78,14 @@ function groupResults(items: DeletarrScanItem[]): ResultGroup[] {
   return [...grouped.values()]
 }
 
+/** Whole folders / loose files the library manager does not track at all. */
+function isOrphanItem(item: DeletarrScanItem): boolean {
+  return (
+    item.reason.startsWith("Orphaned folder") ||
+    item.reason.startsWith("Loose file")
+  )
+}
+
 function lastScanLabel(value: string | null | undefined): string {
   return value ? formatTimestamp(value) : "Not scanned yet"
 }
@@ -93,7 +106,14 @@ export function Library({ type }: LibraryProps) {
   const settingsPath = statusQuery.data?.settings[LIBRARY_PATH_KEYS[type]]
   const currentPath = results?.path ?? status?.path ?? settingsPath ?? ""
   const items = useMemo(() => results?.results ?? [], [results?.results])
-  const groups = useMemo(() => groupResults(items), [items])
+  const managedGroups = useMemo(
+    () => groupResults(items.filter((item) => !isOrphanItem(item))),
+    [items],
+  )
+  const orphanGroups = useMemo(
+    () => groupResults(items.filter(isOrphanItem)),
+    [items],
+  )
   const defaultSelectionKey = useMemo(
     () => items.map((item) => `${item.path}:${String(item.is_checked)}`).join("|"),
     [items],
@@ -122,6 +142,8 @@ export function Library({ type }: LibraryProps) {
     scanLibrary.isPending ||
     deleteItems.isPending
   const stats = results?.stats ?? status?.stats
+  const scanMode = results?.scan_mode ?? status?.scan_mode ?? "heuristic"
+  const arrDetail = status?.arr_detail ?? results?.arr_detail ?? null
 
   function updateSelection(path: string, checked: boolean) {
     setSelectionEdit((current) => {
@@ -176,6 +198,23 @@ export function Library({ type }: LibraryProps) {
         <StatBlock label="Reclaimable" value={formatBytes(stats?.total_size ?? 0)} />
         <StatBlock label="Last scan" value={lastScanLabel(status?.last_scan_at)} />
       </section>
+
+      <div
+        aria-label="Scan mode"
+        className="rounded-lg border bg-muted/40 px-4 py-3 text-sm"
+      >
+        {scanMode === "arr" ? (
+          <p>
+            Verified against <span className="font-medium">{ARR_LABELS[type]}</span>:
+            only files {ARR_LABELS[type]} does not track are shown.
+          </p>
+        ) : (
+          <p className="text-muted-foreground">
+            Heuristic scan{arrDetail ? ` — ${arrDetail}` : ""}. Connect{" "}
+            {ARR_LABELS[type]} to verify candidates against your library.
+          </p>
+        )}
+      </div>
 
       <Card>
         <CardHeader>
@@ -246,13 +285,13 @@ export function Library({ type }: LibraryProps) {
         <p className="rounded-lg border bg-background p-4 text-sm text-muted-foreground">
           Loading Deletarr results...
         </p>
-      ) : groups.length === 0 ? (
+      ) : managedGroups.length === 0 && orphanGroups.length === 0 ? (
         <p className="rounded-lg border bg-background p-4 text-sm text-muted-foreground">
           No junk candidates found for {LIBRARY_LABELS[type].toLowerCase()}.
         </p>
       ) : (
         <div className="flex flex-col gap-3">
-          {groups.map((group) => (
+          {managedGroups.map((group) => (
             <ResultGroupPanel
               key={group.key}
               group={group}
@@ -261,6 +300,28 @@ export function Library({ type }: LibraryProps) {
               onItemSelection={updateSelection}
             />
           ))}
+          {orphanGroups.length > 0 ? (
+            <div className="flex flex-col gap-3">
+              <div className="rounded-lg border border-amber-500/30 bg-amber-500/5 px-4 py-3">
+                <h3 className="text-sm font-semibold">
+                  Not in your {LIBRARY_LABELS[type].toLowerCase()} library
+                </h3>
+                <p className="text-xs text-muted-foreground">
+                  Whole folders and loose files {ARR_LABELS[type]} does not track. These
+                  are unchecked by default — review carefully before deleting.
+                </p>
+              </div>
+              {orphanGroups.map((group) => (
+                <ResultGroupPanel
+                  key={group.key}
+                  group={group}
+                  selectedSet={selectedSet}
+                  onGroupSelection={updateGroupSelection}
+                  onItemSelection={updateSelection}
+                />
+              ))}
+            </div>
+          ) : null}
         </div>
       )}
     </div>

@@ -7,6 +7,11 @@ from typing import Literal
 
 LibraryType = Literal["movies", "tv"]
 ItemKind = Literal["file", "folder"]
+# How a scan was produced and where a candidate came from: "heuristic" is the
+# pattern-only scan; "arr" means Radarr/Sonarr were consulted as the source of
+# truth for which files belong on disk.
+ScanMode = Literal["heuristic", "arr"]
+ItemOrigin = Literal["heuristic", "arr"]
 
 LIBRARY_TYPES: tuple[LibraryType, ...] = ("movies", "tv")
 LIBRARY_LABELS: dict[LibraryType, str] = {
@@ -47,6 +52,9 @@ class ScanItem:
     movie_folder_path: str | None = None
     is_checked: bool = True
     videos_in_folder: list[VideoReference] = field(default_factory=list)
+    # "heuristic" for pattern-only candidates; "arr" when the candidate was
+    # flagged because Radarr/Sonarr does not track the file.
+    origin: ItemOrigin = "heuristic"
 
     def to_dict(self) -> dict[str, object]:
         return {
@@ -60,6 +68,7 @@ class ScanItem:
             "movie_folder_path": self.movie_folder_path,
             "is_checked": self.is_checked,
             "videos_in_folder": [video.to_dict() for video in self.videos_in_folder],
+            "origin": self.origin,
         }
 
 

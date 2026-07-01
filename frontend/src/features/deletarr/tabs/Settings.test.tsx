@@ -16,6 +16,7 @@ import { Settings } from "./Settings"
 const SETTINGS: DeletarrSettings = {
   movies_path: "/media/movies",
   tv_path: "/media/tv",
+  use_arr_source: true,
 }
 
 beforeEach(() => {
@@ -79,6 +80,28 @@ describe("Deletarr Settings", () => {
       movies_path: "/srv/movies",
       tv_path: "/srv/tv",
     })
+  })
+
+  it("renders the Arr source toggle from settings", () => {
+    render(<Settings />)
+
+    expect(
+      screen.getByRole("switch", { name: /source of truth/i }),
+    ).toBeChecked()
+  })
+
+  it("saves the toggled Arr source flag", async () => {
+    const user = userEvent.setup()
+    const mutate = vi.fn()
+    vi.mocked(useUpdateDeletarrSettings).mockReturnValue(
+      mutationResult(mutate, false),
+    )
+    render(<Settings />)
+
+    await user.click(screen.getByRole("switch", { name: /source of truth/i }))
+    await user.click(screen.getByRole("button", { name: "Save" }))
+
+    expect(mutate).toHaveBeenCalledWith({ use_arr_source: false })
   })
 
   it("does not submit unchanged drafts", async () => {

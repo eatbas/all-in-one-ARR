@@ -212,6 +212,9 @@ export type DeletarrLibraryType = "movies" | "tv"
 /** Filesystem entry type returned by a Deletarr scan. */
 export type DeletarrItemType = "file" | "folder"
 
+/** How a Deletarr scan was produced / where a candidate came from. */
+export type DeletarrScanMode = "heuristic" | "arr"
+
 /** Protected video context for a junk item inside a movie folder. */
 export interface DeletarrVideoRef {
   name: string
@@ -230,6 +233,7 @@ export interface DeletarrScanItem {
   movie_folder_path: string | null
   is_checked: boolean
   videos_in_folder: DeletarrVideoRef[]
+  origin: DeletarrScanMode
 }
 
 /** Per-library Deletarr scan statistics. */
@@ -247,14 +251,18 @@ export interface DeletarrLibraryStatus {
   path: string
   last_scan_at: string | null
   last_error: string | null
+  scan_mode: DeletarrScanMode
+  arr_available: boolean
+  arr_detail: string | null
   results_count: number
   stats: DeletarrStats
 }
 
-/** Deletarr path settings. */
+/** Deletarr settings. */
 export interface DeletarrSettings {
   movies_path: string
   tv_path: string
+  use_arr_source: boolean
 }
 
 /** Full Deletarr status response. */
@@ -267,6 +275,9 @@ export interface DeletarrStatus {
 export interface DeletarrResults {
   type: DeletarrLibraryType
   path: string
+  scan_mode: DeletarrScanMode
+  arr_available: boolean
+  arr_detail: string | null
   results: DeletarrScanItem[]
   stats: DeletarrStats
 }
@@ -287,6 +298,7 @@ export interface DeletarrDeleteResult {
 export interface DeletarrSettingsUpdate {
   movies_path?: string
   tv_path?: string
+  use_arr_source?: boolean
 }
 
 /** Error raised when the backend returns a non-2xx response. */

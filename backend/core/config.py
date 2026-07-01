@@ -85,6 +85,10 @@ class Settings(BaseSettings):
     # the dashboard and persisted in the settings store.
     DELETARR_MOVIES_PATH: str = "/media/movies"
     DELETARR_TV_PATH: str = "/media/tv"
+    # When true, Deletarr uses Radarr/Sonarr as the source of truth for which files
+    # belong on disk (falling back to the heuristic scan when they are unreachable).
+    # Seeds the store on first run, then becomes UI-managed.
+    DELETARR_USE_ARR_SOURCE: bool = True
 
     # Whether the poll removes an item from its Trakt list once Seer reports
     # it available (the list entry only — media files are untouched). Off by default

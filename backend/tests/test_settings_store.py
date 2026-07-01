@@ -33,6 +33,7 @@ def test_seeds_and_persists_on_first_run(tmp_path) -> None:
     assert store.deletarr_settings() == {
         "movies_path": "/media/movies",
         "tv_path": "/media/tv",
+        "use_arr_source": True,
     }
 
 
@@ -169,21 +170,25 @@ def test_seeds_updates_and_reloads_deletarr_paths(tmp_path) -> None:
         client_secret="s",
         deletarr_movies_path="/mnt/movies",
         deletarr_tv_path="/mnt/tv",
+        deletarr_use_arr_source=False,
     )
     assert store.deletarr_settings() == {
         "movies_path": "/mnt/movies",
         "tv_path": "/mnt/tv",
+        "use_arr_source": False,
     }
 
     store.update_deletarr_settings(movies_path="/new/movies")
     assert store.deletarr_settings() == {
         "movies_path": "/new/movies",
         "tv_path": "/mnt/tv",
+        "use_arr_source": False,
     }
-    store.update_deletarr_settings(tv_path="/new/tv")
+    store.update_deletarr_settings(tv_path="/new/tv", use_arr_source=True)
     assert store.deletarr_settings() == {
         "movies_path": "/new/movies",
         "tv_path": "/new/tv",
+        "use_arr_source": True,
     }
 
     reopened = SettingsStore(str(path))
@@ -196,6 +201,7 @@ def test_seeds_updates_and_reloads_deletarr_paths(tmp_path) -> None:
     assert reopened.deletarr_settings() == {
         "movies_path": "/new/movies",
         "tv_path": "/new/tv",
+        "use_arr_source": True,
     }
 
 
@@ -213,10 +219,12 @@ def test_backfills_deletarr_paths_from_seed_on_upgrade(tmp_path) -> None:
     assert store.deletarr_settings() == {
         "movies_path": "/seed/movies",
         "tv_path": "/seed/tv",
+        "use_arr_source": True,
     }
     assert json.loads(path.read_text())["deletarr"] == {
         "movies_path": "/seed/movies",
         "tv_path": "/seed/tv",
+        "use_arr_source": True,
     }
 
 

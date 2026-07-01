@@ -83,6 +83,7 @@ class StubSettingsStore:
         trending_sync_interval_minutes: int = 60,
         deletarr_movies_path: str = "/media/movies",
         deletarr_tv_path: str = "/media/tv",
+        deletarr_use_arr_source: bool = False,
     ) -> None:
         # Defaults to True (unlike the real store, which seeds False) so the
         # availability-removal tests exercise the enabled path without having to opt
@@ -94,6 +95,7 @@ class StubSettingsStore:
         self._deletarr_settings = {
             "movies_path": deletarr_movies_path,
             "tv_path": deletarr_tv_path,
+            "use_arr_source": deletarr_use_arr_source,
         }
         self._findarr_settings = {
             "enabled": False,
@@ -253,16 +255,22 @@ class StubSettingsStore:
                     )
         return self.findarr_settings()
 
-    def deletarr_settings(self) -> dict[str, str]:
+    def deletarr_settings(self) -> dict[str, Any]:
         return dict(self._deletarr_settings)
 
     def update_deletarr_settings(
-        self, *, movies_path: str | None = None, tv_path: str | None = None
-    ) -> dict[str, str]:
+        self,
+        *,
+        movies_path: str | None = None,
+        tv_path: str | None = None,
+        use_arr_source: bool | None = None,
+    ) -> dict[str, Any]:
         if movies_path is not None:
             self._deletarr_settings["movies_path"] = movies_path.strip() or self._deletarr_settings["movies_path"]
         if tv_path is not None:
             self._deletarr_settings["tv_path"] = tv_path.strip() or self._deletarr_settings["tv_path"]
+        if use_arr_source is not None:
+            self._deletarr_settings["use_arr_source"] = bool(use_arr_source)
         return self.deletarr_settings()
 
     def masked_services(self) -> dict[str, dict[str, Any]]:
@@ -305,6 +313,56 @@ class StubArr:
 
     def connection_fields(self) -> dict[str, str]:
         return {"base_url": "http://arr", "api_key": "key"}
+
+
+class FakeDeletarrArr:
+    """Canned-response stand-in for :class:`DeletarrArrClient`.
+
+    Returns fixed movie/series/episode payloads without any HTTP; add an endpoint
+    name to ``fail`` to make that call raise :class:`DeletarrArrError`, so manifest
+    fallbacks can be exercised.
+    """
+
+    def __init__(
+        self,
+        *,
+        movies: list[dict] | None = None,
+        series: list[dict] | None = None,
+        episode_files: dict[int, list[dict]] | None = None,
+        root_folders: list[dict] | None = None,
+        fail: tuple[str, ...] = (),
+    ) -> None:
+        self._movies = movies or []
+        self._series = series or []
+        self._episode_files = episode_files or {}
+        self._root_folders = root_folders or []
+        self._fail: set[str] = set(fail)
+        self.closed = False
+
+    def _maybe_fail(self, key: str) -> None:
+        from modules.deletarr.arr_source import DeletarrArrError
+
+        if key in self._fail:
+            raise DeletarrArrError(f"boom:{key}")
+
+    async def movies(self) -> list[dict]:
+        self._maybe_fail("movies")
+        return list(self._movies)
+
+    async def series(self) -> list[dict]:
+        self._maybe_fail("series")
+        return list(self._series)
+
+    async def episode_files(self, series_id: int) -> list[dict]:
+        self._maybe_fail("episode_files")
+        return list(self._episode_files.get(series_id, []))
+
+    async def root_folders(self) -> list[dict]:
+        self._maybe_fail("root_folders")
+        return list(self._root_folders)
+
+    async def aclose(self) -> None:
+        self.closed = True
 
 
 class StubService:

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Literal
+from typing import TYPE_CHECKING, Any, Literal
 
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel, Field
@@ -27,6 +27,7 @@ class DeletarrDeleteRequest(BaseModel):
 class DeletarrSettingsUpdate(BaseModel):
     movies_path: str | None = None
     tv_path: str | None = None
+    use_arr_source: bool | None = None
 
 
 def _unavailable() -> HTTPException:
@@ -42,7 +43,7 @@ def create_deletarr_router(ctx: "AppContext") -> APIRouter:
     router = APIRouter(prefix="/api/deletarr", tags=["deletarr"])
 
     @router.get("/settings")
-    async def get_settings() -> dict[str, str]:
+    async def get_settings() -> dict[str, Any]:
         return ctx.settings_store.deletarr_settings()
 
     @router.put("/settings")
@@ -52,6 +53,7 @@ def create_deletarr_router(ctx: "AppContext") -> APIRouter:
         return await ctx.deletarr_update_settings(
             movies_path=body.movies_path,
             tv_path=body.tv_path,
+            use_arr_source=body.use_arr_source,
         )
 
     @router.get("/status")
