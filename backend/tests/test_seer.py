@@ -6,7 +6,7 @@ import httpx
 import pytest
 import respx
 
-from core.clients.seer import AVAILABLE, SeerClient, SeerError
+from core.clients.seer import AVAILABLE, SeerClient, SeerError, SeerUnavailableError
 
 _BASE = "http://js:5055"
 
@@ -54,6 +54,44 @@ async def test_get_status_network_error_raises() -> None:
     client = make_client()
     with pytest.raises(SeerError):
         await client.get_status(media_type="movie", tmdb_id=500)
+
+
+@respx.mock
+async def test_get_status_connect_error_raises_unavailable() -> None:
+    # A connection-level failure means Seer was never reached: it is classified as
+    # SeerUnavailableError so loops can stop hammering a dead host for the cycle.
+    respx.get(f"{_BASE}/api/v1/movie/500").mock(side_effect=httpx.ConnectError("down"))
+    client = make_client()
+    with pytest.raises(SeerUnavailableError):
+        await client.get_status(media_type="movie", tmdb_id=500)
+
+
+@respx.mock
+async def test_get_status_connect_timeout_raises_unavailable() -> None:
+    respx.get(f"{_BASE}/api/v1/movie/500").mock(
+        side_effect=httpx.ConnectTimeout("too slow")
+    )
+    client = make_client()
+    with pytest.raises(SeerUnavailableError):
+        await client.get_status(media_type="movie", tmdb_id=500)
+
+
+@respx.mock
+async def test_get_status_read_timeout_is_not_unavailable() -> None:
+    # A read timeout means Seer WAS reached but responded slowly: a plain SeerError,
+    # so callers keep treating it as a per-item failure rather than an outage.
+    respx.get(f"{_BASE}/api/v1/movie/500").mock(side_effect=httpx.ReadTimeout("slow"))
+    client = make_client()
+    with pytest.raises(SeerError) as excinfo:
+        await client.get_status(media_type="movie", tmdb_id=500)
+    assert not isinstance(excinfo.value, SeerUnavailableError)
+
+
+def test_default_client_has_tight_connect_timeout() -> None:
+    # The OS-level connect retry to a dead host can take 20+ seconds; the default
+    # client must bound the connect phase well below that.
+    client = make_client()
+    assert client._client.timeout.connect == 5.0
 
 
 @respx.mock

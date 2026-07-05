@@ -14,6 +14,12 @@ stored status updated, so an item that has left a still-tracked list stops drift
 from Seer instead of keeping a frozen status forever. Items on an untracked list, or
 on a list whose read failed, are left alone. The refresh updates status (and
 auto-removes per the same rule) but never creates a new request.
+
+An unreachable Seer trips a per-cycle latch (:class:`_SeerOutage`): the outage is
+logged and recorded once, and every remaining Seer interaction in the same cycle is
+skipped — each would otherwise pay the full connect timeout and add its own failure
+entry. Item mirroring from Trakt still happens; statuses and requests simply catch
+up on the next sync.
 """
 
 from __future__ import annotations
@@ -26,6 +32,7 @@ from core.clients.seer import (
     PENDING,
     PROCESSING,
     SeerError,
+    SeerUnavailableError,
 )
 from core.logging import get_logger, log_action
 from modules.list_syncarr.removal import remove_tracked_item
@@ -43,26 +50,55 @@ _log = get_logger("list_syncarr.sync")
 _ALREADY_REQUESTED = frozenset({PENDING, PROCESSING})
 
 
+class _SeerOutage:
+    """Per-cycle latch that stops the sync from hammering an unreachable Seer.
+
+    The first connection-level failure (:class:`SeerUnavailableError`) trips the
+    latch: it is logged once and recorded once in the activity feed, and every
+    remaining Seer interaction in the same cycle is skipped — each would otherwise
+    pay the full connect timeout and add its own failure entry. Skipped items are
+    simply retried on the next sync.
+    """
+
+    def __init__(self) -> None:
+        self.down = False
+
+    def trip(self, ctx: "AppContext", exc: SeerUnavailableError) -> None:
+        """Latch the outage, recording it on the first trip only."""
+        if self.down:
+            return
+        self.down = True
+        _log.error("Seer unreachable; skipping remaining Seer calls this sync: %s", exc)
+        ctx.db.add_activity(
+            "Seer unreachable",
+            "Could not connect to Seer; status checks and requests will be "
+            "retried on the next sync.",
+        )
+
+
 async def poll_and_request(ctx: "AppContext") -> None:
     """Poll every selected Trakt list, request missing items, then refresh statuses.
 
     Each list is isolated: a failure reading or processing one list (e.g. an
     unauthorised or transient error) is logged and does not abort the others. After
     the lists are polled, items on a successfully-polled list that were not seen in
-    its read are re-checked against Seer so their stored status cannot drift.
+    its read are re-checked against Seer so their stored status cannot drift. An
+    unreachable Seer trips the shared :class:`_SeerOutage` latch, which mutes every
+    remaining Seer call for the rest of the cycle.
     """
     processed: set[tuple[str, int]] = set()
     polled_lists: set[str] = set()
+    outage = _SeerOutage()
     for tracked in ctx.settings_store.tracked_lists():
-        seen, ok = await _poll_one_list(ctx, tracked)
+        seen, ok = await _poll_one_list(ctx, tracked, outage)
         processed |= seen
         if ok:
             polled_lists.add(tracked.slug)
-    await refresh_tracked_statuses(ctx, processed, polled_lists)
+    await refresh_tracked_statuses(ctx, processed, polled_lists, outage)
 
 
 async def _poll_one_list(
-    ctx: "AppContext", tracked: "TrackedList"
+    ctx: "AppContext", tracked: "TrackedList", outage: _SeerOutage
 ) -> tuple[set[tuple[str, int]], bool]:
     """Poll a single Trakt list and request its missing items.
 
@@ -94,7 +130,7 @@ async def _poll_one_list(
             continue
         seen.add((list_id, trakt_id))
         try:
-            await _process_item(ctx, raw, list_id)
+            await _process_item(ctx, raw, list_id, outage)
         except Exception as exc:  # isolate per-item failures
             title = raw.get("title") or "unknown item"
             _log.exception("failed to process item %s: %s", title, exc)
@@ -110,7 +146,9 @@ async def _poll_one_list(
     return seen, True
 
 
-async def _process_item(ctx: "AppContext", raw: dict, list_id: str) -> None:
+async def _process_item(
+    ctx: "AppContext", raw: dict, list_id: str, outage: _SeerOutage
+) -> None:
     """Upsert one item and create a Seer request when appropriate."""
     trakt_id = raw["trakt_id"]
     media_type = raw.get("type")
@@ -132,6 +170,11 @@ async def _process_item(ctx: "AppContext", raw: dict, list_id: str) -> None:
     assert item is not None  # just upserted
     if item["status"] == "removed":
         return
+    if outage.down:
+        # Seer has been seen unreachable this cycle: status checks, requests and
+        # removals (which delete the Seer request) all need Seer, so leave the
+        # freshly-mirrored item as-is and let the next sync catch it up.
+        return
     if item["status"] == "available":
         # Already known available (effectively terminal): retry the auto-remove but
         # deliberately do not re-check Seer — the refresh pass skips it too.
@@ -152,6 +195,9 @@ async def _process_item(ctx: "AppContext", raw: dict, list_id: str) -> None:
         seer_status = await ctx.seer.get_status(
             media_type=seer_media_type, tmdb_id=tmdb
         )
+    except SeerUnavailableError as exc:
+        outage.trip(ctx, exc)
+        return
     except SeerError as exc:
         _log.error("Seer status check failed for %s: %s", title, exc)
         ctx.db.add_activity(
@@ -169,6 +215,9 @@ async def _process_item(ctx: "AppContext", raw: dict, list_id: str) -> None:
         request_id = await ctx.seer.create_request(
             media_type=seer_media_type, tmdb_id=tmdb
         )
+    except SeerUnavailableError as exc:
+        outage.trip(ctx, exc)
+        return
     except SeerError as exc:
         _log.error("Seer request create failed for %s: %s", title, exc)
         ctx.db.add_activity(
@@ -235,6 +284,7 @@ async def refresh_tracked_statuses(
     ctx: "AppContext",
     processed: set[tuple[str, int]],
     polled_lists: set[str],
+    outage: _SeerOutage,
 ) -> None:
     """Re-check Seer for items on a polled list that were not seen in its read.
 
@@ -246,8 +296,13 @@ async def refresh_tracked_statuses(
     auto-removes per the rule) but never creates a Seer request.
 
     Each item is isolated (mirroring :func:`_poll_one_list`): a failure on one item is
-    logged and recorded, and the rest still refresh.
+    logged and recorded, and the rest still refresh. The exception is an unreachable
+    Seer, which trips the ``outage`` latch and ends the refresh — every remaining
+    item would pay the same connect timeout for the same result. A latch already
+    tripped during the poll skips the refresh entirely.
     """
+    if outage.down:
+        return
     for item in ctx.db.active_items():
         if item["list_id"] not in polled_lists:
             continue
@@ -262,6 +317,9 @@ async def refresh_tracked_statuses(
                 tmdb_id=item["tmdb"],
             )
             await _apply_seer_status(ctx, item, seer_status)
+        except SeerUnavailableError as exc:
+            outage.trip(ctx, exc)
+            return
         except Exception as exc:  # isolate per-item failures, mirroring the poll
             _log.exception("status refresh failed for %s: %s", title, exc)
             ctx.db.add_activity(

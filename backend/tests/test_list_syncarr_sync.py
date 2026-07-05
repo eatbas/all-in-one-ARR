@@ -10,9 +10,10 @@ from core.clients.seer import (
     PENDING,
     PROCESSING,
     SeerError,
+    SeerUnavailableError,
 )
 from core.settings_store import TrackedList
-from modules.list_syncarr.sync import poll_and_request
+from modules.list_syncarr.sync import _SeerOutage, poll_and_request
 from tests.conftest import StubSeer, StubSettingsStore, StubTrakt, make_ctx
 
 _MOVIE = {
@@ -239,6 +240,70 @@ async def test_seer_status_error_recorded(db) -> None:
     assert not any("boom" in a["detail"] for a in db.recent_activity())
 
 
+async def test_seer_outage_short_circuits_poll(db) -> None:
+    # Two on-list items and an unreachable Seer: the first connection-level failure
+    # trips the outage latch, so the second item is never checked, no request is
+    # attempted, and exactly one outage entry is recorded (no per-item spam). Both
+    # items are still mirrored into SQLite and simply retried next cycle.
+    items = [_MOVIE, {**_MOVIE, "trakt_id": 2, "title": "Arrival", "tmdb": 200}]
+    seer = StubSeer()
+    seer.get_status = AsyncMock(side_effect=SeerUnavailableError("connect failed"))
+    ctx = make_ctx(db=db, trakt=StubTrakt(items=items), seer=seer)
+    await poll_and_request(ctx)
+    assert seer.get_status.await_count == 1
+    seer.create_request.assert_not_awaited()
+    assert db.get_item(trakt_id=1, list_id="watchlist")["status"] == "synced"
+    assert db.get_item(trakt_id=2, list_id="watchlist")["status"] == "synced"
+    outage_entries = [
+        a for a in db.recent_activity() if a["action"] == "Seer unreachable"
+    ]
+    assert len(outage_entries) == 1
+    assert not any("connect failed" in a["detail"] for a in db.recent_activity())
+    assert not any(a["action"] == "List sync failed" for a in db.recent_activity())
+
+
+async def test_seer_outage_latch_records_first_trip_only(db) -> None:
+    # The latch itself is idempotent: a second trip (defensive — callers gate on
+    # .down before calling Seer) must not add a duplicate activity entry.
+    ctx = make_ctx(db=db)
+    outage = _SeerOutage()
+    outage.trip(ctx, SeerUnavailableError("down"))
+    outage.trip(ctx, SeerUnavailableError("still down"))
+    assert outage.down is True
+    assert (
+        len([a for a in db.recent_activity() if a["action"] == "Seer unreachable"])
+        == 1
+    )
+
+
+async def test_seer_outage_during_request_creation_trips_latch(db) -> None:
+    # Seer dies between the status check and the request create: the create failure
+    # trips the latch (one outage entry, no per-item "Could not request" entry).
+    seer = StubSeer(status=None)
+    seer.create_request = AsyncMock(side_effect=SeerUnavailableError("connect failed"))
+    ctx = make_ctx(db=db, trakt=StubTrakt(items=[_MOVIE]), seer=seer)
+    await poll_and_request(ctx)
+    assert db.get_item(trakt_id=1, list_id="watchlist")["status"] == "synced"
+    assert any(a["action"] == "Seer unreachable" for a in db.recent_activity())
+    assert not any(a["action"] == "List sync failed" for a in db.recent_activity())
+
+
+async def test_seer_outage_skips_available_retry_removal(db) -> None:
+    # Removal needs Seer (the request delete): once the latch is tripped by an
+    # earlier item, the auto-remove retry for an already-available item is skipped
+    # too, so Trakt is not left half-removed while the Seer request lingers.
+    second = {**_MOVIE, "trakt_id": 2, "title": "Arrival", "tmdb": 200}
+    db.upsert_item(**second, list_id="watchlist")
+    db.set_status(trakt_id=2, list_id="watchlist", status="available")
+    trakt = StubTrakt(items=[_MOVIE, second])
+    seer = StubSeer()
+    seer.get_status = AsyncMock(side_effect=SeerUnavailableError("down"))
+    ctx = make_ctx(db=db, trakt=trakt, seer=seer)
+    await poll_and_request(ctx)
+    trakt.remove_items.assert_not_awaited()
+    assert db.get_item(trakt_id=2, list_id="watchlist")["status"] == "available"
+
+
 async def test_seer_request_error_recorded(db) -> None:
     seer = StubSeer(status=None)
     seer.create_request = AsyncMock(side_effect=SeerError("returned 500"))
@@ -431,6 +496,51 @@ async def test_refresh_records_seer_error(db) -> None:
     assert db.get_item(trakt_id=1, list_id="watchlist")["status"] == "requested"
     assert any(a["action"] == "Status check failed" for a in db.recent_activity())
     assert not any("boom" in a["detail"] for a in db.recent_activity())
+
+
+async def test_refresh_stops_at_first_seer_outage(db) -> None:
+    # Two off-list items and an unreachable Seer: the first connection-level failure
+    # ends the refresh (one status call, one outage entry) instead of paying the
+    # connect timeout — and adding a traceback plus an activity row — per item.
+    _seed_offlist(db)
+    db.upsert_item(
+        trakt_id=2, type="movie", title="Arrival", year=2016,
+        tmdb=200, tvdb=None, imdb="tt2", list_id="watchlist",
+    )
+    db.set_status(trakt_id=2, list_id="watchlist", status="requested")
+    trakt = StubTrakt(items=[])
+    seer = StubSeer()
+    seer.get_status = AsyncMock(side_effect=SeerUnavailableError("down"))
+    ctx = make_ctx(db=db, trakt=trakt, seer=seer)
+    await poll_and_request(ctx)
+    assert seer.get_status.await_count == 1
+    assert db.get_item(trakt_id=1, list_id="watchlist")["status"] == "requested"
+    assert db.get_item(trakt_id=2, list_id="watchlist")["status"] == "requested"
+    outage_entries = [
+        a for a in db.recent_activity() if a["action"] == "Seer unreachable"
+    ]
+    assert len(outage_entries) == 1
+    assert not any(a["action"] == "Status check failed" for a in db.recent_activity())
+
+
+async def test_refresh_skipped_when_outage_tripped_during_poll(db) -> None:
+    # The latch tripped while polling the list also mutes the off-list refresh: the
+    # single failed check for the on-list item is the only Seer call of the cycle.
+    db.upsert_item(
+        trakt_id=2, type="movie", title="Arrival", year=2016,
+        tmdb=200, tvdb=None, imdb="tt2", list_id="watchlist",
+    )
+    db.set_status(trakt_id=2, list_id="watchlist", status="requested")
+    seer = StubSeer()
+    seer.get_status = AsyncMock(side_effect=SeerUnavailableError("down"))
+    ctx = make_ctx(db=db, trakt=StubTrakt(items=[_MOVIE]), seer=seer)
+    await poll_and_request(ctx)
+    assert seer.get_status.await_count == 1
+    assert db.get_item(trakt_id=2, list_id="watchlist")["status"] == "requested"
+    assert (
+        len([a for a in db.recent_activity() if a["action"] == "Seer unreachable"])
+        == 1
+    )
 
 
 async def test_refresh_leaves_unknown_offlist_item_unchanged(db) -> None:

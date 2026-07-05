@@ -20,9 +20,33 @@ PROCESSING = 3
 PARTIALLY_AVAILABLE = 4
 AVAILABLE = 5
 
+# A dead or unreachable Seer host must fail fast: the OS-level connect retry can
+# take 20+ seconds per call, so the connect phase gets a tight explicit budget
+# while slow-but-alive responses keep the generous overall timeout.
+_DEFAULT_TIMEOUT = httpx.Timeout(30.0, connect=5.0)
+
+# httpx errors meaning the connection itself failed — Seer was never reached.
+_CONNECT_FAILURES = (httpx.ConnectError, httpx.ConnectTimeout)
+
 
 class SeerError(RuntimeError):
     """Raised when a Seer call fails in a way the loop should record."""
+
+
+class SeerUnavailableError(SeerError):
+    """Raised when Seer cannot be reached at all (connection failure or timeout).
+
+    Distinguished from the base :class:`SeerError` so callers looping over many
+    items can stop hammering a dead Seer for the rest of a cycle instead of
+    paying the connect timeout for every remaining item.
+    """
+
+
+def _request_failed(message: str, exc: httpx.HTTPError) -> SeerError:
+    """Wrap an httpx error, classifying connection-level failures as unavailable."""
+    if isinstance(exc, _CONNECT_FAILURES):
+        return SeerUnavailableError(f"{message}: {exc}")
+    return SeerError(f"{message}: {exc}")
 
 
 class SeerClient:
@@ -38,7 +62,7 @@ class SeerClient:
         self._base_url = base_url.rstrip("/")
         self._api_key = api_key
         self._log = get_logger("seer")
-        self._client = http_client or httpx.AsyncClient(timeout=30.0)
+        self._client = http_client or httpx.AsyncClient(timeout=_DEFAULT_TIMEOUT)
 
     def update_credentials(self, *, base_url: str, api_key: str) -> None:
         """Replace the in-use base URL and API key (set from the dashboard)."""
@@ -64,7 +88,7 @@ class SeerClient:
                 f"{self._base_url}/api/v1/{endpoint}/{tmdb_id}", headers=self._headers
             )
         except httpx.HTTPError as exc:  # network/timeout
-            raise SeerError(f"Seer status request failed: {exc}") from exc
+            raise _request_failed("Seer status request failed", exc) from exc
         if response.status_code == 404:
             return None
         if response.status_code != 200:
@@ -145,7 +169,7 @@ class SeerClient:
                 f"{self._base_url}/api/v1/{path}", headers=self._headers, params=params
             )
         except httpx.HTTPError as exc:
-            raise SeerError(f"Seer discover request failed: {exc}") from exc
+            raise _request_failed("Seer discover request failed", exc) from exc
         if response.status_code != 200:
             raise SeerError(f"Seer discover returned {response.status_code} for {path}")
         return response.json().get("results") or []
@@ -206,7 +230,7 @@ class SeerClient:
                 f"{self._base_url}/api/v1/request", json=body, headers=self._headers
             )
         except httpx.HTTPError as exc:
-            raise SeerError(f"Seer request failed: {exc}") from exc
+            raise _request_failed("Seer request failed", exc) from exc
         if response.status_code not in (200, 201, 202):
             raise SeerError(
                 f"Seer request returned {response.status_code} for {tmdb_id}"
@@ -229,9 +253,7 @@ class SeerClient:
                 headers=self._headers,
             )
         except httpx.HTTPError as exc:
-            raise SeerError(
-                f"Seer request delete failed: {exc}"
-            ) from exc
+            raise _request_failed("Seer request delete failed", exc) from exc
         if response.status_code == 404:
             log_action(
                 self._log,
