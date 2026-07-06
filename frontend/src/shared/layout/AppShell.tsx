@@ -39,10 +39,11 @@ function Sidebar({ collapsed, onToggle }: SidebarProps) {
       >
         <span
           className={cn(
-            "text-sm font-semibold tracking-tight text-sidebar-foreground",
+            "flex items-center gap-2 text-sm font-semibold tracking-tight text-sidebar-foreground",
             collapsed && "sr-only",
           )}
         >
+          <img src="/logo.svg" alt="" className="size-5 shrink-0" />
           aio-arr
         </span>
         <Button
