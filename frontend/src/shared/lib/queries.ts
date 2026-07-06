@@ -870,12 +870,14 @@ export function useDeleteDeletarrItems(): UseMutationResult<
  * APIs).
  */
 const TRENDING_STALE_TIME = 5 * 60_000
+const TRENDING_GC_TIME = 60 * 60_000
 
 export function useTrending(query: TrendingQuery): UseQueryResult<TrendingItem[]> {
   return useQuery({
     queryKey: queryKeys.trending(query),
     queryFn: () => getTrending(query),
     staleTime: TRENDING_STALE_TIME,
+    gcTime: TRENDING_GC_TIME,
   })
 }
 

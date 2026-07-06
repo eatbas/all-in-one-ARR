@@ -295,6 +295,7 @@ class StubSeer:
         self.create_request = AsyncMock(return_value=request_id)
         self.delete_request = AsyncMock(return_value=None)
         self.discover_trending = AsyncMock(return_value=[])
+        self.discover_trending_buckets = AsyncMock(return_value={"movie": [], "show": []})
         self.discover_popular = AsyncMock(return_value=[])
         self.update_credentials = MagicMock()
         self.test_connection = AsyncMock(return_value={"ok": True, "detail": "Connected"})

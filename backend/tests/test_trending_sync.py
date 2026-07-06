@@ -3,9 +3,10 @@
 from __future__ import annotations
 
 import asyncio
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, call
 
 from core import trending_sync
+from core.trending import SCHEDULED_TRENDING_LIMIT, SEER_TRENDING_SYNC_PAGES
 from core.trending_sync import (
     _PREWARM_TASKS,
     _prewarm_targets,
@@ -35,7 +36,10 @@ async def test_refresh_fills_every_feed_and_stamps_sync(db) -> None:
     ctx.trakt.get_popular.return_value = [_row(2)]
     ctx.tmdb.get_trending.return_value = [_row(3)]
     ctx.tmdb.get_popular.return_value = [_row(4, media_type="show")]
-    ctx.seer.discover_trending.return_value = [_row(5), _row(6, media_type="show")]
+    ctx.seer.discover_trending_buckets.return_value = {
+        "movie": [_row(5)],
+        "show": [_row(6, media_type="show")],
+    }
     ctx.seer.discover_popular.return_value = [_row(7)]
 
     await refresh_trending_store(ctx)
@@ -58,6 +62,21 @@ async def test_refresh_fills_every_feed_and_stamps_sync(db) -> None:
         == trending_sync.TRENDING_SYNC_PAGES
     )
     assert ctx.trakt.get_trending.await_args.kwargs["limit"] == 40
+    ctx.seer.discover_popular.assert_has_awaits(
+        [
+            call(
+                media_type="movie",
+                limit=SCHEDULED_TRENDING_LIMIT,
+                pages=trending_sync.TRENDING_SYNC_PAGES,
+            ),
+            call(
+                media_type="show",
+                limit=SCHEDULED_TRENDING_LIMIT,
+                pages=trending_sync.TRENDING_SYNC_PAGES,
+            ),
+        ],
+        any_order=True,
+    )
 
 
 async def test_refresh_keeps_previous_snapshot_when_a_feed_fails(db) -> None:
@@ -82,15 +101,18 @@ async def test_refresh_keeps_previous_snapshot_when_a_feed_fails(db) -> None:
 
 
 async def test_seer_trending_is_fetched_once_and_split_by_media(db) -> None:
-    # Seer's mixed trending feed is fetched a single time per cycle, then split into
-    # the per-media snapshots, rather than fetched separately for movies and shows.
+    # Seer's mixed trending feed is fetched through the bucket helper once per cycle,
+    # rather than fetched separately for movies and shows.
     ctx = make_ctx(db=db)
-    ctx.seer.discover_trending.return_value = [
-        _row(5),
-        _row(6, media_type="show"),
-    ]
+    ctx.seer.discover_trending_buckets.return_value = {
+        "movie": [_row(5)],
+        "show": [_row(6, media_type="show")],
+    }
     await refresh_trending_store(ctx)
-    assert ctx.seer.discover_trending.await_count == 1
+    ctx.seer.discover_trending_buckets.assert_awaited_once_with(
+        limit_per_media=SCHEDULED_TRENDING_LIMIT,
+        pages=SEER_TRENDING_SYNC_PAGES,
+    )
     assert ctx.trending_store.get(
         source="seer", media="movie", category="trending", window="week"
     ) == [_row(5)]
@@ -99,13 +121,53 @@ async def test_seer_trending_is_fetched_once_and_split_by_media(db) -> None:
     ) == [_row(6, media_type="show")]
 
 
+async def test_seer_trending_stores_filled_buckets(db) -> None:
+    ctx = make_ctx(db=db)
+    movies = [_row(index) for index in range(1, 41)]
+    shows = [_row(index, media_type="show") for index in range(101, 141)]
+    ctx.seer.discover_trending_buckets.return_value = {
+        "movie": movies,
+        "show": shows,
+    }
+
+    await refresh_trending_store(ctx)
+
+    assert ctx.trending_store.get(
+        source="seer", media="movie", category="trending", window="week"
+    ) == movies
+    assert ctx.trending_store.get(
+        source="seer", media="show", category="trending", window="week"
+    ) == shows
+
+
+async def test_seer_trending_stores_exhausted_short_bucket(db) -> None:
+    ctx = make_ctx(db=db)
+    movies = [_row(index) for index in range(1, 41)]
+    shows = [_row(index, media_type="show") for index in range(101, 121)]
+    ctx.seer.discover_trending_buckets.return_value = {
+        "movie": movies,
+        "show": shows,
+    }
+
+    await refresh_trending_store(ctx)
+
+    assert len(
+        ctx.trending_store.get(
+            source="seer", media="movie", category="trending", window="week"
+        )
+    ) == 40
+    assert ctx.trending_store.get(
+        source="seer", media="show", category="trending", window="week"
+    ) == shows
+
+
 async def test_refresh_keeps_seer_trending_snapshot_when_it_fails(db) -> None:
     ctx = make_ctx(db=db)
     ctx.trending_store.set(
         source="seer", media="movie", category="trending", window="week",
         rows=[_row(42)],
     )
-    ctx.seer.discover_trending.side_effect = RuntimeError("seer down")
+    ctx.seer.discover_trending_buckets.side_effect = RuntimeError("seer down")
     ctx.seer.discover_popular.return_value = [_row(7)]
 
     await refresh_trending_store(ctx)

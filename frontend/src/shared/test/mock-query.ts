@@ -5,12 +5,19 @@
  */
 import type { UseMutationResult, UseQueryResult } from "@tanstack/react-query"
 
-/** A `useQuery`-shaped result carrying only `data` and `isLoading`. */
+/** A `useQuery`-shaped result carrying the fields components read in tests. */
 export function queryResult<T>(
   data: T | undefined,
   isLoading = false,
+  overrides: Partial<UseQueryResult<T>> = {},
 ): UseQueryResult<T> {
-  return { data, isLoading } as unknown as UseQueryResult<T>
+  return {
+    data,
+    isLoading,
+    isPending: isLoading,
+    isFetching: isLoading,
+    ...overrides,
+  } as unknown as UseQueryResult<T>
 }
 
 /** A `useMutation`-shaped result carrying `mutate`, `isPending`, and `data`. */

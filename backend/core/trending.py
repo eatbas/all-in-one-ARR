@@ -22,6 +22,9 @@ TRENDING_ITEM_LIMIT = 20
 # the deeper fetch stays predictable (TMDB/Seer return ~20 rows per page).
 SCHEDULED_TRENDING_LIMIT = 40
 TRENDING_SYNC_PAGES = 2
+# Seer trending is a mixed movie/show feed. Fetch extra pages so both media buckets
+# can fill to the same per-tab limit before the mixed feed is exhausted.
+SEER_TRENDING_SYNC_PAGES = 6
 _RATING_TTL_SECONDS = 24 * 60 * 60
 _RATING_CACHE_MAX = 512
 # The combined Radarr/Sonarr library is re-listed at most this often.
@@ -229,6 +232,10 @@ class LibraryCache:
         """Return the cached index, or ``None`` when absent or expired."""
         if self._value is None or _now() >= self._expires_at:
             return None
+        return self._value
+
+    def peek(self) -> LibraryIndex | None:
+        """Return the latest cached index, even when it is stale."""
         return self._value
 
     def set(self, value: LibraryIndex) -> None:

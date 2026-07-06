@@ -72,7 +72,7 @@ export function TrendingCard({
           </div>
         ) : (
           <img
-            src={posterUrl(item.media_type, item.tmdb)}
+            src={posterUrl(item.media_type, item.tmdb, item.imdb)}
             alt={label}
             loading="lazy"
             onError={() => setPosterFailed(true)}

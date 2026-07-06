@@ -45,6 +45,14 @@ describe("TrendingCard", () => {
     expect(img).toHaveAttribute("src", "/api/posters/movie/100")
   })
 
+  it("passes an IMDb id to the poster endpoint for fallback lookup", () => {
+    render(<ul><TrendingCard item={item({ imdb: "tt1160419" })} /></ul>)
+    expect(screen.getByRole("img", { name: "Dune" })).toHaveAttribute(
+      "src",
+      "/api/posters/movie/100?imdb=tt1160419",
+    )
+  })
+
   it("falls back to a placeholder when there is no TMDB id", () => {
     render(<ul><TrendingCard item={item({ tmdb: null, title: null })} /></ul>)
     expect(screen.getByRole("img", { name: "No poster for Untitled" })).toBeInTheDocument()

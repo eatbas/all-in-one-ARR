@@ -375,6 +375,149 @@ async def test_discover_trending_stops_on_empty_page() -> None:
 
 
 @respx.mock
+async def test_discover_trending_buckets_fill_from_later_mixed_pages() -> None:
+    route = respx.get(f"{_BASE}/api/v1/discover/trending").mock(
+        side_effect=[
+            httpx.Response(
+                200,
+                json={
+                    "results": [
+                        {
+                            "id": 1,
+                            "mediaType": "movie",
+                            "title": "A",
+                            "releaseDate": "2020-01-01",
+                        },
+                        {"id": 5, "mediaType": "person", "name": "Actor"},
+                    ]
+                },
+            ),
+            httpx.Response(
+                200,
+                json={
+                    "results": [
+                        {
+                            "id": 1,
+                            "mediaType": "movie",
+                            "title": "A",
+                            "releaseDate": "2020-01-01",
+                        },
+                        {
+                            "id": 2,
+                            "mediaType": "movie",
+                            "title": "B",
+                            "releaseDate": "2021-01-01",
+                        },
+                        {
+                            "id": 10,
+                            "mediaType": "tv",
+                            "name": "Show A",
+                            "firstAirDate": "2022-01-01",
+                        },
+                    ]
+                },
+            ),
+            httpx.Response(
+                200,
+                json={
+                    "results": [
+                        {
+                            "id": 3,
+                            "mediaType": "movie",
+                            "title": "C",
+                            "releaseDate": "2023-01-01",
+                        },
+                        {
+                            "mediaType": "tv",
+                            "name": "Show B",
+                            "firstAirDate": "2024-01-01",
+                        },
+                    ]
+                },
+            ),
+            httpx.Response(200, json={"results": []}),
+        ]
+    )
+
+    buckets = await make_client().discover_trending_buckets(limit_per_media=2, pages=4)
+
+    assert [row["tmdb"] for row in buckets["movie"]] == [1, 2]
+    assert [row["tmdb"] for row in buckets["show"]] == [10, None]
+    assert route.call_count == 3
+
+
+@respx.mock
+async def test_discover_trending_buckets_stop_when_empty_page_exhausts_feed() -> None:
+    route = respx.get(f"{_BASE}/api/v1/discover/trending").mock(
+        side_effect=[
+            httpx.Response(
+                200,
+                json={
+                    "results": [
+                        {
+                            "id": 1,
+                            "mediaType": "movie",
+                            "title": "A",
+                            "releaseDate": "2020-01-01",
+                        }
+                    ]
+                },
+            ),
+            httpx.Response(200, json={"results": []}),
+        ]
+    )
+
+    buckets = await make_client().discover_trending_buckets(limit_per_media=2, pages=3)
+
+    assert [row["tmdb"] for row in buckets["movie"]] == [1]
+    assert buckets["show"] == []
+    assert route.call_count == 2
+
+
+@respx.mock
+async def test_discover_trending_buckets_respect_page_cap_when_still_short() -> None:
+    route = respx.get(f"{_BASE}/api/v1/discover/trending").mock(
+        return_value=httpx.Response(
+            200,
+            json={
+                "results": [
+                    {
+                        "id": 1,
+                        "mediaType": "movie",
+                        "title": "A",
+                        "releaseDate": "2020-01-01",
+                    }
+                ]
+            },
+        )
+    )
+
+    buckets = await make_client().discover_trending_buckets(limit_per_media=2, pages=1)
+
+    assert [row["tmdb"] for row in buckets["movie"]] == [1]
+    assert buckets["show"] == []
+    assert route.call_count == 1
+
+
+@respx.mock
+async def test_discover_trending_buckets_returns_empty_for_non_positive_bounds() -> None:
+    route = respx.get(f"{_BASE}/api/v1/discover/trending").mock(
+        return_value=httpx.Response(200, json={"results": [{"id": 1, "mediaType": "movie"}]})
+    )
+    client = make_client()
+
+    assert await client.discover_trending_buckets(limit_per_media=0, pages=1) == {
+        "movie": [],
+        "show": [],
+    }
+    assert await client.discover_trending_buckets(limit_per_media=1, pages=0) == {
+        "movie": [],
+        "show": [],
+    }
+    assert route.call_count == 0
+
+
+@respx.mock
 async def test_discover_non_200_raises() -> None:
     respx.get(f"{_BASE}/api/v1/discover/trending").mock(return_value=httpx.Response(500))
     with pytest.raises(SeerError):

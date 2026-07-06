@@ -2,6 +2,7 @@ import { useState } from "react"
 import { PanelLeftCloseIcon, PanelLeftOpenIcon } from "lucide-react"
 import { NavLink, Outlet } from "react-router-dom"
 
+import { BrandLogo } from "@/shared/components/brand-logo"
 import { Button } from "@/shared/components/ui/button"
 import { cn } from "@/shared/lib/utils"
 import { Topbar } from "@/shared/layout/Topbar"
@@ -43,7 +44,7 @@ function Sidebar({ collapsed, onToggle }: SidebarProps) {
             collapsed && "sr-only",
           )}
         >
-          <img src="/logo.svg" alt="" className="size-5 shrink-0" />
+          <BrandLogo className="size-5 shrink-0 text-sidebar-foreground" />
           aio-arr
         </span>
         <Button

@@ -17,7 +17,7 @@ from typing import TYPE_CHECKING
 from core.db import utcnow_iso
 from core.logging import get_logger
 from core.trending import SCHEDULED_TRENDING_LIMIT, TRENDING_SYNC_PAGES
-from core.trending_api import fetch_feed
+from core.trending_api import fetch_feed, fetch_seer_trending_buckets
 
 if TYPE_CHECKING:  # pragma: no cover
     from core.context import AppContext
@@ -79,12 +79,12 @@ async def _store_seer_trending(ctx: "AppContext") -> None:
     """Refresh both Seer trending feeds from a single mixed-type fetch.
 
     Seer's trending endpoint returns movies and shows on one page, so it is fetched
-    once per cycle and split by media type — rather than fetched separately for each
-    type. A failure is logged and leaves the previous snapshots intact.
+    as bounded mixed pages and split by media type — rather than fetched separately
+    for each type. A failure is logged and leaves the previous snapshots intact.
     """
     try:
-        rows = await ctx.seer.discover_trending(
-            limit=SCHEDULED_TRENDING_LIMIT * 2, pages=TRENDING_SYNC_PAGES
+        buckets = await fetch_seer_trending_buckets(
+            ctx, limit=SCHEDULED_TRENDING_LIMIT, pages=TRENDING_SYNC_PAGES
         )
     except Exception as exc:  # noqa: BLE001 - a dead feed must not abort the cycle
         _log.warning("trending refresh failed (source=seer category=trending): %s", exc)
@@ -95,9 +95,7 @@ async def _store_seer_trending(ctx: "AppContext") -> None:
             media=media,
             category="trending",
             window=SYNC_WINDOW,
-            rows=[row for row in rows if row["media_type"] == media][
-                :SCHEDULED_TRENDING_LIMIT
-            ],
+            rows=buckets[media],
         )
 
 

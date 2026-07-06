@@ -9,6 +9,7 @@ item through the normal pipeline.
 
 from __future__ import annotations
 
+import asyncio
 from typing import TYPE_CHECKING, Literal
 
 from fastapi import APIRouter
@@ -20,6 +21,7 @@ from core.db import Database
 from core.logging import get_logger
 from core.timefmt import next_sync_at
 from core.trending import (
+    SEER_TRENDING_SYNC_PAGES,
     TRENDING_ITEM_LIMIT,
     LibraryCache,
     LibraryIndex,
@@ -63,6 +65,16 @@ class TrendingStatus(BaseModel):
     next_sync_at: str | None
 
 
+async def fetch_seer_trending_buckets(
+    ctx: "AppContext", *, limit: int, pages: int = 1
+) -> dict[str, list[dict]]:
+    """Fetch Seer trending with enough mixed pages to fill both media buckets."""
+    return await ctx.seer.discover_trending_buckets(
+        limit_per_media=limit,
+        pages=max(pages, SEER_TRENDING_SYNC_PAGES),
+    )
+
+
 async def fetch_feed(
     ctx: "AppContext",
     *,
@@ -77,7 +89,7 @@ async def fetch_feed(
 
     Shared by the live cold-feed fallback in the router (``pages=1``) and the
     scheduled refresh (deeper ``pages``/``limit``). The Seer trending feed mixes
-    media types on a single page, so it is over-fetched and filtered to the
+    media types on one endpoint, so it is bucket-filled before returning the
     requested type.
     """
     if source == "trakt":
@@ -92,8 +104,8 @@ async def fetch_feed(
         return await ctx.tmdb.get_popular(media_type=media, limit=limit, pages=pages)
     # source == "seer"
     if category == "trending":
-        rows = await ctx.seer.discover_trending(limit=limit * 2, pages=pages)
-        return [row for row in rows if row["media_type"] == media][:limit]
+        buckets = await fetch_seer_trending_buckets(ctx, limit=limit, pages=pages)
+        return buckets[media]
     return await ctx.seer.discover_popular(media_type=media, limit=limit, pages=pages)
 
 
@@ -163,22 +175,83 @@ def create_trending_router(ctx: "AppContext") -> APIRouter:
     log = get_logger("trending")
     rating_cache = RatingCache()
     library_cache = LibraryCache()
+    library_refresh_task: asyncio.Task[LibraryIndex] | None = None
+
+    async def _fetch_library_index(previous: LibraryIndex | None) -> LibraryIndex:
+        """Fetch Radarr/Sonarr libraries in parallel, preserving failed sides."""
+        radarr_result, sonarr_result = await asyncio.gather(
+            ctx.radarr.library_items(),
+            ctx.sonarr.library_items(),
+            return_exceptions=True,
+        )
+        radarr_failed = isinstance(radarr_result, Exception)
+        sonarr_failed = isinstance(sonarr_result, Exception)
+        if radarr_failed:
+            log.warning("trending radarr library lookup failed: %s", radarr_result)
+        if sonarr_failed:
+            log.warning("trending sonarr library lookup failed: %s", sonarr_result)
+        fresh = build_library_index(
+            radarr_items=[] if radarr_failed else radarr_result,
+            sonarr_items=[] if sonarr_failed else sonarr_result,
+        )
+        if previous is None:
+            return fresh
+        return LibraryIndex(
+            radarr_tmdb=previous.radarr_tmdb if radarr_failed else fresh.radarr_tmdb,
+            sonarr_tvdb=previous.sonarr_tvdb if sonarr_failed else fresh.sonarr_tvdb,
+            sonarr_tmdb=previous.sonarr_tmdb if sonarr_failed else fresh.sonarr_tmdb,
+            radarr_available_tmdb=(
+                previous.radarr_available_tmdb
+                if radarr_failed
+                else fresh.radarr_available_tmdb
+            ),
+            sonarr_available_tvdb=(
+                previous.sonarr_available_tvdb
+                if sonarr_failed
+                else fresh.sonarr_available_tvdb
+            ),
+            sonarr_available_tmdb=(
+                previous.sonarr_available_tmdb
+                if sonarr_failed
+                else fresh.sonarr_available_tmdb
+            ),
+        )
+
+    async def _refresh_library_index() -> LibraryIndex:
+        """Fetch and store a fresh library index, using any stale value as fallback."""
+        index = await _fetch_library_index(library_cache.peek())
+        library_cache.set(index)
+        return index
+
+    def _spawn_library_refresh() -> None:
+        """Refresh the library overlay once in the background when stale."""
+        nonlocal library_refresh_task
+        if library_refresh_task is not None and not library_refresh_task.done():
+            return  # pragma: no cover - only hit by concurrent duplicate requests
+        task = asyncio.create_task(_refresh_library_index())
+        library_refresh_task = task
+
+        def _clear_task(done: asyncio.Task[LibraryIndex]) -> None:
+            nonlocal library_refresh_task
+            try:
+                done.result()
+            except Exception as exc:  # noqa: BLE001  # pragma: no cover - guard
+                log.warning("trending library refresh failed: %s", exc)
+            if library_refresh_task is done:  # pragma: no branch - defensive identity check
+                library_refresh_task = None
+
+        task.add_done_callback(_clear_task)
 
     async def _library_index() -> LibraryIndex:
-        """Return the Radarr/Sonarr library index, refreshing past the cache TTL.
-
-        Both Arr lookups degrade to empty lists on failure, so an unconfigured or
-        dead Arr simply yields no in-library matches rather than breaking the page.
-        """
+        """Return the Radarr/Sonarr library index without blocking on stale refreshes."""
         cached = library_cache.get()
         if cached is not None:
             return cached
-        index = build_library_index(
-            radarr_items=await ctx.radarr.library_items(),
-            sonarr_items=await ctx.sonarr.library_items(),
-        )
-        library_cache.set(index)
-        return index
+        stale = library_cache.peek()
+        if stale is not None:
+            _spawn_library_refresh()
+            return stale
+        return await _refresh_library_index()
 
     @router.get("", response_model=list[TrendingItem])
     async def get_trending(

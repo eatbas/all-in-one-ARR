@@ -90,6 +90,7 @@ describe("Trending", () => {
     expect(
       screen.queryByRole("group", { name: "Time window" }),
     ).not.toBeInTheDocument()
+    expect(useTrending).toHaveBeenCalledTimes(1)
   })
 
   it("changes the query when the media and category toggles are used", async () => {
@@ -144,6 +145,16 @@ describe("Trending", () => {
     vi.mocked(useTrending).mockReturnValue(queryResult<TrendingItem[]>(undefined, true))
     render(<Trending />)
     expect(screen.getByText("Loading trending…")).toBeInTheDocument()
+  })
+
+  it("keeps cached rows visible during a background refresh", () => {
+    vi.mocked(useTrending).mockReturnValue(
+      queryResult([ITEM], false, { isFetching: true }),
+    )
+    render(<Trending />)
+    expect(screen.getByText("Dune")).toBeInTheDocument()
+    expect(screen.queryByText("Loading trending…")).not.toBeInTheDocument()
+    expect(screen.getByText("Refreshing")).toBeInTheDocument()
   })
 
   it("shows an empty state naming the source", () => {

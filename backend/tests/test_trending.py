@@ -196,3 +196,4 @@ def test_library_cache_miss_set_and_ttl(monkeypatch) -> None:
     assert cache.get() is index  # still fresh
     clock["now"] = 1061.0  # past the TTL
     assert cache.get() is None
+    assert cache.peek() is index

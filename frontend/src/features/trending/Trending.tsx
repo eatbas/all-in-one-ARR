@@ -94,11 +94,12 @@ function SourcePanel({ source }: { source: TrendingSource }) {
   const [perRow, setPerRow] = useState<PerRow>(readStoredPerRow)
   const [page, setPage] = useState(1)
   const query: TrendingQuery = { source, media, category }
-  const { data, isLoading } = useTrending(query)
+  const { data, isFetching, isLoading } = useTrending(query)
   const { data: services } = useServiceSettings()
   const { data: status } = useTrendingStatus()
   const seerUrl = services?.seer.url
   const items = data ?? []
+  const isInitialLoading = isLoading && data === undefined
 
   // Any control that changes which/how-many items are shown resets to page 1; the
   // page is then clamped at render so a shrinking list never strands an empty page.
@@ -164,6 +165,9 @@ function SourcePanel({ source }: { source: TrendingSource }) {
           }))}
         />
         <div className="ml-auto flex items-center gap-3">
+          {isFetching && !isInitialLoading ? (
+            <span className="text-xs text-muted-foreground">Refreshing</span>
+          ) : null}
           {status?.last_synced_at ? (
             <span className="text-xs text-muted-foreground">
               Updated {formatRelativeTime(status.last_synced_at)}
@@ -180,7 +184,7 @@ function SourcePanel({ source }: { source: TrendingSource }) {
         </div>
       </div>
 
-      {isLoading ? (
+      {isInitialLoading ? (
         <p className="text-sm text-muted-foreground">Loading trending…</p>
       ) : items.length === 0 ? (
         <p className="text-sm text-muted-foreground">

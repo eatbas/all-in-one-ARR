@@ -158,6 +158,13 @@ describe("posterUrl", () => {
     expect(posterUrl("movie", 603)).toBe("/api/posters/movie/603")
     expect(posterUrl("show", 1399)).toBe("/api/posters/show/1399")
   })
+
+  it("includes an IMDb fallback id when one is available", () => {
+    expect(posterUrl("movie", 603, "tt0133093")).toBe(
+      "/api/posters/movie/603?imdb=tt0133093",
+    )
+    expect(posterUrl("movie", 603, null)).toBe("/api/posters/movie/603")
+  })
 })
 
 describe("seerMediaUrl", () => {

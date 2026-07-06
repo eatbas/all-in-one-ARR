@@ -192,6 +192,44 @@ class SeerClient:
             rows.extend(self._normalise_discover(result) for result in results)
         return [row for row in rows if row is not None][:limit]
 
+    async def discover_trending_buckets(
+        self, *, limit_per_media: int = 20, pages: int = 1
+    ) -> dict[str, list[dict[str, Any]]]:
+        """Return Seer's mixed trending feed split into movie and show buckets.
+
+        The upstream endpoint is mixed, so a caller that wants ``N`` movies and
+        ``N`` shows must not cap the aggregate list before filtering. This fetches
+        bounded pages until both media buckets are full or the endpoint is
+        exhausted. Duplicate TMDB ids are counted once per media type.
+        """
+        buckets: dict[str, list[dict[str, Any]]] = {"movie": [], "show": []}
+        if limit_per_media <= 0 or pages <= 0:
+            return buckets
+
+        seen: set[tuple[str, int]] = set()
+        for page in range(1, pages + 1):
+            results = await self._discover("discover/trending", params={"page": page})
+            if not results:
+                break
+            for result in results:
+                row = self._normalise_discover(result)
+                if row is None:
+                    continue
+                media_type = row["media_type"]
+                bucket = buckets[media_type]
+                if len(bucket) >= limit_per_media:
+                    continue
+                tmdb = row.get("tmdb")
+                if isinstance(tmdb, int):
+                    key = (media_type, tmdb)
+                    if key in seen:
+                        continue
+                    seen.add(key)
+                bucket.append(row)
+            if all(len(bucket) >= limit_per_media for bucket in buckets.values()):
+                break
+        return buckets
+
     async def discover_popular(
         self, *, media_type: str, limit: int = 20, pages: int = 1
     ) -> list[dict[str, Any]]:

@@ -372,8 +372,15 @@ export function getLists(): Promise<ListSummary[]> {
 }
 
 /** Build the same-origin URL for an item's cached poster thumbnail. */
-export function posterUrl(mediaType: ItemType, tmdbId: number): string {
-  return `/api/posters/${mediaType}/${tmdbId}`
+export function posterUrl(
+  mediaType: ItemType,
+  tmdbId: number,
+  imdbId?: string | null,
+): string {
+  const path = `/api/posters/${mediaType}/${tmdbId}`
+  if (!imdbId) return path
+  const params = new URLSearchParams({ imdb: imdbId })
+  return `${path}?${params.toString()}`
 }
 
 /**

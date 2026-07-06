@@ -5,9 +5,11 @@ from __future__ import annotations
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
+from core import trending as trending_mod
 from core.context import SyncAlreadyRunning
 from core.settings_store import TrackedList
-from core.trending_api import create_trending_router
+from core.trending import SEER_TRENDING_SYNC_PAGES
+from core.trending_api import create_trending_router, fetch_feed
 from tests.conftest import make_ctx
 
 
@@ -67,16 +69,40 @@ def test_tmdb_trending_and_popular(db) -> None:
 
 def test_seer_trending_filters_to_requested_media(db) -> None:
     ctx = make_ctx(db=db)
-    ctx.seer.discover_trending.return_value = [
-        _row(media_type="movie", tmdb=300, seer_status=5),
-        _row(media_type="show", tmdb=301),
-    ]
+    ctx.seer.discover_trending_buckets.return_value = {
+        "movie": [_row(media_type="movie", tmdb=300, seer_status=5)],
+        "show": [_row(media_type="show", tmdb=301)],
+    }
     client = build_client(ctx)
     result = client.get(
         "/api/trending", params={"source": "seer", "media": "movie", "category": "trending"}
     ).json()
     assert [item["tmdb"] for item in result] == [300]
     assert result[0]["seer_status"] == 5
+
+
+async def test_seer_trending_fetch_uses_bucket_helper_for_requested_media(db) -> None:
+    ctx = make_ctx(db=db)
+    ctx.seer.discover_trending_buckets.return_value = {
+        "movie": [_row(media_type="movie", tmdb=300), _row(media_type="movie", tmdb=301)],
+        "show": [_row(media_type="show", tmdb=400)],
+    }
+
+    rows = await fetch_feed(
+        ctx,
+        source="seer",
+        media="movie",
+        category="trending",
+        window="week",
+        limit=2,
+        pages=1,
+    )
+
+    assert [row["tmdb"] for row in rows] == [300, 301]
+    ctx.seer.discover_trending_buckets.assert_awaited_once_with(
+        limit_per_media=2,
+        pages=SEER_TRENDING_SYNC_PAGES,
+    )
 
 
 def test_seer_popular(db) -> None:
@@ -217,6 +243,33 @@ def test_get_trending_caches_cold_fetch_in_store(db) -> None:
     client.get("/api/trending", params={"source": "trakt", "category": "trending"})
     client.get("/api/trending", params={"source": "trakt", "category": "trending"})
     ctx.trakt.get_trending.assert_awaited_once()
+
+
+def test_get_trending_uses_stale_library_index_while_refreshing(db, monkeypatch) -> None:
+    clock = {"now": 1000.0}
+    monkeypatch.setattr(trending_mod, "_now", lambda: clock["now"])
+    ctx = make_ctx(db=db)
+    ctx.trending_store.set(
+        source="trakt", media="movie", category="trending", window="week",
+        rows=[_row(tmdb=100)],
+    )
+    ctx.radarr.library_items.return_value = [{"tmdbId": 100, "hasFile": True}]
+    ctx.sonarr.library_items.side_effect = RuntimeError("sonarr down")
+    client = build_client(ctx)
+
+    first = client.get(
+        "/api/trending", params={"source": "trakt", "category": "trending"}
+    ).json()
+    assert first[0]["in_library"] is True
+    assert first[0]["in_library_available"] is True
+
+    clock["now"] = 1061.0
+    ctx.radarr.library_items.side_effect = RuntimeError("radarr down")
+    second = client.get(
+        "/api/trending", params={"source": "trakt", "category": "trending"}
+    ).json()
+    assert second[0]["in_library"] is True
+    assert second[0]["in_library_available"] is True
 
 
 # ---- GET /api/trending/status ----
