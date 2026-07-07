@@ -10,7 +10,7 @@ from __future__ import annotations
 import asyncio
 from contextlib import suppress
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from time import time
 from typing import TYPE_CHECKING, Any
 
@@ -41,13 +41,13 @@ class StatusResult:
 
 def _now_iso() -> str:
     """Return the current UTC timestamp as an ISO 8601 string."""
-    return datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
+    return datetime.now(UTC).replace(microsecond=0).isoformat().replace("+00:00", "Z")
 
 
 class StatusChecker:
     """Periodically ping every configured service and cache the results."""
 
-    def __init__(self, ctx: "AppContext") -> None:
+    def __init__(self, ctx: AppContext) -> None:
         self._ctx = ctx
         self._log = get_logger("status_checker")
         self._task: asyncio.Task | None = None
@@ -100,13 +100,11 @@ class StatusChecker:
         checked_at = _now_iso()
         checked_at_seconds = time()
         clients = self._service_clients()
-        coroutines = [
-            self._check_one(name, client) for name, client in clients.items()
-        ]
+        coroutines = [self._check_one(name, client) for name, client in clients.items()]
         results = await asyncio.gather(*coroutines, return_exceptions=True)
 
         new_results: dict[str, StatusSnapshot] = {}
-        for name, outcome in zip(clients, results):
+        for name, outcome in zip(clients, results, strict=True):
             if isinstance(outcome, BaseException):
                 snapshot = StatusSnapshot(
                     ok=False,
@@ -116,9 +114,7 @@ class StatusChecker:
             else:
                 snapshot = outcome
             new_results[name] = snapshot
-            update_service_metrics(
-                name, ok=snapshot.ok, checked_at=checked_at_seconds
-            )
+            update_service_metrics(name, ok=snapshot.ok, checked_at=checked_at_seconds)
 
         self._results = new_results
         self._last_check_at = checked_at

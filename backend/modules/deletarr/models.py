@@ -23,7 +23,7 @@ LIBRARY_LABELS: dict[LibraryType, str] = {
 def normalise_library_type(value: str) -> LibraryType:
     """Return a supported library type or raise ``ValueError``."""
     if value in LIBRARY_TYPES:
-        return value  # type: ignore[return-value]
+        return value
     raise ValueError(f"Unsupported library type: {value}")
 
 
@@ -92,7 +92,9 @@ class ScanStats:
         }
 
 
-def stats_for(items: list[ScanItem], *, is_scanning: bool, scan_progress: int) -> ScanStats:
+def stats_for(
+    items: list[ScanItem], *, is_scanning: bool, scan_progress: int
+) -> ScanStats:
     """Build aggregate scan statistics for ``items``."""
     files = [item for item in items if item.type == "file"]
     folders = [item for item in items if item.type == "folder"]

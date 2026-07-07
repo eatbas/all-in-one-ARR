@@ -19,9 +19,10 @@ ROOT = Path(__file__).resolve().parent
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from core.clients.qbittorrent import QbittorrentClient  # noqa: E402 - after sys.path bootstrap
-from core.clients.sabnzbd import SabnzbdClient  # noqa: E402 - after sys.path bootstrap
-from core.config import Settings  # noqa: E402 - after sys.path bootstrap
+# These imports must follow the sys.path bootstrap above, so E402 is expected.
+from core.clients.qbittorrent import QbittorrentClient  # noqa: E402
+from core.clients.sabnzbd import SabnzbdClient  # noqa: E402
+from core.config import Settings  # noqa: E402
 
 
 def mask(value: str) -> str:

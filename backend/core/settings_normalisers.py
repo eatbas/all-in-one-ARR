@@ -159,7 +159,36 @@ def normalise_findarr_settings(raw: dict[str, Any] | None = None) -> dict[str, A
     """Merge and validate persisted Findarr settings with safe defaults."""
     raw = raw or {}
     defaults = copy.deepcopy(DEFAULT_FINDARR_SETTINGS)
-    apps = raw.get("apps") if isinstance(raw.get("apps"), dict) else {}
+    apps_raw = raw.get("apps")
+    apps = apps_raw if isinstance(apps_raw, dict) else {}
+
+    normalised_apps: dict[str, dict[str, Any]] = {}
+    for app_name, app_defaults in defaults["apps"].items():
+        raw_app_value = apps.get(app_name)
+        raw_app = raw_app_value if isinstance(raw_app_value, dict) else {}
+        normalised_apps[app_name] = {
+            "enabled": bool(raw_app.get("enabled", app_defaults["enabled"])),
+            "missing_limit": _normalise_findarr_limit(
+                raw_app.get("missing_limit", app_defaults["missing_limit"]),
+                default=app_defaults["missing_limit"],
+            ),
+            "upgrade_limit": _normalise_findarr_limit(
+                raw_app.get("upgrade_limit", app_defaults["upgrade_limit"]),
+                default=app_defaults["upgrade_limit"],
+            ),
+            "monitored_only": bool(
+                raw_app.get("monitored_only", app_defaults["monitored_only"])
+            ),
+            "skip_future": bool(
+                raw_app.get("skip_future", app_defaults["skip_future"])
+            ),
+            "missing_mode": _normalise_findarr_search_mode(
+                raw_app.get("missing_mode", app_defaults["missing_mode"])
+            ),
+            "upgrade_mode": _normalise_findarr_search_mode(
+                raw_app.get("upgrade_mode", app_defaults["upgrade_mode"])
+            ),
+        }
 
     normalised = {
         "enabled": bool(raw.get("enabled", defaults["enabled"])),
@@ -179,32 +208,8 @@ def normalise_findarr_settings(raw: dict[str, Any] | None = None) -> dict[str, A
         "state_reset_hours": _normalise_findarr_reset_hours(
             raw.get("state_reset_hours", defaults["state_reset_hours"])
         ),
-        "apps": {},
+        "apps": normalised_apps,
     }
-
-    for app_name, app_defaults in defaults["apps"].items():
-        raw_app = apps.get(app_name) if isinstance(apps.get(app_name), dict) else {}
-        normalised["apps"][app_name] = {
-            "enabled": bool(raw_app.get("enabled", app_defaults["enabled"])),
-            "missing_limit": _normalise_findarr_limit(
-                raw_app.get("missing_limit", app_defaults["missing_limit"]),
-                default=app_defaults["missing_limit"],
-            ),
-            "upgrade_limit": _normalise_findarr_limit(
-                raw_app.get("upgrade_limit", app_defaults["upgrade_limit"]),
-                default=app_defaults["upgrade_limit"],
-            ),
-            "monitored_only": bool(
-                raw_app.get("monitored_only", app_defaults["monitored_only"])
-            ),
-            "skip_future": bool(raw_app.get("skip_future", app_defaults["skip_future"])),
-            "missing_mode": _normalise_findarr_search_mode(
-                raw_app.get("missing_mode", app_defaults["missing_mode"])
-            ),
-            "upgrade_mode": _normalise_findarr_search_mode(
-                raw_app.get("upgrade_mode", app_defaults["upgrade_mode"])
-            ),
-        }
     return normalised
 
 

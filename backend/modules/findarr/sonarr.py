@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 from modules.findarr.models import FindarrItem
@@ -23,17 +23,22 @@ def _is_future(value: str | None) -> bool:
     except ValueError:
         return False
     if parsed.tzinfo is None:
-        parsed = parsed.replace(tzinfo=timezone.utc)
-    return parsed.astimezone(timezone.utc) > datetime.now(timezone.utc)
+        parsed = parsed.replace(tzinfo=UTC)
+    return parsed.astimezone(UTC) > datetime.now(UTC)
 
 
 def normalise(record: dict[str, Any], *, mode: str) -> FindarrItem | None:
     """Convert a Sonarr wanted record into a Findarr item."""
-    episode = record.get("episode") if isinstance(record.get("episode"), dict) else record
+    episode_raw = record.get("episode")
+    episode = episode_raw if isinstance(episode_raw, dict) else record
     episode_id = episode.get("id")
     if episode_id is None:
         return None
-    series = record.get("series") if isinstance(record.get("series"), dict) else episode.get("series", {})
+    series = (
+        record.get("series")
+        if isinstance(record.get("series"), dict)
+        else episode.get("series", {})
+    )
     series_title = series.get("title") if isinstance(series, dict) else None
     series_year = _as_int(series.get("year")) if isinstance(series, dict) else None
     title = episode.get("title") or "Episode"

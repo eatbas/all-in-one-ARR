@@ -9,8 +9,9 @@ import asyncio
 import json
 import os
 import time
+from collections.abc import Awaitable, Callable
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any
 
 import httpx
 
@@ -26,6 +27,8 @@ _MEDIA_SEGMENT = {"movie": "movies", "show": "shows"}
 def _is_official(owner_user: str) -> bool:
     """Return True when the owner is the Trakt-curated official account."""
     return owner_user == OFFICIAL_OWNER
+
+
 _OAUTH_REDIRECT = "urn:ietf:wg:oauth:2.0:oob"
 # Refresh this many seconds before the access token actually expires.
 _REFRESH_MARGIN_SECONDS = 24 * 60 * 60
@@ -33,7 +36,7 @@ _REFRESH_MARGIN_SECONDS = 24 * 60 * 60
 # Indirection points so tests can control time and sleeping deterministically.
 _now: Callable[[], float] = time.time
 _monotonic: Callable[[], float] = time.monotonic
-_sleep: Callable[[float], "asyncio.Future[None]"] = asyncio.sleep
+_sleep: Callable[[float], Awaitable[None]] = asyncio.sleep
 
 
 class TraktAuthError(RuntimeError):
@@ -218,6 +221,7 @@ class TraktClient:
         stored slug. User lists continue to use their slug.
         """
         ids = entry.get("ids") or {}
+        slug: str | None
         if _is_official(owner_user):
             if not ids.get("trakt"):
                 raise ValueError("Official list response missing numeric trakt id")

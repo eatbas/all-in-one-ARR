@@ -45,7 +45,7 @@ SYNC_WINDOW = "week"
 
 
 async def _store_feed(
-    ctx: "AppContext", *, source: str, media: str, category: str
+    ctx: AppContext, *, source: str, media: str, category: str
 ) -> None:
     """Refresh one ``(source, media, category)`` feed into the store.
 
@@ -76,7 +76,7 @@ async def _store_feed(
     )
 
 
-async def _store_seer_trending(ctx: "AppContext") -> None:
+async def _store_seer_trending(ctx: AppContext) -> None:
     """Refresh both Seer trending feeds from a single mixed-type fetch.
 
     Seer's trending endpoint returns movies and shows on one page, so it is fetched
@@ -100,7 +100,7 @@ async def _store_seer_trending(ctx: "AppContext") -> None:
         )
 
 
-async def refresh_trending_store(ctx: "AppContext") -> None:
+async def refresh_trending_store(ctx: AppContext) -> None:
     """Refresh every trending/popular feed into ``ctx.trending_store``.
 
     Each feed is fetched independently so one dead provider does not abort the cycle.
@@ -144,7 +144,7 @@ def _prewarm_targets(
     return [(media_type, tmdb, imdb) for (media_type, tmdb), imdb in seen.items()]
 
 
-async def prewarm_posters(ctx: "AppContext") -> None:
+async def prewarm_posters(ctx: AppContext) -> None:
     """Fetch posters for the currently-stored trending rows into the disk cache.
 
     Best-effort: bounded by :data:`_PREWARM_CONCURRENCY`, each fetch capped by
@@ -153,6 +153,7 @@ async def prewarm_posters(ctx: "AppContext") -> None:
     """
     if ctx.poster_cache is None:
         return
+    poster_cache = ctx.poster_cache
     targets = _prewarm_targets(ctx.trending_store.all_rows())
     if not targets:
         return
@@ -161,7 +162,7 @@ async def prewarm_posters(ctx: "AppContext") -> None:
     async def _one(media_type: str, tmdb: int, imdb: str | None) -> None:
         async with semaphore:
             await asyncio.wait_for(
-                ctx.poster_cache.get_poster(
+                poster_cache.get_poster(
                     media_type=media_type, tmdb_id=tmdb, imdb_id=imdb
                 ),
                 _PREWARM_TIMEOUT_SECONDS,
@@ -175,7 +176,7 @@ async def prewarm_posters(ctx: "AppContext") -> None:
     _log.info("poster pre-warm: %d targets, %d failed", len(targets), failed)
 
 
-def _spawn_prewarm(ctx: "AppContext") -> None:
+def _spawn_prewarm(ctx: AppContext) -> None:
     """Fire poster pre-warming as a detached task so it never blocks the caller.
 
     A no-op when no poster cache is configured, so callers in tests without a cache
@@ -192,7 +193,7 @@ def _spawn_prewarm(ctx: "AppContext") -> None:
 class _TrendingSync:
     """Holds the context the module-level job reads (APScheduler-4 constraint)."""
 
-    ctx: "AppContext | None" = None
+    ctx: AppContext | None = None
 
 
 _trending_sync = _TrendingSync()
@@ -203,6 +204,7 @@ async def _trending_sync_job() -> None:
     ctx = _trending_sync.ctx
     if ctx is None:  # pragma: no cover - ctx is set before the job is scheduled
         return
+
     async def refresh_and_prewarm() -> None:
         await refresh_trending_store(ctx)
         _spawn_prewarm(ctx)
@@ -210,7 +212,7 @@ async def _trending_sync_job() -> None:
     await observe_scheduler_job(_JOB_ID, refresh_and_prewarm)
 
 
-async def start_trending_sync(ctx: "AppContext") -> None:
+async def start_trending_sync(ctx: AppContext) -> None:
     """Schedule the periodic trending refresh and prime the store immediately.
 
     An interval trigger only fires after the first interval elapses, so the store is

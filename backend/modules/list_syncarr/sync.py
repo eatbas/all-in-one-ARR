@@ -63,7 +63,7 @@ class _SeerOutage:
     def __init__(self) -> None:
         self.down = False
 
-    def trip(self, ctx: "AppContext", exc: SeerUnavailableError) -> None:
+    def trip(self, ctx: AppContext, exc: SeerUnavailableError) -> None:
         """Latch the outage, recording it on the first trip only."""
         if self.down:
             return
@@ -76,7 +76,7 @@ class _SeerOutage:
         )
 
 
-async def poll_and_request(ctx: "AppContext") -> None:
+async def poll_and_request(ctx: AppContext) -> None:
     """Poll every selected Trakt list, request missing items, then refresh statuses.
 
     Each list is isolated: a failure reading or processing one list (e.g. an
@@ -98,7 +98,7 @@ async def poll_and_request(ctx: "AppContext") -> None:
 
 
 async def _poll_one_list(
-    ctx: "AppContext", tracked: "TrackedList", outage: _SeerOutage
+    ctx: AppContext, tracked: TrackedList, outage: _SeerOutage
 ) -> tuple[set[tuple[str, int]], bool]:
     """Poll a single Trakt list and request its missing items.
 
@@ -147,11 +147,13 @@ async def _poll_one_list(
 
 
 async def _process_item(
-    ctx: "AppContext", raw: dict, list_id: str, outage: _SeerOutage
+    ctx: AppContext, raw: dict, list_id: str, outage: _SeerOutage
 ) -> None:
     """Upsert one item and create a Seer request when appropriate."""
     trakt_id = raw["trakt_id"]
-    media_type = raw.get("type")
+    # `type` is a required field of a parsed Trakt item (like trakt_id) and backs
+    # a NOT NULL column, so read it by subscript rather than a nullable .get().
+    media_type = raw["type"]
     title = raw.get("title")
     tmdb = raw.get("tmdb")
 
@@ -238,7 +240,7 @@ async def _process_item(
 
 
 async def _apply_seer_status(
-    ctx: "AppContext", item: dict, seer_status: int | None
+    ctx: AppContext, item: dict, seer_status: int | None
 ) -> bool:
     """Update an item's stored status from a Seer status and auto-remove if due.
 
@@ -281,7 +283,7 @@ async def _apply_seer_status(
 
 
 async def refresh_tracked_statuses(
-    ctx: "AppContext",
+    ctx: AppContext,
     processed: set[tuple[str, int]],
     polled_lists: set[str],
     outage: _SeerOutage,

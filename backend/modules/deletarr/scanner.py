@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
+from typing import Any
 
 from core.logging import get_logger
 from modules.deletarr.manifest import LibraryManifest, ManagedFolder
@@ -56,7 +57,9 @@ class MediaScanner:
     def _scan_tv_directory(self, directory: str) -> None:
         """Scan TV libraries with Show -> Season -> Episode expectations."""
         for root, dirs, files in os.walk(directory):
-            dirs[:] = [name for name in dirs if name not in JunkPatterns.IGNORED_FOLDERS]
+            dirs[:] = [
+                name for name in dirs if name not in JunkPatterns.IGNORED_FOLDERS
+            ]
 
             dirs_to_remove: list[str] = []
             for dir_name in dirs:
@@ -189,7 +192,9 @@ class MediaScanner:
     def _scan_movie_directory(self, directory: str) -> None:
         """Scan movie libraries, preserving the largest matching video per folder."""
         for root, dirs, files in os.walk(directory):
-            dirs[:] = [name for name in dirs if name not in JunkPatterns.IGNORED_FOLDERS]
+            dirs[:] = [
+                name for name in dirs if name not in JunkPatterns.IGNORED_FOLDERS
+            ]
 
             dirs_to_remove: list[str] = []
             for dir_name in dirs:
@@ -209,8 +214,8 @@ class MediaScanner:
             for dir_name in dirs_to_remove:
                 dirs.remove(dir_name)
 
-            all_files: list[dict[str, object]] = []
-            video_files: list[dict[str, object]] = []
+            all_files: list[dict[str, Any]] = []
+            video_files: list[dict[str, Any]] = []
             video_basenames: list[str] = []
 
             for filename in files:
@@ -223,7 +228,7 @@ class MediaScanner:
                     _log.warning("could not stat file %s: %s", filepath, exc)
                     continue
 
-                file_info: dict[str, object] = {
+                file_info: dict[str, Any] = {
                     "path": filepath,
                     "name": filename,
                     "type": "file",
@@ -241,7 +246,7 @@ class MediaScanner:
                     video_files.append(file_info)
 
             folder_name = os.path.basename(root)
-            junk_files: list[dict[str, object]] = []
+            junk_files: list[dict[str, Any]] = []
             for file_info in all_files:
                 if file_info.get("is_video"):
                     continue
@@ -259,13 +264,17 @@ class MediaScanner:
             if not video_files:
                 continue
 
-            valid_videos: list[dict[str, object]] = []
+            valid_videos: list[dict[str, Any]] = []
             for video_info in video_files:
-                if JunkPatterns.video_matches_folder(str(video_info["name"]), folder_name):
+                if JunkPatterns.video_matches_folder(
+                    str(video_info["name"]), folder_name
+                ):
                     valid_videos.append(video_info)
                 else:
                     video_info["is_video"] = False
-                    video_info["reason"] = "Misplaced video (filename does not match folder)"
+                    video_info["reason"] = (
+                        "Misplaced video (filename does not match folder)"
+                    )
                     video_info["demoted_video"] = True
                     junk_files.append(video_info)
 
@@ -274,7 +283,9 @@ class MediaScanner:
                 largest = valid_videos[0]
                 for duplicate in valid_videos[1:]:
                     duplicate["is_video"] = False
-                    duplicate["reason"] = f'Duplicate video (smaller than {largest["name"]})'
+                    duplicate["reason"] = (
+                        f"Duplicate video (smaller than {largest['name']})"
+                    )
                     duplicate["demoted_video"] = True
                     junk_files.append(duplicate)
                 valid_videos = [largest]
@@ -400,7 +411,9 @@ class MediaScanner:
         display_name = os.path.basename(folder_dir)
 
         for root, dirs, files in os.walk(folder_dir):
-            dirs[:] = [name for name in dirs if name not in JunkPatterns.IGNORED_FOLDERS]
+            dirs[:] = [
+                name for name in dirs if name not in JunkPatterns.IGNORED_FOLDERS
+            ]
 
             junk_dirs: list[str] = []
             for dir_name in dirs:
@@ -510,7 +523,7 @@ class MediaScanner:
         single ``"other"`` key, and matches how the frontend regroups results
         by ``movie_folder_path`` (falling back to ``parent``).
         """
-        folder_groups: dict[str, dict[str, object]] = {}
+        folder_groups: dict[str, dict[str, Any]] = {}
         for item in self.scan_results:
             folder_path = item.movie_folder_path or item.path
             if folder_path not in folder_groups:
@@ -518,9 +531,9 @@ class MediaScanner:
             files = folder_groups[folder_path]["files"]
             assert isinstance(files, list)
             files.append(item)
-            folder_groups[folder_path]["total_size"] = int(
-                folder_groups[folder_path]["total_size"]
-            ) + item.size
+            folder_groups[folder_path]["total_size"] = (
+                int(folder_groups[folder_path]["total_size"]) + item.size
+            )
 
         sorted_groups = sorted(
             folder_groups.values(),

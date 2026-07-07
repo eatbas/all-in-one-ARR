@@ -81,7 +81,7 @@ class AddListRequest(BaseModel):
     slug: str | None = None
 
 
-def _settings_response(ctx: "AppContext") -> TraktSettingsResponse:
+def _settings_response(ctx: AppContext) -> TraktSettingsResponse:
     """Build the masked Trakt settings view from the store and client."""
     client_id, client_secret = ctx.settings_store.trakt_credentials()
     return TraktSettingsResponse(
@@ -97,7 +97,7 @@ def _settings_response(ctx: "AppContext") -> TraktSettingsResponse:
     )
 
 
-def create_trakt_router(ctx: "AppContext") -> APIRouter:
+def create_trakt_router(ctx: AppContext) -> APIRouter:
     """Build the ``/api`` router for Trakt connection and list management."""
     router = APIRouter(prefix="/api")
     log = get_logger("trakt_api")
@@ -116,12 +116,15 @@ def create_trakt_router(ctx: "AppContext") -> APIRouter:
             client_secret=body.client_secret,
         )
         client_id, client_secret = ctx.settings_store.trakt_credentials()
-        ctx.trakt.update_credentials(
-            client_id=client_id, client_secret=client_secret
-        )
+        ctx.trakt.update_credentials(client_id=client_id, client_secret=client_secret)
         if (
-            (body.client_id is not None and body.client_id.strip() and body.client_id.strip() != old_id)
-            or (body.client_secret is not None and body.client_secret.strip() and body.client_secret.strip() != old_secret)
+            body.client_id is not None
+            and body.client_id.strip()
+            and body.client_id.strip() != old_id
+        ) or (
+            body.client_secret is not None
+            and body.client_secret.strip()
+            and body.client_secret.strip() != old_secret
         ):
             ctx.db.add_activity(
                 "Trakt credentials updated",
@@ -220,24 +223,24 @@ def create_trakt_router(ctx: "AppContext") -> APIRouter:
         except TraktUrlError as exc:
             return JSONResponse(status_code=400, content={"detail": str(exc)})
         try:
-            summary = await ctx.trakt.get_list_summary(
-                owner_user=owner_user, slug=slug
-            )
+            summary = await ctx.trakt.get_list_summary(owner_user=owner_user, slug=slug)
         except httpx.HTTPStatusError as exc:
-            body = exc.response.text[:200]
+            error_body = exc.response.text[:200]
             return JSONResponse(
                 status_code=400,
                 content={
                     "detail": (
                         f"Could not validate list {owner_user}/{slug}: "
-                        f"HTTP {exc.response.status_code} — {body}"
+                        f"HTTP {exc.response.status_code} — {error_body}"
                     )
                 },
             )
         except Exception as exc:
             return JSONResponse(
                 status_code=400,
-                content={"detail": f"Could not validate list {owner_user}/{slug}: {exc}"},
+                content={
+                    "detail": f"Could not validate list {owner_user}/{slug}: {exc}"
+                },
             )
         if summary is None:
             return JSONResponse(

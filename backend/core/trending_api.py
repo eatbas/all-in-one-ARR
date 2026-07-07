@@ -10,7 +10,7 @@ item through the normal pipeline.
 from __future__ import annotations
 
 import asyncio
-from typing import TYPE_CHECKING, Literal
+from typing import TYPE_CHECKING, Any, Literal
 
 from fastapi import APIRouter
 from fastapi.responses import JSONResponse
@@ -66,7 +66,7 @@ class TrendingStatus(BaseModel):
 
 
 async def fetch_seer_trending_buckets(
-    ctx: "AppContext", *, limit: int, pages: int = 1
+    ctx: AppContext, *, limit: int, pages: int = 1
 ) -> dict[str, list[dict]]:
     """Fetch Seer trending with enough mixed pages to fill both media buckets."""
     return await ctx.seer.discover_trending_buckets(
@@ -76,7 +76,7 @@ async def fetch_seer_trending_buckets(
 
 
 async def fetch_feed(
-    ctx: "AppContext",
+    ctx: AppContext,
     *,
     source: str,
     media: str,
@@ -153,7 +153,7 @@ def _tracked_tmdbs(db: Database) -> set[int]:
     return tmdbs
 
 
-def _addable_target(ctx: "AppContext", owner_user: str, slug: str) -> "TrackedList | None":
+def _addable_target(ctx: AppContext, owner_user: str, slug: str) -> TrackedList | None:
     """Return the tracked list to add to, or ``None`` if it is not addable.
 
     A destination is addable only when it is a tracked list the connected account
@@ -169,7 +169,7 @@ def _addable_target(ctx: "AppContext", owner_user: str, slug: str) -> "TrackedLi
     return None
 
 
-def create_trending_router(ctx: "AppContext") -> APIRouter:
+def create_trending_router(ctx: AppContext) -> APIRouter:
     """Build the ``/api/trending`` router bound to a specific context."""
     router = APIRouter(prefix="/api/trending", tags=["trending"])
     log = get_logger("trending")
@@ -179,6 +179,11 @@ def create_trending_router(ctx: "AppContext") -> APIRouter:
 
     async def _fetch_library_index(previous: LibraryIndex | None) -> LibraryIndex:
         """Fetch Radarr/Sonarr libraries in parallel, preserving failed sides."""
+        # asyncio.gather with return_exceptions=True yields a dynamic union that
+        # mypy cannot resolve through tuple unpacking; annotate explicitly. Each
+        # result is either the library payload or the exception it raised.
+        radarr_result: Any
+        sonarr_result: Any
         radarr_result, sonarr_result = await asyncio.gather(
             ctx.radarr.library_items(),
             ctx.sonarr.library_items(),
@@ -237,7 +242,9 @@ def create_trending_router(ctx: "AppContext") -> APIRouter:
                 done.result()
             except Exception as exc:  # noqa: BLE001  # pragma: no cover - guard
                 log.warning("trending library refresh failed: %s", exc)
-            if library_refresh_task is done:  # pragma: no branch - defensive identity check
+            if (
+                library_refresh_task is done
+            ):  # pragma: no branch - defensive identity check
                 library_refresh_task = None
 
         task.add_done_callback(_clear_task)
@@ -359,7 +366,10 @@ def create_trending_router(ctx: "AppContext") -> APIRouter:
                 log.warning("trending tmdb lookup failed for %s: %s", body.tmdb, exc)
                 resolved = None
             if resolved:
-                ids = {**resolved, **ids}  # add trakt/imdb/tvdb; keep explicit body values
+                ids = {
+                    **resolved,
+                    **ids,
+                }  # add trakt/imdb/tvdb; keep explicit body values
         if not ids:
             return JSONResponse(
                 status_code=422, content={"detail": "No usable media id supplied"}

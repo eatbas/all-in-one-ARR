@@ -2,11 +2,10 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from modules.findarr.models import FindarrItem
-
 
 _RELEASE_FIELDS = ("digitalRelease", "physicalRelease", "inCinemas")
 
@@ -19,23 +18,24 @@ def _parse_date(value: str | None) -> datetime | None:
     except ValueError:
         return None
     if parsed.tzinfo is None:
-        parsed = parsed.replace(tzinfo=timezone.utc)
-    return parsed.astimezone(timezone.utc)
+        parsed = parsed.replace(tzinfo=UTC)
+    return parsed.astimezone(UTC)
 
 
 def _is_future(movie: dict[str, Any]) -> bool:
-    dates = [_parse_date(movie.get(field)) for field in _RELEASE_FIELDS]
-    dates = [item for item in dates if item is not None]
-    if not dates:
+    parsed_dates = [_parse_date(movie.get(field)) for field in _RELEASE_FIELDS]
+    valid_dates = [date for date in parsed_dates if date is not None]
+    if not valid_dates:
         return False
     delay_days = int(movie.get("minimumAvailabilityDelay", 0) or 0)
-    available_at = min(dates) + timedelta(days=delay_days)
-    return available_at > datetime.now(timezone.utc)
+    available_at = min(valid_dates) + timedelta(days=delay_days)
+    return available_at > datetime.now(UTC)
 
 
 def normalise(record: dict[str, Any], *, mode: str) -> FindarrItem | None:
     """Convert a Radarr wanted record into a Findarr item."""
-    movie = record.get("movie") if isinstance(record.get("movie"), dict) else record
+    movie_raw = record.get("movie")
+    movie = movie_raw if isinstance(movie_raw, dict) else record
     movie_id = movie.get("id")
     if movie_id is None:
         return None
