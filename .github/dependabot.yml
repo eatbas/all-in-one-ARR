@@ -1,0 +1,91 @@
+# Dependabot version updates.
+# Docs: https://docs.github.com/en/code-security/how-tos/secure-your-supply-chain/secure-your-dependencies/configure-version-updates
+#
+# Cadence: "daily" (Dependabot runs on weekdays). Non-major bumps are grouped into one
+# PR per ecosystem to keep the daily flow reviewable; major bumps open individually.
+# Commit prefixes follow this repo's Conventional-Commit style.
+version: 2
+
+updates:
+  # ---- GitHub Actions pinned in .github/workflows/*.yml ----
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "daily"
+      time: "06:00"
+      timezone: "Etc/UTC"
+    open-pull-requests-limit: 10
+    labels:
+      - "dependencies"
+    commit-message:
+      prefix: "ci(deps)"
+    groups:
+      github-actions:
+        patterns: ["*"]
+        update-types:
+          - "minor"
+          - "patch"
+
+  # ---- Frontend npm packages (frontend/package.json + package-lock.json) ----
+  - package-ecosystem: "npm"
+    directory: "/frontend"
+    schedule:
+      interval: "daily"
+      time: "06:00"
+      timezone: "Etc/UTC"
+    open-pull-requests-limit: 10
+    labels:
+      - "dependencies"
+    commit-message:
+      prefix: "chore"
+      prefix-development: "chore"
+      include: "scope"
+    groups:
+      npm-minor-and-patch:
+        patterns: ["*"]
+        update-types:
+          - "minor"
+          - "patch"
+
+  # ---- Backend Python packages (backend/pyproject.toml, PEP 621) ----
+  # NOTE: Dependabot updates pyproject.toml only; it does NOT regenerate
+  # backend/requirements.lock (compiled out-of-band via `uv pip compile`).
+  # See the plan's ## Risks for the lock-drift follow-up.
+  - package-ecosystem: "pip"
+    directory: "/backend"
+    schedule:
+      interval: "daily"
+      time: "06:00"
+      timezone: "Etc/UTC"
+    open-pull-requests-limit: 10
+    labels:
+      - "dependencies"
+    commit-message:
+      prefix: "chore"
+      prefix-development: "chore"
+      include: "scope"
+    groups:
+      pip-minor-and-patch:
+        patterns: ["*"]
+        update-types:
+          - "minor"
+          - "patch"
+
+  # ---- Docker base images (Dockerfile FROM tags) ----
+  - package-ecosystem: "docker"
+    directory: "/"
+    schedule:
+      interval: "daily"
+      time: "06:00"
+      timezone: "Etc/UTC"
+    open-pull-requests-limit: 10
+    labels:
+      - "dependencies"
+    commit-message:
+      prefix: "build(deps)"
+    groups:
+      docker:
+        patterns: ["*"]
+        update-types:
+          - "minor"
+          - "patch"
