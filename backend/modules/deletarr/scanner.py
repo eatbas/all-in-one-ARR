@@ -331,7 +331,14 @@ class MediaScanner:
     def _scan_with_manifest(
         self, directory: str, manifest: LibraryManifest, app_label: str
     ) -> None:
-        """Walk the top level of ``directory`` against the Arr manifest."""
+        """Scan ``directory`` against the Arr manifest.
+
+        Managed folders are cleaned in place; a folder that merely *contains*
+        managed folders deeper down (a category container such as ``archive/`` or
+        ``collections/``) is descended into rather than flagged, so nested and
+        categorised libraries are handled. Only folders the Arr knows nothing
+        about, and loose top-level files, are surfaced as orphaned.
+        """
         try:
             entries = sorted(os.scandir(directory), key=lambda entry: entry.name)
         except OSError as exc:  # pragma: no cover - defensive
@@ -347,6 +354,10 @@ class MediaScanner:
                     self._clean_managed_folder(entry.path, folder, app_label)
                 elif manifest.is_known_folder(entry.path):
                     continue  # known to the Arr but no tracked file yet — leave alone
+                elif manifest.contains_managed_descendant(entry.path):
+                    # Category container (e.g. archive/, collections/) that holds
+                    # managed folders below it — descend rather than flag it.
+                    self._scan_with_manifest(entry.path, manifest, app_label)
                 else:
                     self.scan_results.append(
                         ScanItem(

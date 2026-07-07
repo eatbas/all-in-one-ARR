@@ -536,6 +536,42 @@ def test_scan_arr_flags_untracked_keeps_tracked_and_companions(tmp_path) -> None
     assert all(item.origin == "arr" for item in scanner.get_sorted_results())
 
 
+def test_scan_arr_descends_into_category_folders(tmp_path) -> None:
+    root = tmp_path / "movies"
+    # Movies nested under category containers, mirroring a multi-root Radarr where
+    # every movie folder lives one or more levels below the scanned library root.
+    movie = root / "collections" / "A View (1985)"
+    video = _write(movie / "A View (1985).mkv", b"video" * 10)
+    _write(movie / "A View (1985).nfo")  # untracked junk beside the tracked film
+    deep = root / "animations" / "archive" / "Toy (1995)"
+    deep_video = _write(deep / "Toy (1995).mkv", b"toy")
+    _write(root / "Random Junk" / "r.mkv", b"r")  # genuine top-level orphan
+
+    manifest = _manifest(
+        "movies",
+        root,
+        {str(movie): [str(video)], str(deep): [str(deep_video)]},
+    )
+    scanner = MediaScanner([str(root)])
+    scanner.scan_arr(manifest)
+    items = {item.name: item for item in scanner.get_sorted_results()}
+
+    # Category containers (including multi-level nesting) are descended into, not
+    # flagged as orphaned.
+    assert "collections" not in items
+    assert "animations" not in items
+    assert "archive" not in items
+    # The untracked file inside a nested managed folder is still surfaced.
+    assert items["A View (1985).nfo"].reason == "Junk file extension"
+    assert items["A View (1985).nfo"].movie_folder == "A View (1985)"
+    # Tracked videos are kept.
+    assert "A View (1985).mkv" not in items
+    assert "Toy (1995).mkv" not in items
+    # A genuinely unknown top-level folder is still surfaced as orphaned.
+    assert items["Random Junk"].reason == "Orphaned folder (not in Radarr)"
+    assert items["Random Junk"].is_checked is False
+
+
 def test_scan_arr_leaves_known_fileless_folder_and_flags_loose_file(tmp_path) -> None:
     root = tmp_path / "movies"
     pending = root / "Pending (2025)"

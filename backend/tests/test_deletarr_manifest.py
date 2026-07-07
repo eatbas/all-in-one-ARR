@@ -26,12 +26,33 @@ def test_reroot_translates_relative_to_matching_root() -> None:
     ) == _n("/media/movies/Inception (2010)/Inception.mkv")
 
 
-def test_reroot_prefers_longest_root_and_handles_exact_and_unmatched() -> None:
-    # Longest root wins regardless of order (a shorter match after the best is kept).
-    assert _reroot("/a/b/c/film.mkv", ["/a", "/a/b"], "/local") == _n("/local/c/film.mkv")
-    assert _reroot("/a/b/c/film.mkv", ["/a/b", "/a"], "/local") == _n("/local/c/film.mkv")
+def test_reroot_uses_shared_library_mount_and_preserves_categories() -> None:
+    # Several category roots share the parent /data/movies, so that parent is the
+    # library mount and the category segment survives translation onto the local
+    # root (order-independent).
+    roots = ["/data/movies/archive", "/data/movies/collections"]
+    assert _reroot(
+        "/data/movies/collections/A Film (2020)/A.mkv", roots, "/media/movies"
+    ) == _n("/media/movies/collections/A Film (2020)/A.mkv")
+    assert _reroot(
+        "/data/movies/archive/B (2001)", list(reversed(roots)), "/media/movies"
+    ) == _n("/media/movies/archive/B (2001)")
+
+
+def test_reroot_handles_single_root_exact_and_unresolved() -> None:
+    # A single root is its own mount — the unchanged flat-library behaviour.
+    assert _reroot("/a/b/c/film.mkv", ["/a/b"], "/local") == _n("/local/c/film.mkv")
+    # A path equal to the mount maps onto the local root itself.
     assert _reroot("/a/b", ["/a/b"], "/local") == _n("/local")
+    # A path outside the mount is unresolved.
     assert _reroot("/other/x.mkv", ["/a/b"], "/local") is None
+    # No usable roots at all is unresolved.
+    assert _reroot("/a/b/film.mkv", [], "/local") is None
+    assert _reroot("/a/b/film.mkv", [""], "/local") is None
+    # Roots on different mounts share no prefix — unresolved (heuristic fallback).
+    assert _reroot("/a/b/film.mkv", ["/a/b", "/x/y"], "/local") is None
+    # An empty root string is ignored; the remaining root still resolves.
+    assert _reroot("/a/b/film.mkv", ["", "/a"], "/local") == _n("/local/b/film.mkv")
 
 
 def test_basename_without_ext_handles_both_forms() -> None:
@@ -81,6 +102,52 @@ async def test_movie_manifest_maps_files_and_skips_fileless_and_unresolved() -> 
     assert manifest.folder_for(_n("/media/movies/D (2022)")) is None
     assert manifest.is_known_folder(_n("/media/movies/nope")) is False
     assert manifest.media_paths == {_n("/media/movies/A (2020)/A.mkv")}
+
+
+async def test_movie_manifest_preserves_category_folders_across_multiple_roots() -> None:
+    # Mirrors a real Radarr with several category root folders nested under a
+    # shared parent that maps onto Deletarr's single local movies mount.
+    client = FakeDeletarrArr(
+        movies=[
+            {
+                "path": "/data/media/movies/collections/A View (1985)",
+                "rootFolderPath": "/data/media/movies/collections",
+                "movieFile": {
+                    "path": "/data/media/movies/collections/A View (1985)/A.mkv"
+                },
+            },
+            {
+                "path": "/data/media/movies/animations/archive/Toy (1995)",
+                "rootFolderPath": "/data/media/movies/animations/archive",
+                "movieFile": {
+                    "path": "/data/media/movies/animations/archive/Toy (1995)/Toy.mkv"
+                },
+            },
+        ],
+        root_folders=[
+            {"path": "/data/media/movies/collections"},
+            {"path": "/data/media/movies/animations/archive"},
+        ],
+    )
+    manifest = await build_movie_manifest(client, "/media/movies")
+
+    collections = _n("/media/movies/collections/A View (1985)")
+    animations = _n("/media/movies/animations/archive/Toy (1995)")
+    assert set(manifest.folders) == {collections, animations}
+    folder = manifest.folder_for(collections)
+    assert folder is not None
+    assert folder.media_paths == frozenset(
+        {_n("/media/movies/collections/A View (1985)/A.mkv")}
+    )
+    # The intermediate category containers are recognised as ancestors, not orphans.
+    assert manifest.contains_managed_descendant(_n("/media/movies/collections")) is True
+    assert manifest.contains_managed_descendant(_n("/media/movies/animations")) is True
+    assert (
+        manifest.contains_managed_descendant(_n("/media/movies/animations/archive"))
+        is True
+    )
+    # A sibling category with no tracked movie is not treated as a container.
+    assert manifest.contains_managed_descendant(_n("/media/movies/turkish")) is False
 
 
 async def test_movie_manifest_unavailable_on_error() -> None:

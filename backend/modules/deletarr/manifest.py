@@ -8,9 +8,12 @@ folder the app does not know about as *orphaned*.
 
 Path translation is required because Radarr/Sonarr report paths as *they* see them
 (their own container mounts), which usually differ from Deletarr's mount. Each Arr
-path is re-rooted relative to its Arr root folder onto the local library root; a
-path that cannot be resolved to a known root is dropped rather than guessed at, so
-it can never become a deletion candidate.
+path is re-rooted relative to the shared Arr *library mount* (the longest path
+prefix common to every Arr root folder) onto the local library root, so a
+nested/categorised layout below that mount — e.g. movies grouped under
+``archive/`` or ``collections/`` category root folders — is preserved instead of
+being flattened onto the local root. A path that cannot be resolved is dropped
+rather than guessed at, so it can never become a deletion candidate.
 """
 
 from __future__ import annotations
@@ -42,23 +45,48 @@ def _parts(path: str) -> list[str]:
     return [part for part in path.replace("\\", "/").split("/") if part]
 
 
+def _common_root(arr_roots: list[str]) -> list[str] | None:
+    """Return the path components shared by every Arr root folder.
+
+    This is the Arr-side *library mount* that maps onto Deletarr's single local
+    root. With one root it is that root; with several category roots nested under
+    a shared parent (e.g. ``.../movies/archive`` and ``.../movies/collections``)
+    it is the shared parent, so re-rooting keeps the category segment instead of
+    collapsing every category onto the local root. Returns ``None`` when the roots
+    share no common prefix (an unsupported multi-mount layout); every translation
+    then resolves to ``None`` and the scan falls back to the heuristic mode.
+    """
+    part_lists = [parts for parts in (_parts(root) for root in arr_roots) if parts]
+    if not part_lists:
+        return None
+    shared = part_lists[0]
+    for parts in part_lists[1:]:
+        limit = min(len(shared), len(parts))
+        matched = 0
+        while matched < limit and shared[matched] == parts[matched]:
+            matched += 1
+        shared = shared[:matched]
+        if not shared:
+            return None
+    return shared
+
+
 def _reroot(arr_path: str, arr_roots: list[str], local_root: str) -> str | None:
     """Re-root an Arr-reported path under the local Deletarr mount.
 
-    Finds the longest Arr root folder that prefixes ``arr_path``, takes the
-    remainder, and joins it onto ``local_root``. Returns ``None`` when no root
-    matches so the caller treats the path as unresolved (never deletable).
+    Translates relative to the shared Arr library mount (see :func:`_common_root`)
+    so the sub-structure below it — including any category folders — is preserved,
+    then joins the remainder onto ``local_root``. Returns ``None`` when the roots
+    share no mount or ``arr_path`` lies outside it, so the caller treats the path
+    as unresolved (never deletable).
     """
-    arr_parts = _parts(arr_path)
-    best: list[str] | None = None
-    for root in arr_roots:
-        root_parts = _parts(root)
-        if root_parts and arr_parts[: len(root_parts)] == root_parts:
-            if best is None or len(root_parts) > len(best):
-                best = root_parts
-    if best is None:
+    mount = _common_root(arr_roots)
+    if mount is None:
         return None
-    remainder = arr_parts[len(best) :]
+    arr_parts = _parts(arr_path)
+    if arr_parts[: len(mount)] != mount:
+        return None
+    remainder = arr_parts[len(mount) :]
     if not remainder:
         return _norm(local_root)
     return _norm(os.path.join(local_root, *remainder))
@@ -103,6 +131,17 @@ class LibraryManifest:
     def is_known_folder(self, path: str) -> bool:
         """Whether the Arr knows this folder (managed or fileless-but-tracked)."""
         return _norm(path) in self.known_folders
+
+    def contains_managed_descendant(self, path: str) -> bool:
+        """Whether any known Arr folder lives strictly below ``path``.
+
+        Detects an intermediate *category* container (e.g. ``.../movies/archive``)
+        that is not itself a movie/show folder but holds managed folders deeper
+        down. The scanner descends into such a container instead of flagging it as
+        orphaned, so nested and categorised libraries are handled correctly.
+        """
+        prefix = _norm(path) + os.sep
+        return any(known.startswith(prefix) for known in self.known_folders)
 
 
 def _collect_roots(
