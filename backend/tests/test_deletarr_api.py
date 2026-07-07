@@ -52,13 +52,20 @@ def test_runtime_routes_return_503_without_callbacks(db) -> None:
 async def test_status_results_scan_delete_and_settings_callbacks(db) -> None:
     ctx = make_ctx(db=db)
     payload = {
-        "settings": {"movies_path": "/movies", "tv_path": "/tv"},
+        "settings": {
+            "movies_path": "/movies",
+            "tv_path": "/tv",
+            "use_arr_source": False,
+        },
         "libraries": {
             "movies": {
                 "type": "movies",
                 "path": "/movies",
                 "last_scan_at": None,
                 "last_error": None,
+                "scan_mode": "heuristic",
+                "arr_available": False,
+                "arr_detail": None,
                 "results_count": 0,
                 "stats": {
                     "total_files": 0,
@@ -73,6 +80,9 @@ async def test_status_results_scan_delete_and_settings_callbacks(db) -> None:
     results = {
         "type": "movies",
         "path": "/movies",
+        "scan_mode": "heuristic",
+        "arr_available": False,
+        "arr_detail": None,
         "results": [],
         "stats": payload["libraries"]["movies"]["stats"],
     }
