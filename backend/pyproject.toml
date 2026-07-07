@@ -26,6 +26,8 @@ dev = [
     "pytest-asyncio>=1.0,<2.0",
     "pytest-cov>=7.0,<8.0",
     "respx>=0.21,<1.0",
+    "ruff>=0.15,<0.16",
+    "mypy>=1.13,<2.0",
 ]
 
 [tool.setuptools]
@@ -64,3 +66,51 @@ exclude_lines = [
     "raise NotImplementedError",
     "\\.\\.\\.",
 ]
+
+[tool.ruff]
+target-version = "py311"
+line-length = 88
+
+[tool.ruff.lint]
+# pyflakes (F), pycodestyle errors/warnings (E/W), isort (I), pyupgrade (UP),
+# and flake8-bugbear (B). E501 is delegated to the formatter, which owns code
+# width; enforcing it in the linter only flags long comments, strings, and URLs
+# that the formatter deliberately leaves untouched.
+select = ["E", "F", "W", "I", "UP", "B"]
+ignore = ["E501"]
+
+[tool.ruff.lint.isort]
+# Mirror the package layout declared in [tool.setuptools].
+known-first-party = ["core", "modules"]
+
+[tool.ruff.lint.flake8-bugbear]
+# FastAPI's parameter/dependency markers are evaluated once at import time and
+# are the idiomatic way to declare route defaults, so exempt them from B008
+# (function-call-in-default-argument).
+extend-immutable-calls = [
+    "fastapi.Body",
+    "fastapi.Cookie",
+    "fastapi.Depends",
+    "fastapi.File",
+    "fastapi.Form",
+    "fastapi.Header",
+    "fastapi.Path",
+    "fastapi.Query",
+    "fastapi.Security",
+]
+
+[tool.ruff.format]
+# Black-compatible defaults; this section pins the behaviour for future changes.
+docstring-code-format = false
+
+[tool.mypy]
+python_version = "3.11"
+files = ["core", "modules"]
+# Pydantic v2 ships a mypy plugin that teaches mypy about model fields,
+# validators, and constructor signatures.
+plugins = ["pydantic.mypy"]
+warn_redundant_casts = true
+warn_unused_ignores = true
+# Start lenient: third-party packages without shipped stubs should not block the
+# gate. Tighten module-by-module (e.g. disallow_untyped_defs) in follow-ups.
+ignore_missing_imports = true

@@ -28,6 +28,7 @@ htmlcov/
 coverage.xml
 *.egg-info/
 .mypy_cache/
+.ruff_cache/
 
 # Frontend
 frontend/node_modules/
