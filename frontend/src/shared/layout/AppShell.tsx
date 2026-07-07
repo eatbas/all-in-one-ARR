@@ -5,6 +5,7 @@ import { NavLink, Outlet } from "react-router-dom"
 import { BrandLogo } from "@/shared/components/brand-logo"
 import { Button } from "@/shared/components/ui/button"
 import { cn } from "@/shared/lib/utils"
+import { APP_VERSION } from "@/shared/lib/version"
 import { Topbar } from "@/shared/layout/Topbar"
 import { NAV_ITEMS } from "@/shared/layout/nav-config"
 import { SIDEBAR_COLLAPSED_STORAGE_KEY } from "@/shared/layout/sidebar-state"
@@ -28,7 +29,7 @@ function Sidebar({ collapsed, onToggle }: SidebarProps) {
     <aside
       id="primary-sidebar"
       className={cn(
-        "hidden shrink-0 border-r bg-sidebar transition-[width] duration-200 md:block",
+        "hidden shrink-0 flex-col border-r bg-sidebar transition-[width] duration-200 md:flex",
         collapsed ? "w-16" : "w-56",
       )}
     >
@@ -84,6 +85,17 @@ function Sidebar({ collapsed, onToggle }: SidebarProps) {
           </NavLink>
         ))}
       </nav>
+      <div
+        className={cn(
+          "mt-auto flex items-center border-t py-3 text-xs text-muted-foreground",
+          collapsed ? "justify-center px-2" : "gap-1.5 px-4",
+        )}
+      >
+        <span className={cn(collapsed && "sr-only")}>aio-arr</span>
+        <span className={cn(!collapsed && "font-medium text-sidebar-foreground/80")}>
+          v{APP_VERSION}
+        </span>
+      </div>
     </aside>
   )
 }

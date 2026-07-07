@@ -1,10 +1,20 @@
+import { readFileSync } from 'node:fs'
 import path from 'node:path'
 import { defineConfig } from 'vitest/config'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 
+// Single source of truth for the displayed app version: package.json (kept in
+// step with the backend pyproject.toml version and the published Docker tag).
+const { version: appVersion } = JSON.parse(
+  readFileSync(path.resolve(__dirname, './package.json'), 'utf-8'),
+) as { version: string }
+
 // https://vite.dev/config/
 export default defineConfig({
+  define: {
+    __APP_VERSION__: JSON.stringify(appVersion),
+  },
   plugins: [react(), tailwindcss()],
   resolve: {
     alias: {

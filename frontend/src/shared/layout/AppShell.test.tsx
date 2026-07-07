@@ -9,6 +9,7 @@ vi.mock("@/shared/layout/Topbar", () => ({
 
 import { AppShell } from "@/shared/layout/AppShell"
 import { SIDEBAR_COLLAPSED_STORAGE_KEY } from "@/shared/layout/sidebar-state"
+import { APP_VERSION } from "@/shared/lib/version"
 
 beforeEach(() => {
   localStorage.clear()
@@ -49,6 +50,12 @@ describe("AppShell", () => {
     ).not.toHaveAttribute("aria-current", "page")
   })
 
+  it("shows the app version pinned in the sidebar footer", () => {
+    renderAt("/")
+
+    expect(screen.getByText(`v${APP_VERSION}`)).toBeInTheDocument()
+  })
+
   it("marks the List-Syncarr link active on its route", () => {
     renderAt("/list-syncarr")
 
@@ -82,6 +89,8 @@ describe("AppShell", () => {
     const expand = screen.getByRole("button", { name: /expand sidebar/i })
     expect(expand).toHaveAttribute("aria-expanded", "false")
     expect(localStorage.getItem(SIDEBAR_COLLAPSED_STORAGE_KEY)).toBe("true")
+    // The version stays pinned in the footer even when collapsed to the rail.
+    expect(screen.getByText(`v${APP_VERSION}`)).toBeInTheDocument()
     // Labels are visually hidden but remain in the a11y tree, so links keep
     // their accessible names while collapsed.
     expect(
