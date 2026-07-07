@@ -2,6 +2,10 @@ dist
 coverage
 node_modules
 
+# npm owns the lockfile format; keep Prettier out of it so npm operations and
+# releases (scripts/release.sh) never fight the CI `format:check` gate.
+package-lock.json
+
 # Auto-generated from schema/openapi.json by `npm run api:types`; reformatting it
 # here would diverge from the generator's own output and break the CI drift check
 # (`git diff --exit-code -- frontend/src/shared/lib/generated`).

@@ -271,10 +271,12 @@ bash scripts/release.sh --dry-run minor   # preview only; changes nothing
 ```
 
 The release must be cut from a clean `main` (override with `RELEASE_BRANCH`). It
-runs `scripts/check.sh` first (pass `--skip-checks` to skip) and prompts before
-pushing (`-y` to skip). Only `vX.Y.Z` tags trigger the Docker publish, so the `v`
-prefix is required; a mistaken tag can be removed with
-`git tag -d vX.Y.Z && git push origin :refs/tags/vX.Y.Z`.
+runs `scripts/check.sh` first — the full quality gate (Ruff lint + format, mypy,
+Prettier, tests, and build) — and prompts before pushing (`-y` to skip).
+`--skip-checks` only bypasses this *local* pre-flight; CI re-runs the same gates on
+the pushed tag and branch, so a failing check still blocks the Docker publish. Only
+`vX.Y.Z` tags trigger the publish, so the `v` prefix is required; a mistaken tag can
+be removed with `git tag -d vX.Y.Z && git push origin :refs/tags/vX.Y.Z`.
 
 ### One-time Trakt device authorisation
 

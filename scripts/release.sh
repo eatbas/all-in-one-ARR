@@ -19,7 +19,9 @@
 #
 # Flags:
 #   --dry-run       Show the computed version and planned actions; change nothing.
-#   --skip-checks   Skip the local ./scripts/check.sh pre-flight (CI still gates publish).
+#   --skip-checks   Skip the local ./scripts/check.sh pre-flight (Ruff lint + format,
+#                   mypy, Prettier, tests, build). CI re-runs the same gates on the
+#                   pushed tag/branch, so they still gate the Docker publish.
 #   -y, --yes       Do not prompt for confirmation before committing/pushing.
 #   -h, --help      Show this help and exit.
 #
@@ -52,7 +54,8 @@ Usage: scripts/release.sh [major|minor|patch] [flags]
 
 Flags:
   --dry-run       Show the computed version and planned actions; change nothing.
-  --skip-checks   Skip the local scripts/check.sh pre-flight (CI still gates publish).
+  --skip-checks   Skip the local scripts/check.sh pre-flight (Ruff, mypy, Prettier,
+                  tests, build). CI re-runs these gates on the pushed tag/branch.
   -y, --yes       Do not prompt for confirmation before committing/pushing.
   -h, --help      Show this help and exit.
 
@@ -166,6 +169,15 @@ echo "==> Updating frontend/package.json (+ lockfile)"
 ( cd frontend && npm version "$new_version" --no-git-tag-version --allow-same-version >/dev/null )
 
 echo "==> Updating backend/pyproject.toml"
+# Guard: exactly one top-level version to bump (the [project] version). The file
+# also carries [tool.ruff]/[tool.mypy] config; none of those lines start with
+# `version = "`, but a future section must not silently gain a second one.
+# `|| true`: grep -c exits 1 on zero matches, which would abort the script here
+# under `set -e` before the guard below could report it — keep going so the
+# `-eq 1` check handles 0/1/N uniformly with a clear message.
+version_lines="$(grep -cE '^version = "' backend/pyproject.toml || true)"
+[[ "$version_lines" -eq 1 ]] \
+  || die "expected exactly one version line in backend/pyproject.toml, found ${version_lines}"
 perl -0pi -e "s/^version = \"[^\"]*\"/version = \"${new_version}\"/m" backend/pyproject.toml
 grep -qxF "version = \"${new_version}\"" backend/pyproject.toml \
   || die "failed to update version in backend/pyproject.toml"
