@@ -8,9 +8,10 @@ import {
 } from "@/features/trending/components/poster-pill-variants"
 
 /**
- * Collapsed label span that expands on its pill's hover/focus. The side padding
- * is applied only while expanded (via the per-group `REVEAL` classes) so the
- * collapsed span has zero width and every pill stays a perfect circle at rest.
+ * Collapsed label span that expands on its pill's hover/focus. The outer-edge
+ * padding is applied only while expanded (via the per-group `REVEAL` classes)
+ * so the collapsed span has zero width and every pill stays a perfect circle
+ * at rest, while the revealed word sits clear of the pill's rounded cap.
  */
 export function PillLabel({
   group,

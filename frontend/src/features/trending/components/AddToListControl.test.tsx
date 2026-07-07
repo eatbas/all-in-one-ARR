@@ -104,22 +104,29 @@ describe("AddToListControl", () => {
   })
 
   it.each([
-    [5, "size-8", "size-4"],
-    [6, "size-7", "size-3.5"],
-    [7, "size-6", "size-3"],
-  ] as const)("uses the shared pill shell at density %i", (density, shellSize, iconSize) => {
-    vi.mocked(useLists).mockReturnValue(
-      queryResult([listSummary({ slug: "movies", name: "Movies" })]),
-    )
-    render(<AddToListControl item={ITEM} density={density} />)
+    [5, "size-8", "size-4", "group-hover/add:pl-2"],
+    [6, "size-7", "size-3.5", "group-hover/add:pl-1.5"],
+    [7, "size-6", "size-3", "group-hover/add:pl-1.5"],
+  ] as const)(
+    "uses the shared pill shell at density %i",
+    (density, shellSize, iconSize, labelOuterPadding) => {
+      vi.mocked(useLists).mockReturnValue(
+        queryResult([listSummary({ slug: "movies", name: "Movies" })]),
+      )
+      render(<AddToListControl item={ITEM} density={density} />)
 
-    const button = screen.getByRole("button", { name: /add/i })
-    expect(button).toHaveClass(shellSize)
-    expect(button).toHaveClass("rounded-full")
-    expect(button).toHaveClass("px-0")
-    expect(button.querySelector("[data-pill-icon-slot]")).toHaveClass(shellSize)
-    expect(button.querySelector("svg")).toHaveClass(iconSize)
-  })
+      const button = screen.getByRole("button", { name: /add/i })
+      expect(button).toHaveClass(shellSize)
+      // The Button variant's fixed h-8 must be merged away so the add pill
+      // matches the link and status circles at every density.
+      expect(button).not.toHaveClass("h-8")
+      expect(button).toHaveClass("rounded-full")
+      expect(button).toHaveClass("px-0")
+      expect(button.querySelector("[data-pill-icon-slot]")).toHaveClass(shellSize)
+      expect(button.querySelector("svg")).toHaveClass(iconSize)
+      expect(screen.getByText("Add")).toHaveClass(labelOuterPadding)
+    },
+  )
 
   it("disables the trigger while an add is pending", () => {
     vi.mocked(useLists).mockReturnValue(

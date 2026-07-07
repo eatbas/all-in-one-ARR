@@ -144,6 +144,9 @@ describe("TrendingCard", () => {
       expect(source).not.toHaveClass("px-2")
       expect(source).not.toHaveClass("px-1.5")
       expect(add).toHaveClass("px-0")
+      // The Button variant's fixed h-8 must be merged away so the add pill
+      // matches the link and status circles at every density.
+      expect(add).not.toHaveClass("h-8")
     },
   )
 
@@ -155,6 +158,16 @@ describe("TrendingCard", () => {
       expect(screen.getByText(label)).toHaveClass("text-ellipsis")
       expect(screen.getByText(label)).toHaveClass("whitespace-nowrap")
     }
+  })
+
+  it("pads each revealed label on its outer edge so the word stays centred", () => {
+    render(<ul><TrendingCard item={item({ source: "trakt", slug: "dune", seer_status: 3 })} /></ul>)
+
+    // Labels sit left of the icon on the link and add pills, right of it on
+    // the status pill; the expanded padding always lands on the outer edge.
+    expect(screen.getByText("Trakt")).toHaveClass("group-hover/link:pl-2")
+    expect(screen.getByText("Add")).toHaveClass("group-hover/add:pl-2")
+    expect(screen.getByText("Processing")).toHaveClass("group-hover/status:pr-2")
   })
 
   it("omits the status indicator when the item is not in the library", () => {

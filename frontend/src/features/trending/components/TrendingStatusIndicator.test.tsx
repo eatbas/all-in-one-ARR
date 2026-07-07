@@ -77,6 +77,23 @@ describe("TrendingStatusIndicator", () => {
     expect(indicator.querySelector("svg")).toHaveClass(iconSize)
   })
 
+  it.each([
+    [5, "group-hover/status:max-w-24", "group-hover/status:pr-2"],
+    [6, "group-hover/status:max-w-20", "group-hover/status:pr-1.5"],
+    [7, "group-hover/status:max-w-20", "group-hover/status:pr-1.5"],
+  ] as const)(
+    "reveals the label with a wide-enough cap and outer-edge padding at density %i",
+    (density, revealCap, outerPadding) => {
+      render(
+        <TrendingStatusIndicator item={item({ seer_status: 3 })} density={density} />,
+      )
+
+      const label = screen.getByText("Processing")
+      expect(label).toHaveClass(revealCap)
+      expect(label).toHaveClass(outerPadding)
+    },
+  )
+
   it("prefers the Seer detail when both pending signals are present", () => {
     render(
       <TrendingStatusIndicator

@@ -61,7 +61,7 @@ const REVEAL_WIDTH: Record<PillGroup, Record<PillDensity, string>> = {
   status: {
     5: "group-hover/status:max-w-24",
     6: "group-hover/status:max-w-20",
-    7: "group-hover/status:max-w-16",
+    7: "group-hover/status:max-w-20",
   },
   add: {
     5: "group-hover/add:max-w-10 group-focus-visible/add:max-w-10",
@@ -76,30 +76,67 @@ const REVEAL_OPACITY: Record<PillGroup, string> = {
   add: "group-hover/add:opacity-100 group-focus-visible/add:opacity-100",
 }
 
-const REVEAL_PADDING: Record<PillGroup, Record<PillLabelSide, string>> = {
+/**
+ * Outer-edge padding for the revealed label, sized per density to mirror the
+ * icon slot's built-in inset (8px at density 5, 7px at 6, 6px at 7). The slot
+ * inset already separates the icon glyph from the word, so matching padding
+ * on the far side keeps the word optically centred in the expanded lozenge
+ * instead of touching the rounded cap and being clipped by it.
+ */
+const REVEAL_PADDING: Record<
+  PillGroup,
+  Record<PillDensity, Record<PillLabelSide, string>>
+> = {
   link: {
-    left: "group-hover/link:pr-1 group-focus-visible/link:pr-1",
-    right: "group-hover/link:pl-1 group-focus-visible/link:pl-1",
+    5: {
+      left: "group-hover/link:pl-2 group-focus-visible/link:pl-2",
+      right: "group-hover/link:pr-2 group-focus-visible/link:pr-2",
+    },
+    6: {
+      left: "group-hover/link:pl-1.5 group-focus-visible/link:pl-1.5",
+      right: "group-hover/link:pr-1.5 group-focus-visible/link:pr-1.5",
+    },
+    7: {
+      left: "group-hover/link:pl-1.5 group-focus-visible/link:pl-1.5",
+      right: "group-hover/link:pr-1.5 group-focus-visible/link:pr-1.5",
+    },
   },
   status: {
-    left: "group-hover/status:pr-1",
-    right: "group-hover/status:pl-1",
+    5: { left: "group-hover/status:pl-2", right: "group-hover/status:pr-2" },
+    6: { left: "group-hover/status:pl-1.5", right: "group-hover/status:pr-1.5" },
+    7: { left: "group-hover/status:pl-1.5", right: "group-hover/status:pr-1.5" },
   },
   add: {
-    left: "group-hover/add:pr-1 group-focus-visible/add:pr-1",
-    right: "group-hover/add:pl-1 group-focus-visible/add:pl-1",
+    5: {
+      left: "group-hover/add:pl-2 group-focus-visible/add:pl-2",
+      right: "group-hover/add:pr-2 group-focus-visible/add:pr-2",
+    },
+    6: {
+      left: "group-hover/add:pl-1.5 group-focus-visible/add:pl-1.5",
+      right: "group-hover/add:pr-1.5 group-focus-visible/add:pr-1.5",
+    },
+    7: {
+      left: "group-hover/add:pl-1.5 group-focus-visible/add:pl-1.5",
+      right: "group-hover/add:pr-1.5 group-focus-visible/add:pr-1.5",
+    },
   },
 }
 
 /**
  * Tailwind classes that reveal a collapsed label for each named pill group.
- * The label padding is applied only while expanded so the collapsed span has
- * zero width and every pill stays a perfect circle at rest.
+ * The padding is applied only while expanded — on the label's outer edge, away
+ * from the icon — so the collapsed span has zero width and every pill stays a
+ * perfect circle at rest, while the revealed word sits centred between the
+ * icon and the pill's rounded cap.
  */
 export function pillLabelReveal(
   group: PillGroup,
   density: PillDensity,
   side: PillLabelSide,
 ): string {
-  return cn(REVEAL_WIDTH[group][density], REVEAL_OPACITY[group], REVEAL_PADDING[group][side])
+  return cn(
+    REVEAL_WIDTH[group][density],
+    REVEAL_OPACITY[group],
+    REVEAL_PADDING[group][density][side],
+  )
 }
