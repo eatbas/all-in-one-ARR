@@ -1,0 +1,29 @@
+# Fast local pre-commit hooks. Enable once per clone with:
+#   pip install pre-commit && pre-commit install
+#
+# Ruff owns Python linting + formatting + import sorting (backend/); Prettier
+# owns frontend formatting. Keep the ruff `rev` in sync with the pinned version
+# in backend/pyproject.toml.
+repos:
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.15.20
+    hooks:
+      # Lint and auto-fix first, then format, so any fixes are re-formatted.
+      - id: ruff-check
+        args: [--fix]
+        files: ^backend/
+      - id: ruff-format
+        files: ^backend/
+
+  - repo: local
+    hooks:
+      # Runs the frontend's own Prettier (via package.json) so the pinned
+      # version and .prettierignore (the generated API types) are respected.
+      # Auto-fixes to match the Ruff hooks' behaviour: pre-commit fails the commit
+      # if it rewrites anything, so the developer re-stages the formatted files.
+      - id: prettier
+        name: prettier (frontend)
+        entry: bash -c 'cd frontend && npm run format'
+        language: system
+        files: ^frontend/
+        pass_filenames: false

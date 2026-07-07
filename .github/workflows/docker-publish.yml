@@ -27,6 +27,18 @@ jobs:
       - name: Install backend
         run: python -m pip install -e "./backend[dev]"
 
+      - name: Run backend lint (ruff)
+        working-directory: backend
+        run: ruff check .
+
+      - name: Run backend format check (ruff)
+        working-directory: backend
+        run: ruff format --check .
+
+      - name: Run backend type check (mypy)
+        working-directory: backend
+        run: mypy
+
       - name: Run backend tests
         working-directory: backend
         run: python -m pytest
@@ -66,6 +78,10 @@ jobs:
       - name: Run frontend lint
         working-directory: frontend
         run: npm run lint
+
+      - name: Run frontend format check
+        working-directory: frontend
+        run: npm run format:check
 
       - name: Run frontend type check
         working-directory: frontend

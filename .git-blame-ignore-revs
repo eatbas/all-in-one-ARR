@@ -1,0 +1,9 @@
+# Revisions listed here are skipped by `git blame` so one-off mechanical
+# reformats do not obscure real authorship. Enable locally with:
+#   git config blame.ignoreRevsFile .git-blame-ignore-revs
+
+# style: apply Ruff formatting and import sorting to the backend
+1a2080bfd655523c06113489e9adeea7e0d3bebc
+
+# style: apply Prettier formatting to the frontend
+1228ec45fbb0fe3ad66f87cbdcae55c68ac4f1d3

@@ -16,6 +16,15 @@ fi
 
 "$VENV_PY" -m pip install -e "./backend[dev]"
 
+echo "==> Backend lint (ruff)"
+(cd backend && "$VENV_PY" -m ruff check .)
+
+echo "==> Backend format check (ruff)"
+(cd backend && "$VENV_PY" -m ruff format --check .)
+
+echo "==> Backend type check (mypy)"
+(cd backend && "$VENV_PY" -m mypy)
+
 echo "==> Backend tests"
 (cd backend && "$VENV_PY" -m pytest)
 
@@ -33,6 +42,9 @@ git diff --exit-code -- schema/openapi.json frontend/src/shared/lib/generated
 
 echo "==> Frontend lint"
 (cd frontend && npm run lint)
+
+echo "==> Frontend format check"
+(cd frontend && npm run format:check)
 
 echo "==> Frontend type check"
 (cd frontend && npm run test:types -- --pretty false)
