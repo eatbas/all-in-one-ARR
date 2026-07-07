@@ -16,10 +16,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: '3.11'
           cache: pip
@@ -47,10 +47,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: '3.11'
           cache: pip
@@ -59,7 +59,7 @@ jobs:
         run: python -m pip install -e "./backend[dev]"
 
       - name: Set up Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: '20'
           cache: npm
@@ -68,6 +68,14 @@ jobs:
       - name: Install frontend dependencies
         working-directory: frontend
         run: npm ci
+
+      # Build the SPA before exporting the schema: the FastAPI app registers the
+      # SPA HTML routes only when frontend/dist exists (core/app.py::_mount_frontend),
+      # so the OpenAPI export and its git-diff drift check must run against a built
+      # bundle to reproduce the committed schema/openapi.json.
+      - name: Build frontend
+        working-directory: frontend
+        run: npm run build
 
       - name: Generate OpenAPI schema and TypeScript types
         run: |
@@ -91,10 +99,6 @@ jobs:
         working-directory: frontend
         run: npm test
 
-      - name: Build frontend
-        working-directory: frontend
-        run: npm run build
-
   build-and-push:
     runs-on: ubuntu-latest
     needs: [backend-checks, frontend-checks]
@@ -103,7 +107,7 @@ jobs:
       contents: read
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v4

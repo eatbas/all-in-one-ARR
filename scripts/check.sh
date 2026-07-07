@@ -35,6 +35,13 @@ elif [[ ! -d frontend/node_modules ]]; then
   (cd frontend && npm install)
 fi
 
+# Build the SPA before exporting the schema: the FastAPI app registers the SPA
+# HTML routes only when frontend/dist exists (core/app.py::_mount_frontend), so
+# the OpenAPI export and its git-diff drift check must run against a built bundle
+# to reproduce the committed schema/openapi.json.
+echo "==> Frontend build"
+(cd frontend && npm run build)
+
 echo "==> OpenAPI schema and TypeScript types"
 "$VENV_PY" scripts/export_openapi.py
 (cd frontend && npm run api:types)
@@ -51,6 +58,3 @@ echo "==> Frontend type check"
 
 echo "==> Frontend tests"
 (cd frontend && npm test)
-
-echo "==> Frontend build"
-(cd frontend && npm run build)
