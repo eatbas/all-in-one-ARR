@@ -14,7 +14,7 @@ if [[ ! -x "$VENV_PY" ]]; then
   "$PYTHON_BIN" -m venv "$ROOT_DIR/.venv"
 fi
 
-"$VENV_PY" -m pip install -e "./backend[dev]"
+"$VENV_PY" -m pip install -e "./backend[dev]" -c backend/requirements.lock
 
 echo "==> Backend lint (ruff)"
 (cd backend && "$VENV_PY" -m ruff check .)

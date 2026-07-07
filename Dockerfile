@@ -15,12 +15,16 @@ ENV PYTHONUNBUFFERED=1 \
     PIP_NO_CACHE_DIR=1
 WORKDIR /app
 
-# Install Python dependencies first for better layer caching.
-COPY backend/pyproject.toml ./
+# Install Python dependencies first for better layer caching. requirements.lock
+# pins the exact resolved set (including the APScheduler 4 pre-release) so image
+# builds are reproducible; pyproject.toml stays the source of truth for which
+# packages are required. Regenerate the lock with:
+#   uv pip compile backend/pyproject.toml --all-extras --universal -o backend/requirements.lock
+COPY backend/pyproject.toml backend/requirements.lock ./
 COPY backend/core ./core
 COPY backend/modules ./modules
 COPY backend/main.py ./
-RUN pip install .
+RUN pip install . -c requirements.lock
 
 # Bring in the built SPA produced by stage 1.
 COPY --from=frontend /frontend/dist ./frontend/dist
