@@ -518,6 +518,17 @@ The FastAPI app then serves `frontend/dist` at `/`.
 
 ## Tests
 
+Run the full local verification path from the repository root:
+
+```bash
+bash scripts/check.sh
+```
+
+This creates or reuses `.venv`, installs the backend with development extras,
+runs the backend coverage-gated suite, regenerates the OpenAPI schema and
+frontend types, checks that generated contract files are committed, then runs
+frontend linting, type checking, tests, and the production build.
+
 The Python backend has **100% test coverage**, enforced in
 `backend/pyproject.toml`:
 
@@ -553,6 +564,18 @@ Build the frontend to type-check it:
 ```bash
 cd frontend && npm run build
 ```
+
+The frontend API types are generated from FastAPI's OpenAPI schema. Regenerate
+them after changing API request or response models:
+
+```bash
+.venv/bin/python scripts/export_openapi.py
+cd frontend && npm run api:types
+```
+
+GitHub Actions runs the same backend and frontend gates before the Docker publish
+job. Docker Hub login and image push are skipped on pull requests and run only
+after both check jobs have passed.
 
 ## Endpoints
 
@@ -614,8 +637,11 @@ cd frontend && npm run build
 - `POST /api/deletarr/delete` – delete `{ type, paths }` after validating each
   path is a current scan result, resolves under that library root, and (for
   Arr-backed scans) is not a file the library manager now tracks.
-- `GET /metrics` – Prometheus-compatible text exposition of the
-  Bandwidth-Controllarr gauges (`bw_qbit_*`, `bw_sab_*`, `bw_check_status`).
+- `GET /metrics` – Prometheus-compatible text exposition. Existing
+  Bandwidth-Controllarr gauges are preserved (`bw_qbit_*`, `bw_sab_*`,
+  `bw_check_status`), and application-wide `aio_arr_*` metrics cover sync runs,
+  integration health, scheduled jobs, Findarr activity, and Deletarr scans /
+  deletions.
 - `GET /api/trending?source=&media=&category=[&window=]` – normalised trending or
   popular items for the Trending page. `source` is `trakt|tmdb|seer`, `media` is
   `movie|show`, `category` is `trending|popular`, and `window` (`day|week`, TMDB
@@ -667,6 +693,11 @@ cd frontend && npm run build
   uses WAL with a process-level lock. Multi-worker deployment is out of scope.
 - APScheduler 4 is pre-release; all scheduler usage is isolated behind
   `backend/core/scheduler.py` so a downgrade to 3.x is a one-file change.
+- **Prometheus metrics:** `/metrics` exposes the legacy `bw_*` Bandwidth-
+  Controllarr gauges plus `aio_arr_sync_*`, `aio_arr_service_*`,
+  `aio_arr_scheduler_*`, `aio_arr_findarr_*`, and `aio_arr_deletarr_*` families.
+  Labels are deliberately bounded to stable values such as service, status, app,
+  mode, library, trigger, and job id.
 - **Bandwidth-Controllarr** is off by default. When enabled, it polls
   qBittorrent and SABnzbd every `BANDWIDTH_CHECK_INTERVAL_SEC` seconds; if
   qBittorrent has active torrents, SABnzbd is paused, and resumed once the

@@ -17,6 +17,7 @@ from typing import TYPE_CHECKING, Callable
 
 from fastapi import FastAPI
 
+from core.app_metrics import observe_scheduler_job
 from core.logging import get_logger
 from modules.bandwidth_controllarr.control import apply_control, gather_status
 
@@ -59,7 +60,7 @@ def _require_context() -> "AppContext":
 async def control_job() -> None:
     """Scheduled entrypoint for the Bandwidth-Controllarr loop."""
     ctx = _require_context()
-    await apply_control(ctx)
+    await observe_scheduler_job("bandwidth_control", lambda: apply_control(ctx))
 
 
 async def setup(

@@ -6,6 +6,11 @@ import asyncio
 from datetime import datetime, timedelta, timezone
 from typing import TYPE_CHECKING
 
+from core.app_metrics import (
+    record_findarr_run,
+    record_findarr_search,
+    update_findarr_capacity,
+)
 from core.logging import get_logger
 from modules.findarr.client import FindarrArrClient, FindarrClientError
 from modules.findarr.models import APP_NAMES, MODES, FindarrItem, ModeResult, RunResult, SearchUnit
@@ -57,6 +62,8 @@ async def status(ctx: "AppContext") -> dict:
     settings = _settings_for(ctx)
     hourly_cap = int(settings["hourly_cap"])
     used = ctx.db.findarr_success_count_since(_hour_cutoff_iso())
+    remaining = max(0, hourly_cap - used)
+    update_findarr_capacity(remaining)
     run_state = ctx.db.findarr_run_state()
     counts = ctx.db.findarr_counts()
     totals = ctx.db.findarr_totals()
@@ -87,7 +94,7 @@ async def status(ctx: "AppContext") -> dict:
         "hourly": {
             "limit": hourly_cap,
             "used": used,
-            "remaining": max(0, hourly_cap - used),
+            "remaining": remaining,
         },
     }
 
@@ -171,11 +178,14 @@ def _maybe_reset_state(ctx: "AppContext", settings: dict) -> None:
 async def run(ctx: "AppContext", *, app: str | None = None, manual: bool = False) -> dict:
     """Run Findarr for all apps or one requested app."""
     settings = _settings_for(ctx)
+    metric_app = app or "all"
     if app is not None and app not in APP_NAMES:
+        record_findarr_run(app=metric_app, status="error")
         return RunResult(status="error", detail=f"Unknown Findarr app: {app}").to_dict()
     if not settings["enabled"]:
         result = RunResult(status="skipped", detail="Findarr is disabled")
         _record_run_state(ctx, result)
+        record_findarr_run(app=metric_app, status=result.status)
         return result.to_dict()
 
     _maybe_reset_state(ctx, settings)
@@ -199,6 +209,7 @@ async def run(ctx: "AppContext", *, app: str | None = None, manual: bool = False
         results=mode_results,
     )
     _record_run_state(ctx, result)
+    record_findarr_run(app=metric_app, status=result.status)
     if manual:
         ctx.db.add_activity("Findarr run completed", result.detail)
     return result.to_dict()
@@ -257,6 +268,7 @@ async def _run_app(ctx: "AppContext", app: str, settings: dict, app_settings: di
                 ("upgrade", "cutoff", "upgrade_limit"),
             ):
                 remaining = max(0, int(settings["hourly_cap"]) - ctx.db.findarr_success_count_since(_hour_cutoff_iso()))
+                update_findarr_capacity(remaining)
                 limit = min(int(app_settings[limit_key]), remaining)
                 mode_result = await _run_mode(
                     ctx, client, app, mode, wanted_kind, limit, app_settings, sleep_seconds
@@ -364,6 +376,7 @@ async def _run_mode(
                 status="error",
                 detail=str(exc),
             )
+            record_findarr_search(app=app, mode=mode, status="error")
             _log.warning("Findarr search failed for %s %s: %s", app, unit.key, exc)
             continue
         ctx.db.findarr_mark_processed(app=app, mode=mode, item_id=unit.key, title=unit.title)
@@ -376,6 +389,7 @@ async def _run_mode(
             status="success",
             detail=f"Triggered {app.capitalize()} {mode} search",
         )
+        record_findarr_search(app=app, mode=mode, status="success")
         result.processed += 1
     result.detail = f"Processed {result.processed} of {result.selected} selected item(s)"
     return result

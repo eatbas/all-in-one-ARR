@@ -1,16 +1,5 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogTrigger,
-} from "@/shared/components/ui/alert-dialog"
 import { Button } from "@/shared/components/ui/button"
 import {
   Card,
@@ -33,6 +22,12 @@ import {
   type ConnectionState,
 } from "@/shared/components/connection-badge"
 import { SettingsHelp } from "@/shared/components/settings-help"
+import {
+  ActionWithHelp,
+  ClearAction,
+  Field,
+} from "@/features/settings/components/settings-form"
+import { useAutosave } from "@/features/settings/hooks/use-autosave"
 import { useTheme } from "@/shared/components/theme-context"
 import { cn } from "@/shared/lib/utils"
 import { SERVICE_TABS, VALID_TAB_VALUES, type ServiceTab } from "@/shared/lib/services"
@@ -63,92 +58,6 @@ import type {
   UpdateTraktSettings,
 } from "@/shared/lib/api"
 import { useQueryClient } from "@tanstack/react-query"
-
-/** A labelled form row with a saved/state hint. */
-function Field({
-  label,
-  hint,
-  helpText,
-  children,
-}: {
-  label: string
-  hint: string
-  helpText: ReactNode
-  children: ReactNode
-}) {
-  return (
-    <div className="flex flex-col gap-1.5">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-1.5">
-          <label className="text-sm font-medium">{label}</label>
-          <SettingsHelp label={label}>{helpText}</SettingsHelp>
-        </div>
-        <span className="text-xs text-muted-foreground">{hint}</span>
-      </div>
-      {children}
-    </div>
-  )
-}
-
-function ActionWithHelp({
-  label,
-  helpText,
-  children,
-}: {
-  label: string
-  helpText: ReactNode
-  children: ReactNode
-}) {
-  return (
-    <div className="flex items-center gap-1.5">
-      {children}
-      <SettingsHelp label={label}>{helpText}</SettingsHelp>
-    </div>
-  )
-}
-
-const AUTOSAVE_DELAY_MS = 800
-
-/**
- * Debounced autosave helper. Schedules `mutate(body)` after `AUTOSAVE_DELAY_MS`
- * whenever `body` is non-null, but skips scheduling while a matching save is
- * already in-flight. It also suppresses re-submission of an identical body
- * after a failed save settles back to `isPending === false`, preventing the
- * same failed payload from being retried automatically every debounce cycle.
- */
-function useAutosave<TBody>({
-  body,
-  draftRevision,
-  mutate,
-  isPending,
-  onSuccess,
-}: {
-  body: TBody | null
-  draftRevision: number
-  mutate: (body: TBody, options?: { onSuccess?: () => void }) => void
-  isPending: boolean
-  onSuccess: () => void
-}): void {
-  const lastSubmittedRevisionRef = useRef<number | null>(null)
-
-  useEffect(() => {
-    if (!body) {
-      lastSubmittedRevisionRef.current = null
-      return
-    }
-    if (isPending) return
-
-    // Revisions are non-secret edit counters, so failed-save suppression does
-    // not retain Trakt secrets or service API keys in component refs.
-    if (draftRevision === lastSubmittedRevisionRef.current) return
-
-    const timer = window.setTimeout(() => {
-      lastSubmittedRevisionRef.current = draftRevision
-      mutate(body, { onSuccess })
-    }, AUTOSAVE_DELAY_MS)
-    return () => window.clearTimeout(timer)
-  }, [body, draftRevision, isPending, mutate, onSuccess])
-}
 
 /** Edit the Trakt credentials, authorise the app, and test the connection. */
 function CredentialsCard() {
@@ -495,47 +404,6 @@ function ServiceConnectionCard({ name, label, fields }: ServiceTab) {
 }
 
 const STATUS_INTERVAL_OPTIONS = [30, 45, 60] as const
-
-/** Danger-zone action with a confirmation dialog. */
-function ClearAction({
-  label,
-  description,
-  confirmLabel,
-  helpText,
-  disabled,
-  onConfirm,
-}: {
-  label: string
-  description: string
-  confirmLabel: string
-  helpText: ReactNode
-  disabled: boolean
-  onConfirm: () => void
-}) {
-  return (
-    <ActionWithHelp label={label} helpText={helpText}>
-      <AlertDialog>
-        <AlertDialogTrigger asChild>
-          <Button variant="outline" disabled={disabled}>
-            {label}
-          </Button>
-        </AlertDialogTrigger>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>{label}?</AlertDialogTitle>
-            <AlertDialogDescription>{description}</AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={onConfirm}>
-              {confirmLabel}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-    </ActionWithHelp>
-  )
-}
 
 /** Storage overview and destructive clear actions for the local database. */
 function DatabaseCard() {

@@ -21,6 +21,7 @@ from prometheus_client import make_asgi_app
 
 from core import registry
 from core.api import create_api_router
+from core.app_metrics import observe_scheduler_job
 from core.bandwidth_api import create_bandwidth_router
 from core.clients.arr_client import ArrClient
 from core.clients.seer import SeerClient
@@ -164,14 +165,17 @@ async def _poster_churn_job() -> None:
 
     Filesystem work runs off the event loop via :func:`asyncio.to_thread`.
     """
-    cache = _poster_churn.cache
-    if cache is None:  # pragma: no cover - cache is set before the job is scheduled
-        return
-    await asyncio.to_thread(
-        cache.evict,
-        max_age_seconds=_poster_churn.ttl_seconds,
-        max_total_bytes=_poster_churn.max_bytes,
-    )
+    async def evict_posters() -> None:
+        cache = _poster_churn.cache
+        if cache is None:  # pragma: no cover - cache is set before scheduling
+            return
+        await asyncio.to_thread(
+            cache.evict,
+            max_age_seconds=_poster_churn.ttl_seconds,
+            max_total_bytes=_poster_churn.max_bytes,
+        )
+
+    await observe_scheduler_job("poster_cache_churn", evict_posters)
 
 
 async def _start_poster_churn(ctx: AppContext, settings: Settings) -> None:

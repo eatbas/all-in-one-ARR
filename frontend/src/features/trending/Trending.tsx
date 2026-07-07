@@ -1,4 +1,5 @@
 import { useState } from "react"
+import { LayoutGridIcon } from "lucide-react"
 
 import { Button } from "@/shared/components/ui/button"
 import { Switch } from "@/shared/components/ui/switch"
@@ -86,7 +87,10 @@ function Toggle<T extends string>({
   )
 }
 
-/** Controls (media / category / per-row / hide-available), the grid, and its pager. */
+/**
+ * Data toggles (media / category) on the left, display options (per-row
+ * density / hide-available) on the right, then the grid and its pager.
+ */
 function SourcePanel({ source }: { source: TrendingSource }) {
   const [media, setMedia] = useState<ItemType>("movie")
   const [category, setCategory] = useState<TrendingCategory>("trending")
@@ -155,15 +159,6 @@ function SourcePanel({ source }: { source: TrendingSource }) {
             { value: "popular", label: "Popular" },
           ]}
         />
-        <Toggle
-          ariaLabel="Per row"
-          value={String(perRow)}
-          onChange={(value) => changePerRow(Number(value) as PerRow)}
-          options={VALID_PER_ROW_VALUES.map((value) => ({
-            value: String(value),
-            label: String(value),
-          }))}
-        />
         <div className="ml-auto flex items-center gap-3">
           {isFetching && !isInitialLoading ? (
             <span className="text-xs text-muted-foreground">Refreshing</span>
@@ -173,6 +168,23 @@ function SourcePanel({ source }: { source: TrendingSource }) {
               Updated {formatRelativeTime(status.last_synced_at)}
             </span>
           ) : null}
+          {/* The density toggle lives with the display options (not the data
+              toggles) so its bare numbers cannot be misread as page numbers. */}
+          <div className="flex items-center gap-1.5" title="Posters per row">
+            <LayoutGridIcon
+              aria-hidden="true"
+              className="size-4 text-muted-foreground"
+            />
+            <Toggle
+              ariaLabel="Posters per row"
+              value={String(perRow)}
+              onChange={(value) => changePerRow(Number(value) as PerRow)}
+              options={VALID_PER_ROW_VALUES.map((value) => ({
+                value: String(value),
+                label: String(value),
+              }))}
+            />
+          </div>
           <div className="flex items-center gap-2">
             <Switch
               aria-label="Hide available items"
@@ -205,6 +217,7 @@ function SourcePanel({ source }: { source: TrendingSource }) {
                 key={`${item.source}:${item.media_type}:${item.tmdb ?? item.title}:${index}`}
                 item={item}
                 seerUrl={seerUrl}
+                density={perRow}
               />
             ))}
           </ul>

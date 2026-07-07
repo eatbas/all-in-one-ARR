@@ -93,6 +93,34 @@ describe("AddToListControl", () => {
     })
   })
 
+  it("keeps the hover-revealed Add label present in the DOM", () => {
+    vi.mocked(useLists).mockReturnValue(
+      queryResult([listSummary({ slug: "movies", name: "Movies" })]),
+    )
+    render(<AddToListControl item={ITEM} />)
+    // The label is collapsed via CSS and revealed on hover/focus; it must stay
+    // in the DOM so the expansion has content to animate.
+    expect(screen.getByText("Add")).toBeInTheDocument()
+  })
+
+  it.each([
+    [5, "size-8", "size-4"],
+    [6, "size-7", "size-3.5"],
+    [7, "size-6", "size-3"],
+  ] as const)("uses the shared pill shell at density %i", (density, shellSize, iconSize) => {
+    vi.mocked(useLists).mockReturnValue(
+      queryResult([listSummary({ slug: "movies", name: "Movies" })]),
+    )
+    render(<AddToListControl item={ITEM} density={density} />)
+
+    const button = screen.getByRole("button", { name: /add/i })
+    expect(button).toHaveClass(shellSize)
+    expect(button).toHaveClass("rounded-full")
+    expect(button).toHaveClass("px-0")
+    expect(button.querySelector("[data-pill-icon-slot]")).toHaveClass(shellSize)
+    expect(button.querySelector("svg")).toHaveClass(iconSize)
+  })
+
   it("disables the trigger while an add is pending", () => {
     vi.mocked(useLists).mockReturnValue(
       queryResult([listSummary({ slug: "movies", name: "Movies" })]),

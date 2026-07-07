@@ -1,0 +1,3863 @@
+{
+  "components": {
+    "schemas": {
+      "ActivityEntry": {
+        "properties": {
+          "action": {
+            "title": "Action",
+            "type": "string"
+          },
+          "detail": {
+            "title": "Detail",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "ts": {
+            "title": "Ts",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "ts",
+          "action",
+          "detail"
+        ],
+        "title": "ActivityEntry",
+        "type": "object"
+      },
+      "AddListRequest": {
+        "properties": {
+          "owner_user": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Owner User"
+          },
+          "slug": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Slug"
+          },
+          "url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Url"
+          }
+        },
+        "title": "AddListRequest",
+        "type": "object"
+      },
+      "BandwidthSettingsRequest": {
+        "description": "Body for updating Bandwidth-Controllarr settings.\n\nAll fields are optional so the dashboard can change one setting at a time.",
+        "properties": {
+          "check_interval_seconds": {
+            "anyOf": [
+              {
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Check Interval Seconds"
+          },
+          "enabled": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Enabled"
+          }
+        },
+        "title": "BandwidthSettingsRequest",
+        "type": "object"
+      },
+      "BandwidthStatusResponse": {
+        "description": "Live Bandwidth-Controllarr status returned by both endpoints.",
+        "properties": {
+          "check_interval_seconds": {
+            "title": "Check Interval Seconds",
+            "type": "integer"
+          },
+          "enabled": {
+            "title": "Enabled",
+            "type": "boolean"
+          },
+          "last_run_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Run At"
+          },
+          "qbittorrent": {
+            "additionalProperties": true,
+            "title": "Qbittorrent",
+            "type": "object"
+          },
+          "sabnzbd": {
+            "additionalProperties": true,
+            "title": "Sabnzbd",
+            "type": "object"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "enabled",
+          "status",
+          "last_run_at",
+          "check_interval_seconds",
+          "qbittorrent",
+          "sabnzbd"
+        ],
+        "title": "BandwidthStatusResponse",
+        "type": "object"
+      },
+      "Counts": {
+        "properties": {
+          "available": {
+            "title": "Available",
+            "type": "integer"
+          },
+          "removed": {
+            "title": "Removed",
+            "type": "integer"
+          },
+          "requested": {
+            "title": "Requested",
+            "type": "integer"
+          },
+          "synced": {
+            "title": "Synced",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "synced",
+          "requested",
+          "available",
+          "removed"
+        ],
+        "title": "Counts",
+        "type": "object"
+      },
+      "DatabaseStatsResponse": {
+        "properties": {
+          "activity_count": {
+            "title": "Activity Count",
+            "type": "integer"
+          },
+          "db_size_bytes": {
+            "title": "Db Size Bytes",
+            "type": "integer"
+          },
+          "item_count": {
+            "title": "Item Count",
+            "type": "integer"
+          },
+          "list_state_count": {
+            "title": "List State Count",
+            "type": "integer"
+          },
+          "poster_cache_bytes": {
+            "title": "Poster Cache Bytes",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "db_size_bytes",
+          "poster_cache_bytes",
+          "item_count",
+          "activity_count",
+          "list_state_count"
+        ],
+        "title": "DatabaseStatsResponse",
+        "type": "object"
+      },
+      "DeletarrDeleteError": {
+        "properties": {
+          "error": {
+            "title": "Error",
+            "type": "string"
+          },
+          "path": {
+            "title": "Path",
+            "type": "string"
+          }
+        },
+        "required": [
+          "path",
+          "error"
+        ],
+        "title": "DeletarrDeleteError",
+        "type": "object"
+      },
+      "DeletarrDeleteRequest": {
+        "properties": {
+          "paths": {
+            "items": {
+              "type": "string"
+            },
+            "minItems": 1,
+            "title": "Paths",
+            "type": "array"
+          },
+          "type": {
+            "default": "movies",
+            "enum": [
+              "movies",
+              "tv"
+            ],
+            "title": "Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "paths"
+        ],
+        "title": "DeletarrDeleteRequest",
+        "type": "object"
+      },
+      "DeletarrDeleteResult": {
+        "properties": {
+          "deleted": {
+            "title": "Deleted",
+            "type": "integer"
+          },
+          "deleted_paths": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Deleted Paths",
+            "type": "array"
+          },
+          "errors": {
+            "items": {
+              "$ref": "#/components/schemas/DeletarrDeleteError"
+            },
+            "title": "Errors",
+            "type": "array"
+          },
+          "failed": {
+            "title": "Failed",
+            "type": "integer"
+          },
+          "freed_bytes": {
+            "title": "Freed Bytes",
+            "type": "integer"
+          },
+          "freed_formatted": {
+            "title": "Freed Formatted",
+            "type": "string"
+          },
+          "freed_mb": {
+            "title": "Freed Mb",
+            "type": "number"
+          },
+          "success": {
+            "title": "Success",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "success",
+          "deleted",
+          "failed",
+          "freed_bytes",
+          "freed_mb",
+          "freed_formatted",
+          "deleted_paths",
+          "errors"
+        ],
+        "title": "DeletarrDeleteResult",
+        "type": "object"
+      },
+      "DeletarrLibraryStatus": {
+        "properties": {
+          "arr_available": {
+            "title": "Arr Available",
+            "type": "boolean"
+          },
+          "arr_detail": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Arr Detail"
+          },
+          "last_error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Error"
+          },
+          "last_scan_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Scan At"
+          },
+          "path": {
+            "title": "Path",
+            "type": "string"
+          },
+          "results_count": {
+            "title": "Results Count",
+            "type": "integer"
+          },
+          "scan_mode": {
+            "enum": [
+              "heuristic",
+              "arr"
+            ],
+            "title": "Scan Mode",
+            "type": "string"
+          },
+          "stats": {
+            "$ref": "#/components/schemas/DeletarrStats"
+          },
+          "type": {
+            "enum": [
+              "movies",
+              "tv"
+            ],
+            "title": "Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "type",
+          "path",
+          "last_scan_at",
+          "last_error",
+          "scan_mode",
+          "arr_available",
+          "arr_detail",
+          "results_count",
+          "stats"
+        ],
+        "title": "DeletarrLibraryStatus",
+        "type": "object"
+      },
+      "DeletarrResults": {
+        "properties": {
+          "arr_available": {
+            "title": "Arr Available",
+            "type": "boolean"
+          },
+          "arr_detail": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Arr Detail"
+          },
+          "path": {
+            "title": "Path",
+            "type": "string"
+          },
+          "results": {
+            "items": {
+              "$ref": "#/components/schemas/DeletarrScanItem"
+            },
+            "title": "Results",
+            "type": "array"
+          },
+          "scan_mode": {
+            "enum": [
+              "heuristic",
+              "arr"
+            ],
+            "title": "Scan Mode",
+            "type": "string"
+          },
+          "stats": {
+            "$ref": "#/components/schemas/DeletarrStats"
+          },
+          "type": {
+            "enum": [
+              "movies",
+              "tv"
+            ],
+            "title": "Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "type",
+          "path",
+          "scan_mode",
+          "arr_available",
+          "arr_detail",
+          "results",
+          "stats"
+        ],
+        "title": "DeletarrResults",
+        "type": "object"
+      },
+      "DeletarrScanItem": {
+        "properties": {
+          "is_checked": {
+            "title": "Is Checked",
+            "type": "boolean"
+          },
+          "movie_folder": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Movie Folder"
+          },
+          "movie_folder_path": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Movie Folder Path"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "origin": {
+            "enum": [
+              "heuristic",
+              "arr"
+            ],
+            "title": "Origin",
+            "type": "string"
+          },
+          "parent": {
+            "title": "Parent",
+            "type": "string"
+          },
+          "path": {
+            "title": "Path",
+            "type": "string"
+          },
+          "reason": {
+            "title": "Reason",
+            "type": "string"
+          },
+          "size": {
+            "title": "Size",
+            "type": "integer"
+          },
+          "type": {
+            "enum": [
+              "file",
+              "folder"
+            ],
+            "title": "Type",
+            "type": "string"
+          },
+          "videos_in_folder": {
+            "items": {
+              "$ref": "#/components/schemas/DeletarrVideoRef"
+            },
+            "title": "Videos In Folder",
+            "type": "array"
+          }
+        },
+        "required": [
+          "path",
+          "name",
+          "type",
+          "size",
+          "reason",
+          "parent",
+          "movie_folder",
+          "movie_folder_path",
+          "is_checked",
+          "videos_in_folder",
+          "origin"
+        ],
+        "title": "DeletarrScanItem",
+        "type": "object"
+      },
+      "DeletarrScanRequest": {
+        "properties": {
+          "type": {
+            "default": "movies",
+            "enum": [
+              "movies",
+              "tv"
+            ],
+            "title": "Type",
+            "type": "string"
+          }
+        },
+        "title": "DeletarrScanRequest",
+        "type": "object"
+      },
+      "DeletarrSettings": {
+        "properties": {
+          "movies_path": {
+            "title": "Movies Path",
+            "type": "string"
+          },
+          "tv_path": {
+            "title": "Tv Path",
+            "type": "string"
+          },
+          "use_arr_source": {
+            "title": "Use Arr Source",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "movies_path",
+          "tv_path",
+          "use_arr_source"
+        ],
+        "title": "DeletarrSettings",
+        "type": "object"
+      },
+      "DeletarrSettingsUpdate": {
+        "properties": {
+          "movies_path": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Movies Path"
+          },
+          "tv_path": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tv Path"
+          },
+          "use_arr_source": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Use Arr Source"
+          }
+        },
+        "title": "DeletarrSettingsUpdate",
+        "type": "object"
+      },
+      "DeletarrStats": {
+        "properties": {
+          "is_scanning": {
+            "title": "Is Scanning",
+            "type": "boolean"
+          },
+          "scan_progress": {
+            "title": "Scan Progress",
+            "type": "integer"
+          },
+          "total_files": {
+            "title": "Total Files",
+            "type": "integer"
+          },
+          "total_folders": {
+            "title": "Total Folders",
+            "type": "integer"
+          },
+          "total_size": {
+            "title": "Total Size",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "total_files",
+          "total_folders",
+          "total_size",
+          "is_scanning",
+          "scan_progress"
+        ],
+        "title": "DeletarrStats",
+        "type": "object"
+      },
+      "DeletarrStatus": {
+        "properties": {
+          "libraries": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/DeletarrLibraryStatus"
+            },
+            "propertyNames": {
+              "enum": [
+                "movies",
+                "tv"
+              ]
+            },
+            "title": "Libraries",
+            "type": "object"
+          },
+          "settings": {
+            "$ref": "#/components/schemas/DeletarrSettings"
+          }
+        },
+        "required": [
+          "settings",
+          "libraries"
+        ],
+        "title": "DeletarrStatus",
+        "type": "object"
+      },
+      "DeletarrVideoRef": {
+        "properties": {
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "size": {
+            "title": "Size",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "name",
+          "size"
+        ],
+        "title": "DeletarrVideoRef",
+        "type": "object"
+      },
+      "FindarrAppSettings": {
+        "properties": {
+          "enabled": {
+            "title": "Enabled",
+            "type": "boolean"
+          },
+          "missing_limit": {
+            "title": "Missing Limit",
+            "type": "integer"
+          },
+          "missing_mode": {
+            "title": "Missing Mode",
+            "type": "string"
+          },
+          "monitored_only": {
+            "title": "Monitored Only",
+            "type": "boolean"
+          },
+          "skip_future": {
+            "title": "Skip Future",
+            "type": "boolean"
+          },
+          "upgrade_limit": {
+            "title": "Upgrade Limit",
+            "type": "integer"
+          },
+          "upgrade_mode": {
+            "title": "Upgrade Mode",
+            "type": "string"
+          }
+        },
+        "required": [
+          "enabled",
+          "missing_limit",
+          "upgrade_limit",
+          "monitored_only",
+          "skip_future",
+          "missing_mode",
+          "upgrade_mode"
+        ],
+        "title": "FindarrAppSettings",
+        "type": "object"
+      },
+      "FindarrAppSettingsUpdate": {
+        "properties": {
+          "enabled": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Enabled"
+          },
+          "missing_limit": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Missing Limit"
+          },
+          "missing_mode": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Missing Mode"
+          },
+          "monitored_only": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Monitored Only"
+          },
+          "skip_future": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Skip Future"
+          },
+          "upgrade_limit": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Upgrade Limit"
+          },
+          "upgrade_mode": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Upgrade Mode"
+          }
+        },
+        "title": "FindarrAppSettingsUpdate",
+        "type": "object"
+      },
+      "FindarrCountResponse": {
+        "description": "Result of a Findarr mutation reporting how many rows it removed.\n\nShared by the processed-state reset and the history clear; both report a\nstatus string and a removed-row count.",
+        "properties": {
+          "removed": {
+            "title": "Removed",
+            "type": "integer"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "status",
+          "removed"
+        ],
+        "title": "FindarrCountResponse",
+        "type": "object"
+      },
+      "FindarrHistoryEntry": {
+        "properties": {
+          "app": {
+            "title": "App",
+            "type": "string"
+          },
+          "detail": {
+            "title": "Detail",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "item_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Item Id"
+          },
+          "mode": {
+            "title": "Mode",
+            "type": "string"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          },
+          "title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Title"
+          },
+          "ts": {
+            "title": "Ts",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "ts",
+          "app",
+          "mode",
+          "item_id",
+          "title",
+          "status",
+          "detail"
+        ],
+        "title": "FindarrHistoryEntry",
+        "type": "object"
+      },
+      "FindarrModeResult": {
+        "properties": {
+          "app": {
+            "title": "App",
+            "type": "string"
+          },
+          "detail": {
+            "title": "Detail",
+            "type": "string"
+          },
+          "mode": {
+            "title": "Mode",
+            "type": "string"
+          },
+          "processed": {
+            "title": "Processed",
+            "type": "integer"
+          },
+          "scanned": {
+            "title": "Scanned",
+            "type": "integer"
+          },
+          "selected": {
+            "title": "Selected",
+            "type": "integer"
+          },
+          "skipped": {
+            "title": "Skipped",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "app",
+          "mode",
+          "scanned",
+          "selected",
+          "processed",
+          "skipped",
+          "detail"
+        ],
+        "title": "FindarrModeResult",
+        "type": "object"
+      },
+      "FindarrRunRequest": {
+        "properties": {
+          "app": {
+            "anyOf": [
+              {
+                "enum": [
+                  "sonarr",
+                  "radarr"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "App"
+          }
+        },
+        "title": "FindarrRunRequest",
+        "type": "object"
+      },
+      "FindarrRunResponse": {
+        "properties": {
+          "detail": {
+            "title": "Detail",
+            "type": "string"
+          },
+          "processed": {
+            "title": "Processed",
+            "type": "integer"
+          },
+          "results": {
+            "items": {
+              "$ref": "#/components/schemas/FindarrModeResult"
+            },
+            "title": "Results",
+            "type": "array"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "status",
+          "detail",
+          "processed",
+          "results"
+        ],
+        "title": "FindarrRunResponse",
+        "type": "object"
+      },
+      "FindarrSettings": {
+        "properties": {
+          "apps": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/FindarrAppSettings"
+            },
+            "title": "Apps",
+            "type": "object"
+          },
+          "command_sleep_seconds": {
+            "title": "Command Sleep Seconds",
+            "type": "integer"
+          },
+          "enabled": {
+            "title": "Enabled",
+            "type": "boolean"
+          },
+          "hourly_cap": {
+            "title": "Hourly Cap",
+            "type": "integer"
+          },
+          "interval_minutes": {
+            "title": "Interval Minutes",
+            "type": "integer"
+          },
+          "queue_limit": {
+            "title": "Queue Limit",
+            "type": "integer"
+          },
+          "state_reset_hours": {
+            "title": "State Reset Hours",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "enabled",
+          "interval_minutes",
+          "hourly_cap",
+          "queue_limit",
+          "command_sleep_seconds",
+          "state_reset_hours",
+          "apps"
+        ],
+        "title": "FindarrSettings",
+        "type": "object"
+      },
+      "FindarrSettingsUpdate": {
+        "properties": {
+          "apps": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "$ref": "#/components/schemas/FindarrAppSettingsUpdate"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Apps"
+          },
+          "command_sleep_seconds": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Command Sleep Seconds"
+          },
+          "enabled": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Enabled"
+          },
+          "hourly_cap": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Hourly Cap"
+          },
+          "interval_minutes": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Interval Minutes"
+          },
+          "queue_limit": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Queue Limit"
+          },
+          "state_reset_hours": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "State Reset Hours"
+          }
+        },
+        "title": "FindarrSettingsUpdate",
+        "type": "object"
+      },
+      "FindarrStatusResponse": {
+        "properties": {
+          "apps": {
+            "additionalProperties": true,
+            "title": "Apps",
+            "type": "object"
+          },
+          "hourly": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "title": "Hourly",
+            "type": "object"
+          },
+          "last_run_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Run At"
+          },
+          "last_run_detail": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Run Detail"
+          },
+          "last_run_status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Run Status"
+          },
+          "running": {
+            "title": "Running",
+            "type": "boolean"
+          },
+          "settings": {
+            "$ref": "#/components/schemas/FindarrSettings"
+          },
+          "state": {
+            "additionalProperties": true,
+            "title": "State",
+            "type": "object"
+          }
+        },
+        "required": [
+          "settings",
+          "running",
+          "last_run_at",
+          "last_run_status",
+          "last_run_detail",
+          "state",
+          "apps",
+          "hourly"
+        ],
+        "title": "FindarrStatusResponse",
+        "type": "object"
+      },
+      "GeneralSettingsRequest": {
+        "properties": {
+          "auto_remove_when_available": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Auto Remove When Available"
+          },
+          "interval_seconds": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Interval Seconds"
+          },
+          "sync_interval_minutes": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sync Interval Minutes"
+          },
+          "trending_sync_interval_minutes": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Trending Sync Interval Minutes"
+          }
+        },
+        "title": "GeneralSettingsRequest",
+        "type": "object"
+      },
+      "GeneralSettingsResponse": {
+        "properties": {
+          "auto_remove_when_available": {
+            "title": "Auto Remove When Available",
+            "type": "boolean"
+          },
+          "interval_seconds": {
+            "title": "Interval Seconds",
+            "type": "integer"
+          },
+          "sync_interval_minutes": {
+            "title": "Sync Interval Minutes",
+            "type": "integer"
+          },
+          "trending_sync_interval_minutes": {
+            "title": "Trending Sync Interval Minutes",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "interval_seconds",
+          "sync_interval_minutes",
+          "trending_sync_interval_minutes",
+          "auto_remove_when_available"
+        ],
+        "title": "GeneralSettingsResponse",
+        "type": "object"
+      },
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "title": "Detail",
+            "type": "array"
+          }
+        },
+        "title": "HTTPValidationError",
+        "type": "object"
+      },
+      "Item": {
+        "properties": {
+          "created_at": {
+            "title": "Created At",
+            "type": "string"
+          },
+          "imdb": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Imdb"
+          },
+          "list_id": {
+            "title": "List Id",
+            "type": "string"
+          },
+          "seer_request_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Seer Request Id"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          },
+          "title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Title"
+          },
+          "tmdb": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tmdb"
+          },
+          "trakt_id": {
+            "title": "Trakt Id",
+            "type": "integer"
+          },
+          "tvdb": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tvdb"
+          },
+          "type": {
+            "title": "Type",
+            "type": "string"
+          },
+          "updated_at": {
+            "title": "Updated At",
+            "type": "string"
+          },
+          "year": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Year"
+          }
+        },
+        "required": [
+          "trakt_id",
+          "type",
+          "title",
+          "year",
+          "tmdb",
+          "tvdb",
+          "imdb",
+          "list_id",
+          "seer_request_id",
+          "status",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "Item",
+        "type": "object"
+      },
+      "ListSummary": {
+        "properties": {
+          "interval_minutes": {
+            "title": "Interval Minutes",
+            "type": "integer"
+          },
+          "item_count": {
+            "title": "Item Count",
+            "type": "integer"
+          },
+          "last_synced_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Synced At"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "next_sync_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Sync At"
+          },
+          "owner_user": {
+            "title": "Owner User",
+            "type": "string"
+          },
+          "removed_count": {
+            "title": "Removed Count",
+            "type": "integer"
+          },
+          "slug": {
+            "title": "Slug",
+            "type": "string"
+          }
+        },
+        "required": [
+          "owner_user",
+          "slug",
+          "name",
+          "item_count",
+          "removed_count",
+          "last_synced_at",
+          "next_sync_at",
+          "interval_minutes"
+        ],
+        "title": "ListSummary",
+        "type": "object"
+      },
+      "ServiceStatus": {
+        "properties": {
+          "checked_at": {
+            "title": "Checked At",
+            "type": "string"
+          },
+          "detail": {
+            "title": "Detail",
+            "type": "string"
+          },
+          "ok": {
+            "title": "Ok",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "ok",
+          "detail",
+          "checked_at"
+        ],
+        "title": "ServiceStatus",
+        "type": "object"
+      },
+      "ServiceTestResponse": {
+        "properties": {
+          "detail": {
+            "title": "Detail",
+            "type": "string"
+          },
+          "ok": {
+            "title": "Ok",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "ok",
+          "detail"
+        ],
+        "title": "ServiceTestResponse",
+        "type": "object"
+      },
+      "ServicesStatusResponse": {
+        "properties": {
+          "interval_seconds": {
+            "title": "Interval Seconds",
+            "type": "integer"
+          },
+          "last_check_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Check At"
+          },
+          "services": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/ServiceStatus"
+            },
+            "title": "Services",
+            "type": "object"
+          }
+        },
+        "required": [
+          "interval_seconds",
+          "last_check_at",
+          "services"
+        ],
+        "title": "ServicesStatusResponse",
+        "type": "object"
+      },
+      "StatusResponse": {
+        "properties": {
+          "counts": {
+            "$ref": "#/components/schemas/Counts"
+          },
+          "trakt_connected": {
+            "title": "Trakt Connected",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "trakt_connected",
+          "counts"
+        ],
+        "title": "StatusResponse",
+        "type": "object"
+      },
+      "SyncResponse": {
+        "properties": {
+          "status": {
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "status"
+        ],
+        "title": "SyncResponse",
+        "type": "object"
+      },
+      "TrackedListModel": {
+        "properties": {
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "owner_user": {
+            "title": "Owner User",
+            "type": "string"
+          },
+          "slug": {
+            "title": "Slug",
+            "type": "string"
+          }
+        },
+        "required": [
+          "owner_user",
+          "slug",
+          "name"
+        ],
+        "title": "TrackedListModel",
+        "type": "object"
+      },
+      "TraktAuthStartResponse": {
+        "properties": {
+          "message": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Message"
+          },
+          "state": {
+            "title": "State",
+            "type": "string"
+          },
+          "user_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "User Code"
+          },
+          "verification_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Verification Url"
+          }
+        },
+        "required": [
+          "state",
+          "user_code",
+          "verification_url",
+          "message"
+        ],
+        "title": "TraktAuthStartResponse",
+        "type": "object"
+      },
+      "TraktAuthStatusResponse": {
+        "properties": {
+          "connected": {
+            "title": "Connected",
+            "type": "boolean"
+          },
+          "message": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Message"
+          },
+          "state": {
+            "title": "State",
+            "type": "string"
+          },
+          "user_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "User Code"
+          },
+          "verification_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Verification Url"
+          }
+        },
+        "required": [
+          "state",
+          "user_code",
+          "verification_url",
+          "message",
+          "connected"
+        ],
+        "title": "TraktAuthStatusResponse",
+        "type": "object"
+      },
+      "TraktListEntry": {
+        "properties": {
+          "item_count": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Item Count"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "owner_user": {
+            "title": "Owner User",
+            "type": "string"
+          },
+          "selected": {
+            "title": "Selected",
+            "type": "boolean"
+          },
+          "slug": {
+            "title": "Slug",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "slug",
+          "owner_user",
+          "item_count",
+          "selected"
+        ],
+        "title": "TraktListEntry",
+        "type": "object"
+      },
+      "TraktSettingsResponse": {
+        "properties": {
+          "client_id": {
+            "title": "Client Id",
+            "type": "string"
+          },
+          "client_id_hint": {
+            "title": "Client Id Hint",
+            "type": "string"
+          },
+          "client_id_set": {
+            "title": "Client Id Set",
+            "type": "boolean"
+          },
+          "client_secret_set": {
+            "title": "Client Secret Set",
+            "type": "boolean"
+          },
+          "connected": {
+            "title": "Connected",
+            "type": "boolean"
+          },
+          "lists": {
+            "items": {
+              "$ref": "#/components/schemas/TrackedListModel"
+            },
+            "title": "Lists",
+            "type": "array"
+          }
+        },
+        "required": [
+          "client_id",
+          "client_id_hint",
+          "client_id_set",
+          "client_secret_set",
+          "connected",
+          "lists"
+        ],
+        "title": "TraktSettingsResponse",
+        "type": "object"
+      },
+      "TraktTestResponse": {
+        "properties": {
+          "message": {
+            "title": "Message",
+            "type": "string"
+          },
+          "ok": {
+            "title": "Ok",
+            "type": "boolean"
+          },
+          "user": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "User"
+          }
+        },
+        "required": [
+          "ok",
+          "user",
+          "message"
+        ],
+        "title": "TraktTestResponse",
+        "type": "object"
+      },
+      "TrendingAddRequest": {
+        "properties": {
+          "imdb": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Imdb"
+          },
+          "media_type": {
+            "enum": [
+              "movie",
+              "show"
+            ],
+            "title": "Media Type",
+            "type": "string"
+          },
+          "owner_user": {
+            "title": "Owner User",
+            "type": "string"
+          },
+          "slug": {
+            "title": "Slug",
+            "type": "string"
+          },
+          "title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Title"
+          },
+          "tmdb": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tmdb"
+          },
+          "trakt": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Trakt"
+          },
+          "tvdb": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tvdb"
+          }
+        },
+        "required": [
+          "media_type",
+          "owner_user",
+          "slug"
+        ],
+        "title": "TrendingAddRequest",
+        "type": "object"
+      },
+      "TrendingAddResponse": {
+        "properties": {
+          "status": {
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "status"
+        ],
+        "title": "TrendingAddResponse",
+        "type": "object"
+      },
+      "TrendingItem": {
+        "properties": {
+          "already_tracked": {
+            "title": "Already Tracked",
+            "type": "boolean"
+          },
+          "imdb": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Imdb"
+          },
+          "in_library": {
+            "title": "In Library",
+            "type": "boolean"
+          },
+          "in_library_available": {
+            "title": "In Library Available",
+            "type": "boolean"
+          },
+          "media_type": {
+            "title": "Media Type",
+            "type": "string"
+          },
+          "seer_status": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Seer Status"
+          },
+          "slug": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Slug"
+          },
+          "source": {
+            "title": "Source",
+            "type": "string"
+          },
+          "title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Title"
+          },
+          "tmdb": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tmdb"
+          },
+          "trakt": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Trakt"
+          },
+          "tvdb": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tvdb"
+          },
+          "year": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Year"
+          }
+        },
+        "required": [
+          "source",
+          "media_type",
+          "tmdb",
+          "imdb",
+          "tvdb",
+          "trakt",
+          "slug",
+          "title",
+          "year",
+          "seer_status",
+          "already_tracked",
+          "in_library",
+          "in_library_available"
+        ],
+        "title": "TrendingItem",
+        "type": "object"
+      },
+      "TrendingRating": {
+        "properties": {
+          "imdb_rating": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Imdb Rating"
+          },
+          "imdb_votes": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Imdb Votes"
+          }
+        },
+        "required": [
+          "imdb_rating",
+          "imdb_votes"
+        ],
+        "title": "TrendingRating",
+        "type": "object"
+      },
+      "TrendingStatus": {
+        "properties": {
+          "interval_minutes": {
+            "title": "Interval Minutes",
+            "type": "integer"
+          },
+          "last_synced_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Synced At"
+          },
+          "next_sync_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Sync At"
+          }
+        },
+        "required": [
+          "last_synced_at",
+          "interval_minutes",
+          "next_sync_at"
+        ],
+        "title": "TrendingStatus",
+        "type": "object"
+      },
+      "UpdateServiceRequest": {
+        "properties": {
+          "api_key": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Api Key"
+          },
+          "url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Url"
+          }
+        },
+        "title": "UpdateServiceRequest",
+        "type": "object"
+      },
+      "UpdateTraktSettingsRequest": {
+        "properties": {
+          "client_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Client Id"
+          },
+          "client_secret": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Client Secret"
+          }
+        },
+        "title": "UpdateTraktSettingsRequest",
+        "type": "object"
+      },
+      "ValidationError": {
+        "properties": {
+          "ctx": {
+            "title": "Context",
+            "type": "object"
+          },
+          "input": {
+            "title": "Input"
+          },
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "title": "Location",
+            "type": "array"
+          },
+          "msg": {
+            "title": "Message",
+            "type": "string"
+          },
+          "type": {
+            "title": "Error Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError",
+        "type": "object"
+      }
+    }
+  },
+  "info": {
+    "title": "All-in-One ARR",
+    "version": "0.1.0"
+  },
+  "openapi": "3.1.0",
+  "paths": {
+    "/": {
+      "get": {
+        "operationId": "_spa_entry__get",
+        "responses": {
+          "200": {
+            "content": {
+              "text/html": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": " Spa Entry"
+      }
+    },
+    "/api/activity": {
+      "get": {
+        "operationId": "get_activity_api_activity_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/ActivityEntry"
+                  },
+                  "title": "Response Get Activity Api Activity Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Get Activity"
+      }
+    },
+    "/api/bandwidth/settings": {
+      "put": {
+        "operationId": "put_settings_api_bandwidth_settings_put",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BandwidthSettingsRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BandwidthStatusResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Put Settings"
+      }
+    },
+    "/api/bandwidth/status": {
+      "get": {
+        "operationId": "get_status_api_bandwidth_status_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BandwidthStatusResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Get Status"
+      }
+    },
+    "/api/deletarr/delete": {
+      "post": {
+        "operationId": "post_delete_api_deletarr_delete_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DeletarrDeleteRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeletarrDeleteResult"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Post Delete",
+        "tags": [
+          "deletarr"
+        ]
+      }
+    },
+    "/api/deletarr/results": {
+      "get": {
+        "operationId": "get_results_api_deletarr_results_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "type",
+            "required": false,
+            "schema": {
+              "default": "movies",
+              "enum": [
+                "movies",
+                "tv"
+              ],
+              "title": "Type",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeletarrResults"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Results",
+        "tags": [
+          "deletarr"
+        ]
+      }
+    },
+    "/api/deletarr/scan": {
+      "post": {
+        "operationId": "post_scan_api_deletarr_scan_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DeletarrScanRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeletarrResults"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Post Scan",
+        "tags": [
+          "deletarr"
+        ]
+      }
+    },
+    "/api/deletarr/settings": {
+      "get": {
+        "operationId": "get_settings_api_deletarr_settings_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeletarrSettings"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Get Settings",
+        "tags": [
+          "deletarr"
+        ]
+      },
+      "put": {
+        "operationId": "put_settings_api_deletarr_settings_put",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DeletarrSettingsUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeletarrStatus"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Put Settings",
+        "tags": [
+          "deletarr"
+        ]
+      }
+    },
+    "/api/deletarr/status": {
+      "get": {
+        "operationId": "get_status_api_deletarr_status_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeletarrStatus"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Get Status",
+        "tags": [
+          "deletarr"
+        ]
+      }
+    },
+    "/api/findarr/history": {
+      "get": {
+        "operationId": "get_history_api_findarr_history_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/FindarrHistoryEntry"
+                  },
+                  "title": "Response Get History Api Findarr History Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Get History",
+        "tags": [
+          "findarr"
+        ]
+      }
+    },
+    "/api/findarr/history/clear": {
+      "post": {
+        "operationId": "post_clear_history_api_findarr_history_clear_post",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FindarrCountResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Post Clear History",
+        "tags": [
+          "findarr"
+        ]
+      }
+    },
+    "/api/findarr/reset": {
+      "post": {
+        "operationId": "post_reset_api_findarr_reset_post",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FindarrCountResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Post Reset",
+        "tags": [
+          "findarr"
+        ]
+      }
+    },
+    "/api/findarr/run": {
+      "post": {
+        "operationId": "post_run_api_findarr_run_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FindarrRunRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FindarrRunResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Post Run",
+        "tags": [
+          "findarr"
+        ]
+      }
+    },
+    "/api/findarr/settings": {
+      "get": {
+        "operationId": "get_settings_api_findarr_settings_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FindarrSettings"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Get Settings",
+        "tags": [
+          "findarr"
+        ]
+      },
+      "put": {
+        "operationId": "put_settings_api_findarr_settings_put",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FindarrSettingsUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FindarrStatusResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Put Settings",
+        "tags": [
+          "findarr"
+        ]
+      }
+    },
+    "/api/findarr/status": {
+      "get": {
+        "operationId": "get_status_api_findarr_status_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FindarrStatusResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Get Status",
+        "tags": [
+          "findarr"
+        ]
+      }
+    },
+    "/api/items": {
+      "get": {
+        "operationId": "get_items_api_items_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "status",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Status"
+            }
+          },
+          {
+            "in": "query",
+            "name": "list",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "List"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/Item"
+                  },
+                  "title": "Response Get Items Api Items Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Items"
+      }
+    },
+    "/api/items/remove-available": {
+      "post": {
+        "description": "Sweep every Available item out of its Trakt list (manual reconcile).",
+        "operationId": "post_remove_available_api_items_remove_available_post",
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SyncResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Post Remove Available"
+      }
+    },
+    "/api/items/{list_id}/{trakt_id}": {
+      "delete": {
+        "description": "Remove a single tracked item from its Trakt list.",
+        "operationId": "delete_item_api_items__list_id___trakt_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "list_id",
+            "required": true,
+            "schema": {
+              "title": "List Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "trakt_id",
+            "required": true,
+            "schema": {
+              "title": "Trakt Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Delete Item"
+      }
+    },
+    "/api/lists": {
+      "get": {
+        "operationId": "get_lists_api_lists_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/ListSummary"
+                  },
+                  "title": "Response Get Lists Api Lists Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Get Lists"
+      }
+    },
+    "/api/posters/{media_type}/{tmdb_id}": {
+      "get": {
+        "description": "Serve a cached poster thumbnail, fetching it on first request.",
+        "operationId": "get_poster_api_posters__media_type___tmdb_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "media_type",
+            "required": true,
+            "schema": {
+              "title": "Media Type",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "tmdb_id",
+            "required": true,
+            "schema": {
+              "title": "Tmdb Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "imdb",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Imdb"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Poster"
+      }
+    },
+    "/api/services/{name}/test": {
+      "post": {
+        "operationId": "test_service_api_services__name__test_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "title": "Name",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ServiceTestResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Test Service"
+      }
+    },
+    "/api/settings/database": {
+      "get": {
+        "operationId": "get_database_settings_api_settings_database_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DatabaseStatsResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Get Database Settings"
+      }
+    },
+    "/api/settings/database/clear-activity": {
+      "post": {
+        "operationId": "post_clear_activity_api_settings_database_clear_activity_post",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DatabaseStatsResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Post Clear Activity"
+      }
+    },
+    "/api/settings/database/clear-items": {
+      "post": {
+        "operationId": "post_clear_items_api_settings_database_clear_items_post",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DatabaseStatsResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Post Clear Items"
+      }
+    },
+    "/api/settings/database/clear-posters": {
+      "post": {
+        "operationId": "post_clear_posters_api_settings_database_clear_posters_post",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DatabaseStatsResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Post Clear Posters"
+      }
+    },
+    "/api/settings/general": {
+      "get": {
+        "operationId": "get_general_settings_api_settings_general_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GeneralSettingsResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Get General Settings"
+      },
+      "put": {
+        "operationId": "put_general_settings_api_settings_general_put",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GeneralSettingsRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GeneralSettingsResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Put General Settings"
+      }
+    },
+    "/api/settings/services": {
+      "get": {
+        "operationId": "get_services_api_settings_services_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Get Services"
+      }
+    },
+    "/api/settings/services/{name}": {
+      "put": {
+        "operationId": "put_service_api_settings_services__name__put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "title": "Name",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateServiceRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Put Service"
+      }
+    },
+    "/api/settings/trakt": {
+      "get": {
+        "operationId": "get_trakt_settings_api_settings_trakt_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TraktSettingsResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Get Trakt Settings"
+      },
+      "put": {
+        "operationId": "put_trakt_settings_api_settings_trakt_put",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateTraktSettingsRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TraktSettingsResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Put Trakt Settings"
+      }
+    },
+    "/api/status": {
+      "get": {
+        "operationId": "get_status_api_status_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StatusResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Get Status"
+      }
+    },
+    "/api/status/services": {
+      "get": {
+        "operationId": "get_services_status_api_status_services_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ServicesStatusResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Get Services Status"
+      }
+    },
+    "/api/status/services/check": {
+      "post": {
+        "operationId": "post_services_check_api_status_services_check_post",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ServicesStatusResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Post Services Check"
+      }
+    },
+    "/api/sync": {
+      "post": {
+        "operationId": "post_sync_api_sync_post",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SyncResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Post Sync"
+      }
+    },
+    "/api/trakt/auth/start": {
+      "post": {
+        "operationId": "post_trakt_auth_start_api_trakt_auth_start_post",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TraktAuthStartResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Post Trakt Auth Start"
+      }
+    },
+    "/api/trakt/auth/status": {
+      "get": {
+        "operationId": "get_trakt_auth_status_api_trakt_auth_status_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TraktAuthStatusResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Get Trakt Auth Status"
+      }
+    },
+    "/api/trakt/lists": {
+      "get": {
+        "operationId": "get_trakt_lists_api_trakt_lists_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/TraktListEntry"
+                  },
+                  "title": "Response Get Trakt Lists Api Trakt Lists Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Get Trakt Lists"
+      },
+      "post": {
+        "operationId": "post_add_trakt_list_api_trakt_lists_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AddListRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TraktSettingsResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Post Add Trakt List"
+      }
+    },
+    "/api/trakt/lists/{owner_user}/{slug}": {
+      "delete": {
+        "operationId": "delete_trakt_list_api_trakt_lists__owner_user___slug__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "owner_user",
+            "required": true,
+            "schema": {
+              "title": "Owner User",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "slug",
+            "required": true,
+            "schema": {
+              "title": "Slug",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TraktSettingsResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Delete Trakt List"
+      }
+    },
+    "/api/trakt/test": {
+      "post": {
+        "operationId": "post_trakt_test_api_trakt_test_post",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TraktTestResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Post Trakt Test"
+      }
+    },
+    "/api/trending": {
+      "get": {
+        "operationId": "get_trending_api_trending_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "source",
+            "required": true,
+            "schema": {
+              "enum": [
+                "trakt",
+                "tmdb",
+                "seer"
+              ],
+              "title": "Source",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "media",
+            "required": false,
+            "schema": {
+              "default": "movie",
+              "enum": [
+                "movie",
+                "show"
+              ],
+              "title": "Media",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "category",
+            "required": false,
+            "schema": {
+              "default": "trending",
+              "enum": [
+                "trending",
+                "popular"
+              ],
+              "title": "Category",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "window",
+            "required": false,
+            "schema": {
+              "default": "week",
+              "enum": [
+                "day",
+                "week"
+              ],
+              "title": "Window",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/TrendingItem"
+                  },
+                  "title": "Response Get Trending Api Trending Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Trending",
+        "tags": [
+          "trending"
+        ]
+      }
+    },
+    "/api/trending/add": {
+      "post": {
+        "operationId": "post_add_api_trending_add_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TrendingAddRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TrendingAddResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Post Add",
+        "tags": [
+          "trending"
+        ]
+      }
+    },
+    "/api/trending/rating": {
+      "get": {
+        "operationId": "get_rating_api_trending_rating_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "imdb",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Imdb"
+            }
+          },
+          {
+            "in": "query",
+            "name": "media",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "movie",
+                    "show"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Media"
+            }
+          },
+          {
+            "in": "query",
+            "name": "tmdb",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tmdb"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TrendingRating"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Rating",
+        "tags": [
+          "trending"
+        ]
+      }
+    },
+    "/api/trending/status": {
+      "get": {
+        "description": "Return when the trending snapshot last refreshed and when it next will.",
+        "operationId": "get_trending_status_api_trending_status_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TrendingStatus"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Get Trending Status",
+        "tags": [
+          "trending"
+        ]
+      }
+    },
+    "/bandwidth-controllarr": {
+      "get": {
+        "operationId": "_spa_entry_bandwidth_controllarr_get",
+        "responses": {
+          "200": {
+            "content": {
+              "text/html": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": " Spa Entry"
+      }
+    },
+    "/deletarr": {
+      "get": {
+        "operationId": "_spa_entry_deletarr_get",
+        "responses": {
+          "200": {
+            "content": {
+              "text/html": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": " Spa Entry"
+      }
+    },
+    "/findarr": {
+      "get": {
+        "operationId": "_spa_entry_findarr_get",
+        "responses": {
+          "200": {
+            "content": {
+              "text/html": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": " Spa Entry"
+      }
+    },
+    "/health": {
+      "get": {
+        "operationId": "health_health_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {
+                    "type": "string"
+                  },
+                  "title": "Response Health Health Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Health"
+      }
+    },
+    "/list-syncarr": {
+      "get": {
+        "operationId": "_spa_entry_list_syncarr_get",
+        "responses": {
+          "200": {
+            "content": {
+              "text/html": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": " Spa Entry"
+      }
+    },
+    "/settings": {
+      "get": {
+        "operationId": "_spa_entry_settings_get",
+        "responses": {
+          "200": {
+            "content": {
+              "text/html": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": " Spa Entry"
+      }
+    },
+    "/status": {
+      "get": {
+        "operationId": "status_status_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {
+                    "type": "integer"
+                  },
+                  "title": "Response Status Status Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Status"
+      }
+    },
+    "/trending": {
+      "get": {
+        "operationId": "_spa_entry_trending_get",
+        "responses": {
+          "200": {
+            "content": {
+              "text/html": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": " Spa Entry"
+      }
+    },
+    "/webhook/{subpath}": {
+      "post": {
+        "operationId": "_dispatch_webhook__subpath__post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "subpath",
+            "required": true,
+            "schema": {
+              "title": "Subpath",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": " Dispatch"
+      }
+    }
+  }
+}

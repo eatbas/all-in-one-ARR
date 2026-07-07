@@ -29,9 +29,11 @@ reference closures).
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
+from time import perf_counter
 
 from fastapi import FastAPI
 
+from core.app_metrics import observe_scheduler_job, record_sync_run
 from core.logging import get_logger
 from modules.list_syncarr.manual import remove_one
 from modules.list_syncarr.reconcile import reconcile
@@ -64,7 +66,22 @@ def _require_context() -> "AppContext":
 async def poll_job() -> None:
     """Scheduled entrypoint for the interval poll."""
     ctx = _require_context()
-    await ctx.sync_gate.run(lambda: poll_and_request(ctx))
+    started = perf_counter()
+    status = "success"
+    try:
+        await observe_scheduler_job(
+            "list_syncarr_poll",
+            lambda: ctx.sync_gate.run(lambda: poll_and_request(ctx)),
+        )
+    except Exception:
+        status = "error"
+        raise
+    finally:
+        record_sync_run(
+            trigger="scheduled",
+            status=status,
+            duration_seconds=perf_counter() - started,
+        )
 
 
 async def setup(

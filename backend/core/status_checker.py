@@ -11,8 +11,10 @@ import asyncio
 from contextlib import suppress
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
+from time import time
 from typing import TYPE_CHECKING, Any
 
+from core.app_metrics import update_service_metrics
 from core.logging import get_logger
 
 if TYPE_CHECKING:  # pragma: no cover
@@ -96,6 +98,7 @@ class StatusChecker:
         """Ping every configured service once and cache the results."""
         self._log.debug("running status checks")
         checked_at = _now_iso()
+        checked_at_seconds = time()
         clients = self._service_clients()
         coroutines = [
             self._check_one(name, client) for name, client in clients.items()
@@ -113,6 +116,9 @@ class StatusChecker:
             else:
                 snapshot = outcome
             new_results[name] = snapshot
+            update_service_metrics(
+                name, ok=snapshot.ok, checked_at=checked_at_seconds
+            )
 
         self._results = new_results
         self._last_check_at = checked_at

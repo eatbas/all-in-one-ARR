@@ -14,6 +14,7 @@ import asyncio
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
+from core.app_metrics import observe_scheduler_job
 from core.db import utcnow_iso
 from core.logging import get_logger
 from core.trending import SCHEDULED_TRENDING_LIMIT, TRENDING_SYNC_PAGES
@@ -202,8 +203,11 @@ async def _trending_sync_job() -> None:
     ctx = _trending_sync.ctx
     if ctx is None:  # pragma: no cover - ctx is set before the job is scheduled
         return
-    await refresh_trending_store(ctx)
-    _spawn_prewarm(ctx)
+    async def refresh_and_prewarm() -> None:
+        await refresh_trending_store(ctx)
+        _spawn_prewarm(ctx)
+
+    await observe_scheduler_job(_JOB_ID, refresh_and_prewarm)
 
 
 async def start_trending_sync(ctx: "AppContext") -> None:

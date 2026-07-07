@@ -83,8 +83,10 @@ describe("Trending", () => {
       "aria-selected",
       "true",
     )
-    expect(screen.getByText("Dune")).toBeInTheDocument()
-    expect(screen.getByText("Severance")).toBeInTheDocument()
+    // getByTitle targets the static caption; the poster hover overlay repeats
+    // the same title text, so plain text queries would match twice.
+    expect(screen.getByTitle("Dune")).toBeInTheDocument()
+    expect(screen.getByTitle("Severance")).toBeInTheDocument()
     // The time-window toggle has been removed entirely (only TMDB ever supported
     // one), so it is absent on every tab.
     expect(
@@ -152,7 +154,7 @@ describe("Trending", () => {
       queryResult([ITEM], false, { isFetching: true }),
     )
     render(<Trending />)
-    expect(screen.getByText("Dune")).toBeInTheDocument()
+    expect(screen.getByTitle("Dune")).toBeInTheDocument()
     expect(screen.queryByText("Loading trending…")).not.toBeInTheDocument()
     expect(screen.getByText("Refreshing")).toBeInTheDocument()
   })
@@ -187,20 +189,20 @@ describe("Trending", () => {
         { ...ITEM, tmdb: 3, title: "SeerAvail", seer_status: 5 },
         // Library record but media still missing: pending -> stays.
         { ...ITEM, tmdb: 4, title: "Waiting", in_library: true, in_library_available: false },
-        // Processing in Seer: pending -> stays. (Title avoids the "Processing" badge text.)
+        // Processing in Seer: pending -> stays.
         { ...ITEM, tmdb: 5, title: "Queued", seer_status: 3 },
       ]),
     )
     const user = userEvent.setup()
     render(<Trending />)
-    expect(screen.getByText("Downloaded")).toBeInTheDocument()
+    expect(screen.getByTitle("Downloaded")).toBeInTheDocument()
     await user.click(screen.getByRole("switch", { name: "Hide available items" }))
-    expect(screen.queryByText("Downloaded")).not.toBeInTheDocument()
-    expect(screen.queryByText("SeerAvail")).not.toBeInTheDocument()
-    // Pending (yellow) items survive the filter.
-    expect(screen.getByText("Waiting")).toBeInTheDocument()
-    expect(screen.getByText("Queued")).toBeInTheDocument()
-    expect(screen.getByText("Dune")).toBeInTheDocument()
+    expect(screen.queryByTitle("Downloaded")).not.toBeInTheDocument()
+    expect(screen.queryByTitle("SeerAvail")).not.toBeInTheDocument()
+    // Pending (amber) items survive the filter.
+    expect(screen.getByTitle("Waiting")).toBeInTheDocument()
+    expect(screen.getByTitle("Queued")).toBeInTheDocument()
+    expect(screen.getByTitle("Dune")).toBeInTheDocument()
   })
 
   it("shows an all-available message when the filter hides every result", async () => {
@@ -244,21 +246,21 @@ describe("Trending", () => {
     const user = userEvent.setup()
     render(<Trending />)
     expect(screen.getByText("Showing 1–15 of 16")).toBeInTheDocument()
-    expect(screen.getByText("Item 15")).toBeInTheDocument()
-    expect(screen.queryByText("Item 16")).not.toBeInTheDocument()
+    expect(screen.getByTitle("Item 15")).toBeInTheDocument()
+    expect(screen.queryByTitle("Item 16")).not.toBeInTheDocument()
     await user.click(screen.getByRole("button", { name: "Next page" }))
     expect(screen.getByText("Showing 16–16 of 16")).toBeInTheDocument()
-    expect(screen.getByText("Item 16")).toBeInTheDocument()
+    expect(screen.getByTitle("Item 16")).toBeInTheDocument()
   })
 
   it("widens the page size when the per-row density increases (7 → 21)", async () => {
     vi.mocked(useTrending).mockReturnValue(queryResult(items(16)))
     const user = userEvent.setup()
     render(<Trending />)
-    expect(screen.queryByText("Item 16")).not.toBeInTheDocument()
+    expect(screen.queryByTitle("Item 16")).not.toBeInTheDocument()
     await user.click(screen.getByRole("button", { name: "7" }))
     // 7 × 3 = 21 ≥ 16, so every item now fits on a single page.
-    expect(screen.getByText("Item 16")).toBeInTheDocument()
+    expect(screen.getByTitle("Item 16")).toBeInTheDocument()
     expect(screen.getByText("Showing 1–16 of 16")).toBeInTheDocument()
   })
 
@@ -267,7 +269,14 @@ describe("Trending", () => {
     vi.mocked(useTrending).mockReturnValue(queryResult(items(21)))
     render(<Trending />)
     expect(screen.getByText("Showing 1–21 of 21")).toBeInTheDocument()
-    expect(screen.getByText("Item 21")).toBeInTheDocument()
+    expect(screen.getByTitle("Item 21")).toBeInTheDocument()
+  })
+
+  it("labels the density toggle as posters per row, not pagination", () => {
+    render(<Trending />)
+    expect(
+      screen.getByRole("group", { name: "Posters per row" }),
+    ).toBeInTheDocument()
   })
 
   it("persists the chosen per-row density to localStorage", async () => {

@@ -7,12 +7,14 @@ authoritative contract that the frontend TypeScript types mirror.
 from __future__ import annotations
 
 import asyncio
+from time import perf_counter
 from typing import TYPE_CHECKING
 
 from fastapi import APIRouter, Query, Response
 from fastapi.responses import FileResponse, JSONResponse
 from pydantic import BaseModel
 
+from core.app_metrics import record_sync_run
 from core.context import SyncAlreadyRunning
 from core.logging import get_logger
 from core.timefmt import next_sync_at
@@ -210,15 +212,27 @@ def create_api_router(ctx: "AppContext") -> APIRouter:
             return JSONResponse(
                 status_code=503, content={"detail": "sync unavailable"}
             )
+        started = perf_counter()
+        status = "success"
         try:
             await ctx.sync_gate.try_run(ctx.sync_now)
         except SyncAlreadyRunning:
+            status = "skipped"
             log.info("manual sync rejected: a sync is already running")
             ctx.db.add_activity(
                 "Sync already running", "A sync is already running"
             )
             return JSONResponse(
                 status_code=409, content={"detail": "sync already running"}
+            )
+        except Exception:
+            status = "error"
+            raise
+        finally:
+            record_sync_run(
+                trigger="manual",
+                status=status,
+                duration_seconds=perf_counter() - started,
             )
         log.info("manual sync completed")
         ctx.db.add_activity("Sync completed", "Manual sync completed")

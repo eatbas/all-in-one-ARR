@@ -6,6 +6,7 @@ from typing import TYPE_CHECKING, Callable, Awaitable
 
 from fastapi import FastAPI
 
+from core.app_metrics import observe_scheduler_job
 from core.context import SyncAlreadyRunning
 from core.logging import get_logger
 from modules.findarr import engine
@@ -33,7 +34,10 @@ def _require_context() -> "AppContext":
 async def findarr_job() -> None:
     """Scheduled Findarr entrypoint."""
     ctx = _require_context()
-    await ctx.findarr_gate.run(lambda: engine.run(ctx))
+    await observe_scheduler_job(
+        "findarr_poll",
+        lambda: ctx.findarr_gate.run(lambda: engine.run(ctx)),
+    )
 
 
 async def setup(scheduler: "SchedulerService", app: FastAPI, ctx: "AppContext") -> None:

@@ -14,6 +14,7 @@ tokens.json
 *plan_review_*.md
 *review_request_*.md
 commit_plan.md
+trending-density-*.png
 
 # Python
 __pycache__/

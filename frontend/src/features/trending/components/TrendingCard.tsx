@@ -1,49 +1,44 @@
 import { useState } from "react"
-import { CheckIcon, ExternalLinkIcon, FilmIcon } from "lucide-react"
+import { ExternalLinkIcon, FilmIcon } from "lucide-react"
 
-import { Badge } from "@/shared/components/ui/badge"
 import { posterUrl, trendingSourceUrl } from "@/shared/lib/api"
 import type { TrendingItem } from "@/shared/lib/api"
 import { cn } from "@/shared/lib/utils"
 import { displayTitle, formatYear } from "@/shared/lib/format"
 import { AddToListControl } from "@/features/trending/components/AddToListControl"
 import { ImdbRatingBadge } from "@/features/trending/components/ImdbRatingBadge"
+import { PillLabel } from "@/features/trending/components/poster-pill"
 import {
-  isAvailable,
-  isPending,
-  SEER_AVAILABLE_STATUS,
-} from "@/features/trending/trending-item-status"
+  PILL_EXPAND,
+  pillIcon,
+  pillIconSlot,
+  pillShell,
+  type PillDensity,
+} from "@/features/trending/components/poster-pill-variants"
+import { TrendingStatusIndicator } from "@/features/trending/components/TrendingStatusIndicator"
+import { isAvailable, isPending } from "@/features/trending/trending-item-status"
 import { SOURCE_LABELS } from "@/features/trending/trending-tab"
-
-/** Badge styling for a downloaded/available title (green) and a pending one (amber). */
-const AVAILABLE_BADGE = "gap-1 border-transparent bg-emerald-500 text-white shadow-sm"
-const PENDING_BADGE = "gap-1 border-transparent bg-amber-500 text-white shadow-sm"
-
-/** Labels for the Seer library statuses worth surfacing on a card. */
-const SEER_STATUS_LABELS: Record<number, string> = {
-  2: "Requested",
-  3: "Processing",
-  4: "Partial",
-  5: "Available",
-}
 
 /**
  * One trending result: poster with corner overlays — a link to the source's
  * dedicated page (top-right), the add-to-list control (bottom-right), and the
- * Tracked / In-library / Seer-status badges — plus the title and IMDb rating.
+ * availability indicator (bottom-left) — plus a hover overlay with the full
+ * title and year, and the static title and IMDb rating lines beneath.
  */
 export function TrendingCard({
   item,
   seerUrl,
+  density = 5,
 }: {
   item: TrendingItem
   /** Configured Seer base URL, used to deep-link Seer-sourced items. */
   seerUrl?: string
+  /** Posters-per-row density; controls pill and icon size. Defaults to the
+   *  largest size for consumers that do not know the grid density. */
+  density?: PillDensity
 }) {
   const [posterFailed, setPosterFailed] = useState(false)
   const label = displayTitle(item.title)
-  const seerLabel =
-    item.seer_status !== null ? SEER_STATUS_LABELS[item.seer_status] : undefined
   const sourceUrl = trendingSourceUrl(item, seerUrl)
   const sourceLabel = SOURCE_LABELS[item.source]
   // Green = available to watch now (downloaded or Seer-Available); amber = on its way
@@ -57,7 +52,7 @@ export function TrendingCard({
           title is available now, amber when it is still on its way. */}
       <div
         className={cn(
-          "relative rounded-md",
+          "group/poster relative rounded-md",
           available && "ring-[3px] ring-emerald-500",
           !available && pending && "ring-[3px] ring-amber-500",
         )}
@@ -79,14 +74,17 @@ export function TrendingCard({
             className="aspect-[2/3] w-full rounded-md object-cover"
           />
         )}
-        {item.already_tracked ? (
-          <Badge
-            variant="outline"
-            className="absolute left-1 top-1 bg-background/85 shadow-sm backdrop-blur-sm"
-          >
-            Tracked
-          </Badge>
-        ) : null}
+        {/* Hover overlay: the full (untruncated) title and year, revealed on
+            hover or keyboard focus within. It duplicates content that already
+            exists in the static lines below, so it is hidden from assistive
+            technology; pointer-events-none keeps the corner controls usable. */}
+        <div
+          aria-hidden="true"
+          className="pointer-events-none absolute inset-x-0 bottom-0 rounded-b-md bg-linear-to-t from-black/80 via-black/50 to-transparent px-2 pt-6 pb-9 opacity-0 transition-opacity duration-200 group-hover/poster:opacity-100 group-focus-within/poster:opacity-100 motion-reduce:transition-none"
+        >
+          <p className="line-clamp-3 text-xs font-semibold text-white">{label}</p>
+          <p className="text-[11px] text-white/80">{formatYear(item.year)}</p>
+        </div>
         {sourceUrl ? (
           <a
             href={sourceUrl}
@@ -94,39 +92,26 @@ export function TrendingCard({
             rel="noreferrer noopener"
             title={`Open on ${sourceLabel}`}
             aria-label={`Open ${label} on ${sourceLabel}`}
-            className="absolute right-1 top-1 inline-flex items-center justify-center rounded-md bg-background/85 p-1 text-muted-foreground shadow-sm backdrop-blur-sm transition-colors hover:text-foreground"
+            className={cn(
+              pillShell(density),
+              "group/link absolute right-1 top-1 bg-background/85 text-muted-foreground backdrop-blur-sm hover:z-10 hover:text-foreground focus-visible:z-10",
+              PILL_EXPAND.link,
+            )}
           >
-            <ExternalLinkIcon className="size-4" />
+            <PillLabel group="link" side="left" density={density}>
+              {sourceLabel}
+            </PillLabel>
+            <span aria-hidden="true" className={pillIconSlot(density)} data-pill-icon-slot>
+              <ExternalLinkIcon className={pillIcon(density)} />
+            </span>
           </a>
         ) : null}
-        {/* Informational badges stack at the bottom-left, clear of the add control. */}
-        <div className="absolute left-1 bottom-1 flex flex-col items-start gap-1">
-          {item.in_library_available ? (
-            <Badge aria-label="In library" className={AVAILABLE_BADGE}>
-              <CheckIcon className="size-3" />
-              In library
-            </Badge>
-          ) : item.in_library ? (
-            // A library record exists but the media is still missing (downloading).
-            <Badge aria-label="In library, media not downloaded" className={PENDING_BADGE}>
-              In library
-            </Badge>
-          ) : null}
-          {seerLabel ? (
-            <Badge
-              className={cn(
-                "border-transparent text-white shadow-sm",
-                item.seer_status === SEER_AVAILABLE_STATUS
-                  ? "bg-emerald-500"
-                  : "bg-amber-500",
-              )}
-            >
-              {seerLabel}
-            </Badge>
-          ) : null}
+        {/* The availability indicator sits bottom-left, clear of the add control. */}
+        <div className="absolute left-1 bottom-1">
+          <TrendingStatusIndicator item={item} density={density} />
         </div>
         <div className="absolute right-1 bottom-1">
-          <AddToListControl item={item} />
+          <AddToListControl item={item} density={density} />
         </div>
       </div>
       <span className="truncate text-xs font-medium" title={label}>

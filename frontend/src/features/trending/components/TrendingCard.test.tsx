@@ -64,25 +64,32 @@ describe("TrendingCard", () => {
     expect(screen.getByRole("img", { name: "No poster for Dune" })).toBeInTheDocument()
   })
 
-  it("shows a Tracked badge when the item is already mirrored", () => {
+  it("does not show a Tracked badge even when the item is already mirrored", () => {
     render(<ul><TrendingCard item={item({ already_tracked: true })} /></ul>)
-    expect(screen.getByText("Tracked")).toBeInTheDocument()
+    expect(screen.queryByText("Tracked")).not.toBeInTheDocument()
   })
 
-  it("shows a green Seer status badge when the title is Available", () => {
+  it("exposes the source label on the source-link pill for the reveal", () => {
+    render(<ul><TrendingCard item={item({ source: "tmdb" })} /></ul>)
+    expect(screen.getByText("TMDB")).toBeInTheDocument()
+  })
+
+  it("marks a Seer-available title with a green tick indicator", () => {
     render(<ul><TrendingCard item={item({ seer_status: 5 })} /></ul>)
-    expect(screen.getByText("Available")).toHaveClass("bg-emerald-500")
+    expect(screen.getByLabelText("Available")).toHaveClass("bg-emerald-500")
   })
 
-  it("shows an amber Seer status badge while Processing", () => {
+  it("marks a processing title with an amber status indicator", () => {
     render(<ul><TrendingCard item={item({ seer_status: 3 })} /></ul>)
-    expect(screen.getByText("Processing")).toHaveClass("bg-amber-500")
+    const indicator = screen.getByLabelText("Processing")
+    expect(indicator).toHaveClass("ring-amber-500")
+    expect(indicator).toHaveClass("ring-inset")
   })
 
-  it("shows no status badge for an unknown Seer status", () => {
+  it("shows no status indicator for an unknown Seer status", () => {
     render(<ul><TrendingCard item={item({ seer_status: 1 })} /></ul>)
-    expect(screen.queryByText("Available")).not.toBeInTheDocument()
-    expect(screen.queryByText("Requested")).not.toBeInTheDocument()
+    expect(screen.queryByLabelText("Available")).not.toBeInTheDocument()
+    expect(screen.queryByLabelText("Requested")).not.toBeInTheDocument()
   })
 
   it("shows the year and media type", () => {
@@ -90,7 +97,7 @@ describe("TrendingCard", () => {
     expect(screen.getByText("— · show")).toBeInTheDocument()
   })
 
-  it("marks a downloaded library item with a green In-library badge", () => {
+  it("marks a downloaded library item with a green tick indicator", () => {
     render(
       <ul>
         <TrendingCard item={item({ in_library: true, in_library_available: true })} />
@@ -99,20 +106,70 @@ describe("TrendingCard", () => {
     expect(screen.getByLabelText("In library")).toHaveClass("bg-emerald-500")
   })
 
-  it("marks an in-library-but-undownloaded item with an amber badge", () => {
+  it("marks an in-library-but-undownloaded item with an amber status indicator", () => {
     render(
       <ul>
         <TrendingCard item={item({ in_library: true, in_library_available: false })} />
       </ul>,
     )
-    const badge = screen.getByLabelText("In library, media not downloaded")
-    expect(badge).toHaveTextContent("In library")
-    expect(badge).toHaveClass("bg-amber-500")
+    const indicator = screen.getByLabelText("In library, media not downloaded")
+    expect(indicator).toHaveClass("ring-amber-500")
+    expect(indicator).toHaveClass("ring-inset")
   })
 
-  it("omits the In-library badge when the item is not in the library", () => {
+  it.each([
+    [5, "size-8", "size-4"],
+    [6, "size-7", "size-3.5"],
+    [7, "size-6", "size-3"],
+  ] as const)(
+    "uses matching collapsed pill geometry at density %i",
+    (density, shellSize, iconSize) => {
+      render(
+        <ul>
+          <TrendingCard item={item({ seer_status: 3 })} density={density} />
+        </ul>,
+      )
+
+      const source = screen.getByRole("link", { name: /open .* on tmdb/i })
+      const add = screen.getByRole("button", { name: /add/i })
+      const status = screen.getByLabelText("Processing")
+
+      for (const control of [source, add, status]) {
+        expect(control).toHaveClass(shellSize)
+        expect(control).toHaveClass("rounded-full")
+        expect(control.querySelector("[data-pill-icon-slot]")).toHaveClass(shellSize)
+        expect(control.querySelector("svg")).toHaveClass(iconSize)
+      }
+
+      expect(source).not.toHaveClass("px-2")
+      expect(source).not.toHaveClass("px-1.5")
+      expect(add).toHaveClass("px-0")
+    },
+  )
+
+  it("keeps reveal labels truncated and bounded", () => {
+    render(<ul><TrendingCard item={item({ source: "trakt", slug: "dune", seer_status: 3 })} /></ul>)
+
+    for (const label of ["Trakt", "Processing", "Add"]) {
+      expect(screen.getByText(label)).toHaveClass("overflow-hidden")
+      expect(screen.getByText(label)).toHaveClass("text-ellipsis")
+      expect(screen.getByText(label)).toHaveClass("whitespace-nowrap")
+    }
+  })
+
+  it("omits the status indicator when the item is not in the library", () => {
     render(<ul><TrendingCard item={item({})} /></ul>)
-    expect(screen.queryByText("In library")).not.toBeInTheDocument()
+    expect(screen.queryByLabelText("In library")).not.toBeInTheDocument()
+  })
+
+  it("renders a hover overlay with the full title and year", () => {
+    render(<ul><TrendingCard item={item({})} /></ul>)
+    // The title appears twice: the static line below the poster and the overlay.
+    expect(screen.getAllByText("Dune")).toHaveLength(2)
+    // The overlay is aria-hidden — it duplicates content assistive technology
+    // already receives from the static lines and the poster alt text.
+    const year = screen.getByText("2021")
+    expect(year.closest("[aria-hidden='true']")).not.toBeNull()
   })
 
   it("links a TMDB-sourced item to its themoviedb.org page", () => {

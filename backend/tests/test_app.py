@@ -96,6 +96,11 @@ def test_lifespan_authenticated_placeholder_frontend(_env, monkeypatch, tmp_path
         assert "bw_qbit_active_count" in metrics.text
         assert "bw_sab_active_count" in metrics.text
         assert "bw_check_status" in metrics.text
+        assert "aio_arr_sync_runs_total" in metrics.text
+        assert "aio_arr_service_status" in metrics.text
+        assert "aio_arr_scheduler_job_runs_total" in metrics.text
+        assert "aio_arr_findarr_runs_total" in metrics.text
+        assert "aio_arr_deletarr_scans_total" in metrics.text
         # Bandwidth router is reachable through the assembled app.
         assert client.get("/api/bandwidth/status").status_code == 200
         # Deletarr router is registered through the assembled app.
@@ -110,6 +115,37 @@ def test_lifespan_authenticated_placeholder_frontend(_env, monkeypatch, tmp_path
     ctx.omdb.aclose.assert_awaited()
     ctx.sabnzbd.aclose.assert_awaited()
     ctx.qbittorrent.aclose.assert_awaited()
+
+
+def test_openapi_includes_frontend_api_routes(_env, monkeypatch, tmp_path) -> None:
+    ctx = _stub_ctx(authenticated=True)
+    monkeypatch.setattr(app_mod, "build_context", lambda settings: ctx)
+    monkeypatch.setattr(app_mod, "FRONTEND_DIST", tmp_path / "missing")
+
+    schema = create_app().openapi()
+
+    for path in (
+        "/api/status",
+        "/api/items",
+        "/api/lists",
+        "/api/activity",
+        "/api/settings/trakt",
+        "/api/trakt/auth/start",
+        "/api/trakt/auth/status",
+        "/api/trakt/lists",
+        "/api/settings/services",
+        "/api/status/services",
+        "/api/settings/general",
+        "/api/settings/database",
+        "/api/bandwidth/status",
+        "/api/deletarr/status",
+        "/api/deletarr/results",
+        "/api/findarr/status",
+        "/api/trending",
+        "/api/trending/rating",
+        "/api/trending/add",
+    ):
+        assert path in schema["paths"]
 
 
 def test_lifespan_serves_built_frontend(_env, monkeypatch, tmp_path) -> None:

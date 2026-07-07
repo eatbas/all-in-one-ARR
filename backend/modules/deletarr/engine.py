@@ -10,6 +10,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+from core.app_metrics import record_deletarr_delete, record_deletarr_scan
 from core.context import SyncAlreadyRunning
 from core.logging import get_logger
 from modules.deletarr.arr_source import client_for
@@ -110,6 +111,12 @@ class DeletarrService:
                 state.results = scanner.get_sorted_results()
                 state.scan_progress = 100
                 state.last_scan_at = _now_iso()
+                record_deletarr_scan(
+                    library=selected,
+                    mode=state.scan_mode,
+                    status="success",
+                    results_count=len(state.results),
+                )
                 detail = (
                     f"Found {len(state.results)} junk item(s) in "
                     f"{LIBRARY_LABELS[selected]} ({state.scan_mode} scan)."
@@ -118,6 +125,11 @@ class DeletarrService:
                 return await self.results(selected)
             except Exception as exc:
                 state.last_error = str(exc)
+                record_deletarr_scan(
+                    library=selected,
+                    mode=state.scan_mode,
+                    status="error",
+                )
                 self._ctx.db.add_activity(
                     "Deletarr scan failed",
                     f"{LIBRARY_LABELS[selected]} scan failed: {exc}",
@@ -143,6 +155,12 @@ class DeletarrService:
                 if manifest.available:
                     tracked = manifest.media_paths
             result = await asyncio.to_thread(self._delete_sync, state, paths, tracked)
+            record_deletarr_delete(
+                library=selected,
+                deleted=int(result["deleted"]),
+                failed=int(result["failed"]),
+                freed_bytes=int(result["freed_bytes"]),
+            )
             self._ctx.db.add_activity(
                 "Deletarr delete completed",
                 (
