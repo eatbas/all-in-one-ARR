@@ -254,6 +254,28 @@ docker buildx build --platform linux/amd64,linux/arm64 \
   -t erenatbas/aio-arr:0.1.0 -t erenatbas/aio-arr:latest --push .
 ```
 
+### Cutting a release
+
+Maintainers publish a release with `scripts/release.sh`. It reads the current
+version from the latest `vX.Y.Z` git tag, bumps it, updates the version in
+`backend/pyproject.toml` and `frontend/package.json` (the sidebar footer shows the
+latter), commits, creates an annotated `vX.Y.Z` tag, and pushes `main` plus the
+tag. The tag push publishes `erenatbas/aio-arr:X.Y.Z` (+ `X.Y`) and the `main`
+push refreshes `:latest`.
+
+```bash
+bash scripts/release.sh          # patch: 1.6.0 -> 1.6.1 (default)
+bash scripts/release.sh minor    # 1.6.0 -> 1.7.0
+bash scripts/release.sh major    # 1.6.0 -> 2.0.0
+bash scripts/release.sh --dry-run minor   # preview only; changes nothing
+```
+
+The release must be cut from a clean `main` (override with `RELEASE_BRANCH`). It
+runs `scripts/check.sh` first (pass `--skip-checks` to skip) and prompts before
+pushing (`-y` to skip). Only `vX.Y.Z` tags trigger the Docker publish, so the `v`
+prefix is required; a mistaken tag can be removed with
+`git tag -d vX.Y.Z && git push origin :refs/tags/vX.Y.Z`.
+
 ### One-time Trakt device authorisation
 
 On first start (no saved token) the logs print a code and URL:
