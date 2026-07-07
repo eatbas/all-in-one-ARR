@@ -9,20 +9,20 @@
       // Apply the saved (or default) theme to <html> before first paint so the
       // page never flashes the wrong colours. Must mirror ThemeProvider's
       // storage key and default; the provider takes over once React mounts.
-      (function () {
+      ;(function () {
         try {
-          var theme = localStorage.getItem("aio-arr-theme") || "dark";
+          var theme = localStorage.getItem("aio-arr-theme") || "dark"
           var resolved =
             theme === "system"
               ? window.matchMedia("(prefers-color-scheme: dark)").matches
                 ? "dark"
                 : "light"
-              : theme;
-          document.documentElement.classList.add(resolved);
+              : theme
+          document.documentElement.classList.add(resolved)
         } catch (e) {
-          document.documentElement.classList.add("dark");
+          document.documentElement.classList.add("dark")
         }
-      })();
+      })()
     </script>
   </head>
   <body>

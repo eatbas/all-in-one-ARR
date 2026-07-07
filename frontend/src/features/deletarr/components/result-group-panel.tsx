@@ -30,13 +30,18 @@ export function ResultGroupPanel({
   onGroupSelection,
   onItemSelection,
 }: ResultGroupPanelProps) {
-  const selectedCount = group.items.filter((item) => selectedSet.has(item.path)).length
+  const selectedCount = group.items.filter((item) =>
+    selectedSet.has(item.path),
+  ).length
   const allSelected = selectedCount === group.items.length
   const partiallySelected = selectedCount > 0 && !allSelected
   const groupSize = sumSize(group.items)
 
   return (
-    <section className="rounded-lg border bg-background" aria-label={group.title}>
+    <section
+      className="rounded-lg border bg-background"
+      aria-label={group.title}
+    >
       <div className="flex flex-col gap-3 border-b p-4 md:flex-row md:items-start md:justify-between">
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
@@ -49,7 +54,8 @@ export function ResultGroupPanel({
           </p>
           {group.videos.length > 0 ? (
             <p className="mt-2 text-xs text-muted-foreground">
-              Protected video: {group.videos.map((video) => video.name).join(", ")}
+              Protected video:{" "}
+              {group.videos.map((video) => video.name).join(", ")}
             </p>
           ) : null}
         </div>
@@ -75,22 +81,30 @@ export function ResultGroupPanel({
             <input
               type="checkbox"
               checked={selectedSet.has(item.path)}
-              onChange={(event) => onItemSelection(item.path, event.target.checked)}
+              onChange={(event) =>
+                onItemSelection(item.path, event.target.checked)
+              }
               aria-label={`Select ${item.name}`}
             />
             <span className="min-w-0">
               <span className="flex flex-wrap items-center gap-2">
                 <span className="truncate font-medium">{item.name}</span>
-                <Badge variant={item.type === "folder" ? "outline" : "secondary"}>
+                <Badge
+                  variant={item.type === "folder" ? "outline" : "secondary"}
+                >
                   {item.type}
                 </Badge>
               </span>
               <span className="mt-1 block break-all font-mono text-xs text-muted-foreground">
                 {item.path}
               </span>
-              <span className="mt-1 block text-xs text-muted-foreground">{item.reason}</span>
+              <span className="mt-1 block text-xs text-muted-foreground">
+                {item.reason}
+              </span>
             </span>
-            <span className="text-sm font-medium md:text-right">{formatBytes(item.size)}</span>
+            <span className="text-sm font-medium md:text-right">
+              {formatBytes(item.size)}
+            </span>
           </label>
         ))}
       </div>

@@ -3,7 +3,12 @@ import { LayoutGridIcon } from "lucide-react"
 
 import { Button } from "@/shared/components/ui/button"
 import { Switch } from "@/shared/components/ui/switch"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/shared/components/ui/tabs"
+import {
+  Tabs,
+  TabsContent,
+  TabsList,
+  TabsTrigger,
+} from "@/shared/components/ui/tabs"
 import { Pagination } from "@/shared/components/pagination/pagination"
 import { pageCount } from "@/shared/components/pagination/pagination-utils"
 import { formatRelativeTime } from "@/shared/lib/format"
@@ -129,7 +134,9 @@ function SourcePanel({ source }: { source: TrendingSource }) {
 
   // "Hide available" drops only titles the user can watch now (downloaded in
   // Radarr/Sonarr, or Available in Seer); requested/processing/missing items stay.
-  const visible = hideAvailable ? items.filter((item) => !isAvailable(item)) : items
+  const visible = hideAvailable
+    ? items.filter((item) => !isAvailable(item))
+    : items
 
   const pageSize = perRow * ROWS_PER_PAGE
   const currentPage = Math.min(page, pageCount(visible.length, pageSize))
@@ -191,7 +198,9 @@ function SourcePanel({ source }: { source: TrendingSource }) {
               checked={hideAvailable}
               onCheckedChange={changeHideAvailable}
             />
-            <span className="text-sm text-muted-foreground">Hide available</span>
+            <span className="text-sm text-muted-foreground">
+              Hide available
+            </span>
           </div>
         </div>
       </div>
@@ -255,8 +264,8 @@ export function Trending() {
       <div>
         <h1 className="text-2xl font-semibold tracking-tight">Trending</h1>
         <p className="text-sm text-muted-foreground">
-          Trending and popular movies and shows from Trakt, TMDB and Seer. Add any
-          to one of your Trakt lists and it is synced and requested in Seer.
+          Trending and popular movies and shows from Trakt, TMDB and Seer. Add
+          any to one of your Trakt lists and it is synced and requested in Seer.
         </p>
       </div>
 

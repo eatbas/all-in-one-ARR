@@ -3,7 +3,11 @@ import { ActivityIcon, LineChartIcon, PauseIcon, PlayIcon } from "lucide-react"
 import { Button } from "@/shared/components/ui/button"
 import { cn } from "@/shared/lib/utils"
 import { APP_BRAND } from "@/features/findarr/components/app-brand"
-import type { FindarrAppName, FindarrAppStatus, FindarrStatus } from "@/shared/lib/api"
+import type {
+  FindarrAppName,
+  FindarrAppStatus,
+  FindarrStatus,
+} from "@/shared/lib/api"
 
 interface FindarrAppCardProps {
   app: FindarrAppName
@@ -90,7 +94,9 @@ export function FindarrAppCard({
 
       <div className="grid w-full grid-cols-2 gap-4 text-center">
         <div>
-          <p className={cn("text-4xl font-bold tabular-nums", brand.accentClass)}>
+          <p
+            className={cn("text-4xl font-bold tabular-nums", brand.accentClass)}
+          >
             {lifetime.missing}
           </p>
           <p className="mt-1 text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
@@ -104,7 +110,9 @@ export function FindarrAppCard({
           </p>
         </div>
         <div>
-          <p className={cn("text-4xl font-bold tabular-nums", brand.accentClass)}>
+          <p
+            className={cn("text-4xl font-bold tabular-nums", brand.accentClass)}
+          >
             {lifetime.upgrade}
           </p>
           <p className="mt-1 text-[11px] font-medium uppercase tracking-wider text-muted-foreground">

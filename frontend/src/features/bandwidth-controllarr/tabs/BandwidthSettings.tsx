@@ -103,7 +103,8 @@ export function BandwidthSettings() {
                 </a>
               </Button>
               <SettingsHelp label="Open metrics">
-                Opens the Prometheus scrape endpoint for bandwidth control gauges.
+                Opens the Prometheus scrape endpoint for bandwidth control
+                gauges.
               </SettingsHelp>
             </div>
           </div>

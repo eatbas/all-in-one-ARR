@@ -48,7 +48,8 @@ export function Status() {
                 {enabled ? "Enabled" : "Disabled"}
               </span>
               <SettingsHelp label="Enable Findarr">
-                Allows the scheduler to run bounded missing and upgrade searches.
+                Allows the scheduler to run bounded missing and upgrade
+                searches.
               </SettingsHelp>
             </div>
           </div>

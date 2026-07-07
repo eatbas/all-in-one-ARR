@@ -1,4 +1,9 @@
-import { render as rtlRender, screen, fireEvent, act } from "@testing-library/react"
+import {
+  render as rtlRender,
+  screen,
+  fireEvent,
+  act,
+} from "@testing-library/react"
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
 import type { ReactElement } from "react"
 import userEvent from "@testing-library/user-event"
@@ -33,7 +38,11 @@ vi.mock("@/shared/lib/queries", () => ({
 
 const { setThemeMock } = vi.hoisted(() => ({ setThemeMock: vi.fn() }))
 vi.mock("@/shared/components/theme-context", () => ({
-  useTheme: () => ({ theme: "dark", resolvedTheme: "dark", setTheme: setThemeMock }),
+  useTheme: () => ({
+    theme: "dark",
+    resolvedTheme: "dark",
+    setTheme: setThemeMock,
+  }),
 }))
 
 import {
@@ -70,7 +79,9 @@ import { expectHelpTooltip } from "@/shared/test/tooltip"
 
 /** Render wrapped in a fresh TanStack Query client so `useQueryClient` works. */
 function render(ui: ReactElement, options?: Parameters<typeof rtlRender>[1]) {
-  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+  const queryClient = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  })
   return {
     queryClient,
     ...rtlRender(ui, {
@@ -92,15 +103,17 @@ function mutation(
   callOnSuccess?: boolean,
 ) {
   const shouldCallOnSuccess = callOnSuccess ?? !isPending
-  const mutate = vi.fn((vars: unknown, options?: { onSuccess?: () => void }) => {
-    ;(mutateImpl as (vars: unknown) => void)(vars)
-    // When simulating a pending mutation, the success callback has not fired
-    // yet, so do not invoke it automatically. Tests can also suppress
-    // onSuccess for settled-error scenarios.
-    if (shouldCallOnSuccess && options?.onSuccess) {
-      options.onSuccess()
-    }
-  })
+  const mutate = vi.fn(
+    (vars: unknown, options?: { onSuccess?: () => void }) => {
+      ;(mutateImpl as (vars: unknown) => void)(vars)
+      // When simulating a pending mutation, the success callback has not fired
+      // yet, so do not invoke it automatically. Tests can also suppress
+      // onSuccess for settled-error scenarios.
+      if (shouldCallOnSuccess && options?.onSuccess) {
+        options.onSuccess()
+      }
+    },
+  )
   return { mutate, isPending, data } as never
 }
 
@@ -177,7 +190,9 @@ beforeEach(() => {
       services: {},
     }),
   )
-  vi.mocked(useUpdateServiceSettings).mockReturnValue(mutation(serviceUpdateMutate))
+  vi.mocked(useUpdateServiceSettings).mockReturnValue(
+    mutation(serviceUpdateMutate),
+  )
   vi.mocked(useTestService).mockReturnValue(mutation(serviceTestMutate))
   vi.mocked(useGeneralSettings).mockReturnValue(
     queryResult({
@@ -294,9 +309,9 @@ describe("Settings — credentials", () => {
     expect(screen.getByPlaceholderText("Trakt client id")).toHaveValue(
       SETTINGS.client_id,
     )
-    expect(screen.getByPlaceholderText("Leave blank to keep current")).toHaveValue(
-      "",
-    )
+    expect(
+      screen.getByPlaceholderText("Leave blank to keep current"),
+    ).toHaveValue("")
   })
 
   it("shows a saving hint while the update is pending", async () => {
@@ -359,7 +374,9 @@ describe("Settings — credentials", () => {
     await renderTrakt()
     vi.useFakeTimers()
 
-    const secretInput = screen.getByPlaceholderText("Leave blank to keep current")
+    const secretInput = screen.getByPlaceholderText(
+      "Leave blank to keep current",
+    )
     act(() => fireEvent.change(secretInput, { target: { value: "sec" } }))
     act(() => vi.advanceTimersByTime(800))
     expect(secretInput).toHaveValue("")
@@ -747,9 +764,7 @@ describe("Settings — service tabs", () => {
     render(<Settings />)
     await user.click(screen.getByRole("tab", { name: "Radarr" }))
     expect(screen.getByText("Set key")).toBeInTheDocument()
-    expect(
-      screen.getByPlaceholderText("http://host:port"),
-    ).toBeInTheDocument()
+    expect(screen.getByPlaceholderText("http://host:port")).toBeInTheDocument()
   })
 
   it("shows a saving hint while the service update is pending", async () => {
@@ -770,9 +785,9 @@ describe("Settings — service tabs", () => {
     expect(screen.getByPlaceholderText("http://host:port")).toHaveValue(
       "http://js:5055",
     )
-    expect(screen.getByPlaceholderText("Leave blank to keep current")).toHaveValue(
-      "",
-    )
+    expect(
+      screen.getByPlaceholderText("Leave blank to keep current"),
+    ).toHaveValue("")
   })
 
   it("does not autosave a service on initial render", async () => {
@@ -1123,7 +1138,13 @@ describe("Settings — service tabs", () => {
       queryResult<ServicesStatusResponse>({
         interval_seconds: 60,
         last_check_at: "2026-06-27T12:00:00Z",
-        services: { seer: { ok: true, detail: "Reachable", checked_at: "2026-06-27T12:00:00Z" } },
+        services: {
+          seer: {
+            ok: true,
+            detail: "Reachable",
+            checked_at: "2026-06-27T12:00:00Z",
+          },
+        },
       }),
     )
     const user = userEvent.setup()
@@ -1140,7 +1161,11 @@ describe("Settings — service tabs", () => {
         interval_seconds: 60,
         last_check_at: "2026-06-27T12:00:00Z",
         services: {
-          seer: { ok: false, detail: "Connection refused", checked_at: "2026-06-27T12:00:00Z" },
+          seer: {
+            ok: false,
+            detail: "Connection refused",
+            checked_at: "2026-06-27T12:00:00Z",
+          },
         },
       }),
     )
@@ -1172,7 +1197,13 @@ describe("Settings — service tabs", () => {
       queryResult<ServicesStatusResponse>({
         interval_seconds: 60,
         last_check_at: "2026-06-27T12:00:00Z",
-        services: { sonarr: { ok: true, detail: "Reachable", checked_at: "2026-06-27T12:00:00Z" } },
+        services: {
+          sonarr: {
+            ok: true,
+            detail: "Reachable",
+            checked_at: "2026-06-27T12:00:00Z",
+          },
+        },
       }),
     )
     const user = userEvent.setup()
@@ -1254,7 +1285,10 @@ describe("Settings — database", () => {
     expect(screen.getByText("Loading…")).toBeInTheDocument()
   })
 
-  async function confirmClearAction(user: ReturnType<typeof userEvent.setup>, buttonName: string) {
+  async function confirmClearAction(
+    user: ReturnType<typeof userEvent.setup>,
+    buttonName: string,
+  ) {
     await user.click(screen.getByRole("button", { name: buttonName }))
     await user.click(screen.getByRole("button", { name: "Clear" }))
   }
@@ -1278,9 +1312,13 @@ describe("Settings — database", () => {
   })
 
   it("disables a clear button while its mutation is pending", async () => {
-    vi.mocked(useClearActivity).mockReturnValue(mutation(clearActivityMutate, true))
+    vi.mocked(useClearActivity).mockReturnValue(
+      mutation(clearActivityMutate, true),
+    )
     await renderDatabase()
-    expect(screen.getByRole("button", { name: "Clear activity log" })).toBeDisabled()
+    expect(
+      screen.getByRole("button", { name: "Clear activity log" }),
+    ).toBeDisabled()
   })
 
   it("persists the Database tab to localStorage", async () => {

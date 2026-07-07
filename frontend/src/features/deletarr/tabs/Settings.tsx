@@ -59,7 +59,9 @@ function SettingsForm({ settings, onSave, isPending }: SettingsFormProps) {
   return (
     <div className="flex flex-col gap-6">
       <div>
-        <h1 className="text-2xl font-semibold tracking-tight">Deletarr Settings</h1>
+        <h1 className="text-2xl font-semibold tracking-tight">
+          Deletarr Settings
+        </h1>
         <p className="text-sm text-muted-foreground">
           Configure the library roots Deletarr scans for junk candidates.
         </p>
@@ -72,19 +74,26 @@ function SettingsForm({ settings, onSave, isPending }: SettingsFormProps) {
             Media library paths
           </CardTitle>
           <CardDescription>
-            Changes are saved to the settings store and take effect on the next scan.
+            Changes are saved to the settings store and take effect on the next
+            scan.
           </CardDescription>
         </CardHeader>
         <CardContent className="grid gap-5">
           <div className="grid gap-2">
-            <label htmlFor="deletarr-movies-path" className="text-sm font-medium">
+            <label
+              htmlFor="deletarr-movies-path"
+              className="text-sm font-medium"
+            >
               Movies path
             </label>
             <Input
               id="deletarr-movies-path"
               value={drafts.movies_path}
               onChange={(event) =>
-                setDrafts((current) => ({ ...current, movies_path: event.target.value }))
+                setDrafts((current) => ({
+                  ...current,
+                  movies_path: event.target.value,
+                }))
               }
               placeholder="/media/movies"
               disabled={isPending}
@@ -98,7 +107,10 @@ function SettingsForm({ settings, onSave, isPending }: SettingsFormProps) {
               id="deletarr-tv-path"
               value={drafts.tv_path}
               onChange={(event) =>
-                setDrafts((current) => ({ ...current, tv_path: event.target.value }))
+                setDrafts((current) => ({
+                  ...current,
+                  tv_path: event.target.value,
+                }))
               }
               placeholder="/media/tv"
               disabled={isPending}
@@ -106,19 +118,26 @@ function SettingsForm({ settings, onSave, isPending }: SettingsFormProps) {
           </div>
           <div className="flex items-start justify-between gap-4 rounded-md border p-3">
             <div className="grid gap-1">
-              <label htmlFor="deletarr-use-arr-source" className="text-sm font-medium">
+              <label
+                htmlFor="deletarr-use-arr-source"
+                className="text-sm font-medium"
+              >
                 Use Radarr and Sonarr as the source of truth
               </label>
               <p className="text-xs text-muted-foreground">
-                When on, only files your library manager does not track are flagged;
-                Deletarr falls back to the heuristic scan when they are unreachable.
+                When on, only files your library manager does not track are
+                flagged; Deletarr falls back to the heuristic scan when they are
+                unreachable.
               </p>
             </div>
             <Switch
               id="deletarr-use-arr-source"
               checked={drafts.use_arr_source}
               onCheckedChange={(checked) =>
-                setDrafts((current) => ({ ...current, use_arr_source: checked }))
+                setDrafts((current) => ({
+                  ...current,
+                  use_arr_source: checked,
+                }))
               }
               disabled={isPending}
               aria-label="Use Radarr and Sonarr as the source of truth"
@@ -146,7 +165,11 @@ export function Settings() {
   const updateSettings = useUpdateDeletarrSettings()
 
   if (isLoading || !settings) {
-    return <p className="text-sm text-muted-foreground">Loading Deletarr settings…</p>
+    return (
+      <p className="text-sm text-muted-foreground">
+        Loading Deletarr settings…
+      </p>
+    )
   }
 
   return (

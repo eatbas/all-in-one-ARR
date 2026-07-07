@@ -50,8 +50,8 @@ export function Status() {
             <div className="flex items-center gap-1.5">
               <span className="text-sm font-medium">{controlLabel}</span>
               <SettingsHelp label="Enable bandwidth control">
-                Allows SABnzbd to pause while qBittorrent has active torrents and
-                resume when idle.
+                Allows SABnzbd to pause while qBittorrent has active torrents
+                and resume when idle.
               </SettingsHelp>
             </div>
           </div>

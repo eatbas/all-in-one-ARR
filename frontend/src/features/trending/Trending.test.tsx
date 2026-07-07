@@ -25,7 +25,11 @@ import {
   TRENDING_TAB_STORAGE_KEY,
 } from "@/features/trending/trending-tab"
 import { mutationResult, queryResult } from "@/shared/test/mock-query"
-import type { ServicesSettings, TrendingItem, TrendingRating } from "@/shared/lib/api"
+import type {
+  ServicesSettings,
+  TrendingItem,
+  TrendingRating,
+} from "@/shared/lib/api"
 
 const ITEM: TrendingItem = {
   source: "trakt",
@@ -55,7 +59,9 @@ function items(n: number): TrendingItem[] {
 beforeEach(() => {
   localStorage.clear()
   vi.mocked(useTrending).mockReturnValue(queryResult([ITEM]))
-  vi.mocked(useTrendingRating).mockReturnValue(queryResult<TrendingRating>(undefined))
+  vi.mocked(useTrendingRating).mockReturnValue(
+    queryResult<TrendingRating>(undefined),
+  )
   vi.mocked(useTrendingStatus).mockReturnValue(
     queryResult({
       last_synced_at: null,
@@ -65,7 +71,9 @@ beforeEach(() => {
   )
   vi.mocked(useLists).mockReturnValue(queryResult([]))
   vi.mocked(useAddTrending).mockReturnValue(mutationResult(vi.fn(), false))
-  vi.mocked(useServiceSettings).mockReturnValue(queryResult<ServicesSettings>(undefined))
+  vi.mocked(useServiceSettings).mockReturnValue(
+    queryResult<ServicesSettings>(undefined),
+  )
 })
 
 afterEach(() => {
@@ -100,7 +108,11 @@ describe("Trending", () => {
     render(<Trending />)
     await user.click(screen.getByRole("button", { name: "Shows" }))
     expect(useTrending).toHaveBeenLastCalledWith(
-      expect.objectContaining({ source: "trakt", media: "show", category: "trending" }),
+      expect.objectContaining({
+        source: "trakt",
+        media: "show",
+        category: "trending",
+      }),
     )
     await user.click(screen.getByRole("button", { name: "Popular" }))
     expect(useTrending).toHaveBeenLastCalledWith(
@@ -144,7 +156,9 @@ describe("Trending", () => {
   })
 
   it("shows a loading state", () => {
-    vi.mocked(useTrending).mockReturnValue(queryResult<TrendingItem[]>(undefined, true))
+    vi.mocked(useTrending).mockReturnValue(
+      queryResult<TrendingItem[]>(undefined, true),
+    )
     render(<Trending />)
     expect(screen.getByText("Loading trending…")).toBeInTheDocument()
   })
@@ -184,11 +198,23 @@ describe("Trending", () => {
       queryResult([
         ITEM, // plain discovery: stays
         // Downloaded in the library: available -> hidden.
-        { ...ITEM, tmdb: 2, title: "Downloaded", in_library: true, in_library_available: true },
+        {
+          ...ITEM,
+          tmdb: 2,
+          title: "Downloaded",
+          in_library: true,
+          in_library_available: true,
+        },
         // Available in Seer: hidden.
         { ...ITEM, tmdb: 3, title: "SeerAvail", seer_status: 5 },
         // Library record but media still missing: pending -> stays.
-        { ...ITEM, tmdb: 4, title: "Waiting", in_library: true, in_library_available: false },
+        {
+          ...ITEM,
+          tmdb: 4,
+          title: "Waiting",
+          in_library: true,
+          in_library_available: false,
+        },
         // Processing in Seer: pending -> stays.
         { ...ITEM, tmdb: 5, title: "Queued", seer_status: 3 },
       ]),
@@ -196,7 +222,9 @@ describe("Trending", () => {
     const user = userEvent.setup()
     render(<Trending />)
     expect(screen.getByTitle("Downloaded")).toBeInTheDocument()
-    await user.click(screen.getByRole("switch", { name: "Hide available items" }))
+    await user.click(
+      screen.getByRole("switch", { name: "Hide available items" }),
+    )
     expect(screen.queryByTitle("Downloaded")).not.toBeInTheDocument()
     expect(screen.queryByTitle("SeerAvail")).not.toBeInTheDocument()
     // Pending (amber) items survive the filter.
@@ -211,7 +239,9 @@ describe("Trending", () => {
     )
     const user = userEvent.setup()
     render(<Trending />)
-    await user.click(screen.getByRole("switch", { name: "Hide available items" }))
+    await user.click(
+      screen.getByRole("switch", { name: "Hide available items" }),
+    )
     expect(
       screen.getByText(/Every result is already available/),
     ).toBeInTheDocument()

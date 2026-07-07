@@ -173,7 +173,8 @@ export function TraktListSelector() {
                           aria-label={`Sync ${entry.slug}`}
                         />
                         <SettingsHelp label={`Sync ${entry.slug}`}>
-                          Turns syncing on or off for this discovered Trakt list.
+                          Turns syncing on or off for this discovered Trakt
+                          list.
                         </SettingsHelp>
                       </div>
                     </li>

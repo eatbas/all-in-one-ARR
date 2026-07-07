@@ -30,7 +30,14 @@ export function BrandLogo({ className }: BrandLogoProps) {
       aria-hidden="true"
       focusable="false"
     >
-      <mask id={maskId} maskUnits="userSpaceOnUse" x="0" y="0" width="64" height="64">
+      <mask
+        id={maskId}
+        maskUnits="userSpaceOnUse"
+        x="0"
+        y="0"
+        width="64"
+        height="64"
+      >
         <rect width="64" height="64" fill="#fff" />
         <rect x="43.35" y="43.35" width="4" height="4" rx="1.2" fill="#000" />
         <rect x="49.65" y="43.35" width="4" height="4" rx="1.2" fill="#000" />
@@ -38,8 +45,24 @@ export function BrandLogo({ className }: BrandLogoProps) {
         <rect x="49.65" y="49.65" width="4" height="4" rx="1.2" fill="#000" />
       </mask>
       <rect x="7" y="7" width="22" height="22" rx="6" fill="currentColor" />
-      <rect x="33" y="7" width="22" height="22" rx="6" fill="currentColor" opacity="0.68" />
-      <rect x="7" y="33" width="22" height="22" rx="6" fill="currentColor" opacity="0.45" />
+      <rect
+        x="33"
+        y="7"
+        width="22"
+        height="22"
+        rx="6"
+        fill="currentColor"
+        opacity="0.68"
+      />
+      <rect
+        x="7"
+        y="33"
+        width="22"
+        height="22"
+        rx="6"
+        fill="currentColor"
+        opacity="0.45"
+      />
       <rect
         x="33"
         y="33"

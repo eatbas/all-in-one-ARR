@@ -39,10 +39,14 @@ function installMatchMedia(matches: boolean) {
     matches,
     media: "(prefers-color-scheme: dark)",
     onchange: null,
-    addEventListener: (_type: string, cb: (event: MediaQueryListEvent) => void) =>
-      listeners.add(cb),
-    removeEventListener: (_type: string, cb: (event: MediaQueryListEvent) => void) =>
-      listeners.delete(cb),
+    addEventListener: (
+      _type: string,
+      cb: (event: MediaQueryListEvent) => void,
+    ) => listeners.add(cb),
+    removeEventListener: (
+      _type: string,
+      cb: (event: MediaQueryListEvent) => void,
+    ) => listeners.delete(cb),
     addListener: vi.fn(),
     removeListener: vi.fn(),
     dispatchEvent: vi.fn(),
@@ -198,12 +202,18 @@ describe("useTheme guard", () => {
     window.addEventListener("error", suppressWindowError)
     let captured: Error | undefined
     render(
-      <CaptureError onError={(error) => { captured = error }}>
+      <CaptureError
+        onError={(error) => {
+          captured = error
+        }}
+      >
         <ThemeProbe />
       </CaptureError>,
     )
     window.removeEventListener("error", suppressWindowError)
-    expect(captured?.message).toBe("useTheme must be used within a ThemeProvider")
+    expect(captured?.message).toBe(
+      "useTheme must be used within a ThemeProvider",
+    )
     consoleError.mockRestore()
   })
 })

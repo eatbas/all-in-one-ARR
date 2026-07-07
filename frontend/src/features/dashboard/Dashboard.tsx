@@ -61,8 +61,7 @@ export function Dashboard() {
   )
 
   const services =
-    serviceStatuses?.services ??
-    ({} as ServicesStatusResponse["services"])
+    serviceStatuses?.services ?? ({} as ServicesStatusResponse["services"])
   const lastCheck = serviceStatuses?.last_check_at
 
   return (
@@ -78,7 +77,9 @@ export function Dashboard() {
       <div className="flex flex-col gap-3">
         <div className="flex items-center justify-between gap-4">
           <div>
-            <h2 className="text-2xl font-semibold tracking-tight">Integrations</h2>
+            <h2 className="text-2xl font-semibold tracking-tight">
+              Integrations
+            </h2>
             <p className="text-sm text-muted-foreground">
               Review the current connection status for every configured service.
             </p>

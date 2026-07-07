@@ -130,7 +130,10 @@ describe("getItems", () => {
     const fetchSpy = mockFetch(jsonResponse([]))
 
     await getItems(undefined, "movies")
-    expect(fetchSpy).toHaveBeenCalledWith("/api/items?list=movies", expect.anything())
+    expect(fetchSpy).toHaveBeenCalledWith(
+      "/api/items?list=movies",
+      expect.anything(),
+    )
   })
 
   it("combines the status and list filters", async () => {
@@ -238,7 +241,10 @@ describe("trakt settings and lists", () => {
   it("GETs the trakt settings", async () => {
     const fetchSpy = mockFetch(jsonResponse({ user: "me" }))
     await getTraktSettings()
-    expect(fetchSpy).toHaveBeenCalledWith("/api/settings/trakt", expect.anything())
+    expect(fetchSpy).toHaveBeenCalledWith(
+      "/api/settings/trakt",
+      expect.anything(),
+    )
   })
 
   it("PUTs updated trakt settings", async () => {
@@ -263,7 +269,9 @@ describe("trakt settings and lists", () => {
   })
 
   it("GETs the device-auth status", async () => {
-    const fetchSpy = mockFetch(jsonResponse({ state: "idle", connected: false }))
+    const fetchSpy = mockFetch(
+      jsonResponse({ state: "idle", connected: false }),
+    )
     await getTraktAuthStatus()
     expect(fetchSpy).toHaveBeenCalledWith(
       "/api/trakt/auth/status",
@@ -272,7 +280,9 @@ describe("trakt settings and lists", () => {
   })
 
   it("POSTs a connection test", async () => {
-    const fetchSpy = mockFetch(jsonResponse({ ok: true, user: "me", message: "" }))
+    const fetchSpy = mockFetch(
+      jsonResponse({ ok: true, user: "me", message: "" }),
+    )
     await testTrakt()
     expect(fetchSpy).toHaveBeenCalledWith(
       "/api/trakt/test",
@@ -350,7 +360,10 @@ describe("service status dashboard", () => {
       }),
     )
     await getServiceStatuses()
-    expect(fetchSpy).toHaveBeenCalledWith("/api/status/services", expect.anything())
+    expect(fetchSpy).toHaveBeenCalledWith(
+      "/api/status/services",
+      expect.anything(),
+    )
   })
 
   it("POSTs to trigger a fresh status check", async () => {
@@ -373,7 +386,10 @@ describe("general settings", () => {
   it("GETs the general settings", async () => {
     const fetchSpy = mockFetch(jsonResponse({ interval_seconds: 60 }))
     await getGeneralSettings()
-    expect(fetchSpy).toHaveBeenCalledWith("/api/settings/general", expect.anything())
+    expect(fetchSpy).toHaveBeenCalledWith(
+      "/api/settings/general",
+      expect.anything(),
+    )
   })
 
   it("PUTs the status-check interval", async () => {
@@ -401,7 +417,10 @@ describe("database settings", () => {
   it("GETs the database stats", async () => {
     const fetchSpy = mockFetch(jsonResponse(sampleDatabaseStats))
     await expect(getDatabaseStats()).resolves.toEqual(sampleDatabaseStats)
-    expect(fetchSpy).toHaveBeenCalledWith("/api/settings/database", expect.anything())
+    expect(fetchSpy).toHaveBeenCalledWith(
+      "/api/settings/database",
+      expect.anything(),
+    )
   })
 
   it("POSTs to clear the activity log", async () => {
@@ -440,7 +459,10 @@ describe("deletarr", () => {
       .mockResolvedValueOnce(jsonResponse({ movies_path: "/media/movies" }))
 
     await getDeletarrStatus()
-    expect(fetchSpy).toHaveBeenCalledWith("/api/deletarr/status", expect.anything())
+    expect(fetchSpy).toHaveBeenCalledWith(
+      "/api/deletarr/status",
+      expect.anything(),
+    )
 
     await getDeletarrSettings()
     expect(fetchSpy).toHaveBeenCalledWith(
@@ -527,7 +549,10 @@ describe("bandwidth controllarr", () => {
   it("GETs the bandwidth status", async () => {
     const fetchSpy = mockFetch(jsonResponse(sampleBandwidthStatus))
     await expect(getBandwidthStatus()).resolves.toEqual(sampleBandwidthStatus)
-    expect(fetchSpy).toHaveBeenCalledWith("/api/bandwidth/status", expect.anything())
+    expect(fetchSpy).toHaveBeenCalledWith(
+      "/api/bandwidth/status",
+      expect.anything(),
+    )
   })
 
   it("PUTs bandwidth settings", async () => {
@@ -559,16 +584,21 @@ describe("request error and empty-body handling", () => {
 
   it("surfaces the backend's JSON detail as the error message", async () => {
     mockFetch(
-      new Response(JSON.stringify({ detail: "Trakt could not find this title to add" }), {
-        status: 502,
-        headers: { "Content-Type": "application/json" },
-      }),
+      new Response(
+        JSON.stringify({ detail: "Trakt could not find this title to add" }),
+        {
+          status: 502,
+          headers: { "Content-Type": "application/json" },
+        },
+      ),
     )
 
     const error = await getStatus().catch((caught: unknown) => caught)
     expect(error).toBeInstanceOf(ApiError)
     expect((error as ApiError).status).toBe(502)
-    expect((error as ApiError).message).toBe("Trakt could not find this title to add")
+    expect((error as ApiError).message).toBe(
+      "Trakt could not find this title to add",
+    )
   })
 
   it("falls back to the status message when detail is not a string", async () => {
@@ -629,7 +659,9 @@ describe("getTrendingStatus", () => {
 
 describe("getTrendingRating", () => {
   it("sends the imdb id when present", async () => {
-    const fetchSpy = mockFetch(jsonResponse({ imdb_rating: 8.6, imdb_votes: 10 }))
+    const fetchSpy = mockFetch(
+      jsonResponse({ imdb_rating: 8.6, imdb_votes: 10 }),
+    )
 
     await expect(getTrendingRating({ imdb: "tt1" })).resolves.toEqual({
       imdb_rating: 8.6,
@@ -639,7 +671,9 @@ describe("getTrendingRating", () => {
   })
 
   it("falls back to media+tmdb when no imdb id is given", async () => {
-    const fetchSpy = mockFetch(jsonResponse({ imdb_rating: null, imdb_votes: null }))
+    const fetchSpy = mockFetch(
+      jsonResponse({ imdb_rating: null, imdb_votes: null }),
+    )
 
     await getTrendingRating({ media: "movie", tmdb: 603 })
     const url = fetchSpy.mock.calls[0][0] as string
@@ -648,7 +682,9 @@ describe("getTrendingRating", () => {
   })
 
   it("omits the query string when nothing is identifiable", async () => {
-    const fetchSpy = mockFetch(jsonResponse({ imdb_rating: null, imdb_votes: null }))
+    const fetchSpy = mockFetch(
+      jsonResponse({ imdb_rating: null, imdb_votes: null }),
+    )
 
     await getTrendingRating({})
     expect(fetchSpy.mock.calls[0][0]).toBe("/api/trending/rating")
@@ -660,7 +696,12 @@ describe("addTrending", () => {
     const fetchSpy = mockFetch(jsonResponse({ status: "added" }))
 
     await expect(
-      addTrending({ media_type: "movie", owner_user: "me", slug: "my-list", tmdb: 100 }),
+      addTrending({
+        media_type: "movie",
+        owner_user: "me",
+        slug: "my-list",
+        tmdb: 100,
+      }),
     ).resolves.toEqual({ status: "added" })
     expect(fetchSpy).toHaveBeenCalledWith(
       "/api/trending/add",
@@ -683,12 +724,16 @@ describe("trendingSourceUrl", () => {
       "https://www.themoviedb.org/movie/603",
     )
     expect(
-      trendingSourceUrl(trendingItem({ source: "tmdb", media_type: "show", tmdb: 1399 })),
+      trendingSourceUrl(
+        trendingItem({ source: "tmdb", media_type: "show", tmdb: 1399 }),
+      ),
     ).toBe("https://www.themoviedb.org/tv/1399")
   })
 
   it("returns null for a TMDB item with no TMDB id", () => {
-    expect(trendingSourceUrl(trendingItem({ source: "tmdb", tmdb: null }))).toBeNull()
+    expect(
+      trendingSourceUrl(trendingItem({ source: "tmdb", tmdb: null })),
+    ).toBeNull()
   })
 
   it("links Trakt movies and shows by slug", () => {
@@ -697,13 +742,19 @@ describe("trendingSourceUrl", () => {
     ).toBe("https://trakt.tv/movies/dune-2021")
     expect(
       trendingSourceUrl(
-        trendingItem({ source: "trakt", media_type: "show", slug: "severance" }),
+        trendingItem({
+          source: "trakt",
+          media_type: "show",
+          slug: "severance",
+        }),
       ),
     ).toBe("https://trakt.tv/shows/severance")
   })
 
   it("returns null for a Trakt item without a slug", () => {
-    expect(trendingSourceUrl(trendingItem({ source: "trakt", slug: null }))).toBeNull()
+    expect(
+      trendingSourceUrl(trendingItem({ source: "trakt", slug: null })),
+    ).toBeNull()
   })
 
   it("links Seer items to the configured instance via seerMediaUrl", () => {
@@ -716,9 +767,14 @@ describe("trendingSourceUrl", () => {
   })
 
   it("returns null for a Seer item with no base URL or no TMDB id", () => {
-    expect(trendingSourceUrl(trendingItem({ source: "seer", tmdb: 42 }))).toBeNull()
     expect(
-      trendingSourceUrl(trendingItem({ source: "seer", tmdb: null }), "https://seer.example.com"),
+      trendingSourceUrl(trendingItem({ source: "seer", tmdb: 42 })),
+    ).toBeNull()
+    expect(
+      trendingSourceUrl(
+        trendingItem({ source: "seer", tmdb: null }),
+        "https://seer.example.com",
+      ),
     ).toBeNull()
   })
 })
@@ -727,13 +783,19 @@ describe("findarr", () => {
   it("GETs the Findarr status", async () => {
     const fetchSpy = mockFetch(jsonResponse({ running: false }))
     await getFindarrStatus()
-    expect(fetchSpy).toHaveBeenCalledWith("/api/findarr/status", expect.anything())
+    expect(fetchSpy).toHaveBeenCalledWith(
+      "/api/findarr/status",
+      expect.anything(),
+    )
   })
 
   it("GETs the Findarr settings", async () => {
     const fetchSpy = mockFetch(jsonResponse({ enabled: false }))
     await getFindarrSettings()
-    expect(fetchSpy).toHaveBeenCalledWith("/api/findarr/settings", expect.anything())
+    expect(fetchSpy).toHaveBeenCalledWith(
+      "/api/findarr/settings",
+      expect.anything(),
+    )
   })
 
   it("PUTs Findarr settings", async () => {
@@ -772,12 +834,18 @@ describe("findarr", () => {
   it("GETs the Findarr history", async () => {
     const fetchSpy = mockFetch(jsonResponse([]))
     await expect(getFindarrHistory()).resolves.toEqual([])
-    expect(fetchSpy).toHaveBeenCalledWith("/api/findarr/history", expect.anything())
+    expect(fetchSpy).toHaveBeenCalledWith(
+      "/api/findarr/history",
+      expect.anything(),
+    )
   })
 
   it("POSTs a clear of the Findarr history", async () => {
     const fetchSpy = mockFetch(jsonResponse({ status: "cleared", removed: 3 }))
-    await expect(clearFindarrHistory()).resolves.toEqual({ status: "cleared", removed: 3 })
+    await expect(clearFindarrHistory()).resolves.toEqual({
+      status: "cleared",
+      removed: 3,
+    })
     expect(fetchSpy).toHaveBeenCalledWith(
       "/api/findarr/history/clear",
       expect.objectContaining({ method: "POST" }),

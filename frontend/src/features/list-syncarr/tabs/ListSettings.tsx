@@ -40,8 +40,8 @@ export function ListSettings() {
       <div>
         <h1 className="text-2xl font-semibold tracking-tight">Settings</h1>
         <p className="text-sm text-muted-foreground">
-          Choose which Trakt lists the engine keeps in sync, and how it polls and
-          removes them.
+          Choose which Trakt lists the engine keeps in sync, and how it polls
+          and removes them.
         </p>
       </div>
 
@@ -63,18 +63,20 @@ export function ListSettings() {
                   Remove from Trakt when available
                 </p>
                 <SettingsHelp label="Remove from Trakt when available">
-                  Removes the list entry and the Seer request once Seer reports the
-                  item available or partially available. A merely-requested item is
-                  not removed; media files in Radarr/Sonarr are untouched.
+                  Removes the list entry and the Seer request once Seer reports
+                  the item available or partially available. A merely-requested
+                  item is not removed; media files in Radarr/Sonarr are
+                  untouched.
                 </SettingsHelp>
               </div>
               <p className="text-sm text-muted-foreground">
-                When on, an item is removed from its Trakt list once Seer reports it
-                available — or partially available (some episodes downloaded). Both
-                the Trakt entry and the Seer request are deleted; media files in
-                Radarr/Sonarr are untouched, so any download in progress continues. A
-                merely-requested item stays until it is at least partially available.
-                When off, removal is manual — use the controls in the Lists tab.
+                When on, an item is removed from its Trakt list once Seer
+                reports it available — or partially available (some episodes
+                downloaded). Both the Trakt entry and the Seer request are
+                deleted; media files in Radarr/Sonarr are untouched, so any
+                download in progress continues. A merely-requested item stays
+                until it is at least partially available. When off, removal is
+                manual — use the controls in the Lists tab.
               </p>
             </div>
             <Switch
@@ -92,8 +94,8 @@ export function ListSettings() {
                   Sync interval
                 </label>
                 <SettingsHelp label="Sync interval">
-                  How often List-Syncarr polls Trakt and requests missing items in
-                  Seer.
+                  How often List-Syncarr polls Trakt and requests missing items
+                  in Seer.
                 </SettingsHelp>
               </div>
               <p className="text-sm text-muted-foreground">
@@ -102,7 +104,9 @@ export function ListSettings() {
             </div>
             <Select
               value={String(syncInterval)}
-              onValueChange={(value) => updateSyncInterval.mutate(Number(value))}
+              onValueChange={(value) =>
+                updateSyncInterval.mutate(Number(value))
+              }
               disabled={updateSyncInterval.isPending}
             >
               <SelectTrigger id="sync-interval" className="w-40">

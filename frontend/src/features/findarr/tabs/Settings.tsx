@@ -103,7 +103,10 @@ function ModeSelect({
         </label>
         <SettingsHelp label={label}>{helpText}</SettingsHelp>
       </div>
-      <Select value={value} onValueChange={(next) => onChange(next as FindarrSearchMode)}>
+      <Select
+        value={value}
+        onValueChange={(next) => onChange(next as FindarrSearchMode)}
+      >
         <SelectTrigger id={id} className="flex-1">
           <SelectValue />
         </SelectTrigger>
@@ -148,7 +151,8 @@ export function Settings() {
                 {settings.enabled ? "Enabled" : "Disabled"}
               </span>
               <SettingsHelp label="Enable Findarr">
-                Allows the scheduler to run bounded missing and upgrade searches.
+                Allows the scheduler to run bounded missing and upgrade
+                searches.
               </SettingsHelp>
             </div>
             <Switch
@@ -171,7 +175,9 @@ export function Settings() {
             </div>
             <Select
               value={String(settings.interval_minutes)}
-              onValueChange={(value) => update({ interval_minutes: Number(value) })}
+              onValueChange={(value) =>
+                update({ interval_minutes: Number(value) })
+              }
             >
               <SelectTrigger id="findarr-interval" className="flex-1">
                 <SelectValue placeholder="Interval" />
@@ -236,7 +242,9 @@ export function Settings() {
           <div className="text-sm">
             <p className="font-medium">State reset date</p>
             <p className="text-muted-foreground">
-              {status?.state.reset_at ? formatTimestamp(status.state.reset_at) : "—"}
+              {status?.state.reset_at
+                ? formatTimestamp(status.state.reset_at)
+                : "—"}
             </p>
           </div>
           <NumberInput
@@ -268,7 +276,9 @@ export function Settings() {
                   <Switch
                     aria-label={`Enable ${APP_LABELS[app]}`}
                     checked={appSettings.enabled}
-                    onCheckedChange={(checked) => updateApp(app, { enabled: checked })}
+                    onCheckedChange={(checked) =>
+                      updateApp(app, { enabled: checked })
+                    }
                   />
                 </CardAction>
               </CardHeader>
@@ -324,14 +334,18 @@ export function Settings() {
                       label="Missing search mode"
                       value={appSettings.missing_mode}
                       helpText="How to search missing Sonarr content (Seasons recommended for torrent users)."
-                      onChange={(mode) => updateApp(app, { missing_mode: mode })}
+                      onChange={(mode) =>
+                        updateApp(app, { missing_mode: mode })
+                      }
                     />
                     <ModeSelect
                       id="sonarr-upgrade-mode"
                       label="Upgrade mode"
                       value={appSettings.upgrade_mode}
                       helpText="How to search Sonarr upgrades (Seasons/Shows upgrade whole seasons or series at once)."
-                      onChange={(mode) => updateApp(app, { upgrade_mode: mode })}
+                      onChange={(mode) =>
+                        updateApp(app, { upgrade_mode: mode })
+                      }
                     />
                   </>
                 )}

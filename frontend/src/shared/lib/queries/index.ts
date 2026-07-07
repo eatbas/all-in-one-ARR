@@ -180,7 +180,9 @@ export function useTraktAuthStatus(): UseQueryResult<TraktAuthStatus> {
   })
 }
 
-export function useTraktLists(enabled: boolean): UseQueryResult<TraktListEntry[]> {
+export function useTraktLists(
+  enabled: boolean,
+): UseQueryResult<TraktListEntry[]> {
   return useQuery({
     queryKey: queryKeys.traktLists,
     queryFn: getTraktLists,
@@ -202,12 +204,18 @@ export function useUpdateTraktSettings(): UseMutationResult<
       void queryClient.invalidateQueries({ queryKey: queryKeys.activity })
     },
     onError: (error) => {
-      toast.error("Could not save Trakt settings", { description: error.message })
+      toast.error("Could not save Trakt settings", {
+        description: error.message,
+      })
     },
   })
 }
 
-export function useStartTraktAuth(): UseMutationResult<TraktAuthStart, Error, void> {
+export function useStartTraktAuth(): UseMutationResult<
+  TraktAuthStart,
+  Error,
+  void
+> {
   const queryClient = useQueryClient()
 
   return useMutation({
@@ -216,16 +224,24 @@ export function useStartTraktAuth(): UseMutationResult<TraktAuthStart, Error, vo
       toast.success("Authorisation started", {
         description: "Enter the code shown below at trakt.tv/activate.",
       })
-      void queryClient.invalidateQueries({ queryKey: queryKeys.traktAuthStatus })
+      void queryClient.invalidateQueries({
+        queryKey: queryKeys.traktAuthStatus,
+      })
       void queryClient.invalidateQueries({ queryKey: queryKeys.activity })
     },
     onError: (error) => {
-      toast.error("Could not start authorisation", { description: error.message })
+      toast.error("Could not start authorisation", {
+        description: error.message,
+      })
     },
   })
 }
 
-export function useTestTrakt(): UseMutationResult<TraktTestResult, Error, void> {
+export function useTestTrakt(): UseMutationResult<
+  TraktTestResult,
+  Error,
+  void
+> {
   const queryClient = useQueryClient()
 
   return useMutation({
@@ -357,7 +373,9 @@ export function useCheckServiceStatuses(): UseMutationResult<
     mutationFn: checkServiceStatuses,
     onSuccess: () => {
       toast.success("Status check complete")
-      void queryClient.invalidateQueries({ queryKey: queryKeys.serviceStatuses })
+      void queryClient.invalidateQueries({
+        queryKey: queryKeys.serviceStatuses,
+      })
       void queryClient.invalidateQueries({ queryKey: queryKeys.activity })
     },
     onError: (error) => {
@@ -379,8 +397,12 @@ export function useUpdateStatusInterval(): UseMutationResult<
       toast.success("Status interval updated", {
         description: `Checking every ${result.interval_seconds} seconds`,
       })
-      void queryClient.invalidateQueries({ queryKey: queryKeys.serviceStatuses })
-      void queryClient.invalidateQueries({ queryKey: queryKeys.generalSettings })
+      void queryClient.invalidateQueries({
+        queryKey: queryKeys.serviceStatuses,
+      })
+      void queryClient.invalidateQueries({
+        queryKey: queryKeys.generalSettings,
+      })
       void queryClient.invalidateQueries({ queryKey: queryKeys.activity })
     },
     onError: (error) => {
@@ -410,12 +432,16 @@ export function useUpdateSyncInterval(): UseMutationResult<
       toast.success("Sync interval updated", {
         description: `Polling Trakt every ${result.sync_interval_minutes} minutes`,
       })
-      void queryClient.invalidateQueries({ queryKey: queryKeys.generalSettings })
+      void queryClient.invalidateQueries({
+        queryKey: queryKeys.generalSettings,
+      })
       void queryClient.invalidateQueries({ queryKey: queryKeys.lists })
       void queryClient.invalidateQueries({ queryKey: queryKeys.activity })
     },
     onError: (error) => {
-      toast.error("Could not update sync interval", { description: error.message })
+      toast.error("Could not update sync interval", {
+        description: error.message,
+      })
     },
   })
 }
@@ -434,7 +460,9 @@ export function useUpdateTrendingInterval(): UseMutationResult<
       toast.success("Trending sync interval updated", {
         description: `Refreshing trending every ${result.trending_sync_interval_minutes} minutes`,
       })
-      void queryClient.invalidateQueries({ queryKey: queryKeys.generalSettings })
+      void queryClient.invalidateQueries({
+        queryKey: queryKeys.generalSettings,
+      })
       void queryClient.invalidateQueries({ queryKey: queryKeys.trendingStatus })
       void queryClient.invalidateQueries({ queryKey: queryKeys.activity })
     },
@@ -467,11 +495,15 @@ export function useUpdateAutoRemoveWhenAvailable(): UseMutationResult<
             : "Items stay on their Trakt list until you remove them.",
         },
       )
-      void queryClient.invalidateQueries({ queryKey: queryKeys.generalSettings })
+      void queryClient.invalidateQueries({
+        queryKey: queryKeys.generalSettings,
+      })
       void queryClient.invalidateQueries({ queryKey: queryKeys.activity })
     },
     onError: (error) => {
-      toast.error("Could not update auto-remove", { description: error.message })
+      toast.error("Could not update auto-remove", {
+        description: error.message,
+      })
     },
   })
 }
@@ -498,14 +530,19 @@ export function useRemoveItem(): UseMutationResult<
   })
 }
 
-export function useRemoveAvailable(): UseMutationResult<SyncResult, Error, void> {
+export function useRemoveAvailable(): UseMutationResult<
+  SyncResult,
+  Error,
+  void
+> {
   const queryClient = useQueryClient()
 
   return useMutation({
     mutationFn: removeAvailable,
     onSuccess: () => {
       toast.success("Removing available items", {
-        description: "Available items are being removed from their Trakt lists.",
+        description:
+          "Available items are being removed from their Trakt lists.",
       })
       void queryClient.invalidateQueries({ queryKey: ["items"] })
       void queryClient.invalidateQueries({ queryKey: queryKeys.lists })
@@ -548,7 +585,9 @@ export function useUpdateBandwidthSettings(): UseMutationResult<
   return useMutation({
     mutationFn: updateBandwidthSettings,
     onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: queryKeys.bandwidthStatus })
+      void queryClient.invalidateQueries({
+        queryKey: queryKeys.bandwidthStatus,
+      })
     },
     onError: (error) => {
       toast.error("Could not update bandwidth settings", {
@@ -646,7 +685,9 @@ export function useResetFindarrState(): UseMutationResult<
       invalidateFindarr(queryClient)
     },
     onError: (error) => {
-      toast.error("Could not reset Findarr state", { description: error.message })
+      toast.error("Could not reset Findarr state", {
+        description: error.message,
+      })
     },
   })
 }
@@ -667,7 +708,9 @@ export function useClearFindarrHistory(): UseMutationResult<
       invalidateFindarr(queryClient)
     },
     onError: (error) => {
-      toast.error("Could not clear Findarr history", { description: error.message })
+      toast.error("Could not clear Findarr history", {
+        description: error.message,
+      })
     },
   })
 }
@@ -677,7 +720,11 @@ function invalidateDatabase(queryClient: ReturnType<typeof useQueryClient>) {
   void queryClient.invalidateQueries({ queryKey: queryKeys.activity })
 }
 
-export function useClearActivity(): UseMutationResult<DatabaseStats, Error, void> {
+export function useClearActivity(): UseMutationResult<
+  DatabaseStats,
+  Error,
+  void
+> {
   const queryClient = useQueryClient()
 
   return useMutation({
@@ -687,7 +734,9 @@ export function useClearActivity(): UseMutationResult<DatabaseStats, Error, void
       invalidateDatabase(queryClient)
     },
     onError: (error) => {
-      toast.error("Could not clear activity log", { description: error.message })
+      toast.error("Could not clear activity log", {
+        description: error.message,
+      })
     },
   })
 }
@@ -707,12 +756,18 @@ export function useClearItems(): UseMutationResult<DatabaseStats, Error, void> {
       void queryClient.invalidateQueries({ queryKey: ["items"] })
     },
     onError: (error) => {
-      toast.error("Could not clear synced items", { description: error.message })
+      toast.error("Could not clear synced items", {
+        description: error.message,
+      })
     },
   })
 }
 
-export function useClearPosters(): UseMutationResult<DatabaseStats, Error, void> {
+export function useClearPosters(): UseMutationResult<
+  DatabaseStats,
+  Error,
+  void
+> {
   const queryClient = useQueryClient()
 
   return useMutation({
@@ -722,7 +777,9 @@ export function useClearPosters(): UseMutationResult<DatabaseStats, Error, void>
       invalidateDatabase(queryClient)
     },
     onError: (error) => {
-      toast.error("Could not clear poster cache", { description: error.message })
+      toast.error("Could not clear poster cache", {
+        description: error.message,
+      })
     },
   })
 }
@@ -761,7 +818,9 @@ function invalidateDeletarr(
   void queryClient.invalidateQueries({ queryKey: queryKeys.deletarrStatus })
   void queryClient.invalidateQueries({ queryKey: queryKeys.deletarrSettings })
   if (type) {
-    void queryClient.invalidateQueries({ queryKey: queryKeys.deletarrResults(type) })
+    void queryClient.invalidateQueries({
+      queryKey: queryKeys.deletarrResults(type),
+    })
   } else {
     void queryClient.invalidateQueries({ queryKey: ["deletarr", "results"] })
   }
@@ -847,7 +906,9 @@ export function useDeleteDeletarrItems(): UseMutationResult<
 const TRENDING_STALE_TIME = 5 * 60_000
 const TRENDING_GC_TIME = 60 * 60_000
 
-export function useTrending(query: TrendingQuery): UseQueryResult<TrendingItem[]> {
+export function useTrending(
+  query: TrendingQuery,
+): UseQueryResult<TrendingItem[]> {
   return useQuery({
     queryKey: queryKeys.trending(query),
     queryFn: () => getTrending(query),
@@ -883,7 +944,11 @@ export function useTrendingRating(
   return useQuery({
     queryKey: queryKeys.trendingRating(key),
     queryFn: () =>
-      getTrendingRating({ imdb: item.imdb, media: item.media_type, tmdb: item.tmdb }),
+      getTrendingRating({
+        imdb: item.imdb,
+        media: item.media_type,
+        tmdb: item.tmdb,
+      }),
     enabled: enabled && hasId,
     staleTime: Infinity,
   })

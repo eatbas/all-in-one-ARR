@@ -47,7 +47,11 @@ function AddButtonBody({ density }: AddButtonBodyProps) {
       <PillLabel group="add" side="left" density={density}>
         Add
       </PillLabel>
-      <span aria-hidden="true" className={pillIconSlot(density)} data-pill-icon-slot>
+      <span
+        aria-hidden="true"
+        className={pillIconSlot(density)}
+        data-pill-icon-slot
+      >
         <PlusIcon className={pillIcon(density)} />
       </span>
     </>

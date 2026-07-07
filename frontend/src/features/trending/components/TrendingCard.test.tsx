@@ -7,7 +7,11 @@ vi.mock("@/shared/lib/queries", () => ({
   useAddTrending: vi.fn(),
 }))
 
-import { useAddTrending, useLists, useTrendingRating } from "@/shared/lib/queries"
+import {
+  useAddTrending,
+  useLists,
+  useTrendingRating,
+} from "@/shared/lib/queries"
 import { TrendingCard } from "@/features/trending/components/TrendingCard"
 import { mutationResult, queryResult } from "@/shared/test/mock-query"
 import type { TrendingItem, TrendingRating } from "@/shared/lib/api"
@@ -33,20 +37,32 @@ function item(over: Partial<TrendingItem>): TrendingItem {
 
 beforeEach(() => {
   // Children hooks: no rating, no owned lists (add disabled), idle mutation.
-  vi.mocked(useTrendingRating).mockReturnValue(queryResult<TrendingRating>(undefined))
+  vi.mocked(useTrendingRating).mockReturnValue(
+    queryResult<TrendingRating>(undefined),
+  )
   vi.mocked(useLists).mockReturnValue(queryResult([]))
   vi.mocked(useAddTrending).mockReturnValue(mutationResult(vi.fn(), false))
 })
 
 describe("TrendingCard", () => {
   it("renders a poster image when the item has a TMDB id", () => {
-    render(<ul>{[item({})].map((i) => <TrendingCard key="x" item={i} />)}</ul>)
+    render(
+      <ul>
+        {[item({})].map((i) => (
+          <TrendingCard key="x" item={i} />
+        ))}
+      </ul>,
+    )
     const img = screen.getByRole("img", { name: "Dune" })
     expect(img).toHaveAttribute("src", "/api/posters/movie/100")
   })
 
   it("passes an IMDb id to the poster endpoint for fallback lookup", () => {
-    render(<ul><TrendingCard item={item({ imdb: "tt1160419" })} /></ul>)
+    render(
+      <ul>
+        <TrendingCard item={item({ imdb: "tt1160419" })} />
+      </ul>,
+    )
     expect(screen.getByRole("img", { name: "Dune" })).toHaveAttribute(
       "src",
       "/api/posters/movie/100?imdb=tt1160419",
@@ -54,53 +70,91 @@ describe("TrendingCard", () => {
   })
 
   it("falls back to a placeholder when there is no TMDB id", () => {
-    render(<ul><TrendingCard item={item({ tmdb: null, title: null })} /></ul>)
-    expect(screen.getByRole("img", { name: "No poster for Untitled" })).toBeInTheDocument()
+    render(
+      <ul>
+        <TrendingCard item={item({ tmdb: null, title: null })} />
+      </ul>,
+    )
+    expect(
+      screen.getByRole("img", { name: "No poster for Untitled" }),
+    ).toBeInTheDocument()
   })
 
   it("falls back to a placeholder when the poster fails to load", () => {
-    render(<ul><TrendingCard item={item({})} /></ul>)
+    render(
+      <ul>
+        <TrendingCard item={item({})} />
+      </ul>,
+    )
     fireEvent.error(screen.getByRole("img", { name: "Dune" }))
-    expect(screen.getByRole("img", { name: "No poster for Dune" })).toBeInTheDocument()
+    expect(
+      screen.getByRole("img", { name: "No poster for Dune" }),
+    ).toBeInTheDocument()
   })
 
   it("does not show a Tracked badge even when the item is already mirrored", () => {
-    render(<ul><TrendingCard item={item({ already_tracked: true })} /></ul>)
+    render(
+      <ul>
+        <TrendingCard item={item({ already_tracked: true })} />
+      </ul>,
+    )
     expect(screen.queryByText("Tracked")).not.toBeInTheDocument()
   })
 
   it("exposes the source label on the source-link pill for the reveal", () => {
-    render(<ul><TrendingCard item={item({ source: "tmdb" })} /></ul>)
+    render(
+      <ul>
+        <TrendingCard item={item({ source: "tmdb" })} />
+      </ul>,
+    )
     expect(screen.getByText("TMDB")).toBeInTheDocument()
   })
 
   it("marks a Seer-available title with a green tick indicator", () => {
-    render(<ul><TrendingCard item={item({ seer_status: 5 })} /></ul>)
+    render(
+      <ul>
+        <TrendingCard item={item({ seer_status: 5 })} />
+      </ul>,
+    )
     expect(screen.getByLabelText("Available")).toHaveClass("bg-emerald-500")
   })
 
   it("marks a processing title with an amber status indicator", () => {
-    render(<ul><TrendingCard item={item({ seer_status: 3 })} /></ul>)
+    render(
+      <ul>
+        <TrendingCard item={item({ seer_status: 3 })} />
+      </ul>,
+    )
     const indicator = screen.getByLabelText("Processing")
     expect(indicator).toHaveClass("ring-amber-500")
     expect(indicator).toHaveClass("ring-inset")
   })
 
   it("shows no status indicator for an unknown Seer status", () => {
-    render(<ul><TrendingCard item={item({ seer_status: 1 })} /></ul>)
+    render(
+      <ul>
+        <TrendingCard item={item({ seer_status: 1 })} />
+      </ul>,
+    )
     expect(screen.queryByLabelText("Available")).not.toBeInTheDocument()
     expect(screen.queryByLabelText("Requested")).not.toBeInTheDocument()
   })
 
   it("shows the year and media type", () => {
-    render(<ul><TrendingCard item={item({ year: null, media_type: "show" })} /></ul>)
+    render(
+      <ul>
+        <TrendingCard item={item({ year: null, media_type: "show" })} />
+      </ul>,
+    )
     expect(screen.getByText("— · show")).toBeInTheDocument()
   })
 
   it("marks a downloaded library item with a green tick indicator", () => {
     render(
       <ul>
-        <TrendingCard item={item({ in_library: true, in_library_available: true })} />
+        <TrendingCard
+          item={item({ in_library: true, in_library_available: true })}
+        />
       </ul>,
     )
     expect(screen.getByLabelText("In library")).toHaveClass("bg-emerald-500")
@@ -109,7 +163,9 @@ describe("TrendingCard", () => {
   it("marks an in-library-but-undownloaded item with an amber status indicator", () => {
     render(
       <ul>
-        <TrendingCard item={item({ in_library: true, in_library_available: false })} />
+        <TrendingCard
+          item={item({ in_library: true, in_library_available: false })}
+        />
       </ul>,
     )
     const indicator = screen.getByLabelText("In library, media not downloaded")
@@ -137,7 +193,9 @@ describe("TrendingCard", () => {
       for (const control of [source, add, status]) {
         expect(control).toHaveClass(shellSize)
         expect(control).toHaveClass("rounded-full")
-        expect(control.querySelector("[data-pill-icon-slot]")).toHaveClass(shellSize)
+        expect(control.querySelector("[data-pill-icon-slot]")).toHaveClass(
+          shellSize,
+        )
         expect(control.querySelector("svg")).toHaveClass(iconSize)
       }
 
@@ -151,7 +209,13 @@ describe("TrendingCard", () => {
   )
 
   it("keeps reveal labels truncated and bounded", () => {
-    render(<ul><TrendingCard item={item({ source: "trakt", slug: "dune", seer_status: 3 })} /></ul>)
+    render(
+      <ul>
+        <TrendingCard
+          item={item({ source: "trakt", slug: "dune", seer_status: 3 })}
+        />
+      </ul>,
+    )
 
     for (const label of ["Trakt", "Processing", "Add"]) {
       expect(screen.getByText(label)).toHaveClass("overflow-hidden")
@@ -161,22 +225,38 @@ describe("TrendingCard", () => {
   })
 
   it("pads each revealed label on its outer edge so the word stays centred", () => {
-    render(<ul><TrendingCard item={item({ source: "trakt", slug: "dune", seer_status: 3 })} /></ul>)
+    render(
+      <ul>
+        <TrendingCard
+          item={item({ source: "trakt", slug: "dune", seer_status: 3 })}
+        />
+      </ul>,
+    )
 
     // Labels sit left of the icon on the link and add pills, right of it on
     // the status pill; the expanded padding always lands on the outer edge.
     expect(screen.getByText("Trakt")).toHaveClass("group-hover/link:pl-2")
     expect(screen.getByText("Add")).toHaveClass("group-hover/add:pl-2")
-    expect(screen.getByText("Processing")).toHaveClass("group-hover/status:pr-2")
+    expect(screen.getByText("Processing")).toHaveClass(
+      "group-hover/status:pr-2",
+    )
   })
 
   it("omits the status indicator when the item is not in the library", () => {
-    render(<ul><TrendingCard item={item({})} /></ul>)
+    render(
+      <ul>
+        <TrendingCard item={item({})} />
+      </ul>,
+    )
     expect(screen.queryByLabelText("In library")).not.toBeInTheDocument()
   })
 
   it("renders a hover overlay with the full title and year", () => {
-    render(<ul><TrendingCard item={item({})} /></ul>)
+    render(
+      <ul>
+        <TrendingCard item={item({})} />
+      </ul>,
+    )
     // The title appears twice: the static line below the poster and the overlay.
     expect(screen.getAllByText("Dune")).toHaveLength(2)
     // The overlay is aria-hidden — it duplicates content assistive technology
@@ -186,25 +266,31 @@ describe("TrendingCard", () => {
   })
 
   it("links a TMDB-sourced item to its themoviedb.org page", () => {
-    render(<ul><TrendingCard item={item({ source: "tmdb", tmdb: 603 })} /></ul>)
-    expect(screen.getByRole("link", { name: /open .* on tmdb/i })).toHaveAttribute(
-      "href",
-      "https://www.themoviedb.org/movie/603",
+    render(
+      <ul>
+        <TrendingCard item={item({ source: "tmdb", tmdb: 603 })} />
+      </ul>,
     )
+    expect(
+      screen.getByRole("link", { name: /open .* on tmdb/i }),
+    ).toHaveAttribute("href", "https://www.themoviedb.org/movie/603")
   })
 
   it("links a Trakt-sourced item to its trakt.tv slug page", () => {
     render(
       <ul>
         <TrendingCard
-          item={item({ source: "trakt", media_type: "show", slug: "severance" })}
+          item={item({
+            source: "trakt",
+            media_type: "show",
+            slug: "severance",
+          })}
         />
       </ul>,
     )
-    expect(screen.getByRole("link", { name: /open .* on trakt/i })).toHaveAttribute(
-      "href",
-      "https://trakt.tv/shows/severance",
-    )
+    expect(
+      screen.getByRole("link", { name: /open .* on trakt/i }),
+    ).toHaveAttribute("href", "https://trakt.tv/shows/severance")
   })
 
   it("links a Seer-sourced item to the configured Seer instance", () => {
@@ -216,15 +302,18 @@ describe("TrendingCard", () => {
         />
       </ul>,
     )
-    expect(screen.getByRole("link", { name: /open .* on seer/i })).toHaveAttribute(
-      "href",
-      "https://seer.example.com/movie/42",
-    )
+    expect(
+      screen.getByRole("link", { name: /open .* on seer/i }),
+    ).toHaveAttribute("href", "https://seer.example.com/movie/42")
   })
 
   it("omits the source link when no URL can be resolved", () => {
     // A Trakt item without a slug has no resolvable trakt.tv URL.
-    render(<ul><TrendingCard item={item({ source: "trakt", slug: null })} /></ul>)
+    render(
+      <ul>
+        <TrendingCard item={item({ source: "trakt", slug: null })} />
+      </ul>,
+    )
     expect(screen.queryByRole("link")).not.toBeInTheDocument()
   })
 })

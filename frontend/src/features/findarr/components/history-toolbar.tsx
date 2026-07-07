@@ -43,9 +43,14 @@ export function HistoryToolbar({
     <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
       <Select
         value={instanceFilter}
-        onValueChange={(value) => onInstanceFilterChange(value as InstanceFilter)}
+        onValueChange={(value) =>
+          onInstanceFilterChange(value as InstanceFilter)
+        }
       >
-        <SelectTrigger aria-label="Filter by instance" className="w-full sm:w-44">
+        <SelectTrigger
+          aria-label="Filter by instance"
+          className="w-full sm:w-44"
+        >
           <SelectValue />
         </SelectTrigger>
         <SelectContent>

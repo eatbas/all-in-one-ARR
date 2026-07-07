@@ -11,7 +11,13 @@ const sampleStatus = {
 
 describe("IntegrationStatusCard", () => {
   it("renders an online card for a healthy integration", () => {
-    render(<IntegrationStatusCard name="trakt" label="Trakt" status={sampleStatus} />)
+    render(
+      <IntegrationStatusCard
+        name="trakt"
+        label="Trakt"
+        status={sampleStatus}
+      />,
+    )
 
     expect(screen.getByText("Trakt")).toBeInTheDocument()
     expect(screen.getByText("Online")).toBeInTheDocument()
@@ -24,7 +30,11 @@ describe("IntegrationStatusCard", () => {
       <IntegrationStatusCard
         name="seer"
         label="Seer"
-        status={{ ok: false, detail: "Connection refused", checked_at: sampleStatus.checked_at }}
+        status={{
+          ok: false,
+          detail: "Connection refused",
+          checked_at: sampleStatus.checked_at,
+        }}
       />,
     )
 
@@ -34,7 +44,9 @@ describe("IntegrationStatusCard", () => {
   })
 
   it("renders a not-yet-checked state when status is missing", () => {
-    render(<IntegrationStatusCard name="sonarr" label="Sonarr" status={undefined} />)
+    render(
+      <IntegrationStatusCard name="sonarr" label="Sonarr" status={undefined} />,
+    )
 
     expect(screen.getByText("Sonarr")).toBeInTheDocument()
     expect(screen.getByText("Offline")).toBeInTheDocument()

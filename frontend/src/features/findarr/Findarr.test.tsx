@@ -64,7 +64,11 @@ const STATUS: FindarrStatus = {
   last_run_at: "2026-06-26T20:00:00Z",
   last_run_status: "completed",
   last_run_detail: "Processed 0 Findarr item(s)",
-  state: { created_at: "2026-06-26T20:00:00Z", reset_at: "2026-07-03T20:00:00Z", reset_hours: 168 },
+  state: {
+    created_at: "2026-06-26T20:00:00Z",
+    reset_at: "2026-07-03T20:00:00Z",
+    reset_hours: 168,
+  },
   apps: {
     sonarr: {
       detail: "Connected to Sonarr 4.0.1",
@@ -114,8 +118,12 @@ beforeEach(() => {
     mutationResult(vi.fn(), false),
   )
   vi.mocked(useRunFindarr).mockReturnValue(mutationResult(vi.fn(), false))
-  vi.mocked(useResetFindarrState).mockReturnValue(mutationResult(vi.fn(), false))
-  vi.mocked(useClearFindarrHistory).mockReturnValue(mutationResult(vi.fn(), false))
+  vi.mocked(useResetFindarrState).mockReturnValue(
+    mutationResult(vi.fn(), false),
+  )
+  vi.mocked(useClearFindarrHistory).mockReturnValue(
+    mutationResult(vi.fn(), false),
+  )
 })
 
 afterEach(() => {

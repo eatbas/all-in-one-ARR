@@ -35,15 +35,35 @@ const BASE_STATUS: FindarrStatus = {
     command_sleep_seconds: 0,
     state_reset_hours: 168,
     apps: {
-      sonarr: { enabled: true, missing_limit: 5, upgrade_limit: 5, monitored_only: true, skip_future: true, missing_mode: "episodes", upgrade_mode: "episodes" },
-      radarr: { enabled: true, missing_limit: 5, upgrade_limit: 5, monitored_only: true, skip_future: true, missing_mode: "episodes", upgrade_mode: "episodes" },
+      sonarr: {
+        enabled: true,
+        missing_limit: 5,
+        upgrade_limit: 5,
+        monitored_only: true,
+        skip_future: true,
+        missing_mode: "episodes",
+        upgrade_mode: "episodes",
+      },
+      radarr: {
+        enabled: true,
+        missing_limit: 5,
+        upgrade_limit: 5,
+        monitored_only: true,
+        skip_future: true,
+        missing_mode: "episodes",
+        upgrade_mode: "episodes",
+      },
     },
   },
   running: false,
   last_run_at: "2026-06-26T20:00:00Z",
   last_run_status: "completed",
   last_run_detail: "Processed 0 Findarr item(s)",
-  state: { created_at: "2026-06-26T20:00:00Z", reset_at: "2026-07-03T20:00:00Z", reset_hours: 168 },
+  state: {
+    created_at: "2026-06-26T20:00:00Z",
+    reset_at: "2026-07-03T20:00:00Z",
+    reset_hours: 168,
+  },
   apps: {
     sonarr: {
       detail: "Connected to Sonarr 4.0.1",
@@ -80,14 +100,18 @@ beforeEach(() => {
   runMutate = vi.fn()
   resetMutate = vi.fn()
   vi.mocked(useFindarrStatus).mockReturnValue(queryResult(BASE_STATUS))
-  vi.mocked(useUpdateFindarrSettings).mockReturnValue(mutation(updateMutate, false))
+  vi.mocked(useUpdateFindarrSettings).mockReturnValue(
+    mutation(updateMutate, false),
+  )
   vi.mocked(useRunFindarr).mockReturnValue(mutation(runMutate, false))
   vi.mocked(useResetFindarrState).mockReturnValue(mutation(resetMutate, false))
 })
 
 describe("Findarr Status tab", () => {
   it("shows a loading state until the status arrives", () => {
-    vi.mocked(useFindarrStatus).mockReturnValue(queryResult<FindarrStatus>(undefined, true))
+    vi.mocked(useFindarrStatus).mockReturnValue(
+      queryResult<FindarrStatus>(undefined, true),
+    )
     render(<Status />)
     expect(screen.getByText("Loading Findarr…")).toBeInTheDocument()
   })
@@ -115,12 +139,22 @@ describe("Findarr Status tab", () => {
     expect(sonarr.getByText("API 5 / 20")).toBeInTheDocument()
     // Headline is the reset-proof lifetime tally; pair each counter with its
     // caption so a missing<->upgrade swap is caught.
-    expect(sonarr.getByText("Searches Triggered").closest("div")).toHaveTextContent("10")
-    expect(sonarr.getByText("Upgrades Triggered").closest("div")).toHaveTextContent("20")
+    expect(
+      sonarr.getByText("Searches Triggered").closest("div"),
+    ).toHaveTextContent("10")
+    expect(
+      sonarr.getByText("Upgrades Triggered").closest("div"),
+    ).toHaveTextContent("20")
     // The "this window" sub-line and the last-run activity explain a 0.
-    expect(sonarr.getByText("1 searched · 11 left this window")).toBeInTheDocument()
-    expect(sonarr.getByText("2 searched · 6 left this window")).toBeInTheDocument()
-    expect(sonarr.getByText("Searched 3 item(s) on the last run")).toBeInTheDocument()
+    expect(
+      sonarr.getByText("1 searched · 11 left this window"),
+    ).toBeInTheDocument()
+    expect(
+      sonarr.getByText("2 searched · 6 left this window"),
+    ).toBeInTheDocument()
+    expect(
+      sonarr.getByText("Searched 3 item(s) on the last run"),
+    ).toBeInTheDocument()
 
     const radarrRegion = screen.getByRole("region", { name: "Radarr" })
     const radarr = within(radarrRegion)
@@ -129,10 +163,18 @@ describe("Findarr Status tab", () => {
       "/brand/radarr.svg",
     )
     expect(radarr.getByText("API 5 / 20")).toBeInTheDocument()
-    expect(radarr.getByText("Searches Triggered").closest("div")).toHaveTextContent("30")
-    expect(radarr.getByText("Upgrades Triggered").closest("div")).toHaveTextContent("40")
-    expect(radarr.getByText("3 searched · 2 left this window")).toBeInTheDocument()
-    expect(radarr.getByText("4 searched · 2 left this window")).toBeInTheDocument()
+    expect(
+      radarr.getByText("Searches Triggered").closest("div"),
+    ).toHaveTextContent("30")
+    expect(
+      radarr.getByText("Upgrades Triggered").closest("div"),
+    ).toHaveTextContent("40")
+    expect(
+      radarr.getByText("3 searched · 2 left this window"),
+    ).toBeInTheDocument()
+    expect(
+      radarr.getByText("4 searched · 2 left this window"),
+    ).toBeInTheDocument()
     expect(radarr.getByText(/Caught up/)).toBeInTheDocument()
   })
 
@@ -190,10 +232,14 @@ describe("Findarr Status tab", () => {
     render(<Status />)
     expect(screen.getByText("Disabled")).toBeInTheDocument()
     expect(
-      within(screen.getByRole("region", { name: "Sonarr" })).getByText("Paused"),
+      within(screen.getByRole("region", { name: "Sonarr" })).getByText(
+        "Paused",
+      ),
     ).toBeInTheDocument()
     expect(
-      within(screen.getByRole("region", { name: "Radarr" })).getByText("Paused"),
+      within(screen.getByRole("region", { name: "Radarr" })).getByText(
+        "Paused",
+      ),
     ).toBeInTheDocument()
   })
 

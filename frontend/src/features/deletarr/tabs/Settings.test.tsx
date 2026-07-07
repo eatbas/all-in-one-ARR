@@ -8,7 +8,10 @@ vi.mock("@/shared/lib/queries", () => ({
 }))
 
 import type { DeletarrSettings } from "@/shared/lib/api"
-import { useDeletarrSettings, useUpdateDeletarrSettings } from "@/shared/lib/queries"
+import {
+  useDeletarrSettings,
+  useUpdateDeletarrSettings,
+} from "@/shared/lib/queries"
 import { mutationResult, queryResult } from "@/shared/test/mock-query"
 
 import { Settings } from "./Settings"
@@ -21,7 +24,9 @@ const SETTINGS: DeletarrSettings = {
 
 beforeEach(() => {
   vi.mocked(useDeletarrSettings).mockReturnValue(queryResult(SETTINGS))
-  vi.mocked(useUpdateDeletarrSettings).mockReturnValue(mutationResult(vi.fn(), false))
+  vi.mocked(useUpdateDeletarrSettings).mockReturnValue(
+    mutationResult(vi.fn(), false),
+  )
 })
 
 describe("Deletarr Settings", () => {

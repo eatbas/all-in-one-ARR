@@ -16,7 +16,10 @@ import {
   type PillDensity,
 } from "@/features/trending/components/poster-pill-variants"
 import { TrendingStatusIndicator } from "@/features/trending/components/TrendingStatusIndicator"
-import { isAvailable, isPending } from "@/features/trending/trending-item-status"
+import {
+  isAvailable,
+  isPending,
+} from "@/features/trending/trending-item-status"
 import { SOURCE_LABELS } from "@/features/trending/trending-tab"
 
 /**
@@ -82,7 +85,9 @@ export function TrendingCard({
           aria-hidden="true"
           className="pointer-events-none absolute inset-x-0 bottom-0 rounded-b-md bg-linear-to-t from-black/80 via-black/50 to-transparent px-2 pt-6 pb-9 opacity-0 transition-opacity duration-200 group-hover/poster:opacity-100 group-focus-within/poster:opacity-100 motion-reduce:transition-none"
         >
-          <p className="line-clamp-3 text-xs font-semibold text-white">{label}</p>
+          <p className="line-clamp-3 text-xs font-semibold text-white">
+            {label}
+          </p>
           <p className="text-[11px] text-white/80">{formatYear(item.year)}</p>
         </div>
         {sourceUrl ? (
@@ -101,7 +106,11 @@ export function TrendingCard({
             <PillLabel group="link" side="left" density={density}>
               {sourceLabel}
             </PillLabel>
-            <span aria-hidden="true" className={pillIconSlot(density)} data-pill-icon-slot>
+            <span
+              aria-hidden="true"
+              className={pillIconSlot(density)}
+              data-pill-icon-slot
+            >
               <ExternalLinkIcon className={pillIcon(density)} />
             </span>
           </a>

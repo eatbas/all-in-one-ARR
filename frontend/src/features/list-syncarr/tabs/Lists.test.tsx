@@ -23,7 +23,12 @@ import {
 } from "@/shared/lib/queries"
 
 import { Lists } from "@/features/list-syncarr/tabs/Lists"
-import type { Item, ListSummary, ServicesSettings, Status } from "@/shared/lib/api"
+import type {
+  Item,
+  ListSummary,
+  ServicesSettings,
+  Status,
+} from "@/shared/lib/api"
 import { queryResult } from "@/shared/test/mock-query"
 
 const SERVICES: ServicesSettings = {
@@ -111,7 +116,9 @@ describe("Lists page", () => {
     vi.mocked(useListItems).mockReturnValue(queryResult(items))
     vi.mocked(useServiceSettings).mockReturnValue(queryResult(SERVICES))
     vi.mocked(useRemoveItem).mockReturnValue(mutation(removeItemMutate))
-    vi.mocked(useRemoveAvailable).mockReturnValue(mutation(removeAvailableMutate))
+    vi.mocked(useRemoveAvailable).mockReturnValue(
+      mutation(removeAvailableMutate),
+    )
     vi.mocked(useSyncNow).mockReturnValue(mutation(syncNowMutate))
   })
 
@@ -124,7 +131,9 @@ describe("Lists page", () => {
   })
 
   it("shows a loading message while the lists query is pending", () => {
-    vi.mocked(useLists).mockReturnValue(queryResult<ListSummary[]>(undefined, true))
+    vi.mocked(useLists).mockReturnValue(
+      queryResult<ListSummary[]>(undefined, true),
+    )
     render(<Lists />)
     expect(screen.getByText("Loading lists…")).toBeInTheDocument()
   })
@@ -254,7 +263,9 @@ describe("Lists page", () => {
   })
 
   it("shows a loading message while a list's items load", async () => {
-    vi.mocked(useListItems).mockReturnValue(queryResult<Item[]>(undefined, true))
+    vi.mocked(useListItems).mockReturnValue(
+      queryResult<Item[]>(undefined, true),
+    )
     const user = userEvent.setup()
     render(<Lists />)
 
@@ -272,7 +283,9 @@ describe("Lists page", () => {
   })
 
   it("treats settled-but-undefined items as empty", async () => {
-    vi.mocked(useListItems).mockReturnValue(queryResult<Item[]>(undefined, false))
+    vi.mocked(useListItems).mockReturnValue(
+      queryResult<Item[]>(undefined, false),
+    )
     const user = userEvent.setup()
     render(<Lists />)
 
@@ -337,10 +350,46 @@ describe("Lists page", () => {
     // Supplied deliberately out of order; the grid must render
     // available -> requested -> synced -> removed.
     const mixed: Item[] = [
-      { ...itemBase, trakt_id: 10, list_id: "movies", title: "Zeta", year: 2000, type: "movie", tmdb: 10, status: "removed" },
-      { ...itemBase, trakt_id: 11, list_id: "movies", title: "Yan", year: 2000, type: "movie", tmdb: 11, status: "synced" },
-      { ...itemBase, trakt_id: 12, list_id: "movies", title: "Xavier", year: 2000, type: "movie", tmdb: 12, status: "available" },
-      { ...itemBase, trakt_id: 13, list_id: "movies", title: "Wendy", year: 2000, type: "movie", tmdb: 13, status: "requested" },
+      {
+        ...itemBase,
+        trakt_id: 10,
+        list_id: "movies",
+        title: "Zeta",
+        year: 2000,
+        type: "movie",
+        tmdb: 10,
+        status: "removed",
+      },
+      {
+        ...itemBase,
+        trakt_id: 11,
+        list_id: "movies",
+        title: "Yan",
+        year: 2000,
+        type: "movie",
+        tmdb: 11,
+        status: "synced",
+      },
+      {
+        ...itemBase,
+        trakt_id: 12,
+        list_id: "movies",
+        title: "Xavier",
+        year: 2000,
+        type: "movie",
+        tmdb: 12,
+        status: "available",
+      },
+      {
+        ...itemBase,
+        trakt_id: 13,
+        list_id: "movies",
+        title: "Wendy",
+        year: 2000,
+        type: "movie",
+        tmdb: 13,
+        status: "requested",
+      },
     ]
     vi.mocked(useListItems).mockReturnValue(queryResult<Item[]>(mixed))
     const user = userEvent.setup()
@@ -349,9 +398,12 @@ describe("Lists page", () => {
     await user.click(screen.getByRole("switch", { name: "Show removed items" }))
     await user.click(screen.getByRole("button", { name: /Movies/ }))
 
-    const badges = screen.getAllByText(/^(Available|Requested|Synced|Removed)$/, {
-      selector: "[data-slot='badge']",
-    })
+    const badges = screen.getAllByText(
+      /^(Available|Requested|Synced|Removed)$/,
+      {
+        selector: "[data-slot='badge']",
+      },
+    )
     expect(badges.map((b) => b.textContent)).toEqual([
       "Available",
       "Requested",

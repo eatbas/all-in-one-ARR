@@ -1,7 +1,12 @@
 import { useState } from "react"
 import { ActivityIcon, SettingsIcon } from "lucide-react"
 
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/shared/components/ui/tabs"
+import {
+  Tabs,
+  TabsContent,
+  TabsList,
+  TabsTrigger,
+} from "@/shared/components/ui/tabs"
 import { Status } from "@/features/bandwidth-controllarr/tabs/Status"
 import { BandwidthSettings } from "@/features/bandwidth-controllarr/tabs/BandwidthSettings"
 import {
@@ -37,8 +42,8 @@ export function BandwidthControllarr() {
           Bandwidth-Controllarr
         </h1>
         <p className="text-sm text-muted-foreground">
-          Prioritise BitTorrent over Usenet by pausing SABnzbd while
-          qBittorrent is active.
+          Prioritise BitTorrent over Usenet by pausing SABnzbd while qBittorrent
+          is active.
         </p>
       </div>
 

@@ -1,7 +1,12 @@
 import { useState } from "react"
 import { ActivityIcon, HistoryIcon, SettingsIcon } from "lucide-react"
 
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/shared/components/ui/tabs"
+import {
+  Tabs,
+  TabsContent,
+  TabsList,
+  TabsTrigger,
+} from "@/shared/components/ui/tabs"
 import { History } from "@/features/findarr/tabs/History"
 import { Settings } from "@/features/findarr/tabs/Settings"
 import { Status } from "@/features/findarr/tabs/Status"
@@ -15,7 +20,8 @@ export function Findarr() {
   const [activeTab, setActiveTab] = useState(() => {
     if (typeof localStorage === "undefined") return "status"
     const stored = localStorage.getItem(FINDARR_TAB_STORAGE_KEY)
-    return stored && VALID_FINDARR_TABS.includes(stored as (typeof VALID_FINDARR_TABS)[number])
+    return stored &&
+      VALID_FINDARR_TABS.includes(stored as (typeof VALID_FINDARR_TABS)[number])
       ? stored
       : "status"
   })

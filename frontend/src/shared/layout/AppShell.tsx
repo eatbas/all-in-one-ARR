@@ -92,7 +92,9 @@ function Sidebar({ collapsed, onToggle }: SidebarProps) {
         )}
       >
         <span className={cn(collapsed && "sr-only")}>aio-arr</span>
-        <span className={cn(!collapsed && "font-medium text-sidebar-foreground/80")}>
+        <span
+          className={cn(!collapsed && "font-medium text-sidebar-foreground/80")}
+        >
           v{APP_VERSION}
         </span>
       </div>

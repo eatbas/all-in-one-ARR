@@ -24,7 +24,11 @@ import {
 import type { TrendingItem, TrendingQuery } from "@/shared/lib/api"
 import { setup } from "@/shared/test/query-provider"
 
-const QUERY: TrendingQuery = { source: "trakt", media: "movie", category: "trending" }
+const QUERY: TrendingQuery = {
+  source: "trakt",
+  media: "movie",
+  category: "trending",
+}
 
 const ITEM: TrendingItem = {
   source: "trakt",
@@ -45,7 +49,10 @@ const ITEM: TrendingItem = {
 beforeEach(() => {
   vi.clearAllMocks()
   vi.mocked(api.getTrending).mockResolvedValue([ITEM])
-  vi.mocked(api.getTrendingRating).mockResolvedValue({ imdb_rating: 8.6, imdb_votes: 10 })
+  vi.mocked(api.getTrendingRating).mockResolvedValue({
+    imdb_rating: 8.6,
+    imdb_votes: 10,
+  })
 })
 
 describe("useTrending", () => {
@@ -120,7 +127,9 @@ describe("useAddTrending", () => {
 
     expect(toast.success).toHaveBeenCalledWith(
       "Added to Trakt list",
-      expect.objectContaining({ description: "Syncing now to request it in Seer." }),
+      expect.objectContaining({
+        description: "Syncing now to request it in Seer.",
+      }),
     )
     expect(invalidate).toHaveBeenCalledWith({ queryKey: queryKeys.status })
     expect(invalidate).toHaveBeenCalledWith({ queryKey: queryKeys.lists })
@@ -128,12 +137,19 @@ describe("useAddTrending", () => {
   })
 
   it("toasts the pending-sync variant when a sync is already running", async () => {
-    vi.mocked(api.addTrending).mockResolvedValue({ status: "added_pending_sync" })
+    vi.mocked(api.addTrending).mockResolvedValue({
+      status: "added_pending_sync",
+    })
     const { wrapper } = setup()
     const hook = renderHook(() => useAddTrending(), { wrapper })
 
     act(() =>
-      hook.result.current.mutate({ media_type: "movie", owner_user: "me", slug: "my-list", tmdb: 100 }),
+      hook.result.current.mutate({
+        media_type: "movie",
+        owner_user: "me",
+        slug: "my-list",
+        tmdb: 100,
+      }),
     )
     await waitFor(() => expect(hook.result.current.isSuccess).toBe(true))
     expect(toast.success).toHaveBeenCalledWith(
@@ -150,7 +166,12 @@ describe("useAddTrending", () => {
     const hook = renderHook(() => useAddTrending(), { wrapper })
 
     act(() =>
-      hook.result.current.mutate({ media_type: "movie", owner_user: "me", slug: "my-list", tmdb: 100 }),
+      hook.result.current.mutate({
+        media_type: "movie",
+        owner_user: "me",
+        slug: "my-list",
+        tmdb: 100,
+      }),
     )
     await waitFor(() => expect(hook.result.current.isError).toBe(true))
     expect(toast.error).toHaveBeenCalledWith("Could not add to list", {

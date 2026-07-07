@@ -63,7 +63,9 @@ export function SyncStats() {
                 {card.title}
               </CardTitle>
               <span className="text-xl font-bold tabular-nums">
-                {isLoading || status === undefined ? "–" : status.counts[card.key]}
+                {isLoading || status === undefined
+                  ? "–"
+                  : status.counts[card.key]}
               </span>
             </div>
             <card.icon className="size-4 shrink-0 text-muted-foreground" />

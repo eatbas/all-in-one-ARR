@@ -41,7 +41,9 @@ function activityEntries(count: number): ActivityEntry[] {
 describe("Dashboard", () => {
   beforeEach(() => {
     checkNowMutate.mockClear()
-    vi.mocked(useActivity).mockReturnValue(queryResult<ActivityEntry[]>([], false))
+    vi.mocked(useActivity).mockReturnValue(
+      queryResult<ActivityEntry[]>([], false),
+    )
     vi.mocked(useServiceStatuses).mockReturnValue(
       queryResult(emptyServiceStatuses, false),
     )
@@ -54,14 +56,23 @@ describe("Dashboard", () => {
   it("starts with the activity feed collapsed", () => {
     vi.mocked(useActivity).mockReturnValue(
       queryResult<ActivityEntry[]>(
-        [{ id: 1, ts: "2024-01-01T10:00:00Z", action: "Requested", detail: "Dune" }],
+        [
+          {
+            id: 1,
+            ts: "2024-01-01T10:00:00Z",
+            action: "Requested",
+            detail: "Dune",
+          },
+        ],
         false,
       ),
     )
 
     render(<Dashboard />)
 
-    expect(screen.getByRole("heading", { name: "Dashboard" })).toBeInTheDocument()
+    expect(
+      screen.getByRole("heading", { name: "Dashboard" }),
+    ).toBeInTheDocument()
     expect(
       screen.getByText(
         "All-in-one ARR coordinates Trakt lists, Seer requests, Sonarr/Radarr searches, and download-client controls from one dashboard.",
@@ -82,7 +93,9 @@ describe("Dashboard", () => {
   })
 
   it("shows a loading placeholder while the activity query is loading", () => {
-    vi.mocked(useActivity).mockReturnValue(queryResult<ActivityEntry[]>(undefined, true))
+    vi.mocked(useActivity).mockReturnValue(
+      queryResult<ActivityEntry[]>(undefined, true),
+    )
 
     render(<Dashboard />)
     fireEvent.click(screen.getByRole("button", { name: /recent activity/i }))
@@ -91,7 +104,9 @@ describe("Dashboard", () => {
   })
 
   it("shows an empty feed when settled but unpopulated", () => {
-    vi.mocked(useActivity).mockReturnValue(queryResult<ActivityEntry[]>([], false))
+    vi.mocked(useActivity).mockReturnValue(
+      queryResult<ActivityEntry[]>([], false),
+    )
 
     render(<Dashboard />)
     fireEvent.click(screen.getByRole("button", { name: /recent activity/i }))
@@ -103,7 +118,12 @@ describe("Dashboard", () => {
     vi.mocked(useActivity).mockReturnValue(
       queryResult<ActivityEntry[]>(
         [
-          { id: 1, ts: "2024-01-01T10:00:00Z", action: "Older", detail: "first" },
+          {
+            id: 1,
+            ts: "2024-01-01T10:00:00Z",
+            action: "Older",
+            detail: "first",
+          },
           { id: 2, ts: "not-a-date", action: "Newer", detail: "second" },
         ],
         false,
@@ -153,9 +173,13 @@ describe("Dashboard", () => {
     expect(within(entries[0]).getByText("Action 1")).toBeInTheDocument()
     expect(screen.getByText("Showing 6–6 of 6")).toBeInTheDocument()
     expect(screen.getByText("Page 2 of 2")).toBeInTheDocument()
-    expect(screen.getByRole("button", { name: "Next activity page" })).toBeDisabled()
+    expect(
+      screen.getByRole("button", { name: "Next activity page" }),
+    ).toBeDisabled()
 
-    await user.click(screen.getByRole("button", { name: "Previous activity page" }))
+    await user.click(
+      screen.getByRole("button", { name: "Previous activity page" }),
+    )
 
     expect(screen.getAllByRole("listitem")).toHaveLength(5)
     expect(screen.getByText("Page 1 of 2")).toBeInTheDocument()
@@ -191,7 +215,14 @@ describe("Dashboard", () => {
     const user = userEvent.setup()
     vi.mocked(useActivity).mockReturnValue(
       queryResult<ActivityEntry[]>(
-        [{ id: 1, ts: "2024-01-01T10:00:00Z", action: "Requested", detail: "Dune" }],
+        [
+          {
+            id: 1,
+            ts: "2024-01-01T10:00:00Z",
+            action: "Requested",
+            detail: "Dune",
+          },
+        ],
         false,
       ),
     )
@@ -214,7 +245,14 @@ describe("Dashboard", () => {
   it("toggles the activity feed with the keyboard and ignores other keys", () => {
     vi.mocked(useActivity).mockReturnValue(
       queryResult<ActivityEntry[]>(
-        [{ id: 1, ts: "2024-01-01T10:00:00Z", action: "Requested", detail: "Dune" }],
+        [
+          {
+            id: 1,
+            ts: "2024-01-01T10:00:00Z",
+            action: "Requested",
+            detail: "Dune",
+          },
+        ],
         false,
       ),
     )
@@ -247,7 +285,11 @@ describe("Dashboard", () => {
           interval_seconds: 60,
           last_check_at: "2026-06-23T13:22:46Z",
           services: {
-            trakt: { ok: true, detail: "Connected", checked_at: "2026-06-23T13:22:46Z" },
+            trakt: {
+              ok: true,
+              detail: "Connected",
+              checked_at: "2026-06-23T13:22:46Z",
+            },
             seer: {
               ok: false,
               detail: "Refused",
@@ -273,7 +315,9 @@ describe("Dashboard", () => {
 
   it("triggers a fresh check when 'Check now' is clicked", async () => {
     const user = userEvent.setup()
-    vi.mocked(useActivity).mockReturnValue(queryResult<ActivityEntry[]>([], false))
+    vi.mocked(useActivity).mockReturnValue(
+      queryResult<ActivityEntry[]>([], false),
+    )
 
     render(<Dashboard />)
     await user.click(screen.getByRole("button", { name: /check now/i }))
@@ -282,7 +326,9 @@ describe("Dashboard", () => {
   })
 
   it("defaults services and spins the button while a check is pending", () => {
-    vi.mocked(useActivity).mockReturnValue(queryResult<ActivityEntry[]>([], false))
+    vi.mocked(useActivity).mockReturnValue(
+      queryResult<ActivityEntry[]>([], false),
+    )
     // No service-status snapshot at all: `services` falls back to an empty map
     // and `lastCheck` is undefined.
     vi.mocked(useServiceStatuses).mockReturnValue(

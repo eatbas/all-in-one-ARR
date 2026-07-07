@@ -1,4 +1,9 @@
-import { render as rtlRender, screen, fireEvent, within } from "@testing-library/react"
+import {
+  render as rtlRender,
+  screen,
+  fireEvent,
+  within,
+} from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import type { ReactElement } from "react"
 import { beforeEach, describe, expect, it, vi } from "vitest"
@@ -67,8 +72,24 @@ const STATUS: FindarrStatus = {
     reset_hours: 168,
   },
   apps: {
-    sonarr: { detail: "ok", version: "4.0.1", compatible: true, processed: { missing: 0, upgrade: 0 }, lifetime: { missing: 0, upgrade: 0 }, wanted: { missing: 0, upgrade: 0 }, activity: "Not run yet" },
-    radarr: { detail: "ok", version: "6.0.0", compatible: true, processed: { missing: 0, upgrade: 0 }, lifetime: { missing: 0, upgrade: 0 }, wanted: { missing: 0, upgrade: 0 }, activity: "Not run yet" },
+    sonarr: {
+      detail: "ok",
+      version: "4.0.1",
+      compatible: true,
+      processed: { missing: 0, upgrade: 0 },
+      lifetime: { missing: 0, upgrade: 0 },
+      wanted: { missing: 0, upgrade: 0 },
+      activity: "Not run yet",
+    },
+    radarr: {
+      detail: "ok",
+      version: "6.0.0",
+      compatible: true,
+      processed: { missing: 0, upgrade: 0 },
+      lifetime: { missing: 0, upgrade: 0 },
+      wanted: { missing: 0, upgrade: 0 },
+      activity: "Not run yet",
+    },
   },
   hourly: { limit: 20, used: 0, remaining: 20 },
 }
@@ -85,13 +106,17 @@ beforeEach(() => {
   resetMutate = vi.fn()
   vi.mocked(useFindarrSettings).mockReturnValue(queryResult(SETTINGS))
   vi.mocked(useFindarrStatus).mockReturnValue(queryResult(STATUS))
-  vi.mocked(useUpdateFindarrSettings).mockReturnValue(mutation(updateMutate, false))
+  vi.mocked(useUpdateFindarrSettings).mockReturnValue(
+    mutation(updateMutate, false),
+  )
   vi.mocked(useResetFindarrState).mockReturnValue(mutation(resetMutate, false))
 })
 
 describe("Findarr Settings tab", () => {
   it("shows a loading state until settings arrive", () => {
-    vi.mocked(useFindarrSettings).mockReturnValue(queryResult<FindarrSettings>(undefined, true))
+    vi.mocked(useFindarrSettings).mockReturnValue(
+      queryResult<FindarrSettings>(undefined, true),
+    )
     render(<Settings />)
     expect(screen.getByText("Loading settings…")).toBeInTheDocument()
   })
@@ -121,11 +146,17 @@ describe("Findarr Settings tab", () => {
 
   it("edits the hourly cap, queue limit, and sleep duration numbers", () => {
     render(<Settings />)
-    fireEvent.change(screen.getByLabelText("Hourly cap"), { target: { value: "10" } })
+    fireEvent.change(screen.getByLabelText("Hourly cap"), {
+      target: { value: "10" },
+    })
     expect(updateMutate).toHaveBeenCalledWith({ hourly_cap: 10 })
-    fireEvent.change(screen.getByLabelText("Queue limit"), { target: { value: "3" } })
+    fireEvent.change(screen.getByLabelText("Queue limit"), {
+      target: { value: "3" },
+    })
     expect(updateMutate).toHaveBeenCalledWith({ queue_limit: 3 })
-    fireEvent.change(screen.getByLabelText("Sleep duration"), { target: { value: "5" } })
+    fireEvent.change(screen.getByLabelText("Sleep duration"), {
+      target: { value: "5" },
+    })
     expect(updateMutate).toHaveBeenCalledWith({ command_sleep_seconds: 5 })
   })
 
@@ -133,11 +164,19 @@ describe("Findarr Settings tab", () => {
     const user = userEvent.setup()
     render(<Settings />)
     await user.click(screen.getByRole("switch", { name: "Enable Sonarr" }))
-    expect(updateMutate).toHaveBeenCalledWith({ apps: { sonarr: { enabled: false } } })
-    await user.click(screen.getByRole("switch", { name: "Sonarr monitored only" }))
-    expect(updateMutate).toHaveBeenCalledWith({ apps: { sonarr: { monitored_only: false } } })
+    expect(updateMutate).toHaveBeenCalledWith({
+      apps: { sonarr: { enabled: false } },
+    })
+    await user.click(
+      screen.getByRole("switch", { name: "Sonarr monitored only" }),
+    )
+    expect(updateMutate).toHaveBeenCalledWith({
+      apps: { sonarr: { monitored_only: false } },
+    })
     await user.click(screen.getByRole("switch", { name: "Sonarr skip future" }))
-    expect(updateMutate).toHaveBeenCalledWith({ apps: { sonarr: { skip_future: false } } })
+    expect(updateMutate).toHaveBeenCalledWith({
+      apps: { sonarr: { skip_future: false } },
+    })
   })
 
   it("edits the per-app cycle limits", () => {
@@ -146,11 +185,15 @@ describe("Findarr Settings tab", () => {
     fireEvent.change(screen.getAllByLabelText("Missing per cycle")[0], {
       target: { value: "7" },
     })
-    expect(updateMutate).toHaveBeenCalledWith({ apps: { sonarr: { missing_limit: 7 } } })
+    expect(updateMutate).toHaveBeenCalledWith({
+      apps: { sonarr: { missing_limit: 7 } },
+    })
     fireEvent.change(screen.getAllByLabelText("Upgrades per cycle")[1], {
       target: { value: "9" },
     })
-    expect(updateMutate).toHaveBeenCalledWith({ apps: { radarr: { upgrade_limit: 9 } } })
+    expect(updateMutate).toHaveBeenCalledWith({
+      apps: { radarr: { upgrade_limit: 9 } },
+    })
   })
 
   it("offers the Sonarr search modes only for Sonarr", async () => {
@@ -160,13 +203,19 @@ describe("Findarr Settings tab", () => {
     expect(screen.getAllByText("Missing search mode")).toHaveLength(1)
     expect(screen.getAllByText("Upgrade mode")).toHaveLength(1)
 
-    await user.click(screen.getByRole("combobox", { name: "Missing search mode" }))
+    await user.click(
+      screen.getByRole("combobox", { name: "Missing search mode" }),
+    )
     await user.click(screen.getByRole("option", { name: "Seasons" }))
-    expect(updateMutate).toHaveBeenCalledWith({ apps: { sonarr: { missing_mode: "seasons" } } })
+    expect(updateMutate).toHaveBeenCalledWith({
+      apps: { sonarr: { missing_mode: "seasons" } },
+    })
 
     await user.click(screen.getByRole("combobox", { name: "Upgrade mode" }))
     await user.click(screen.getByRole("option", { name: "Shows" }))
-    expect(updateMutate).toHaveBeenCalledWith({ apps: { sonarr: { upgrade_mode: "shows" } } })
+    expect(updateMutate).toHaveBeenCalledWith({
+      apps: { sonarr: { upgrade_mode: "shows" } },
+    })
   })
 
   it("shows the stateful-management window and edits the reset hours", () => {
@@ -181,7 +230,9 @@ describe("Findarr Settings tab", () => {
   })
 
   it("shows placeholders when no state window exists yet", () => {
-    vi.mocked(useFindarrStatus).mockReturnValue(queryResult<FindarrStatus>(undefined))
+    vi.mocked(useFindarrStatus).mockReturnValue(
+      queryResult<FindarrStatus>(undefined),
+    )
     render(<Settings />)
     expect(screen.getByText("Not created yet")).toBeInTheDocument()
     expect(screen.getByText("—")).toBeInTheDocument()

@@ -20,10 +20,7 @@ export function StatusBadge({
 }) {
   const label = status[0].toUpperCase() + status.slice(1)
   return (
-    <Badge
-      variant="outline"
-      className={cn(STATUS_STYLES[status], className)}
-    >
+    <Badge variant="outline" className={cn(STATUS_STYLES[status], className)}>
       {label}
     </Badge>
   )

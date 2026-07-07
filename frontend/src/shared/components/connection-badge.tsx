@@ -12,8 +12,7 @@ const DEFAULT_LABELS: Record<ConnectionState, string> = {
 }
 
 const STATE_STYLES: Record<ConnectionState, string> = {
-  connected:
-    "border-emerald-500/40 text-emerald-600 dark:text-emerald-400",
+  connected: "border-emerald-500/40 text-emerald-600 dark:text-emerald-400",
   offline: "border-red-500/40 text-red-600 dark:text-red-400",
   "not-set": "border-amber-500/40 text-amber-600 dark:text-amber-400",
   checking: "border-slate-500/40 text-slate-600 dark:text-slate-400",

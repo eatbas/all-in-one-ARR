@@ -119,13 +119,7 @@ export interface AddListPayload {
 
 /** The connection services managed from the Settings tabs. */
 export type ServiceName =
-  | "seer"
-  | "sonarr"
-  | "radarr"
-  | "tmdb"
-  | "omdb"
-  | "sabnzbd"
-  | "qbittorrent"
+  "seer" | "sonarr" | "radarr" | "tmdb" | "omdb" | "sabnzbd" | "qbittorrent"
 
 /**
  * A service's masked connection. Fields are optional because services differ in
@@ -574,10 +568,9 @@ export interface FindarrCountResult {
 
 /** Remove a single tracked item from its Trakt list. */
 export function removeItem(listId: string, traktId: number): Promise<void> {
-  return request<void>(
-    `/api/items/${encodeURIComponent(listId)}/${traktId}`,
-    { method: "DELETE" },
-  )
+  return request<void>(`/api/items/${encodeURIComponent(listId)}/${traktId}`, {
+    method: "DELETE",
+  })
 }
 
 /** Trigger removal of every Available item from its Trakt list. */
@@ -731,7 +724,9 @@ export function getTrendingRating(params: {
   return request<TrendingRating>(`/api/trending/rating${qs ? `?${qs}` : ""}`)
 }
 
-export function addTrending(payload: AddTrendingPayload): Promise<TrendingAddResult> {
+export function addTrending(
+  payload: AddTrendingPayload,
+): Promise<TrendingAddResult> {
   return postJson<TrendingAddResult>("/api/trending/add", payload)
 }
 

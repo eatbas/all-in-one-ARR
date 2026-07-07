@@ -60,9 +60,9 @@ describe("BandwidthSettings", () => {
     expect(
       screen.queryByRole("switch", { name: "Enable bandwidth control" }),
     ).not.toBeInTheDocument()
-    expect(screen.getByRole("combobox", { name: "Check interval" })).toHaveTextContent(
-      "15 seconds",
-    )
+    expect(
+      screen.getByRole("combobox", { name: "Check interval" }),
+    ).toHaveTextContent("15 seconds")
   })
 
   it("changes the check interval", async () => {
@@ -89,9 +89,9 @@ describe("BandwidthSettings", () => {
       queryResult({ ...BASE, check_interval_seconds: 60 }),
     )
     render(<BandwidthSettings />)
-    expect(screen.getByRole("combobox", { name: "Check interval" })).toHaveTextContent(
-      "60 seconds",
-    )
+    expect(
+      screen.getByRole("combobox", { name: "Check interval" }),
+    ).toHaveTextContent("60 seconds")
   })
 
   it("links to /metrics", () => {
@@ -102,9 +102,13 @@ describe("BandwidthSettings", () => {
   })
 
   it("disables controls while the mutation is pending", () => {
-    vi.mocked(useUpdateBandwidthSettings).mockReturnValue(mutation(updateMutate, true))
+    vi.mocked(useUpdateBandwidthSettings).mockReturnValue(
+      mutation(updateMutate, true),
+    )
     render(<BandwidthSettings />)
-    expect(screen.getByRole("combobox", { name: "Check interval" })).toBeDisabled()
+    expect(
+      screen.getByRole("combobox", { name: "Check interval" }),
+    ).toBeDisabled()
   })
 
   it("falls back to defaults while loading", () => {
@@ -115,8 +119,8 @@ describe("BandwidthSettings", () => {
     expect(
       screen.queryByRole("switch", { name: "Enable bandwidth control" }),
     ).not.toBeInTheDocument()
-    expect(screen.getByRole("combobox", { name: "Check interval" })).toHaveTextContent(
-      "15 seconds",
-    )
+    expect(
+      screen.getByRole("combobox", { name: "Check interval" }),
+    ).toHaveTextContent("15 seconds")
   })
 })

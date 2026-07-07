@@ -9,10 +9,7 @@ vi.mock("@/shared/lib/queries", () => ({
   useClearFindarrHistory: vi.fn(),
 }))
 
-import {
-  useClearFindarrHistory,
-  useFindarrHistory,
-} from "@/shared/lib/queries"
+import { useClearFindarrHistory, useFindarrHistory } from "@/shared/lib/queries"
 import { History } from "@/features/findarr/tabs/History"
 import type { FindarrCountResult, FindarrHistoryEntry } from "@/shared/lib/api"
 import { TooltipProvider } from "@/shared/components/ui/tooltip"
@@ -73,7 +70,9 @@ function render(ui: ReactElement) {
 
 beforeEach(() => {
   clearMutate = vi.fn()
-  vi.mocked(useFindarrHistory).mockReturnValue(queryResult<FindarrHistoryEntry[]>(ROWS))
+  vi.mocked(useFindarrHistory).mockReturnValue(
+    queryResult<FindarrHistoryEntry[]>(ROWS),
+  )
   vi.mocked(useClearFindarrHistory).mockReturnValue(
     mutationResult<FindarrCountResult, void>(() => clearMutate(), false),
   )
@@ -89,7 +88,9 @@ describe("Findarr History tab", () => {
   })
 
   it("shows an empty state when there is no history", () => {
-    vi.mocked(useFindarrHistory).mockReturnValue(queryResult<FindarrHistoryEntry[]>([]))
+    vi.mocked(useFindarrHistory).mockReturnValue(
+      queryResult<FindarrHistoryEntry[]>([]),
+    )
     render(<History />)
     expect(screen.getByText("No Findarr history yet.")).toBeInTheDocument()
   })
@@ -103,7 +104,9 @@ describe("Findarr History tab", () => {
     expect(screen.getByText("Upgrade")).toBeInTheDocument()
     expect(screen.getByText("System")).toBeInTheDocument()
     // System rows surface their detail as the processed-information text.
-    expect(screen.getByText("Findarr history cleared (0 rows removed)")).toBeInTheDocument()
+    expect(
+      screen.getByText("Findarr history cleared (0 rows removed)"),
+    ).toBeInTheDocument()
     expect(screen.getByText("34451")).toBeInTheDocument()
     expect(screen.getByText("—")).toBeInTheDocument() // system row has no id
     expect(screen.getAllByText("Sonarr - Default")).toHaveLength(2)
@@ -114,7 +117,9 @@ describe("Findarr History tab", () => {
     const user = userEvent.setup()
     render(<History />)
     await user.hover(
-      screen.getByRole("button", { name: "Details for Little Brother (2026): error" }),
+      screen.getByRole("button", {
+        name: "Details for Little Brother (2026): error",
+      }),
     )
     expect((await screen.findAllByText(/boom/)).length).toBeGreaterThan(0)
   })
@@ -122,7 +127,9 @@ describe("Findarr History tab", () => {
   it("filters by instance", async () => {
     const user = userEvent.setup()
     render(<History />)
-    await user.click(screen.getByRole("combobox", { name: "Filter by instance" }))
+    await user.click(
+      screen.getByRole("combobox", { name: "Filter by instance" }),
+    )
     await user.click(screen.getByRole("option", { name: "Sonarr" }))
     expect(screen.queryByText("Little Brother (2026)")).not.toBeInTheDocument()
     expect(
@@ -141,7 +148,9 @@ describe("Findarr History tab", () => {
 
     await user.clear(screen.getByLabelText("Search history"))
     await user.type(screen.getByLabelText("Search history"), "no-such-entry")
-    expect(screen.getByText("No entries match your filters.")).toBeInTheDocument()
+    expect(
+      screen.getByText("No entries match your filters."),
+    ).toBeInTheDocument()
   })
 
   it("pages through history at the selected page size", async () => {
@@ -196,7 +205,9 @@ describe("Findarr History tab", () => {
     await user.click(screen.getByRole("button", { name: "Next page" }))
     expect(screen.getByText("Page 2 of 2")).toBeInTheDocument()
 
-    await user.click(screen.getByRole("combobox", { name: "Filter by instance" }))
+    await user.click(
+      screen.getByRole("combobox", { name: "Filter by instance" }),
+    )
     await user.click(screen.getByRole("option", { name: "Sonarr" }))
     expect(screen.getByText("Page 1 of 2")).toBeInTheDocument()
     expect(screen.getByText("Show 0")).toBeInTheDocument()
@@ -222,7 +233,9 @@ describe("Findarr History tab", () => {
     render(<History />)
     await user.click(screen.getByRole("button", { name: "Clear" }))
     const dialog = screen.getByRole("alertdialog")
-    await user.click(within(dialog).getByRole("button", { name: "Clear history" }))
+    await user.click(
+      within(dialog).getByRole("button", { name: "Clear history" }),
+    )
     expect(clearMutate).toHaveBeenCalledTimes(1)
   })
 

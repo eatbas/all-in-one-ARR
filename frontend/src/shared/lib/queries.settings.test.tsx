@@ -96,7 +96,9 @@ describe("trakt settings hooks", () => {
     act(() => result.current.mutate({ client_id: "newid1234" }))
 
     await waitFor(() => expect(result.current.isSuccess).toBe(true))
-    expect(invalidate).toHaveBeenCalledWith({ queryKey: queryKeys.traktSettings })
+    expect(invalidate).toHaveBeenCalledWith({
+      queryKey: queryKeys.traktSettings,
+    })
     expect(invalidate).toHaveBeenCalledWith({ queryKey: queryKeys.activity })
   })
 
@@ -352,7 +354,9 @@ describe("service status hooks", () => {
     await waitFor(() => expect(result.current.isSuccess).toBe(true))
     expect(api.checkServiceStatuses).toHaveBeenCalled()
     expect(toast.success).toHaveBeenCalledWith("Status check complete")
-    expect(invalidate).toHaveBeenCalledWith({ queryKey: queryKeys.serviceStatuses })
+    expect(invalidate).toHaveBeenCalledWith({
+      queryKey: queryKeys.serviceStatuses,
+    })
     expect(invalidate).toHaveBeenCalledWith({ queryKey: queryKeys.activity })
   })
 
@@ -398,8 +402,12 @@ describe("general settings hooks", () => {
       { interval_seconds: 30 },
       expect.anything(),
     )
-    expect(invalidate).toHaveBeenCalledWith({ queryKey: queryKeys.serviceStatuses })
-    expect(invalidate).toHaveBeenCalledWith({ queryKey: queryKeys.generalSettings })
+    expect(invalidate).toHaveBeenCalledWith({
+      queryKey: queryKeys.serviceStatuses,
+    })
+    expect(invalidate).toHaveBeenCalledWith({
+      queryKey: queryKeys.generalSettings,
+    })
     expect(invalidate).toHaveBeenCalledWith({ queryKey: queryKeys.activity })
   })
 
@@ -433,7 +441,9 @@ describe("general settings hooks", () => {
     expect(api.updateGeneralSettings).toHaveBeenCalledWith({
       sync_interval_minutes: 30,
     })
-    expect(invalidate).toHaveBeenCalledWith({ queryKey: queryKeys.generalSettings })
+    expect(invalidate).toHaveBeenCalledWith({
+      queryKey: queryKeys.generalSettings,
+    })
     expect(invalidate).toHaveBeenCalledWith({ queryKey: queryKeys.lists })
     expect(invalidate).toHaveBeenCalledWith({ queryKey: queryKeys.activity })
   })
@@ -460,7 +470,9 @@ describe("general settings hooks", () => {
     })
     const { queryClient, wrapper } = setup()
     const invalidate = vi.spyOn(queryClient, "invalidateQueries")
-    const { result } = renderHook(() => useUpdateTrendingInterval(), { wrapper })
+    const { result } = renderHook(() => useUpdateTrendingInterval(), {
+      wrapper,
+    })
 
     act(() => result.current.mutate(120))
 
@@ -472,22 +484,31 @@ describe("general settings hooks", () => {
       "Trending sync interval updated",
       expect.objectContaining({ description: expect.any(String) }),
     )
-    expect(invalidate).toHaveBeenCalledWith({ queryKey: queryKeys.generalSettings })
-    expect(invalidate).toHaveBeenCalledWith({ queryKey: queryKeys.trendingStatus })
+    expect(invalidate).toHaveBeenCalledWith({
+      queryKey: queryKeys.generalSettings,
+    })
+    expect(invalidate).toHaveBeenCalledWith({
+      queryKey: queryKeys.trendingStatus,
+    })
     expect(invalidate).toHaveBeenCalledWith({ queryKey: queryKeys.activity })
   })
 
   it("useUpdateTrendingInterval toasts on error", async () => {
     vi.mocked(api.updateGeneralSettings).mockRejectedValue(new Error("boom"))
     const { wrapper } = setup()
-    const { result } = renderHook(() => useUpdateTrendingInterval(), { wrapper })
+    const { result } = renderHook(() => useUpdateTrendingInterval(), {
+      wrapper,
+    })
 
     act(() => result.current.mutate(30))
 
     await waitFor(() => expect(result.current.isError).toBe(true))
-    expect(toast.error).toHaveBeenCalledWith("Could not update trending sync interval", {
-      description: "boom",
-    })
+    expect(toast.error).toHaveBeenCalledWith(
+      "Could not update trending sync interval",
+      {
+        description: "boom",
+      },
+    )
   })
 
   it("useUpdateAutoRemoveWhenAvailable announces enabled and invalidates general settings", async () => {
@@ -499,7 +520,9 @@ describe("general settings hooks", () => {
     })
     const { queryClient, wrapper } = setup()
     const invalidate = vi.spyOn(queryClient, "invalidateQueries")
-    const { result } = renderHook(() => useUpdateAutoRemoveWhenAvailable(), { wrapper })
+    const { result } = renderHook(() => useUpdateAutoRemoveWhenAvailable(), {
+      wrapper,
+    })
 
     act(() => result.current.mutate(true))
 
@@ -525,7 +548,9 @@ describe("general settings hooks", () => {
       auto_remove_when_available: false,
     })
     const { wrapper } = setup()
-    const { result } = renderHook(() => useUpdateAutoRemoveWhenAvailable(), { wrapper })
+    const { result } = renderHook(() => useUpdateAutoRemoveWhenAvailable(), {
+      wrapper,
+    })
 
     act(() => result.current.mutate(false))
 
@@ -539,7 +564,9 @@ describe("general settings hooks", () => {
   it("useUpdateAutoRemoveWhenAvailable toasts on error", async () => {
     vi.mocked(api.updateGeneralSettings).mockRejectedValue(new Error("boom"))
     const { wrapper } = setup()
-    const { result } = renderHook(() => useUpdateAutoRemoveWhenAvailable(), { wrapper })
+    const { result } = renderHook(() => useUpdateAutoRemoveWhenAvailable(), {
+      wrapper,
+    })
 
     act(() => result.current.mutate(true))
 

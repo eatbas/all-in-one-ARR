@@ -38,7 +38,13 @@ const SETTINGS: TraktSettings = {
 
 const DISCOVERED: TraktListEntry[] = [
   { name: "TV", slug: "tv", owner_user: "me", item_count: 6, selected: false },
-  { name: null, slug: "anime", owner_user: "me", item_count: null, selected: true },
+  {
+    name: null,
+    slug: "anime",
+    owner_user: "me",
+    item_count: null,
+    selected: true,
+  },
 ]
 
 function render(ui: ReactElement) {
@@ -52,7 +58,9 @@ beforeEach(() => {
   addMutate = vi.fn()
   removeMutate = vi.fn()
   vi.mocked(useTraktSettings).mockReturnValue(queryResult(SETTINGS))
-  vi.mocked(useTraktLists).mockReturnValue(queryResult<TraktListEntry[]>(DISCOVERED))
+  vi.mocked(useTraktLists).mockReturnValue(
+    queryResult<TraktListEntry[]>(DISCOVERED),
+  )
   vi.mocked(useAddTraktList).mockReturnValue(mutation(addMutate))
   vi.mocked(useRemoveTraktList).mockReturnValue(mutation(removeMutate))
 })
@@ -68,7 +76,10 @@ describe("TraktListSelector", () => {
     const user = userEvent.setup()
     render(<TraktListSelector />)
     await user.click(screen.getByRole("button", { name: "Remove" }))
-    expect(removeMutate).toHaveBeenCalledWith({ owner_user: "me", slug: "movies" })
+    expect(removeMutate).toHaveBeenCalledWith({
+      owner_user: "me",
+      slug: "movies",
+    })
   })
 
   it("shows an empty message when nothing is synced", () => {
@@ -125,7 +136,10 @@ describe("TraktListSelector", () => {
     expect(addMutate).toHaveBeenCalledWith({ owner_user: "me", slug: "tv" })
 
     await user.click(screen.getByRole("switch", { name: "Sync anime" }))
-    expect(removeMutate).toHaveBeenCalledWith({ owner_user: "me", slug: "anime" })
+    expect(removeMutate).toHaveBeenCalledWith({
+      owner_user: "me",
+      slug: "anime",
+    })
   })
 
   it("shows help for discovered list switches", async () => {

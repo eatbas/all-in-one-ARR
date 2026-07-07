@@ -72,7 +72,9 @@ describe("BandwidthControllarr", () => {
     const user = userEvent.setup()
     render(<BandwidthControllarr />)
     await user.click(screen.getByRole("tab", { name: "Settings" }))
-    expect(localStorage.getItem(BANDWIDTH_CONTROLLARR_TAB_STORAGE_KEY)).toBe("settings")
+    expect(localStorage.getItem(BANDWIDTH_CONTROLLARR_TAB_STORAGE_KEY)).toBe(
+      "settings",
+    )
     expect(
       screen.getByText((text) => text.includes("Control when SABnzbd pauses")),
     ).toBeInTheDocument()

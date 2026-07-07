@@ -1,7 +1,12 @@
 import { useState } from "react"
 import { FilmIcon, SettingsIcon, TvIcon } from "lucide-react"
 
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/shared/components/ui/tabs"
+import {
+  Tabs,
+  TabsContent,
+  TabsList,
+  TabsTrigger,
+} from "@/shared/components/ui/tabs"
 import { Library } from "@/features/deletarr/tabs/Library"
 import { Settings } from "@/features/deletarr/tabs/Settings"
 import {
@@ -37,7 +42,8 @@ export function Deletarr() {
       <div>
         <h1 className="text-2xl font-semibold tracking-tight">Deletarr</h1>
         <p className="text-sm text-muted-foreground">
-          Review junk files and folders in your media libraries before deleting them.
+          Review junk files and folders in your media libraries before deleting
+          them.
         </p>
       </div>
 

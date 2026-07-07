@@ -1,7 +1,12 @@
 import { useState } from "react"
 import { ListIcon, SettingsIcon } from "lucide-react"
 
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/shared/components/ui/tabs"
+import {
+  Tabs,
+  TabsContent,
+  TabsList,
+  TabsTrigger,
+} from "@/shared/components/ui/tabs"
 import { Lists } from "@/features/list-syncarr/tabs/Lists"
 import { ListSettings } from "@/features/list-syncarr/tabs/ListSettings"
 import {

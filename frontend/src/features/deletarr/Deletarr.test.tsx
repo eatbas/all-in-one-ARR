@@ -169,7 +169,9 @@ beforeEach(() => {
     mutationResult(vi.fn(), false),
   )
   vi.mocked(useScanDeletarr).mockReturnValue(mutationResult(vi.fn(), false))
-  vi.mocked(useDeleteDeletarrItems).mockReturnValue(mutationResult(vi.fn(), false))
+  vi.mocked(useDeleteDeletarrItems).mockReturnValue(
+    mutationResult(vi.fn(), false),
+  )
 })
 
 afterEach(() => {
@@ -185,7 +187,9 @@ describe("Deletarr", () => {
       "true",
     )
     expect(
-      screen.getByText("Review junk files and folders in your media libraries before deleting them."),
+      screen.getByText(
+        "Review junk files and folders in your media libraries before deleting them.",
+      ),
     ).toBeInTheDocument()
     expect(screen.getByRole("region", { name: "Dune" })).toBeInTheDocument()
     expect(screen.getByText("Protected video: Dune.mkv")).toBeInTheDocument()
@@ -287,7 +291,9 @@ describe("Deletarr", () => {
       "aria-selected",
       "true",
     )
-    expect(screen.getByText("No junk candidates found for tv shows.")).toBeInTheDocument()
+    expect(
+      screen.getByText("No junk candidates found for tv shows."),
+    ).toBeInTheDocument()
   })
 
   it("switches to Settings and persists the selected tab", async () => {
@@ -362,7 +368,9 @@ describe("Deletarr", () => {
   it("selects a whole group and deletes after confirmation", async () => {
     const user = userEvent.setup()
     const mutate = vi.fn()
-    vi.mocked(useDeleteDeletarrItems).mockReturnValue(mutationResult(mutate, false))
+    vi.mocked(useDeleteDeletarrItems).mockReturnValue(
+      mutationResult(mutate, false),
+    )
     render(<Deletarr />)
 
     const duneGroup = screen.getByRole("region", { name: "Dune" })
@@ -388,13 +396,19 @@ describe("Deletarr", () => {
     render(<Deletarr />)
 
     await user.click(screen.getByLabelText("Select movie.nfo"))
-    expect(screen.getByText("1 of 3 candidate(s) selected.")).toBeInTheDocument()
+    expect(
+      screen.getByText("1 of 3 candidate(s) selected."),
+    ).toBeInTheDocument()
 
     const duneGroup = screen.getByRole("region", { name: "Dune" })
     await user.click(within(duneGroup).getByLabelText("Select group"))
-    expect(screen.getByText("3 of 3 candidate(s) selected.")).toBeInTheDocument()
+    expect(
+      screen.getByText("3 of 3 candidate(s) selected."),
+    ).toBeInTheDocument()
     await user.click(within(duneGroup).getByLabelText("Select group"))
-    expect(screen.getByText("1 of 3 candidate(s) selected.")).toBeInTheDocument()
+    expect(
+      screen.getByText("1 of 3 candidate(s) selected."),
+    ).toBeInTheDocument()
   })
 
   it("does not duplicate an already selected item", async () => {
@@ -404,7 +418,9 @@ describe("Deletarr", () => {
     await user.click(screen.getByLabelText("Select sample.txt"))
     await user.click(screen.getByLabelText("Select sample.txt"))
 
-    expect(screen.getByText("2 of 3 candidate(s) selected.")).toBeInTheDocument()
+    expect(
+      screen.getByText("2 of 3 candidate(s) selected."),
+    ).toBeInTheDocument()
   })
 
   it("clears local selection when delete succeeds", async () => {
@@ -412,13 +428,17 @@ describe("Deletarr", () => {
     const mutate = vi.fn((_variables, options?: { onSuccess?: () => void }) => {
       options?.onSuccess?.()
     })
-    vi.mocked(useDeleteDeletarrItems).mockReturnValue(mutationResult(mutate, false))
+    vi.mocked(useDeleteDeletarrItems).mockReturnValue(
+      mutationResult(mutate, false),
+    )
     render(<Deletarr />)
 
     await user.click(screen.getByRole("button", { name: "Delete selected" }))
     await user.click(screen.getByRole("button", { name: "Delete" }))
 
-    expect(screen.getByText("0 of 3 candidate(s) selected.")).toBeInTheDocument()
+    expect(
+      screen.getByText("0 of 3 candidate(s) selected."),
+    ).toBeInTheDocument()
   })
 
   it("uses later group items for protected video context", () => {

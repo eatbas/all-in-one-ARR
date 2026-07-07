@@ -22,7 +22,11 @@ vi.mock("@/shared/lib/queries", () => ({
   useTraktLists: vi.fn(() => ({ data: [], isLoading: false })),
   useUpdateTraktSettings: vi.fn(() => ({ mutate: vi.fn(), isPending: false })),
   useStartTraktAuth: vi.fn(() => ({ mutate: vi.fn(), isPending: false })),
-  useTestTrakt: vi.fn(() => ({ mutate: vi.fn(), isPending: false, data: undefined })),
+  useTestTrakt: vi.fn(() => ({
+    mutate: vi.fn(),
+    isPending: false,
+    data: undefined,
+  })),
   useAddTraktList: vi.fn(() => ({ mutate: vi.fn(), isPending: false })),
   useRemoveTraktList: vi.fn(() => ({ mutate: vi.fn(), isPending: false })),
   useGeneralSettings: vi.fn(() => ({
@@ -31,10 +35,16 @@ vi.mock("@/shared/lib/queries", () => ({
   useUpdateStatusInterval: vi.fn(() => ({ mutate: vi.fn(), isPending: false })),
   useUpdateSyncInterval: vi.fn(() => ({ mutate: vi.fn(), isPending: false })),
   useServiceSettings: vi.fn(() => ({ data: undefined })),
-  useUpdateServiceSettings: vi.fn(() => ({ mutate: vi.fn(), isPending: false })),
+  useUpdateServiceSettings: vi.fn(() => ({
+    mutate: vi.fn(),
+    isPending: false,
+  })),
   useTestService: vi.fn(() => ({ mutate: vi.fn(), isPending: false })),
   useBandwidthStatus: vi.fn(() => ({ data: undefined, isLoading: false })),
-  useUpdateBandwidthSettings: vi.fn(() => ({ mutate: vi.fn(), isPending: false })),
+  useUpdateBandwidthSettings: vi.fn(() => ({
+    mutate: vi.fn(),
+    isPending: false,
+  })),
   useDeletarrStatus: vi.fn(() => ({
     data: {
       settings: { movies_path: "/media/movies", tv_path: "/media/tv" },
@@ -86,7 +96,10 @@ vi.mock("@/shared/lib/queries", () => ({
     },
     isLoading: false,
   })),
-  useUpdateDeletarrSettings: vi.fn(() => ({ mutate: vi.fn(), isPending: false })),
+  useUpdateDeletarrSettings: vi.fn(() => ({
+    mutate: vi.fn(),
+    isPending: false,
+  })),
   useScanDeletarr: vi.fn(() => ({ mutate: vi.fn(), isPending: false })),
   useDeleteDeletarrItems: vi.fn(() => ({ mutate: vi.fn(), isPending: false })),
   useFindarrStatus: vi.fn(() => ({
@@ -151,7 +164,10 @@ vi.mock("@/shared/lib/queries", () => ({
   useFindarrSettings: vi.fn(() => ({ data: undefined, isLoading: false })),
   useFindarrHistory: vi.fn(() => ({ data: [], isLoading: false })),
   useClearFindarrHistory: vi.fn(() => ({ mutate: vi.fn(), isPending: false })),
-  useUpdateFindarrSettings: vi.fn(() => ({ mutate: vi.fn(), isPending: false })),
+  useUpdateFindarrSettings: vi.fn(() => ({
+    mutate: vi.fn(),
+    isPending: false,
+  })),
   useRunFindarr: vi.fn(() => ({ mutate: vi.fn(), isPending: false })),
   useResetFindarrState: vi.fn(() => ({ mutate: vi.fn(), isPending: false })),
   useTrending: vi.fn(() => ({ data: [], isLoading: false })),
@@ -192,7 +208,9 @@ import { ThemeProvider } from "@/shared/components/theme-provider"
 import { TooltipProvider } from "@/shared/components/ui/tooltip"
 
 function renderAt(path: string) {
-  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+  const queryClient = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  })
   return render(
     <QueryClientProvider client={queryClient}>
       <ThemeProvider defaultTheme="dark" storageKey="app-test-theme">

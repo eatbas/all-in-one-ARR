@@ -2,7 +2,10 @@ import { CheckIcon, ClockIcon } from "lucide-react"
 
 import type { TrendingItem } from "@/shared/lib/api"
 import { cn } from "@/shared/lib/utils"
-import { isAvailable, isPending } from "@/features/trending/trending-item-status"
+import {
+  isAvailable,
+  isPending,
+} from "@/features/trending/trending-item-status"
 import { PillLabel } from "@/features/trending/components/poster-pill"
 import {
   PILL_EXPAND,
@@ -72,7 +75,11 @@ function StatusPill({
         STATUS_TONE_CLASSES[tone],
       )}
     >
-      <span aria-hidden="true" className={pillIconSlot(density)} data-pill-icon-slot>
+      <span
+        aria-hidden="true"
+        className={pillIconSlot(density)}
+        data-pill-icon-slot
+      >
         <Icon className={pillIcon(density)} />
       </span>
       <PillLabel group="status" side="right" density={density}>

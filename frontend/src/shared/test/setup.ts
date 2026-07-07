@@ -3,8 +3,8 @@
  * `ThemeProvider` and the Radix UI primitives depend on. Runs before every test
  * file (see `test.setupFiles` in `vite.config.ts`).
  */
-import '@testing-library/jest-dom/vitest'
-import { vi } from 'vitest'
+import "@testing-library/jest-dom/vitest"
+import { vi } from "vitest"
 
 // jsdom does not implement `matchMedia`; `ThemeProvider` and some Radix
 // primitives call it. Default to the "light" preference (`matches: false`);

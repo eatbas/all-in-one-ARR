@@ -53,7 +53,10 @@ export function ThemeProvider({
     },
     [theme],
   )
-  const systemTheme = useSyncExternalStore(subscribeToSystemTheme, getSystemTheme)
+  const systemTheme = useSyncExternalStore(
+    subscribeToSystemTheme,
+    getSystemTheme,
+  )
 
   const resolvedTheme: "dark" | "light" =
     theme === "system" ? systemTheme : theme

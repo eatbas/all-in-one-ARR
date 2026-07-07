@@ -1,9 +1,5 @@
 import { useMemo, useState } from "react"
-import {
-  FolderIcon,
-  RefreshCwIcon,
-  Trash2Icon,
-} from "lucide-react"
+import { FolderIcon, RefreshCwIcon, Trash2Icon } from "lucide-react"
 
 import {
   AlertDialog,
@@ -24,7 +20,10 @@ import {
   CardHeader,
   CardTitle,
 } from "@/shared/components/ui/card"
-import { ResultGroupPanel, type ResultGroup } from "@/features/deletarr/components/result-group-panel"
+import {
+  ResultGroupPanel,
+  type ResultGroup,
+} from "@/features/deletarr/components/result-group-panel"
 import { StatBlock } from "@/features/deletarr/components/stat-block"
 import type { DeletarrLibraryType, DeletarrScanItem } from "@/shared/lib/api"
 import { formatBytes, formatTimestamp } from "@/shared/lib/format"
@@ -45,7 +44,10 @@ const ARR_LABELS: Record<DeletarrLibraryType, string> = {
   tv: "Sonarr",
 }
 
-const LIBRARY_PATH_KEYS: Record<DeletarrLibraryType, "movies_path" | "tv_path"> = {
+const LIBRARY_PATH_KEYS: Record<
+  DeletarrLibraryType,
+  "movies_path" | "tv_path"
+> = {
   movies: "movies_path",
   tv: "tv_path",
 }
@@ -115,7 +117,8 @@ export function Library({ type }: LibraryProps) {
     [items],
   )
   const defaultSelectionKey = useMemo(
-    () => items.map((item) => `${item.path}:${String(item.is_checked)}`).join("|"),
+    () =>
+      items.map((item) => `${item.path}:${String(item.is_checked)}`).join("|"),
     [items],
   )
   const defaultSelectedPaths = useMemo(
@@ -136,7 +139,10 @@ export function Library({ type }: LibraryProps) {
     () => items.filter((item) => selectedSet.has(item.path)),
     [items, selectedSet],
   )
-  const selectedSize = selectedItems.reduce((total, item) => total + item.size, 0)
+  const selectedSize = selectedItems.reduce(
+    (total, item) => total + item.size,
+    0,
+  )
   const isBusy =
     Boolean(status?.stats.is_scanning || results?.stats.is_scanning) ||
     scanLibrary.isPending ||
@@ -148,7 +154,9 @@ export function Library({ type }: LibraryProps) {
   function updateSelection(path: string, checked: boolean) {
     setSelectionEdit((current) => {
       const currentPaths =
-        current.key === defaultSelectionKey ? current.paths : defaultSelectedPaths
+        current.key === defaultSelectionKey
+          ? current.paths
+          : defaultSelectedPaths
       if (checked) {
         return {
           key: defaultSelectionKey,
@@ -166,7 +174,9 @@ export function Library({ type }: LibraryProps) {
     const paths = group.items.map((item) => item.path)
     setSelectionEdit((current) => {
       const currentPaths =
-        current.key === defaultSelectionKey ? current.paths : defaultSelectedPaths
+        current.key === defaultSelectionKey
+          ? current.paths
+          : defaultSelectedPaths
       if (!checked) {
         return {
           key: defaultSelectionKey,
@@ -186,7 +196,10 @@ export function Library({ type }: LibraryProps) {
   function handleDelete() {
     deleteItems.mutate(
       { type, paths: selectedPaths },
-      { onSuccess: () => setSelectionEdit({ key: defaultSelectionKey, paths: [] }) },
+      {
+        onSuccess: () =>
+          setSelectionEdit({ key: defaultSelectionKey, paths: [] }),
+      },
     )
   }
 
@@ -195,8 +208,14 @@ export function Library({ type }: LibraryProps) {
       <section className="grid gap-3 md:grid-cols-4">
         <StatBlock label="Junk files" value={stats?.total_files ?? 0} />
         <StatBlock label="Junk folders" value={stats?.total_folders ?? 0} />
-        <StatBlock label="Reclaimable" value={formatBytes(stats?.total_size ?? 0)} />
-        <StatBlock label="Last scan" value={lastScanLabel(status?.last_scan_at)} />
+        <StatBlock
+          label="Reclaimable"
+          value={formatBytes(stats?.total_size ?? 0)}
+        />
+        <StatBlock
+          label="Last scan"
+          value={lastScanLabel(status?.last_scan_at)}
+        />
       </section>
 
       <div
@@ -205,8 +224,9 @@ export function Library({ type }: LibraryProps) {
       >
         {scanMode === "arr" ? (
           <p>
-            Verified against <span className="font-medium">{ARR_LABELS[type]}</span>:
-            only files {ARR_LABELS[type]} does not track are shown.
+            Verified against{" "}
+            <span className="font-medium">{ARR_LABELS[type]}</span>: only files{" "}
+            {ARR_LABELS[type]} does not track are shown.
           </p>
         ) : (
           <p className="text-muted-foreground">
@@ -223,7 +243,8 @@ export function Library({ type }: LibraryProps) {
             {LIBRARY_LABELS[type]} library
           </CardTitle>
           <CardDescription>
-            Current path: <span className="font-mono">{currentPath || "Not set"}</span>
+            Current path:{" "}
+            <span className="font-mono">{currentPath || "Not set"}</span>
           </CardDescription>
         </CardHeader>
         <CardContent className="flex flex-col gap-4">
@@ -266,16 +287,20 @@ export function Library({ type }: LibraryProps) {
           </AlertDialogTrigger>
           <AlertDialogContent>
             <AlertDialogHeader>
-              <AlertDialogTitle>Delete selected Deletarr items?</AlertDialogTitle>
+              <AlertDialogTitle>
+                Delete selected Deletarr items?
+              </AlertDialogTitle>
               <AlertDialogDescription>
-                This will delete {selectedPaths.length} current scan result(s) from the{" "}
-                {LIBRARY_LABELS[type].toLowerCase()} library and reclaim about{" "}
-                {formatBytes(selectedSize)}.
+                This will delete {selectedPaths.length} current scan result(s)
+                from the {LIBRARY_LABELS[type].toLowerCase()} library and
+                reclaim about {formatBytes(selectedSize)}.
               </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>
               <AlertDialogCancel>Cancel</AlertDialogCancel>
-              <AlertDialogAction onClick={handleDelete}>Delete</AlertDialogAction>
+              <AlertDialogAction onClick={handleDelete}>
+                Delete
+              </AlertDialogAction>
             </AlertDialogFooter>
           </AlertDialogContent>
         </AlertDialog>
@@ -307,8 +332,9 @@ export function Library({ type }: LibraryProps) {
                   Not in your {LIBRARY_LABELS[type].toLowerCase()} library
                 </h3>
                 <p className="text-xs text-muted-foreground">
-                  Whole folders and loose files {ARR_LABELS[type]} does not track. These
-                  are unchecked by default — review carefully before deleting.
+                  Whole folders and loose files {ARR_LABELS[type]} does not
+                  track. These are unchecked by default — review carefully
+                  before deleting.
                 </p>
               </div>
               {orphanGroups.map((group) => (

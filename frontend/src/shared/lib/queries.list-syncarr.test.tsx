@@ -67,7 +67,9 @@ describe("list syncarr query hooks", () => {
 
   it("useListItems fetches a list's items when enabled", async () => {
     const { wrapper } = setup()
-    const { result } = renderHook(() => useListItems("movies", true), { wrapper })
+    const { result } = renderHook(() => useListItems("movies", true), {
+      wrapper,
+    })
 
     await waitFor(() => expect(result.current.isSuccess).toBe(true))
     expect(api.getItems).toHaveBeenCalledWith(undefined, "movies")
@@ -75,7 +77,9 @@ describe("list syncarr query hooks", () => {
 
   it("useListItems stays idle while disabled", () => {
     const { wrapper } = setup()
-    const { result } = renderHook(() => useListItems("movies", false), { wrapper })
+    const { result } = renderHook(() => useListItems("movies", false), {
+      wrapper,
+    })
 
     expect(result.current.fetchStatus).toBe("idle")
     expect(api.getItems).not.toHaveBeenCalled()
@@ -158,11 +162,15 @@ describe("trakt connection hooks", () => {
     const invalidate = vi.spyOn(queryClient, "invalidateQueries")
     const { result } = renderHook(() => useAddTraktList(), { wrapper })
 
-    act(() => result.current.mutate({ url: "https://trakt.tv/users/me/lists/anime" }))
+    act(() =>
+      result.current.mutate({ url: "https://trakt.tv/users/me/lists/anime" }),
+    )
 
     await waitFor(() => expect(result.current.isSuccess).toBe(true))
     expect(toast.success).toHaveBeenCalledWith("List added")
-    expect(invalidate).toHaveBeenCalledWith({ queryKey: queryKeys.traktSettings })
+    expect(invalidate).toHaveBeenCalledWith({
+      queryKey: queryKeys.traktSettings,
+    })
     expect(invalidate).toHaveBeenCalledWith({ queryKey: queryKeys.traktLists })
     expect(invalidate).toHaveBeenCalledWith({ queryKey: queryKeys.activity })
   })
@@ -263,8 +271,11 @@ describe("list item management hooks", () => {
     act(() => result.current.mutate())
 
     await waitFor(() => expect(result.current.isError).toBe(true))
-    expect(toast.error).toHaveBeenCalledWith("Could not remove available items", {
-      description: "offline",
-    })
+    expect(toast.error).toHaveBeenCalledWith(
+      "Could not remove available items",
+      {
+        description: "offline",
+      },
+    )
   })
 })

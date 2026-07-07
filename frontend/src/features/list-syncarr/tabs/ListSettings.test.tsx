@@ -48,7 +48,13 @@ const SETTINGS: TraktSettings = {
 
 const DISCOVERED: TraktListEntry[] = [
   { name: "TV", slug: "tv", owner_user: "me", item_count: 6, selected: false },
-  { name: null, slug: "anime", owner_user: "me", item_count: null, selected: true },
+  {
+    name: null,
+    slug: "anime",
+    owner_user: "me",
+    item_count: null,
+    selected: true,
+  },
 ]
 
 const GENERAL: GeneralSettings = {
@@ -94,7 +100,10 @@ describe("ListSettings", () => {
     const user = userEvent.setup()
     render(<ListSettings />)
     await user.click(screen.getByRole("button", { name: "Remove" }))
-    expect(removeMutate).toHaveBeenCalledWith({ owner_user: "me", slug: "movies" })
+    expect(removeMutate).toHaveBeenCalledWith({
+      owner_user: "me",
+      slug: "movies",
+    })
   })
 
   it("shows an empty message when nothing is synced", () => {
@@ -133,7 +142,10 @@ describe("ListSettings", () => {
     expect(addMutate).toHaveBeenCalledWith({ owner_user: "me", slug: "tv" })
 
     await user.click(screen.getByRole("switch", { name: "Sync anime" }))
-    expect(removeMutate).toHaveBeenCalledWith({ owner_user: "me", slug: "anime" })
+    expect(removeMutate).toHaveBeenCalledWith({
+      owner_user: "me",
+      slug: "anime",
+    })
   })
 
   it("prompts to connect when Trakt is not connected", async () => {

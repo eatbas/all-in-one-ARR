@@ -15,7 +15,11 @@ type SettingsHelpProps = {
 }
 
 /** Icon-only help trigger for settings controls and actions. */
-export function SettingsHelp({ label, children, className }: SettingsHelpProps) {
+export function SettingsHelp({
+  label,
+  children,
+  className,
+}: SettingsHelpProps) {
   return (
     <Tooltip>
       <TooltipTrigger asChild>

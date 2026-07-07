@@ -15,7 +15,10 @@ export class ApiError extends Error {
  * the server's reason. Falls back to a generic status message when the body is
  * empty, not JSON, or carries no string detail (e.g. a 422 validation array).
  */
-async function errorMessage(input: string, response: Response): Promise<string> {
+async function errorMessage(
+  input: string,
+  response: Response,
+): Promise<string> {
   try {
     const { detail } = (await response.json()) as { detail?: unknown }
     if (typeof detail === "string") {

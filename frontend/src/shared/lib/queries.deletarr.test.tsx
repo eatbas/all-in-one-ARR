@@ -37,7 +37,11 @@ const stats = {
 }
 
 const status: DeletarrStatus = {
-  settings: { movies_path: "/media/movies", tv_path: "/media/tv", use_arr_source: true },
+  settings: {
+    movies_path: "/media/movies",
+    tv_path: "/media/tv",
+    use_arr_source: true,
+  },
   libraries: {
     movies: {
       type: "movies",
@@ -85,10 +89,14 @@ describe("Deletarr query hooks", () => {
     const { wrapper } = setup()
     const statusHook = renderHook(() => useDeletarrStatus(), { wrapper })
     const settingsHook = renderHook(() => useDeletarrSettings(), { wrapper })
-    const resultsHook = renderHook(() => useDeletarrResults("movies"), { wrapper })
+    const resultsHook = renderHook(() => useDeletarrResults("movies"), {
+      wrapper,
+    })
 
     await waitFor(() => expect(statusHook.result.current.isSuccess).toBe(true))
-    await waitFor(() => expect(settingsHook.result.current.isSuccess).toBe(true))
+    await waitFor(() =>
+      expect(settingsHook.result.current.isSuccess).toBe(true),
+    )
     await waitFor(() => expect(resultsHook.result.current.isSuccess).toBe(true))
     expect(api.getDeletarrStatus).toHaveBeenCalled()
     expect(api.getDeletarrSettings).toHaveBeenCalled()
@@ -111,7 +119,9 @@ describe("Deletarr query hooks", () => {
     const { queryClient, wrapper } = setup()
     const invalidate = vi.spyOn(queryClient, "invalidateQueries")
 
-    const updateHook = renderHook(() => useUpdateDeletarrSettings(), { wrapper })
+    const updateHook = renderHook(() => useUpdateDeletarrSettings(), {
+      wrapper,
+    })
     act(() => updateHook.result.current.mutate({ movies_path: "/srv/movies" }))
     await waitFor(() => expect(updateHook.result.current.isSuccess).toBe(true))
 
@@ -128,8 +138,12 @@ describe("Deletarr query hooks", () => {
     )
     await waitFor(() => expect(deleteHook.result.current.isSuccess).toBe(true))
 
-    expect(invalidate).toHaveBeenCalledWith({ queryKey: queryKeys.deletarrStatus })
-    expect(invalidate).toHaveBeenCalledWith({ queryKey: queryKeys.deletarrSettings })
+    expect(invalidate).toHaveBeenCalledWith({
+      queryKey: queryKeys.deletarrStatus,
+    })
+    expect(invalidate).toHaveBeenCalledWith({
+      queryKey: queryKeys.deletarrSettings,
+    })
     expect(invalidate).toHaveBeenCalledWith({
       queryKey: queryKeys.deletarrResults("movies"),
     })
@@ -147,7 +161,9 @@ describe("Deletarr query hooks", () => {
       deleted_paths: ["/media/movies/Dune/movie.nfo"],
       errors: [{ path: "/media/movies/Dune/bad.nfo", error: "missing" }],
     })
-    vi.mocked(api.updateDeletarrSettings).mockRejectedValue(new Error("save boom"))
+    vi.mocked(api.updateDeletarrSettings).mockRejectedValue(
+      new Error("save boom"),
+    )
     vi.mocked(api.scanDeletarr).mockRejectedValue(new Error("scan boom"))
     const { wrapper } = setup()
 
@@ -160,7 +176,9 @@ describe("Deletarr query hooks", () => {
     )
     await waitFor(() => expect(deleteHook.result.current.isSuccess).toBe(true))
 
-    const updateHook = renderHook(() => useUpdateDeletarrSettings(), { wrapper })
+    const updateHook = renderHook(() => useUpdateDeletarrSettings(), {
+      wrapper,
+    })
     act(() => updateHook.result.current.mutate({ movies_path: "/srv/movies" }))
     await waitFor(() => expect(updateHook.result.current.isError).toBe(true))
 
@@ -172,16 +190,21 @@ describe("Deletarr query hooks", () => {
       "Some Deletarr items could not be deleted",
       { description: "1 deleted, 1 failed." },
     )
-    expect(toast.error).toHaveBeenCalledWith("Could not save Deletarr settings", {
-      description: "save boom",
-    })
+    expect(toast.error).toHaveBeenCalledWith(
+      "Could not save Deletarr settings",
+      {
+        description: "save boom",
+      },
+    )
     expect(toast.error).toHaveBeenCalledWith("Could not scan library", {
       description: "scan boom",
     })
   })
 
   it("toasts delete mutation errors", async () => {
-    vi.mocked(api.deleteDeletarrItems).mockRejectedValue(new Error("delete boom"))
+    vi.mocked(api.deleteDeletarrItems).mockRejectedValue(
+      new Error("delete boom"),
+    )
     const { wrapper } = setup()
 
     const deleteHook = renderHook(() => useDeleteDeletarrItems(), { wrapper })
@@ -193,8 +216,11 @@ describe("Deletarr query hooks", () => {
     )
     await waitFor(() => expect(deleteHook.result.current.isError).toBe(true))
 
-    expect(toast.error).toHaveBeenCalledWith("Could not delete selected items", {
-      description: "delete boom",
-    })
+    expect(toast.error).toHaveBeenCalledWith(
+      "Could not delete selected items",
+      {
+        description: "delete boom",
+      },
+    )
   })
 })

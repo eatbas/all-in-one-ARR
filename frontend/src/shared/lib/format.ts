@@ -44,7 +44,10 @@ const WEEK = 7 * DAY
  * so the output is deterministic under test. Falls back to the raw value when
  * the input cannot be parsed.
  */
-export function formatRelativeTime(iso: string, now: Date = new Date()): string {
+export function formatRelativeTime(
+  iso: string,
+  now: Date = new Date(),
+): string {
   const date = new Date(iso)
   if (Number.isNaN(date.getTime())) {
     return iso
@@ -122,7 +125,10 @@ function formatCountdownTo(
  * out at hours for the minute-scale sync cadence. Re-evaluated against a fresh
  * `now` each second so it counts down live; `now` is injectable for tests.
  */
-export function formatNextSync(iso: string | null, now: Date = new Date()): string {
+export function formatNextSync(
+  iso: string | null,
+  now: Date = new Date(),
+): string {
   return formatCountdownTo(iso, now, "hour")
 }
 
@@ -132,6 +138,9 @@ export function formatNextSync(iso: string | null, now: Date = new Date()): stri
  * Findarr stateful-reset window, whose horizon spans days. `now` is injectable
  * for deterministic tests; an unparseable value falls back to its raw form.
  */
-export function formatCountdown(iso: string | null, now: Date = new Date()): string {
+export function formatCountdown(
+  iso: string | null,
+  now: Date = new Date(),
+): string {
   return formatCountdownTo(iso, now, "day")
 }

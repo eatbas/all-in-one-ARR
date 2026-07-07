@@ -28,12 +28,14 @@ function operationMeta(mode: FindarrHistoryEntry["mode"]): OperationMeta {
     case "missing":
       return {
         label: "Missing",
-        className: "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400",
+        className:
+          "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400",
       }
     case "upgrade":
       return {
         label: "Upgrade",
-        className: "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400",
+        className:
+          "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400",
       }
     default:
       return { label: "System", className: "bg-muted text-muted-foreground" }
@@ -59,7 +61,9 @@ export function HistoryRow({ entry }: HistoryRowProps) {
                 aria-label={`Details for ${information}: ${entry.status}`}
                 className={cn(
                   "inline-flex size-5 shrink-0 items-center justify-center rounded-full transition-colors",
-                  entry.status === "error" ? "text-destructive" : "text-sky-500",
+                  entry.status === "error"
+                    ? "text-destructive"
+                    : "text-sky-500",
                 )}
               >
                 <InfoIcon className="size-4" aria-hidden="true" />
@@ -72,7 +76,10 @@ export function HistoryRow({ entry }: HistoryRowProps) {
               {entry.title === null ? "" : ` — ${entry.detail}`}
             </TooltipContent>
           </Tooltip>
-          <span className="truncate max-w-[34ch] font-medium" title={information}>
+          <span
+            className="truncate max-w-[34ch] font-medium"
+            title={information}
+          >
             {information}
           </span>
         </div>

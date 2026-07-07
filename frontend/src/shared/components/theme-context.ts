@@ -15,9 +15,9 @@ export interface ThemeProviderState {
  * `ThemeProvider` component — so the provider file only exports components and
  * React Fast Refresh boundaries stay intact (react-refresh/only-export-components).
  */
-export const ThemeProviderContext = createContext<ThemeProviderState | undefined>(
-  undefined,
-)
+export const ThemeProviderContext = createContext<
+  ThemeProviderState | undefined
+>(undefined)
 
 export function useTheme(): ThemeProviderState {
   const context = useContext(ThemeProviderContext)

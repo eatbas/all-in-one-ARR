@@ -33,7 +33,9 @@ describe("SyncStats", () => {
   })
 
   it("renders the aggregate counts once loaded", () => {
-    vi.mocked(useStatus).mockReturnValue(queryResult<Status>(loadedStatus, false))
+    vi.mocked(useStatus).mockReturnValue(
+      queryResult<Status>(loadedStatus, false),
+    )
 
     render(<SyncStats />)
 

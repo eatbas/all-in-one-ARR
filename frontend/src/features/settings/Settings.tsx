@@ -16,7 +16,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/shared/components/ui/select"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/shared/components/ui/tabs"
+import {
+  Tabs,
+  TabsContent,
+  TabsList,
+  TabsTrigger,
+} from "@/shared/components/ui/tabs"
 import {
   ConnectionBadge,
   type ConnectionState,
@@ -30,7 +35,11 @@ import {
 import { useAutosave } from "@/features/settings/hooks/use-autosave"
 import { useTheme } from "@/shared/components/theme-context"
 import { cn } from "@/shared/lib/utils"
-import { SERVICE_TABS, VALID_TAB_VALUES, type ServiceTab } from "@/shared/lib/services"
+import {
+  SERVICE_TABS,
+  VALID_TAB_VALUES,
+  type ServiceTab,
+} from "@/shared/lib/services"
 import { SETTINGS_TAB_STORAGE_KEY } from "@/features/settings/settings-tab"
 import { THEME_OPTIONS } from "@/shared/lib/theme-options"
 import { formatBytes } from "@/shared/lib/format"
@@ -63,10 +72,8 @@ import { useQueryClient } from "@tanstack/react-query"
 function CredentialsCard() {
   const { data: settings, isLoading } = useTraktSettings()
   const { data: auth } = useTraktAuthStatus()
-  const {
-    mutate: updateTraktSettings,
-    isPending: isUpdatingTraktSettings,
-  } = useUpdateTraktSettings()
+  const { mutate: updateTraktSettings, isPending: isUpdatingTraktSettings } =
+    useUpdateTraktSettings()
   const startAuth = useStartTraktAuth()
   const test = useTestTrakt()
   const queryClient = useQueryClient()
@@ -217,7 +224,9 @@ function CredentialsCard() {
                   Go to{" "}
                   <a
                     className="font-medium underline"
-                    href={pending.verification_url ?? "https://trakt.tv/activate"}
+                    href={
+                      pending.verification_url ?? "https://trakt.tv/activate"
+                    }
                     target="_blank"
                     rel="noreferrer"
                   >
@@ -417,7 +426,8 @@ function DatabaseCard() {
       <CardHeader>
         <CardTitle>Database</CardTitle>
         <CardDescription>
-          Storage used by the local SQLite database and cached poster thumbnails.
+          Storage used by the local SQLite database and cached poster
+          thumbnails.
         </CardDescription>
       </CardHeader>
       <CardContent className="flex flex-col gap-6">
@@ -449,25 +459,40 @@ function DatabaseCard() {
 
             <div className="grid gap-3 sm:grid-cols-3">
               <div className="flex flex-col gap-0.5 rounded-md border p-3">
-                <span className="text-xs text-muted-foreground">Tracked items</span>
-                <span className="text-lg font-semibold">{stats.item_count}</span>
+                <span className="text-xs text-muted-foreground">
+                  Tracked items
+                </span>
+                <span className="text-lg font-semibold">
+                  {stats.item_count}
+                </span>
               </div>
               <div className="flex flex-col gap-0.5 rounded-md border p-3">
-                <span className="text-xs text-muted-foreground">Activity entries</span>
-                <span className="text-lg font-semibold">{stats.activity_count}</span>
+                <span className="text-xs text-muted-foreground">
+                  Activity entries
+                </span>
+                <span className="text-lg font-semibold">
+                  {stats.activity_count}
+                </span>
               </div>
               <div className="flex flex-col gap-0.5 rounded-md border p-3">
-                <span className="text-xs text-muted-foreground">Synced lists</span>
-                <span className="text-lg font-semibold">{stats.list_state_count}</span>
+                <span className="text-xs text-muted-foreground">
+                  Synced lists
+                </span>
+                <span className="text-lg font-semibold">
+                  {stats.list_state_count}
+                </span>
               </div>
             </div>
 
             <div className="flex flex-col gap-3 rounded-md border border-destructive/50 p-4">
               <div>
-                <p className="text-sm font-medium text-destructive">Danger zone</p>
+                <p className="text-sm font-medium text-destructive">
+                  Danger zone
+                </p>
                 <p className="text-xs text-muted-foreground">
-                  These actions are destructive and cannot be undone. Credentials,
-                  Trakt tokens, and tracked-list configuration are never deleted.
+                  These actions are destructive and cannot be undone.
+                  Credentials, Trakt tokens, and tracked-list configuration are
+                  never deleted.
                 </p>
               </div>
               <div className="flex flex-wrap gap-3">
@@ -499,9 +524,9 @@ function DatabaseCard() {
             </div>
 
             <p className="text-xs text-muted-foreground">
-              Note: SQLite does not shrink the database file immediately after rows
-              are deleted, so the reported size may not drop right away. There is no
-              compact action.
+              Note: SQLite does not shrink the database file immediately after
+              rows are deleted, so the reported size may not drop right away.
+              There is no compact action.
             </p>
           </>
         )}
@@ -606,20 +631,23 @@ function AppSchedulerCard() {
       <CardHeader>
         <CardTitle>App scheduler</CardTitle>
         <CardDescription>
-          Background refresh of the Trending page's feeds, so opening it does not call
-          Trakt, TMDB and Seer on every click.
+          Background refresh of the Trending page's feeds, so opening it does
+          not call Trakt, TMDB and Seer on every click.
         </CardDescription>
       </CardHeader>
       <CardContent>
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <div className="flex items-center gap-1.5">
-              <label htmlFor="trending-interval" className="text-sm font-medium">
+              <label
+                htmlFor="trending-interval"
+                className="text-sm font-medium"
+              >
                 Trending sync interval
               </label>
               <SettingsHelp label="Trending sync interval">
-                How often the background job refreshes the trending and popular feeds
-                from Trakt, TMDB and Seer.
+                How often the background job refreshes the trending and popular
+                feeds from Trakt, TMDB and Seer.
               </SettingsHelp>
             </div>
             <p className="text-sm text-muted-foreground">
@@ -628,7 +656,9 @@ function AppSchedulerCard() {
           </div>
           <Select
             value={String(interval)}
-            onValueChange={(value) => updateTrendingInterval.mutate(Number(value))}
+            onValueChange={(value) =>
+              updateTrendingInterval.mutate(Number(value))
+            }
             disabled={updateTrendingInterval.isPending}
           >
             <SelectTrigger id="trending-interval" className="w-full sm:w-40">

@@ -26,7 +26,10 @@ interface ClearHistoryDialogProps {
  * this tab, whereas reset clears processed-media bookkeeping. Neither touches
  * Sonarr/Radarr libraries.
  */
-export function ClearHistoryDialog({ onConfirm, disabled }: ClearHistoryDialogProps) {
+export function ClearHistoryDialog({
+  onConfirm,
+  disabled,
+}: ClearHistoryDialogProps) {
   return (
     <AlertDialog>
       <AlertDialogTrigger asChild>
@@ -39,13 +42,15 @@ export function ClearHistoryDialog({ onConfirm, disabled }: ClearHistoryDialogPr
         <AlertDialogHeader>
           <AlertDialogTitle>Clear Findarr history?</AlertDialogTitle>
           <AlertDialogDescription>
-            This removes every recorded Findarr history entry. It does not change
-            Sonarr or Radarr, nor Findarr&apos;s processed state.
+            This removes every recorded Findarr history entry. It does not
+            change Sonarr or Radarr, nor Findarr&apos;s processed state.
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
           <AlertDialogCancel>Cancel</AlertDialogCancel>
-          <AlertDialogAction onClick={onConfirm}>Clear history</AlertDialogAction>
+          <AlertDialogAction onClick={onConfirm}>
+            Clear history
+          </AlertDialogAction>
         </AlertDialogFooter>
       </AlertDialogContent>
     </AlertDialog>

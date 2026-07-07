@@ -17,7 +17,10 @@ export default function App() {
         <Route path="/" element={<Dashboard />} />
         <Route path="/trending" element={<Trending />} />
         <Route path="/list-syncarr" element={<ListSyncarr />} />
-        <Route path="/bandwidth-controllarr" element={<BandwidthControllarr />} />
+        <Route
+          path="/bandwidth-controllarr"
+          element={<BandwidthControllarr />}
+        />
         <Route path="/findarr" element={<Findarr />} />
         <Route path="/deletarr" element={<Deletarr />} />
         <Route path="/settings" element={<Settings />} />

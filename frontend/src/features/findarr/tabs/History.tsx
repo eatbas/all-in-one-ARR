@@ -16,10 +16,7 @@ import {
   HistoryToolbar,
   type InstanceFilter,
 } from "@/features/findarr/components/history-toolbar"
-import {
-  useClearFindarrHistory,
-  useFindarrHistory,
-} from "@/shared/lib/queries"
+import { useClearFindarrHistory, useFindarrHistory } from "@/shared/lib/queries"
 
 export function History() {
   const { data: history, isLoading } = useFindarrHistory()
@@ -33,7 +30,9 @@ export function History() {
     return <p className="text-sm text-muted-foreground">Loading history…</p>
   }
   if (history.length === 0) {
-    return <p className="text-sm text-muted-foreground">No Findarr history yet.</p>
+    return (
+      <p className="text-sm text-muted-foreground">No Findarr history yet.</p>
+    )
   }
 
   const query = search.trim().toLowerCase()
@@ -41,14 +40,18 @@ export function History() {
     .filter((entry) => instanceFilter === "all" || entry.app === instanceFilter)
     .filter(
       (entry) =>
-        query === "" || processedInformation(entry).toLowerCase().includes(query),
+        query === "" ||
+        processedInformation(entry).toLowerCase().includes(query),
     )
 
   // Clamp the page so a filter that shrinks the result set never strands the
   // user on a now-empty page, even before the reset-on-change handlers fire.
   const totalPages = pageCount(filtered.length, pageSize)
   const currentPage = Math.min(page, totalPages)
-  const visible = filtered.slice((currentPage - 1) * pageSize, currentPage * pageSize)
+  const visible = filtered.slice(
+    (currentPage - 1) * pageSize,
+    currentPage * pageSize,
+  )
 
   return (
     <div className="flex flex-col gap-4">
@@ -79,12 +82,18 @@ export function History() {
               <TableHead className="text-xs uppercase tracking-wider">
                 Processed information
               </TableHead>
-              <TableHead className="text-xs uppercase tracking-wider">Operation</TableHead>
-              <TableHead className="text-xs uppercase tracking-wider">ID number</TableHead>
+              <TableHead className="text-xs uppercase tracking-wider">
+                Operation
+              </TableHead>
+              <TableHead className="text-xs uppercase tracking-wider">
+                ID number
+              </TableHead>
               <TableHead className="text-xs uppercase tracking-wider">
                 Name of instance
               </TableHead>
-              <TableHead className="text-xs uppercase tracking-wider">How long ago</TableHead>
+              <TableHead className="text-xs uppercase tracking-wider">
+                How long ago
+              </TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -98,7 +107,9 @@ export function History() {
                 </TableCell>
               </TableRow>
             ) : (
-              visible.map((entry) => <HistoryRow key={entry.id} entry={entry} />)
+              visible.map((entry) => (
+                <HistoryRow key={entry.id} entry={entry} />
+              ))
             )}
           </TableBody>
         </Table>

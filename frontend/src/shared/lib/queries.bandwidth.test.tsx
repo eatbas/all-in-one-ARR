@@ -13,7 +13,11 @@ vi.mock("sonner", () => ({
 import * as api from "@/shared/lib/api"
 import { toast } from "sonner"
 
-import { queryKeys, useBandwidthStatus, useUpdateBandwidthSettings } from "@/shared/lib/queries"
+import {
+  queryKeys,
+  useBandwidthStatus,
+  useUpdateBandwidthSettings,
+} from "@/shared/lib/queries"
 import { setup } from "@/shared/test/query-provider"
 
 beforeEach(() => {
@@ -70,7 +74,9 @@ describe("bandwidth hooks", () => {
     })
     const { queryClient, wrapper } = setup()
     const invalidate = vi.spyOn(queryClient, "invalidateQueries")
-    const { result } = renderHook(() => useUpdateBandwidthSettings(), { wrapper })
+    const { result } = renderHook(() => useUpdateBandwidthSettings(), {
+      wrapper,
+    })
 
     act(() => result.current.mutate({ enabled: true }))
 
@@ -79,19 +85,26 @@ describe("bandwidth hooks", () => {
       { enabled: true },
       expect.anything(),
     )
-    expect(invalidate).toHaveBeenCalledWith({ queryKey: queryKeys.bandwidthStatus })
+    expect(invalidate).toHaveBeenCalledWith({
+      queryKey: queryKeys.bandwidthStatus,
+    })
   })
 
   it("useUpdateBandwidthSettings toasts on error", async () => {
     vi.mocked(api.updateBandwidthSettings).mockRejectedValue(new Error("bad"))
     const { wrapper } = setup()
-    const { result } = renderHook(() => useUpdateBandwidthSettings(), { wrapper })
+    const { result } = renderHook(() => useUpdateBandwidthSettings(), {
+      wrapper,
+    })
 
     act(() => result.current.mutate({ enabled: true }))
 
     await waitFor(() => expect(result.current.isError).toBe(true))
-    expect(toast.error).toHaveBeenCalledWith("Could not update bandwidth settings", {
-      description: "bad",
-    })
+    expect(toast.error).toHaveBeenCalledWith(
+      "Could not update bandwidth settings",
+      {
+        description: "bad",
+      },
+    )
   })
 })

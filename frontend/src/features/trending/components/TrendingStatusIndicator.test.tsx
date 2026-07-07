@@ -68,14 +68,24 @@ describe("TrendingStatusIndicator", () => {
     [5, "size-8", "size-4"],
     [6, "size-7", "size-3.5"],
     [7, "size-6", "size-3"],
-  ] as const)("uses the shared shell and icon slot at density %i", (density, shellSize, iconSize) => {
-    render(<TrendingStatusIndicator item={item({ seer_status: 3 })} density={density} />)
+  ] as const)(
+    "uses the shared shell and icon slot at density %i",
+    (density, shellSize, iconSize) => {
+      render(
+        <TrendingStatusIndicator
+          item={item({ seer_status: 3 })}
+          density={density}
+        />,
+      )
 
-    const indicator = screen.getByLabelText("Processing")
-    expect(indicator).toHaveClass(shellSize)
-    expect(indicator.querySelector("[data-pill-icon-slot]")).toHaveClass(shellSize)
-    expect(indicator.querySelector("svg")).toHaveClass(iconSize)
-  })
+      const indicator = screen.getByLabelText("Processing")
+      expect(indicator).toHaveClass(shellSize)
+      expect(indicator.querySelector("[data-pill-icon-slot]")).toHaveClass(
+        shellSize,
+      )
+      expect(indicator.querySelector("svg")).toHaveClass(iconSize)
+    },
+  )
 
   it.each([
     [5, "group-hover/status:max-w-24", "group-hover/status:pr-2"],
@@ -85,7 +95,10 @@ describe("TrendingStatusIndicator", () => {
     "reveals the label with a wide-enough cap and outer-edge padding at density %i",
     (density, revealCap, outerPadding) => {
       render(
-        <TrendingStatusIndicator item={item({ seer_status: 3 })} density={density} />,
+        <TrendingStatusIndicator
+          item={item({ seer_status: 3 })}
+          density={density}
+        />,
       )
 
       const label = screen.getByText("Processing")
@@ -97,7 +110,11 @@ describe("TrendingStatusIndicator", () => {
   it("prefers the Seer detail when both pending signals are present", () => {
     render(
       <TrendingStatusIndicator
-        item={item({ in_library: true, in_library_available: false, seer_status: 3 })}
+        item={item({
+          in_library: true,
+          in_library_available: false,
+          seer_status: 3,
+        })}
       />,
     )
     expect(screen.getByLabelText("Processing")).toBeInTheDocument()

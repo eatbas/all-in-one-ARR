@@ -52,7 +52,9 @@ describe("SettingsHelp", () => {
 
     await user.tab()
 
-    expect(screen.getByRole("button", { name: "Explain Sync interval" })).toHaveFocus()
+    expect(
+      screen.getByRole("button", { name: "Explain Sync interval" }),
+    ).toHaveFocus()
     expect(
       (await screen.findAllByText("How often the sync loop runs.")).length,
     ).toBeGreaterThan(0)

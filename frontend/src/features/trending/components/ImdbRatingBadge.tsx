@@ -33,7 +33,9 @@ export function ImdbRatingBadge({ item }: { item: TrendingItem }) {
       <span className="font-medium text-foreground">
         {data.imdb_rating.toFixed(1)}
       </span>
-      {data.imdb_votes !== null ? <span>({formatVotes(data.imdb_votes)})</span> : null}
+      {data.imdb_votes !== null ? (
+        <span>({formatVotes(data.imdb_votes)})</span>
+      ) : null}
     </span>
   )
 }

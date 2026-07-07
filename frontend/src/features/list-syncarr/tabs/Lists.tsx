@@ -122,7 +122,9 @@ function ListRow({
         <span className="flex-1 text-base font-medium">
           {list.name}{" "}
           <span className="text-muted-foreground">
-            {showRemoved ? `(${activeCount} + ${removedCount})` : `(${activeCount})`}
+            {showRemoved
+              ? `(${activeCount} + ${removedCount})`
+              : `(${activeCount})`}
           </span>
         </span>
         <span className="hidden text-xs text-muted-foreground sm:inline">
@@ -262,11 +264,7 @@ export function Lists() {
             </CardDescription>
           </div>
           <div className="flex items-center gap-4">
-            <Button
-              size="sm"
-              onClick={handleSync}
-              disabled={syncNow.isPending}
-            >
+            <Button size="sm" onClick={handleSync} disabled={syncNow.isPending}>
               {/* The icon spins while a sync is in flight so the disabled state
                   reads as "working" rather than simply inert. */}
               <RefreshCwIcon
@@ -280,7 +278,9 @@ export function Lists() {
                 checked={showRemoved}
                 onCheckedChange={setShowRemoved}
               />
-              <span className="text-sm text-muted-foreground">Show removed</span>
+              <span className="text-sm text-muted-foreground">
+                Show removed
+              </span>
             </div>
             <AlertDialog>
               <AlertDialogTrigger asChild>
@@ -297,8 +297,8 @@ export function Lists() {
                 <AlertDialogHeader>
                   <AlertDialogTitle>Delete available items?</AlertDialogTitle>
                   <AlertDialogDescription>
-                    This removes every item Seer reports as available from
-                    its Trakt list.
+                    This removes every item Seer reports as available from its
+                    Trakt list.
                   </AlertDialogDescription>
                 </AlertDialogHeader>
                 <AlertDialogFooter>

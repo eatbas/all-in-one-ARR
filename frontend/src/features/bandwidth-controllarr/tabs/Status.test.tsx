@@ -74,7 +74,9 @@ describe("Status", () => {
   })
 
   it("uses safe defaults before status data is available", () => {
-    vi.mocked(useBandwidthStatus).mockReturnValue(queryResult<BandwidthStatus>(undefined))
+    vi.mocked(useBandwidthStatus).mockReturnValue(
+      queryResult<BandwidthStatus>(undefined),
+    )
     render(<Status />)
     expect(screen.getByText("Monitoring only (Disabled)")).toBeInTheDocument()
     expect(screen.getByText("Waiting for first check…")).toBeInTheDocument()
@@ -93,7 +95,9 @@ describe("Status", () => {
       }),
     )
     render(<Status />)
-    expect(screen.getByText("Active torrents — SABnzbd paused")).toBeInTheDocument()
+    expect(
+      screen.getByText("Active torrents — SABnzbd paused"),
+    ).toBeInTheDocument()
     expect(screen.getByText("Enabled")).toBeInTheDocument()
     expect(screen.getByText("PAUSED")).toBeInTheDocument()
   })
@@ -101,7 +105,9 @@ describe("Status", () => {
   it("toggles bandwidth control on", async () => {
     const user = userEvent.setup()
     render(<Status />)
-    const toggle = screen.getByRole("switch", { name: "Enable bandwidth control" })
+    const toggle = screen.getByRole("switch", {
+      name: "Enable bandwidth control",
+    })
     expect(toggle).not.toBeChecked()
     await user.click(toggle)
     expect(updateMutate).toHaveBeenCalledWith({ enabled: true })
@@ -136,7 +142,9 @@ describe("Status", () => {
   })
 
   it("disables the switch while the mutation is pending", () => {
-    vi.mocked(useUpdateBandwidthSettings).mockReturnValue(mutation(updateMutate, true))
+    vi.mocked(useUpdateBandwidthSettings).mockReturnValue(
+      mutation(updateMutate, true),
+    )
     render(<Status />)
     expect(
       screen.getByRole("switch", { name: "Enable bandwidth control" }),

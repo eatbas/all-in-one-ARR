@@ -12,7 +12,11 @@ export const VALID_PER_ROW_VALUES = [5, 6, 7] as const
 export type PerRow = (typeof VALID_PER_ROW_VALUES)[number]
 
 /** The selectable source tabs, in display order. */
-export const VALID_TRENDING_TABS = ["trakt", "tmdb", "seer"] as const satisfies readonly TrendingSource[]
+export const VALID_TRENDING_TABS = [
+  "trakt",
+  "tmdb",
+  "seer",
+] as const satisfies readonly TrendingSource[]
 
 export type TrendingTab = (typeof VALID_TRENDING_TABS)[number]
 

@@ -20,12 +20,17 @@ export function isAvailable(
  * Partial (4). These read amber rather than green and survive "Hide available".
  */
 export function isPending(
-  item: Pick<TrendingItem, "in_library" | "in_library_available" | "seer_status">,
+  item: Pick<
+    TrendingItem,
+    "in_library" | "in_library_available" | "seer_status"
+  >,
 ): boolean {
   if (isAvailable(item)) {
     return false
   }
   const requestedOrProcessing =
     item.seer_status !== null && item.seer_status >= 2 && item.seer_status <= 4
-  return (item.in_library && !item.in_library_available) || requestedOrProcessing
+  return (
+    (item.in_library && !item.in_library_available) || requestedOrProcessing
+  )
 }

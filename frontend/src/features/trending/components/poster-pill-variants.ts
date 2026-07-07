@@ -15,7 +15,12 @@ const SIZE: Record<
     label: "text-[11px]",
     icon: "size-3.5",
   },
-  7: { shell: "size-6", iconSlot: "size-6", label: "text-[10px]", icon: "size-3" },
+  7: {
+    shell: "size-6",
+    iconSlot: "size-6",
+    label: "text-[10px]",
+    icon: "size-3",
+  },
 }
 
 /**
@@ -103,8 +108,14 @@ const REVEAL_PADDING: Record<
   },
   status: {
     5: { left: "group-hover/status:pl-2", right: "group-hover/status:pr-2" },
-    6: { left: "group-hover/status:pl-1.5", right: "group-hover/status:pr-1.5" },
-    7: { left: "group-hover/status:pl-1.5", right: "group-hover/status:pr-1.5" },
+    6: {
+      left: "group-hover/status:pl-1.5",
+      right: "group-hover/status:pr-1.5",
+    },
+    7: {
+      left: "group-hover/status:pl-1.5",
+      right: "group-hover/status:pr-1.5",
+    },
   },
   add: {
     5: {

@@ -25,10 +25,7 @@ function renderAt(path: string) {
       <Routes>
         <Route element={<AppShell />}>
           <Route path="/" element={<div>dashboard-page</div>} />
-          <Route
-            path="/list-syncarr"
-            element={<div>list-syncarr-page</div>}
-          />
+          <Route path="/list-syncarr" element={<div>list-syncarr-page</div>} />
           <Route path="/deletarr" element={<div>deletarr-page</div>} />
         </Route>
       </Routes>
@@ -60,9 +57,10 @@ describe("AppShell", () => {
     renderAt("/list-syncarr")
 
     expect(screen.getByText("list-syncarr-page")).toBeInTheDocument()
-    expect(
-      screen.getByRole("link", { name: /list-syncarr/i }),
-    ).toHaveAttribute("aria-current", "page")
+    expect(screen.getByRole("link", { name: /list-syncarr/i })).toHaveAttribute(
+      "aria-current",
+      "page",
+    )
   })
 
   it("marks the Deletarr link active on its route", () => {
@@ -93,9 +91,7 @@ describe("AppShell", () => {
     expect(screen.getByText(`v${APP_VERSION}`)).toBeInTheDocument()
     // Labels are visually hidden but remain in the a11y tree, so links keep
     // their accessible names while collapsed.
-    expect(
-      screen.getByRole("link", { name: /dashboard/i }),
-    ).toBeInTheDocument()
+    expect(screen.getByRole("link", { name: /dashboard/i })).toBeInTheDocument()
   })
 
   it("restores the collapsed state from localStorage", () => {
@@ -105,9 +101,7 @@ describe("AppShell", () => {
     expect(
       screen.getByRole("button", { name: /expand sidebar/i }),
     ).toHaveAttribute("aria-expanded", "false")
-    expect(
-      screen.getByRole("link", { name: /dashboard/i }),
-    ).toBeInTheDocument()
+    expect(screen.getByRole("link", { name: /dashboard/i })).toBeInTheDocument()
   })
 
   it("stays usable when localStorage is unavailable", async () => {

@@ -102,7 +102,9 @@ describe("Findarr query hooks", () => {
     const historyHook = renderHook(() => useFindarrHistory(), { wrapper })
 
     await waitFor(() => expect(statusHook.result.current.isSuccess).toBe(true))
-    await waitFor(() => expect(settingsHook.result.current.isSuccess).toBe(true))
+    await waitFor(() =>
+      expect(settingsHook.result.current.isSuccess).toBe(true),
+    )
     await waitFor(() => expect(historyHook.result.current.isSuccess).toBe(true))
     expect(api.getFindarrStatus).toHaveBeenCalled()
     expect(api.getFindarrSettings).toHaveBeenCalled()
@@ -117,8 +119,14 @@ describe("Findarr query hooks", () => {
       processed: 0,
       results: [],
     })
-    vi.mocked(api.resetFindarrState).mockResolvedValue({ status: "reset", removed: 1 })
-    vi.mocked(api.clearFindarrHistory).mockResolvedValue({ status: "cleared", removed: 2 })
+    vi.mocked(api.resetFindarrState).mockResolvedValue({
+      status: "reset",
+      removed: 1,
+    })
+    vi.mocked(api.clearFindarrHistory).mockResolvedValue({
+      status: "cleared",
+      removed: 2,
+    })
     const { queryClient, wrapper } = setup()
     const invalidate = vi.spyOn(queryClient, "invalidateQueries")
 
@@ -138,16 +146,26 @@ describe("Findarr query hooks", () => {
     act(() => clearHook.result.current.mutate())
     await waitFor(() => expect(clearHook.result.current.isSuccess).toBe(true))
 
-    expect(invalidate).toHaveBeenCalledWith({ queryKey: queryKeys.findarrStatus })
-    expect(invalidate).toHaveBeenCalledWith({ queryKey: queryKeys.findarrSettings })
-    expect(invalidate).toHaveBeenCalledWith({ queryKey: queryKeys.findarrHistory })
+    expect(invalidate).toHaveBeenCalledWith({
+      queryKey: queryKeys.findarrStatus,
+    })
+    expect(invalidate).toHaveBeenCalledWith({
+      queryKey: queryKeys.findarrSettings,
+    })
+    expect(invalidate).toHaveBeenCalledWith({
+      queryKey: queryKeys.findarrHistory,
+    })
   })
 
   it("toasts an error when a Findarr mutation fails", async () => {
-    vi.mocked(api.updateFindarrSettings).mockRejectedValue(new Error("save boom"))
+    vi.mocked(api.updateFindarrSettings).mockRejectedValue(
+      new Error("save boom"),
+    )
     vi.mocked(api.runFindarr).mockRejectedValue(new Error("run boom"))
     vi.mocked(api.resetFindarrState).mockRejectedValue(new Error("reset boom"))
-    vi.mocked(api.clearFindarrHistory).mockRejectedValue(new Error("clear boom"))
+    vi.mocked(api.clearFindarrHistory).mockRejectedValue(
+      new Error("clear boom"),
+    )
     const { wrapper } = setup()
 
     const updateHook = renderHook(() => useUpdateFindarrSettings(), { wrapper })
@@ -166,17 +184,23 @@ describe("Findarr query hooks", () => {
     act(() => clearHook.result.current.mutate())
     await waitFor(() => expect(clearHook.result.current.isError).toBe(true))
 
-    expect(toast.error).toHaveBeenCalledWith("Could not save Findarr settings", {
-      description: "save boom",
-    })
+    expect(toast.error).toHaveBeenCalledWith(
+      "Could not save Findarr settings",
+      {
+        description: "save boom",
+      },
+    )
     expect(toast.error).toHaveBeenCalledWith("Could not run Findarr", {
       description: "run boom",
     })
     expect(toast.error).toHaveBeenCalledWith("Could not reset Findarr state", {
       description: "reset boom",
     })
-    expect(toast.error).toHaveBeenCalledWith("Could not clear Findarr history", {
-      description: "clear boom",
-    })
+    expect(toast.error).toHaveBeenCalledWith(
+      "Could not clear Findarr history",
+      {
+        description: "clear boom",
+      },
+    )
   })
 })

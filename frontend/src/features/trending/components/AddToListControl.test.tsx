@@ -122,7 +122,9 @@ describe("AddToListControl", () => {
       expect(button).not.toHaveClass("h-8")
       expect(button).toHaveClass("rounded-full")
       expect(button).toHaveClass("px-0")
-      expect(button.querySelector("[data-pill-icon-slot]")).toHaveClass(shellSize)
+      expect(button.querySelector("[data-pill-icon-slot]")).toHaveClass(
+        shellSize,
+      )
       expect(button.querySelector("svg")).toHaveClass(iconSize)
       expect(screen.getByText("Add")).toHaveClass(labelOuterPadding)
     },

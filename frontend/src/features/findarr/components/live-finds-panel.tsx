@@ -1,7 +1,12 @@
 import { PlayIcon } from "lucide-react"
 
 import { Button } from "@/shared/components/ui/button"
-import { Card, CardContent, CardHeader, CardTitle } from "@/shared/components/ui/card"
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+} from "@/shared/components/ui/card"
 import { FindarrAppCard } from "@/features/findarr/components/app-card"
 import { FindarrResetDialog } from "@/features/findarr/components/reset-dialog"
 import { formatCountdown } from "@/shared/lib/format"
@@ -63,7 +68,9 @@ export function LiveFindsPanel({
             app={app}
             status={status.apps[app]}
             hourly={hourly}
-            enabled={status.settings.enabled && status.settings.apps[app].enabled}
+            enabled={
+              status.settings.enabled && status.settings.apps[app].enabled
+            }
             onRun={() => onRunApp(app)}
             isRunning={isRunning}
           />
