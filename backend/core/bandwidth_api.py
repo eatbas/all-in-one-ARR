@@ -12,7 +12,7 @@ from typing import TYPE_CHECKING
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
-from core.settings_store import VALID_BANDWIDTH_INTERVALS
+from core.settings_normalisers import VALID_BANDWIDTH_INTERVALS
 
 if TYPE_CHECKING:  # pragma: no cover
     from core.context import AppContext

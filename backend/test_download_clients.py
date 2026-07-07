@@ -19,9 +19,9 @@ ROOT = Path(__file__).resolve().parent
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from core.clients.qbittorrent import QbittorrentClient
-from core.clients.sabnzbd import SabnzbdClient
-from core.config import Settings
+from core.clients.qbittorrent import QbittorrentClient  # noqa: E402 - after sys.path bootstrap
+from core.clients.sabnzbd import SabnzbdClient  # noqa: E402 - after sys.path bootstrap
+from core.config import Settings  # noqa: E402 - after sys.path bootstrap
 
 
 def mask(value: str) -> str:

@@ -10,7 +10,6 @@ from fastapi.testclient import TestClient
 
 from core.bandwidth_api import create_bandwidth_router
 from core.context import AppContext
-from core.db import Database
 from core.webhooks import WebhookRegistry
 from tests.conftest import StubService, StubSettingsStore, StubTrakt, _StubSettings
 

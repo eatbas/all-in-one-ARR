@@ -13,7 +13,7 @@ single module-level reference set in ``setup()``.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Callable
+from typing import TYPE_CHECKING, Awaitable, Callable
 
 from fastapi import FastAPI
 
