@@ -538,6 +538,53 @@ uvicorn main:app --app-dir backend --port 3223
 
 The FastAPI app then serves `frontend/dist` at `/`.
 
+## Code quality
+
+Formatting, linting, and static typing are automated and enforced in CI:
+
+| Area | Tool | Responsibility |
+| --- | --- | --- |
+| Backend | [Ruff](https://docs.astral.sh/ruff/) | Linting **and** formatting **and** import sorting — one tool in place of Black + isort + Flake8. |
+| Backend | [mypy](https://mypy-lang.org/) | Static type checking of `core/` and `modules/`. |
+| Frontend | [ESLint](https://eslint.org/) | Linting (TypeScript + React-hooks rules). |
+| Frontend | [Prettier](https://prettier.io/) | Formatting. `eslint-config-prettier` switches off the ESLint rules Prettier owns so the two never conflict. |
+
+Configuration lives in `backend/pyproject.toml` (`[tool.ruff]`, `[tool.mypy]`),
+`frontend/.prettierrc.json`, `frontend/.prettierignore`, and
+`frontend/eslint.config.js`.
+
+Run the checks the way CI does:
+
+```bash
+# Backend — from backend/, with the dev extras installed
+ruff check .            # lint (add --fix to auto-fix)
+ruff format --check .   # verify formatting (drop --check to write)
+mypy                    # type check
+
+# Frontend — from frontend/
+npm run lint
+npm run format:check    # verify formatting (npm run format to write)
+npm run test:types
+```
+
+`bash scripts/check.sh` runs all of the above plus the test suites and build.
+
+**Pre-commit hooks** (optional but recommended) run Ruff and Prettier before each
+commit — see `.pre-commit-config.yaml`:
+
+```bash
+pip install pre-commit
+pre-commit install
+```
+
+The whole tree was reformatted once when this toolchain was adopted. Record those
+formatting-only commit SHAs in `.git-blame-ignore-revs`, then have `git blame`
+skip them:
+
+```bash
+git config blame.ignoreRevsFile .git-blame-ignore-revs
+```
+
 ## Tests
 
 Run the full local verification path from the repository root:
@@ -547,9 +594,11 @@ bash scripts/check.sh
 ```
 
 This creates or reuses `.venv`, installs the backend with development extras,
-runs the backend coverage-gated suite, regenerates the OpenAPI schema and
-frontend types, checks that generated contract files are committed, then runs
-frontend linting, type checking, tests, and the production build.
+runs the backend lint (Ruff), format check (Ruff) and type check (mypy) followed
+by the coverage-gated test suite, regenerates the OpenAPI schema and frontend
+types, checks that generated contract files are committed, then runs frontend
+linting, the Prettier format check, type checking, tests, and the production
+build.
 
 The Python backend has **100% test coverage**, enforced in
 `backend/pyproject.toml`:
