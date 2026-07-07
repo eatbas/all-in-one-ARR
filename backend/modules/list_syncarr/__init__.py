@@ -28,8 +28,8 @@ reference closures).
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
 from time import perf_counter
+from typing import TYPE_CHECKING
 
 from fastapi import FastAPI
 
@@ -48,16 +48,16 @@ _log = get_logger("list_syncarr")
 # The active context, set during setup() so the top-level scheduled jobs can
 # reach the shared clients/db without the scheduler needing to reference a
 # closure (an APScheduler 4 constraint).
-_CONTEXT: "AppContext | None" = None
+_CONTEXT: AppContext | None = None
 
 
-def register_context(ctx: "AppContext") -> None:
+def register_context(ctx: AppContext) -> None:
     """Store the active context for the scheduled jobs to use."""
     global _CONTEXT
     _CONTEXT = ctx
 
 
-def _require_context() -> "AppContext":
+def _require_context() -> AppContext:
     if _CONTEXT is None:  # pragma: no cover - guarded by setup ordering
         raise RuntimeError("list_syncarr context not initialised")
     return _CONTEXT
@@ -84,9 +84,7 @@ async def poll_job() -> None:
         )
 
 
-async def setup(
-    scheduler: "SchedulerService", app: FastAPI, ctx: "AppContext"
-) -> None:
+async def setup(scheduler: SchedulerService, app: FastAPI, ctx: AppContext) -> None:
     """Register the poll job and the manual sync/removal/reschedule callables."""
     register_context(ctx)
 

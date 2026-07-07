@@ -11,6 +11,7 @@ from core.app_metrics import (
     findarr_hourly_capacity_remaining,
     findarr_runs_total,
     findarr_searches_total,
+    observe_scheduler_job,
     record_deletarr_delete,
     record_deletarr_scan,
     record_findarr_run,
@@ -21,7 +22,6 @@ from core.app_metrics import (
     sync_runs_total,
     update_findarr_capacity,
     update_service_metrics,
-    observe_scheduler_job,
 )
 
 
@@ -46,7 +46,10 @@ async def test_scheduler_job_metrics_update() -> None:
         return "done"
 
     assert await observe_scheduler_job("findarr_poll", job) == "done"
-    assert _counter_value(scheduler_job_runs_total, "findarr_poll", "success") == before + 1
+    assert (
+        _counter_value(scheduler_job_runs_total, "findarr_poll", "success")
+        == before + 1
+    )
 
 
 @pytest.mark.asyncio
@@ -58,12 +61,16 @@ async def test_scheduler_job_metrics_record_error_and_reraise() -> None:
 
     with pytest.raises(RuntimeError, match="job boom"):
         await observe_scheduler_job("findarr_poll", job)
-    assert _counter_value(scheduler_job_runs_total, "findarr_poll", "error") == before + 1
+    assert (
+        _counter_value(scheduler_job_runs_total, "findarr_poll", "error") == before + 1
+    )
 
 
 def test_findarr_metrics_update() -> None:
     run_before = _counter_value(findarr_runs_total, "sonarr", "completed")
-    search_before = _counter_value(findarr_searches_total, "sonarr", "missing", "success")
+    search_before = _counter_value(
+        findarr_searches_total, "sonarr", "missing", "success"
+    )
 
     record_findarr_run(app="sonarr", status="completed")
     record_findarr_search(app="sonarr", mode="missing", status="success")
@@ -85,9 +92,7 @@ def test_deletarr_metrics_update() -> None:
     record_deletarr_scan(
         library="movies", mode="arr", status="success", results_count=4
     )
-    record_deletarr_delete(
-        library="movies", deleted=2, failed=1, freed_bytes=2048
-    )
+    record_deletarr_delete(library="movies", deleted=2, failed=1, freed_bytes=2048)
 
     assert deletarr_scan_results.labels("movies", "arr")._value.get() == 4
     assert (

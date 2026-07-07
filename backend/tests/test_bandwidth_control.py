@@ -6,6 +6,7 @@ from unittest.mock import AsyncMock
 
 import pytest
 
+import modules.bandwidth_controllarr as bandwidth_module
 from core.bandwidth_metrics import (
     bw_check_status,
     bw_qbit_active_count,
@@ -17,10 +18,8 @@ from core.bandwidth_metrics import (
     bw_sab_speed_mbps,
     update_bandwidth_metrics,
 )
-import modules.bandwidth_controllarr as bandwidth_module
 from modules.bandwidth_controllarr import _STATE, control_job, setup
 from modules.bandwidth_controllarr.control import apply_control, gather_status
-
 from tests.conftest import StubService, make_ctx
 
 
@@ -40,7 +39,9 @@ def _reset_state():
     _STATE.sab_paused = False
     bandwidth_module._CONTEXT = None
     yield
-    _STATE.enabled, _STATE.status, _STATE.last_run_at, _STATE.sab_paused = previous_state
+    _STATE.enabled, _STATE.status, _STATE.last_run_at, _STATE.sab_paused = (
+        previous_state
+    )
     bandwidth_module._CONTEXT = previous_context
 
 
@@ -74,7 +75,9 @@ def _make_sab_stub(
 
 
 async def test_gather_status_merges_state_and_stats(db) -> None:
-    qbit = _make_qbit_stub(online=True, speed_mbps=5.5, active_downloads=2, queue_size=1)
+    qbit = _make_qbit_stub(
+        online=True, speed_mbps=5.5, active_downloads=2, queue_size=1
+    )
     sab = _make_sab_stub(online=True, speed_mbps=1.2, active_downloads=1, paused=True)
     ctx = make_ctx(db=db, qbittorrent=qbit, sabnzbd=sab)
 
@@ -382,9 +385,7 @@ async def test_update_bandwidth_metrics_offline_sab() -> None:
 
 
 async def test_update_bandwidth_metrics_both_offline() -> None:
-    update_bandwidth_metrics(
-        {"online": False}, {"online": False}, check_ok=False
-    )
+    update_bandwidth_metrics({"online": False}, {"online": False}, check_ok=False)
 
     assert bw_qbit_active_count._value.get() == 0.0
     assert bw_sab_active_count._value.get() == 0.0

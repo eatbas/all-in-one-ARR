@@ -43,9 +43,10 @@ def test_empty_values_holds_exactly_the_declared_fields() -> None:
 
 def test_masked_entry_masks_only_secret_fields() -> None:
     # Legacy url/api_key service: api_key reduced to api_key_set.
-    assert masked_entry(
-        BY_NAME["seer"], {"url": "http://js", "api_key": "k"}
-    ) == {"url": "http://js", "api_key_set": True}
+    assert masked_entry(BY_NAME["seer"], {"url": "http://js", "api_key": "k"}) == {
+        "url": "http://js",
+        "api_key_set": True,
+    }
     # API-key-only service: just the boolean.
     assert masked_entry(BY_NAME["tmdb"], {"api_key": ""}) == {"api_key_set": False}
     # qBittorrent is a url/api_key service: url in clear, api_key masked.

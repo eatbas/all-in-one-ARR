@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import asyncio
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING
 
 from core.app_metrics import (
@@ -12,9 +12,16 @@ from core.app_metrics import (
     update_findarr_capacity,
 )
 from core.logging import get_logger
-from modules.findarr.client import FindarrArrClient, FindarrClientError
-from modules.findarr.models import APP_NAMES, MODES, FindarrItem, ModeResult, RunResult, SearchUnit
 from modules.findarr import grouping, radarr, sonarr
+from modules.findarr.client import FindarrArrClient, FindarrClientError
+from modules.findarr.models import (
+    APP_NAMES,
+    MODES,
+    FindarrItem,
+    ModeResult,
+    RunResult,
+    SearchUnit,
+)
 
 if TYPE_CHECKING:  # pragma: no cover
     from core.context import AppContext
@@ -30,7 +37,7 @@ def _format_iso(value: datetime) -> str:
 
 
 def _now_iso() -> str:
-    return _format_iso(datetime.now(timezone.utc))
+    return _format_iso(datetime.now(UTC))
 
 
 def _parse_iso(value: str) -> datetime | None:
@@ -39,25 +46,27 @@ def _parse_iso(value: str) -> datetime | None:
     except ValueError:  # pragma: no cover - defensive against a corrupt anchor
         return None
     if parsed.tzinfo is None:  # pragma: no cover - anchors are always tz-aware
-        parsed = parsed.replace(tzinfo=timezone.utc)
-    return parsed.astimezone(timezone.utc)
+        parsed = parsed.replace(tzinfo=UTC)
+    return parsed.astimezone(UTC)
 
 
 def _hour_cutoff_iso() -> str:
-    return (datetime.now(timezone.utc) - timedelta(hours=1)).isoformat()
+    return (datetime.now(UTC) - timedelta(hours=1)).isoformat()
 
 
-def _client_for(ctx: "AppContext", app: str) -> FindarrArrClient:
+def _client_for(ctx: AppContext, app: str) -> FindarrArrClient:
     source = ctx.sonarr if app == "sonarr" else ctx.radarr
     fields = source.connection_fields()
-    return FindarrArrClient(app=app, base_url=fields["base_url"], api_key=fields["api_key"])
+    return FindarrArrClient(
+        app=app, base_url=fields["base_url"], api_key=fields["api_key"]
+    )
 
 
-def _settings_for(ctx: "AppContext") -> dict:
+def _settings_for(ctx: AppContext) -> dict:
     return ctx.settings_store.findarr_settings()
 
 
-async def status(ctx: "AppContext") -> dict:
+async def status(ctx: AppContext) -> dict:
     """Return Findarr's cached status snapshot."""
     settings = _settings_for(ctx)
     hourly_cap = int(settings["hourly_cap"])
@@ -85,7 +94,8 @@ async def status(ctx: "AppContext") -> dict:
                 "processed": counts[app],
                 "lifetime": totals[app],
                 "wanted": {
-                    mode: int(run_state.get(f"{app}_{mode}_wanted", 0)) for mode in MODES
+                    mode: int(run_state.get(f"{app}_{mode}_wanted", 0))
+                    for mode in MODES
                 },
                 "activity": run_state.get(f"{app}_activity", "Not run yet"),
             }
@@ -99,12 +109,12 @@ async def status(ctx: "AppContext") -> dict:
     }
 
 
-async def history(ctx: "AppContext") -> list[dict]:
+async def history(ctx: AppContext) -> list[dict]:
     """Return recent Findarr history rows."""
     return ctx.db.findarr_recent_history()
 
 
-async def reset_state(ctx: "AppContext") -> dict:
+async def reset_state(ctx: AppContext) -> dict:
     """Clear processed state, restart the reset window, and append an audit entry."""
     removed = ctx.db.findarr_reset_state()
     ctx.db.findarr_set_run_state(_STATE_ANCHOR_KEY, _now_iso())
@@ -120,7 +130,7 @@ async def reset_state(ctx: "AppContext") -> dict:
     return {"status": "reset", "removed": removed}
 
 
-async def clear_history(ctx: "AppContext") -> dict:
+async def clear_history(ctx: AppContext) -> dict:
     """Empty the Findarr history log and record an audit entry of the clearance.
 
     Removes only the history rows (the audit log surfaced on the History tab);
@@ -149,7 +159,7 @@ def _state_snapshot(run_state: dict, settings: dict) -> dict:
     return {"created_at": created_raw, "reset_at": reset_at, "reset_hours": reset_hours}
 
 
-def _maybe_reset_state(ctx: "AppContext", settings: dict) -> None:
+def _maybe_reset_state(ctx: AppContext, settings: dict) -> None:
     """Seed the reset anchor, or clear processed state once the window elapses.
 
     Mirrors Huntarr's stateful management: processed-media ids are wiped after
@@ -164,18 +174,26 @@ def _maybe_reset_state(ctx: "AppContext", settings: dict) -> None:
         ctx.db.findarr_set_run_state(_STATE_ANCHOR_KEY, _now_iso())
         return
     reset_hours = int(settings["state_reset_hours"])
-    if datetime.now(timezone.utc) < created + timedelta(hours=reset_hours):
+    if datetime.now(UTC) < created + timedelta(hours=reset_hours):
         return
     removed = ctx.db.findarr_reset_state()
     ctx.db.findarr_set_run_state(_STATE_ANCHOR_KEY, _now_iso())
     detail = f"Findarr state auto-reset after {reset_hours}h ({removed} rows removed)"
     ctx.db.findarr_add_history(
-        app="sonarr", mode="system", item_id=None, title=None, status="success", detail=detail
+        app="sonarr",
+        mode="system",
+        item_id=None,
+        title=None,
+        status="success",
+        detail=detail,
     )
-    ctx.db.add_activity("Findarr state auto-reset", f"Removed {removed} processed entries after {reset_hours}h")
+    ctx.db.add_activity(
+        "Findarr state auto-reset",
+        f"Removed {removed} processed entries after {reset_hours}h",
+    )
 
 
-async def run(ctx: "AppContext", *, app: str | None = None, manual: bool = False) -> dict:
+async def run(ctx: AppContext, *, app: str | None = None, manual: bool = False) -> dict:
     """Run Findarr for all apps or one requested app."""
     settings = _settings_for(ctx)
     metric_app = app or "all"
@@ -215,13 +233,15 @@ async def run(ctx: "AppContext", *, app: str | None = None, manual: bool = False
     return result.to_dict()
 
 
-def _record_run_state(ctx: "AppContext", result: RunResult) -> None:
+def _record_run_state(ctx: AppContext, result: RunResult) -> None:
     ctx.db.findarr_set_run_state("last_run_at", _now_iso())
     ctx.db.findarr_set_run_state("last_run_status", result.status)
     ctx.db.findarr_set_run_state("last_run_detail", result.detail)
 
 
-async def _run_app(ctx: "AppContext", app: str, settings: dict, app_settings: dict) -> tuple[int, list[ModeResult]]:
+async def _run_app(
+    ctx: AppContext, app: str, settings: dict, app_settings: dict
+) -> tuple[int, list[ModeResult]]:
     client = _client_for(ctx, app)
     try:
         try:
@@ -230,13 +250,24 @@ async def _run_app(ctx: "AppContext", app: str, settings: dict, app_settings: di
             detail = str(exc)
             ctx.db.findarr_set_run_state(f"{app}_detail", detail)
             ctx.db.findarr_set_run_state(f"{app}_compatible", "false")
-            ctx.db.findarr_set_run_state(f"{app}_activity", f"Connection error — {detail}")
-            ctx.db.findarr_add_history(app=app, mode="system", item_id=None, title=None, status="error", detail=detail)
+            ctx.db.findarr_set_run_state(
+                f"{app}_activity", f"Connection error — {detail}"
+            )
+            ctx.db.findarr_add_history(
+                app=app,
+                mode="system",
+                item_id=None,
+                title=None,
+                status="error",
+                detail=detail,
+            )
             return 0, []
 
         ctx.db.findarr_set_run_state(f"{app}_detail", compatibility.detail)
         ctx.db.findarr_set_run_state(f"{app}_version", compatibility.version)
-        ctx.db.findarr_set_run_state(f"{app}_compatible", "true" if compatibility.ok else "false")
+        ctx.db.findarr_set_run_state(
+            f"{app}_compatible", "true" if compatibility.ok else "false"
+        )
         if not compatibility.ok:
             ctx.db.findarr_set_run_state(f"{app}_activity", compatibility.detail)
             ctx.db.findarr_add_history(
@@ -257,7 +288,14 @@ async def _run_app(ctx: "AppContext", app: str, settings: dict, app_settings: di
                     detail = f"{app.capitalize()} queue size {queue_size} is at or above Findarr limit {queue_limit}"
                     ctx.db.findarr_set_run_state(f"{app}_detail", detail)
                     ctx.db.findarr_set_run_state(f"{app}_activity", detail)
-                    ctx.db.findarr_add_history(app=app, mode="system", item_id=None, title=None, status="skipped", detail=detail)
+                    ctx.db.findarr_add_history(
+                        app=app,
+                        mode="system",
+                        item_id=None,
+                        title=None,
+                        status="skipped",
+                        detail=detail,
+                    )
                     return 0, []
 
             sleep_seconds = int(settings["command_sleep_seconds"])
@@ -267,16 +305,29 @@ async def _run_app(ctx: "AppContext", app: str, settings: dict, app_settings: di
                 ("missing", "missing", "missing_limit"),
                 ("upgrade", "cutoff", "upgrade_limit"),
             ):
-                remaining = max(0, int(settings["hourly_cap"]) - ctx.db.findarr_success_count_since(_hour_cutoff_iso()))
+                remaining = max(
+                    0,
+                    int(settings["hourly_cap"])
+                    - ctx.db.findarr_success_count_since(_hour_cutoff_iso()),
+                )
                 update_findarr_capacity(remaining)
                 limit = min(int(app_settings[limit_key]), remaining)
                 mode_result = await _run_mode(
-                    ctx, client, app, mode, wanted_kind, limit, app_settings, sleep_seconds
+                    ctx,
+                    client,
+                    app,
+                    mode,
+                    wanted_kind,
+                    limit,
+                    app_settings,
+                    sleep_seconds,
                 )
                 processed += mode_result.processed
                 results.append(mode_result)
             for mode_result in results:
-                ctx.db.findarr_set_run_state(f"{app}_{mode_result.mode}_wanted", str(mode_result.scanned))
+                ctx.db.findarr_set_run_state(
+                    f"{app}_{mode_result.mode}_wanted", str(mode_result.scanned)
+                )
             ctx.db.findarr_set_run_state(f"{app}_activity", _app_activity(results))
             return processed, results
         except FindarrClientError as exc:
@@ -286,8 +337,17 @@ async def _run_app(ctx: "AppContext", app: str, settings: dict, app_settings: di
             # run for every app.
             detail = str(exc)
             ctx.db.findarr_set_run_state(f"{app}_detail", detail)
-            ctx.db.findarr_set_run_state(f"{app}_activity", f"Connection error — {detail}")
-            ctx.db.findarr_add_history(app=app, mode="system", item_id=None, title=None, status="error", detail=detail)
+            ctx.db.findarr_set_run_state(
+                f"{app}_activity", f"Connection error — {detail}"
+            )
+            ctx.db.findarr_add_history(
+                app=app,
+                mode="system",
+                item_id=None,
+                title=None,
+                status="error",
+                detail=detail,
+            )
             return 0, []
     finally:
         await client.aclose()
@@ -327,7 +387,7 @@ def _granularity_for(app: str, mode: str, app_settings: dict) -> str:
 
 
 async def _run_mode(
-    ctx: "AppContext",
+    ctx: AppContext,
     client: FindarrArrClient,
     app: str,
     mode: str,
@@ -351,12 +411,16 @@ async def _run_mode(
     result.filtered = sum(
         1
         for unit in units
-        if _filtered_by_preference(unit, monitored_only=monitored_only, skip_future=skip_future)
+        if _filtered_by_preference(
+            unit, monitored_only=monitored_only, skip_future=skip_future
+        )
     )
     candidates = [
         unit
         for unit in units
-        if _unit_allowed(ctx, unit, monitored_only=monitored_only, skip_future=skip_future)
+        if _unit_allowed(
+            ctx, unit, monitored_only=monitored_only, skip_future=skip_future
+        )
     ]
     selected = candidates[:limit]
     result.selected = len(selected)
@@ -379,7 +443,9 @@ async def _run_mode(
             record_findarr_search(app=app, mode=mode, status="error")
             _log.warning("Findarr search failed for %s %s: %s", app, unit.key, exc)
             continue
-        ctx.db.findarr_mark_processed(app=app, mode=mode, item_id=unit.key, title=unit.title)
+        ctx.db.findarr_mark_processed(
+            app=app, mode=mode, item_id=unit.key, title=unit.title
+        )
         ctx.db.findarr_increment_total(app=app, mode=mode)
         ctx.db.findarr_add_history(
             app=app,
@@ -391,7 +457,9 @@ async def _run_mode(
         )
         record_findarr_search(app=app, mode=mode, status="success")
         result.processed += 1
-    result.detail = f"Processed {result.processed} of {result.selected} selected item(s)"
+    result.detail = (
+        f"Processed {result.processed} of {result.selected} selected item(s)"
+    )
     return result
 
 
@@ -405,7 +473,9 @@ def _normalise_items(app: str, mode: str, records: list[dict]) -> list[FindarrIt
     return items
 
 
-def _filtered_by_preference(unit: SearchUnit, *, monitored_only: bool, skip_future: bool) -> bool:
+def _filtered_by_preference(
+    unit: SearchUnit, *, monitored_only: bool, skip_future: bool
+) -> bool:
     """Whether a unit is excluded by the monitored-only / skip-future preferences."""
     if monitored_only and not unit.monitored:
         return True
@@ -414,7 +484,13 @@ def _filtered_by_preference(unit: SearchUnit, *, monitored_only: bool, skip_futu
     return False
 
 
-def _unit_allowed(ctx: "AppContext", unit: SearchUnit, *, monitored_only: bool, skip_future: bool) -> bool:
-    if _filtered_by_preference(unit, monitored_only=monitored_only, skip_future=skip_future):
+def _unit_allowed(
+    ctx: AppContext, unit: SearchUnit, *, monitored_only: bool, skip_future: bool
+) -> bool:
+    if _filtered_by_preference(
+        unit, monitored_only=monitored_only, skip_future=skip_future
+    ):
         return False
-    return not ctx.db.findarr_is_processed(app=unit.app, mode=unit.mode, item_id=unit.key)
+    return not ctx.db.findarr_is_processed(
+        app=unit.app, mode=unit.mode, item_id=unit.key
+    )

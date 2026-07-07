@@ -28,14 +28,14 @@ if TYPE_CHECKING:  # pragma: no cover
 _SYNC_TASKS: set[asyncio.Task] = set()
 
 
-def _on_sync_done(task: "asyncio.Task") -> None:
+def _on_sync_done(task: asyncio.Task) -> None:
     """Discard a finished sync task and log any failure."""
     _SYNC_TASKS.discard(task)
     if not task.cancelled() and task.exception() is not None:
         get_logger("api").error("manual sync failed: %s", task.exception())
 
 
-def _remember_task(task: "asyncio.Task") -> None:
+def _remember_task(task: asyncio.Task) -> None:
     """Retain a background task and attach the completion callback."""
     _SYNC_TASKS.add(task)
     task.add_done_callback(_on_sync_done)
@@ -127,7 +127,7 @@ class DatabaseStatsResponse(BaseModel):
     list_state_count: int
 
 
-def _services_status_response(snapshot: "StatusResult") -> ServicesStatusResponse:
+def _services_status_response(snapshot: StatusResult) -> ServicesStatusResponse:
     """Map a status-checker snapshot onto the API response model."""
     return ServicesStatusResponse(
         interval_seconds=snapshot.interval_seconds,
@@ -139,7 +139,7 @@ def _services_status_response(snapshot: "StatusResult") -> ServicesStatusRespons
     )
 
 
-def create_api_router(ctx: "AppContext") -> APIRouter:
+def create_api_router(ctx: AppContext) -> APIRouter:
     """Build the ``/api`` router bound to a specific application context."""
     router = APIRouter(prefix="/api")
     log = get_logger("api")
@@ -209,9 +209,7 @@ def create_api_router(ctx: "AppContext") -> APIRouter:
     async def post_sync() -> JSONResponse:
         if ctx.sync_now is None:  # no module registered a sync callable
             log.warning("manual sync requested but no sync handler registered")
-            return JSONResponse(
-                status_code=503, content={"detail": "sync unavailable"}
-            )
+            return JSONResponse(status_code=503, content={"detail": "sync unavailable"})
         started = perf_counter()
         status = "success"
         try:
@@ -219,9 +217,7 @@ def create_api_router(ctx: "AppContext") -> APIRouter:
         except SyncAlreadyRunning:
             status = "skipped"
             log.info("manual sync rejected: a sync is already running")
-            ctx.db.add_activity(
-                "Sync already running", "A sync is already running"
-            )
+            ctx.db.add_activity("Sync already running", "A sync is already running")
             return JSONResponse(
                 status_code=409, content={"detail": "sync already running"}
             )
@@ -269,10 +265,14 @@ def create_api_router(ctx: "AppContext") -> APIRouter:
     async def get_database_settings() -> DatabaseStatsResponse:
         return _database_stats()
 
-    @router.post("/settings/database/clear-activity", response_model=DatabaseStatsResponse)
+    @router.post(
+        "/settings/database/clear-activity", response_model=DatabaseStatsResponse
+    )
     async def post_clear_activity() -> DatabaseStatsResponse:
         removed = ctx.db.clear_activity()
-        ctx.db.add_activity("Activity log cleared", f"Removed {removed} activity entries")
+        ctx.db.add_activity(
+            "Activity log cleared", f"Removed {removed} activity entries"
+        )
         return _database_stats()
 
     @router.post("/settings/database/clear-items", response_model=DatabaseStatsResponse)
@@ -283,7 +283,9 @@ def create_api_router(ctx: "AppContext") -> APIRouter:
         )
         return _database_stats()
 
-    @router.post("/settings/database/clear-posters", response_model=DatabaseStatsResponse)
+    @router.post(
+        "/settings/database/clear-posters", response_model=DatabaseStatsResponse
+    )
     async def post_clear_posters() -> DatabaseStatsResponse:
         if ctx.poster_cache is not None:
             freed = ctx.poster_cache.clear()
@@ -318,7 +320,9 @@ def create_api_router(ctx: "AppContext") -> APIRouter:
                 )
         if body.sync_interval_minutes is not None:
             previous = ctx.settings_store.sync_interval_minutes()
-            minutes = ctx.settings_store.update_sync_interval(body.sync_interval_minutes)
+            minutes = ctx.settings_store.update_sync_interval(
+                body.sync_interval_minutes
+            )
             if minutes != previous:
                 ctx.db.add_activity(
                     "Sync interval updated",
@@ -356,7 +360,9 @@ def create_api_router(ctx: "AppContext") -> APIRouter:
                     )
         return _general_settings()
 
-    @router.post("/items/remove-available", response_model=SyncResponse, status_code=202)
+    @router.post(
+        "/items/remove-available", response_model=SyncResponse, status_code=202
+    )
     async def post_remove_available() -> JSONResponse:
         """Sweep every Available item out of its Trakt list (manual reconcile)."""
         if ctx.remove_available is not None:

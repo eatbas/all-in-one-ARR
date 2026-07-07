@@ -6,8 +6,12 @@ from modules.deletarr.patterns import JunkPatterns
 
 
 def test_video_and_whitelisted_artwork_are_preserved() -> None:
-    assert JunkPatterns.is_junk_file("Movie.mkv", "/media/Movie.mkv")["is_junk"] is False
-    assert JunkPatterns.is_junk_file("poster.jpg", "/media/poster.jpg")["is_junk"] is False
+    assert (
+        JunkPatterns.is_junk_file("Movie.mkv", "/media/Movie.mkv")["is_junk"] is False
+    )
+    assert (
+        JunkPatterns.is_junk_file("poster.jpg", "/media/poster.jpg")["is_junk"] is False
+    )
 
 
 def test_common_junk_extensions_and_patterns_are_flagged() -> None:
@@ -48,13 +52,23 @@ def test_metadata_must_match_video_or_folder_name() -> None:
 
 def test_movie_and_tv_name_helpers() -> None:
     assert JunkPatterns.is_junk_folder("Samples") is True
-    assert JunkPatterns.video_matches_folder("Anything.mkv", "{tmdb-1234} (2020)") is True
-    assert JunkPatterns.video_matches_folder("Example Movie 2020.mkv", "Example Movie (2020)") is True
+    assert (
+        JunkPatterns.video_matches_folder("Anything.mkv", "{tmdb-1234} (2020)") is True
+    )
+    assert (
+        JunkPatterns.video_matches_folder(
+            "Example Movie 2020.mkv", "Example Movie (2020)"
+        )
+        is True
+    )
     assert JunkPatterns.video_matches_folder("Other Film.mkv", "Example Movie") is False
     assert JunkPatterns.is_tv_season_folder("Season 01") is True
     assert JunkPatterns.is_tv_specials_folder("Season 00") is True
     assert JunkPatterns.is_tv_specials_folder("[Group] Specials") is True
-    assert JunkPatterns.is_valid_tv_episode("Example Show S01E02.mkv", "Example Show") is True
+    assert (
+        JunkPatterns.is_valid_tv_episode("Example Show S01E02.mkv", "Example Show")
+        is True
+    )
     assert JunkPatterns.is_valid_tv_episode("S01E02.mkv", "{tvdb-1} (2020)") is True
     assert JunkPatterns.is_valid_tv_episode("Pilot.mkv", "Example Show") is False
 
@@ -84,7 +98,9 @@ def test_scene_tag_patterns_match_case_insensitively() -> None:
 
 
 def test_recognised_artwork_is_kept() -> None:
-    assert _is_junk("fanart.jpg", video_basenames=["Movie"], folder_name="Movie") is False
+    assert (
+        _is_junk("fanart.jpg", video_basenames=["Movie"], folder_name="Movie") is False
+    )
     assert _is_junk("banner.PNG") is False
     assert _is_junk("poster.bmp") is False
     assert _is_junk("season01-poster.jpg") is False
@@ -94,8 +110,13 @@ def test_recognised_artwork_is_kept() -> None:
     # Case-insensitive video/folder match.
     assert _is_junk("Movie.JPG", video_basenames=["movie"]) is False
     # Still junk when nothing matches.
-    assert _is_junk("unknown-poster.jpg", video_basenames=["Movie"], folder_name="Other") is True
-    assert _is_junk("random.png", video_basenames=["Movie"], folder_name="Other") is True
+    assert (
+        _is_junk("unknown-poster.jpg", video_basenames=["Movie"], folder_name="Other")
+        is True
+    )
+    assert (
+        _is_junk("random.png", video_basenames=["Movie"], folder_name="Other") is True
+    )
 
 
 def test_episode_signatures_accept_common_formats() -> None:
@@ -147,8 +168,13 @@ def test_specials_folder_recognises_zero_and_localised() -> None:
 def test_video_matches_folder_uses_year_and_strips_tags() -> None:
     match = JunkPatterns.video_matches_folder
     # A matching year is sufficient even with imdb/edition tags present.
-    assert match("Seven.1995.mkv", "Se7en (1995) {imdb-tt0114369} {edition-Directors}") is True
-    assert match("The Matrix 1999.mkv", "The Matrix (1999) {edition-Remastered}") is True
+    assert (
+        match("Seven.1995.mkv", "Se7en (1995) {imdb-tt0114369} {edition-Directors}")
+        is True
+    )
+    assert (
+        match("The Matrix 1999.mkv", "The Matrix (1999) {edition-Remastered}") is True
+    )
     # No year: distinctive words still match after stop-word removal.
     assert match("matrix.reloaded.mkv", "The Matrix Reloaded") is True
     # No year, wrong movie.

@@ -80,7 +80,9 @@ def test_movie_scan_flags_sidecars_duplicates_and_misplaced_videos(tmp_path) -> 
     assert reasons["Example Movie 2024.nfo"] == "Junk file extension"
     assert reasons["random.png"] == "Metadata file not matching video or folder"
     assert reasons["Example Movie 2024.small.mp4"].startswith("Duplicate video")
-    assert reasons["Other Film.mkv"] == "Misplaced video (filename does not match folder)"
+    assert (
+        reasons["Other Film.mkv"] == "Misplaced video (filename does not match folder)"
+    )
     assert any(item.name == "sample" and item.type == "folder" for item in results)
     assert "poster.jpg" not in reasons
     assert scanner.get_stats().total_files == 4
@@ -102,10 +104,17 @@ def test_tv_scan_flags_non_episode_files_and_unexpected_folders(tmp_path) -> Non
     reasons = {item.name: item.reason for item in results}
 
     assert reasons["notes.nfo"] == "Non-video file in Season folder"
-    assert reasons["Bad Name.mkv"] == "Irregular episode naming (missing SxxExx or show name)"
+    assert (
+        reasons["Bad Name.mkv"]
+        == "Irregular episode naming (missing SxxExx or show name)"
+    )
     assert reasons["Extras"] == "Junk folder"
     assert reasons["Featurettes"] == "Unexpected folder in TV Show directory"
-    assert all(item.videos_in_folder[0].name == "Example Show S01E01.mkv" for item in results if item.movie_folder_path == str(season))
+    assert all(
+        item.videos_in_folder[0].name == "Example Show S01E01.mkv"
+        for item in results
+        if item.movie_folder_path == str(season)
+    )
 
 
 def test_tv_scan_skips_files_that_cannot_be_statted(tmp_path, monkeypatch) -> None:
@@ -180,7 +189,9 @@ def test_movie_scan_skips_ignored_and_unstattable_files(tmp_path, monkeypatch) -
     assert scanner.get_sorted_results() == []
 
 
-def test_movie_video_without_suffix_uses_defensive_branch(tmp_path, monkeypatch) -> None:
+def test_movie_video_without_suffix_uses_defensive_branch(
+    tmp_path, monkeypatch
+) -> None:
     movie = tmp_path / "Movie"
     video = _write(movie / "Movie", b"video")
     _write(movie / "Movie.nfo")
@@ -215,7 +226,9 @@ def test_folder_size_ignores_unreadable_files(tmp_path, monkeypatch) -> None:
     assert MediaScanner([])._get_folder_size(str(folder)) == ok.stat().st_size
 
 
-async def test_delete_requires_scan_membership_and_library_containment(db, tmp_path) -> None:
+async def test_delete_requires_scan_membership_and_library_containment(
+    db, tmp_path
+) -> None:
     root = tmp_path / "movies"
     outside = tmp_path / "outside"
     movie = root / "Example Movie"
@@ -617,7 +630,9 @@ def test_scan_arr_skips_unstattable_junk_file(tmp_path, monkeypatch) -> None:
     assert all(item.name != "broken.nfo" for item in scanner.get_sorted_results())
 
 
-def test_scan_arr_folder_videos_tolerate_unreadable_media(tmp_path, monkeypatch) -> None:
+def test_scan_arr_folder_videos_tolerate_unreadable_media(
+    tmp_path, monkeypatch
+) -> None:
     import os
 
     root = tmp_path / "movies"
@@ -644,7 +659,9 @@ def test_scan_arr_folder_videos_tolerate_unreadable_media(tmp_path, monkeypatch)
 # ---- Engine scan-mode selection and Arr-aware delete ----
 
 
-async def test_scan_uses_arr_mode_when_manifest_available(db, tmp_path, monkeypatch) -> None:
+async def test_scan_uses_arr_mode_when_manifest_available(
+    db, tmp_path, monkeypatch
+) -> None:
     root = tmp_path / "movies"
     movie = root / "Inception (2010)"
     video = _write(movie / "Inception.mkv", b"video")
@@ -825,7 +842,9 @@ async def test_arr_mode_delete_succeeds_for_untracked_junk(
     assert not junk.exists()
 
 
-async def test_arr_mode_delete_blocks_now_tracked_path(db, tmp_path, monkeypatch) -> None:
+async def test_arr_mode_delete_blocks_now_tracked_path(
+    db, tmp_path, monkeypatch
+) -> None:
     root = tmp_path / "movies"
     movie = root / "Inception (2010)"
     video = _write(movie / "Inception.mkv", b"video")

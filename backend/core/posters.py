@@ -14,9 +14,10 @@ import asyncio
 import os
 import threading
 import time
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
-from typing import TYPE_CHECKING, Callable
+from typing import TYPE_CHECKING
 
 from core.logging import get_logger
 
@@ -40,9 +41,7 @@ class PosterEvictionResult:
 class PosterCache:
     """Fetch-once disk cache for poster thumbnails."""
 
-    def __init__(
-        self, *, cache_dir: str, tmdb: "TmdbClient", omdb: "OmdbClient"
-    ) -> None:
+    def __init__(self, *, cache_dir: str, tmdb: TmdbClient, omdb: OmdbClient) -> None:
         self._cache_dir = Path(cache_dir)
         self._tmdb = tmdb
         self._omdb = omdb
@@ -88,9 +87,7 @@ class PosterCache:
             if path.exists():
                 self._touch_access(path)
                 return path
-            data = await self._tmdb.fetch_poster(
-                media_type=media_type, tmdb_id=tmdb_id
-            )
+            data = await self._tmdb.fetch_poster(media_type=media_type, tmdb_id=tmdb_id)
             if data is None and imdb_id:
                 data = await self._omdb.fetch_poster(imdb_id=imdb_id)
             if data is None:
@@ -206,4 +203,6 @@ class PosterCache:
             )
         else:
             self._log.debug("poster churn evicted nothing")
-        return PosterEvictionResult(removed_files=removed_files, freed_bytes=freed_bytes)
+        return PosterEvictionResult(
+            removed_files=removed_files, freed_bytes=freed_bytes
+        )

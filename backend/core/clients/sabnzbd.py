@@ -112,7 +112,9 @@ class SabnzbdClient:
             return _offline_stats()
 
         speed_mbps = _parse_sab_speed(queue.get("speed"))
-        active_downloads = sum(1 for slot in slots if slot.get("status") == "Downloading")
+        active_downloads = sum(
+            1 for slot in slots if slot.get("status") == "Downloading"
+        )
         paused = _parse_sab_bool(queue.get("paused"))
 
         return {
@@ -176,7 +178,7 @@ def _parse_sab_speed(value: Any) -> float:
         number = float(numeric)
     except ValueError:
         return 0.0
-    unit = text[len(numeric):].strip()
+    unit = text[len(numeric) :].strip()
     if unit.startswith("K"):
         return round(number / 1024, 2)
     if unit.startswith("B"):

@@ -96,7 +96,12 @@ def test_to_trending_items_flags_in_library_available() -> None:
         rows, source="trakt", tracked_tmdbs=set(), library=library
     )
     assert [item["in_library"] for item in items] == [True, True, True, True]
-    assert [item["in_library_available"] for item in items] == [True, False, True, False]
+    assert [item["in_library_available"] for item in items] == [
+        True,
+        False,
+        True,
+        False,
+    ]
 
 
 def test_is_available_defaults_false_without_library() -> None:
@@ -174,11 +179,17 @@ def test_trending_store_all_rows_flattens_every_feed() -> None:
     store = TrendingStore()
     assert store.all_rows() == []
     store.set(
-        source="trakt", media="movie", category="trending", window="week",
+        source="trakt",
+        media="movie",
+        category="trending",
+        window="week",
         rows=[{"tmdb": 1}],
     )
     store.set(
-        source="tmdb", media="show", category="popular", window="week",
+        source="tmdb",
+        media="show",
+        category="popular",
+        window="week",
         rows=[{"tmdb": 2}, {"tmdb": 3}],
     )
     assert sorted(row["tmdb"] for row in store.all_rows()) == [1, 2, 3]

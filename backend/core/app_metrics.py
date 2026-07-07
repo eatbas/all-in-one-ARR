@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
+from collections.abc import Awaitable, Callable
 from time import perf_counter, time
-from typing import Awaitable, Callable, TypeVar
+from typing import TypeVar
 
 from prometheus_client import Counter, Gauge, Histogram
 
@@ -142,15 +143,15 @@ def record_sync_run(*, trigger: str, status: str, duration_seconds: float) -> No
         sync_last_success_timestamp_seconds.set(time())
 
 
-def update_service_metrics(name: str, *, ok: bool, checked_at: float | None = None) -> None:
+def update_service_metrics(
+    name: str, *, ok: bool, checked_at: float | None = None
+) -> None:
     """Update cached health metrics for one integration."""
     service_status.labels(name).set(1 if ok else 0)
     service_last_check_timestamp_seconds.labels(name).set(checked_at or time())
 
 
-async def observe_scheduler_job(
-    job_id: str, job: Callable[[], Awaitable[T]]
-) -> T:
+async def observe_scheduler_job(job_id: str, job: Callable[[], Awaitable[T]]) -> T:
     """Run ``job`` and record bounded scheduler metrics around it."""
     started = perf_counter()
     status = "success"

@@ -114,18 +114,14 @@ async def test_fetch_poster_non_json_returns_none() -> None:
 
 @respx.mock
 async def test_fetch_poster_image_non_200_returns_none() -> None:
-    respx.get(_URL).mock(
-        return_value=httpx.Response(200, json={"Poster": _POSTER_URL})
-    )
+    respx.get(_URL).mock(return_value=httpx.Response(200, json={"Poster": _POSTER_URL}))
     respx.get(_POSTER_URL).mock(return_value=httpx.Response(404))
     assert await OmdbClient(api_key="ok").fetch_poster(imdb_id="tt1") is None
 
 
 @respx.mock
 async def test_fetch_poster_image_network_error_returns_none() -> None:
-    respx.get(_URL).mock(
-        return_value=httpx.Response(200, json={"Poster": _POSTER_URL})
-    )
+    respx.get(_URL).mock(return_value=httpx.Response(200, json={"Poster": _POSTER_URL}))
     respx.get(_POSTER_URL).mock(side_effect=httpx.ConnectError("down"))
     assert await OmdbClient(api_key="ok").fetch_poster(imdb_id="tt1") is None
 

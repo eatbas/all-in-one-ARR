@@ -19,7 +19,7 @@ if TYPE_CHECKING:  # pragma: no cover
 _log = get_logger("list_syncarr.reconcile")
 
 
-async def reconcile(ctx: "AppContext") -> None:
+async def reconcile(ctx: AppContext) -> None:
     """Remove items Seer now reports as Available from their Trakt list.
 
     Scoped to lists still in the settings store: an active item whose list the user
@@ -43,7 +43,9 @@ async def reconcile(ctx: "AppContext") -> None:
                 media_type=seer_media_type, tmdb_id=tmdb
             )
             if seer_status == AVAILABLE:
-                await remove_tracked_item(ctx, item, reason="reconciled (webhook missed)")
+                await remove_tracked_item(
+                    ctx, item, reason="reconciled (webhook missed)"
+                )
         except SeerError as exc:
             title = item.get("title") or "unknown item"
             _log.error("reconcile failed for %s: %s", title, exc)

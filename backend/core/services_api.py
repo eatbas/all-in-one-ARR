@@ -36,7 +36,7 @@ class ServiceTestResponse(BaseModel):
     detail: str
 
 
-def _client_for(ctx: "AppContext", name: str):
+def _client_for(ctx: AppContext, name: str):
     """Return the reconfigurable client backing a service name."""
     return {
         "seer": ctx.seer,
@@ -49,7 +49,7 @@ def _client_for(ctx: "AppContext", name: str):
     }[name]
 
 
-def _apply_credentials(ctx: "AppContext", name: str) -> None:
+def _apply_credentials(ctx: AppContext, name: str) -> None:
     """Push the stored connection fields into the live client for ``name``.
 
     Each client's ``update_credentials`` takes only the keyword arguments for the
@@ -57,7 +57,7 @@ def _apply_credentials(ctx: "AppContext", name: str) -> None:
     the descriptor's fields onto that call generically. Every managed service
     carries an ``api_key``; only some also carry a ``url``.
     """
-    desc: "ServiceDescriptor" = BY_NAME[name]
+    desc: ServiceDescriptor = BY_NAME[name]
     values = ctx.settings_store.service_fields(name)
     kwargs: dict[str, str] = {"api_key": values["api_key"]}
     if "url" in desc.fields:
@@ -65,18 +65,16 @@ def _apply_credentials(ctx: "AppContext", name: str) -> None:
     _client_for(ctx, name).update_credentials(**kwargs)
 
 
-def _services_response(ctx: "AppContext") -> dict[str, dict[str, Any]]:
+def _services_response(ctx: AppContext) -> dict[str, dict[str, Any]]:
     """Build the masked services response (descriptor-trimmed per service)."""
     return ctx.settings_store.masked_services()
 
 
 def _unknown_service(name: str) -> JSONResponse:
-    return JSONResponse(
-        status_code=404, content={"detail": f"Unknown service: {name}"}
-    )
+    return JSONResponse(status_code=404, content={"detail": f"Unknown service: {name}"})
 
 
-def create_services_router(ctx: "AppContext") -> APIRouter:
+def create_services_router(ctx: AppContext) -> APIRouter:
     """Build the ``/api`` router for service connection management."""
     router = APIRouter(prefix="/api")
     log = get_logger("services_api")

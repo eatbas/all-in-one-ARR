@@ -95,7 +95,9 @@ class FindarrArrClient(ServarrClient):
 
     async def queue_size(self) -> int:
         """Return current download queue size."""
-        data = await self._request("GET", "/api/v3/queue", params={"page": 1, "pageSize": 1})
+        data = await self._request(
+            "GET", "/api/v3/queue", params={"page": 1, "pageSize": 1}
+        )
         if isinstance(data, dict):
             return int(data.get("totalRecords", len(data.get("records", []))))
         if isinstance(data, list):
@@ -125,14 +127,20 @@ class FindarrArrClient(ServarrClient):
             if isinstance(data, dict):
                 page_records = data.get("records", [])
                 if not isinstance(page_records, list):
-                    raise FindarrClientError(f"{self.app} wanted payload has invalid records")
-                records.extend([record for record in page_records if isinstance(record, dict)])
+                    raise FindarrClientError(
+                        f"{self.app} wanted payload has invalid records"
+                    )
+                records.extend(
+                    [record for record in page_records if isinstance(record, dict)]
+                )
                 # ``totalRecords`` is authoritative when present. When an older
                 # Arr build omits it, fall back to "stop on the first empty page"
                 # rather than treating the first page as the whole set — the
                 # latter silently drops every record beyond page one.
                 total = data.get("totalRecords")
-                if (total is not None and len(records) >= int(total)) or not page_records:
+                if (
+                    total is not None and len(records) >= int(total)
+                ) or not page_records:
                     break
             elif isinstance(data, list):
                 records.extend([record for record in data if isinstance(record, dict)])

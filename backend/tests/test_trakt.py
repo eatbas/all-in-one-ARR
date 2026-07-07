@@ -17,7 +17,13 @@ _LIST_JSON = [
         "movie": {
             "title": "Dune",
             "year": 2021,
-            "ids": {"trakt": 1, "slug": "dune", "imdb": "tt1", "tmdb": 100, "tvdb": None},
+            "ids": {
+                "trakt": 1,
+                "slug": "dune",
+                "imdb": "tt1",
+                "tmdb": 100,
+                "tvdb": None,
+            },
         },
     },
     {
@@ -92,7 +98,9 @@ async def test_poll_success(tmp_path) -> None:
         )
     )
     client = make_client(tmp_path)
-    ok = await client.poll_for_token({"device_code": "dev", "interval": 0, "expires_in": 600})
+    ok = await client.poll_for_token(
+        {"device_code": "dev", "interval": 0, "expires_in": 600}
+    )
     assert ok is True
     assert client.is_authenticated() is True
 
@@ -102,10 +110,14 @@ async def test_poll_pending_then_success(tmp_path) -> None:
     route = respx.post(f"{TRAKT_BASE_URL}/oauth/device/token")
     route.side_effect = [
         httpx.Response(400),
-        httpx.Response(200, json={"access_token": "a", "refresh_token": "r", "expires_in": 1}),
+        httpx.Response(
+            200, json={"access_token": "a", "refresh_token": "r", "expires_in": 1}
+        ),
     ]
     client = make_client(tmp_path)
-    ok = await client.poll_for_token({"device_code": "dev", "interval": 0, "expires_in": 600})
+    ok = await client.poll_for_token(
+        {"device_code": "dev", "interval": 0, "expires_in": 600}
+    )
     assert ok is True
 
 
@@ -115,13 +127,17 @@ async def test_poll_failure_status(tmp_path) -> None:
         return_value=httpx.Response(410)
     )
     client = make_client(tmp_path)
-    ok = await client.poll_for_token({"device_code": "dev", "interval": 0, "expires_in": 600})
+    ok = await client.poll_for_token(
+        {"device_code": "dev", "interval": 0, "expires_in": 600}
+    )
     assert ok is False
 
 
 async def test_poll_expired(tmp_path) -> None:
     client = make_client(tmp_path)
-    ok = await client.poll_for_token({"device_code": "dev", "interval": 0, "expires_in": 0})
+    ok = await client.poll_for_token(
+        {"device_code": "dev", "interval": 0, "expires_in": 0}
+    )
     assert ok is False
 
 
@@ -201,9 +217,9 @@ async def test_read_list_items_user_list(tmp_path) -> None:
 
 @respx.mock
 async def test_remove_items_real_movie_user_list(tmp_path) -> None:
-    route = respx.post(
-        f"{TRAKT_BASE_URL}/users/me/lists/my-list/items/remove"
-    ).mock(return_value=httpx.Response(200, json={"deleted": {"movies": 1}}))
+    route = respx.post(f"{TRAKT_BASE_URL}/users/me/lists/my-list/items/remove").mock(
+        return_value=httpx.Response(200, json={"deleted": {"movies": 1}})
+    )
     client = make_client(tmp_path)
     client._tokens = {"access_token": "a", "refresh_token": "r", "expires_at": 9e9}
     result = await client.remove_items(movies=[100], list_id="my-list")
@@ -269,7 +285,11 @@ async def test_get_popular_shows_uses_flat_objects(tmp_path) -> None:
         return_value=httpx.Response(
             200,
             json=[
-                {"title": "Severance", "year": 2022, "ids": {"trakt": 2, "tmdb": 200, "tvdb": 300}},
+                {
+                    "title": "Severance",
+                    "year": 2022,
+                    "ids": {"trakt": 2, "tmdb": 200, "tvdb": 300},
+                },
                 "broken",  # skipped: not a dict
             ],
         )
@@ -302,7 +322,9 @@ async def test_lookup_ids_by_tmdb_returns_ids(tmp_path) -> None:
             json=[
                 {
                     "type": "movie",
-                    "movie": {"ids": {"trakt": 1, "tmdb": 100, "imdb": "tt1", "slug": "dune"}},
+                    "movie": {
+                        "ids": {"trakt": 1, "tmdb": 100, "imdb": "tt1", "slug": "dune"}
+                    },
                 }
             ],
         )
@@ -322,7 +344,12 @@ async def test_lookup_ids_by_tmdb_show_type(tmp_path) -> None:
     route = respx.get(f"{TRAKT_BASE_URL}/search/tmdb/200").mock(
         return_value=httpx.Response(
             200,
-            json=[{"type": "show", "show": {"ids": {"trakt": 2, "tmdb": 200, "tvdb": 300}}}],
+            json=[
+                {
+                    "type": "show",
+                    "show": {"ids": {"trakt": 2, "tmdb": 200, "tvdb": 300}},
+                }
+            ],
         )
     )
     client = make_client(tmp_path)
@@ -393,9 +420,9 @@ def test_update_credentials(tmp_path) -> None:
 
 @respx.mock
 async def test_read_list_items_explicit_owner_and_list(tmp_path) -> None:
-    respx.get(
-        f"{TRAKT_BASE_URL}/users/bob/lists/anime/items/movies,shows"
-    ).mock(return_value=httpx.Response(200, json=[]))
+    respx.get(f"{TRAKT_BASE_URL}/users/bob/lists/anime/items/movies,shows").mock(
+        return_value=httpx.Response(200, json=[])
+    )
     client = make_client(tmp_path)
     client._tokens = dict(_TOKENS)
     assert await client.read_list_items(list_id="anime", owner_user="bob") == []
@@ -403,9 +430,9 @@ async def test_read_list_items_explicit_owner_and_list(tmp_path) -> None:
 
 @respx.mock
 async def test_remove_items_explicit_owner_and_list(tmp_path) -> None:
-    route = respx.post(
-        f"{TRAKT_BASE_URL}/users/bob/lists/anime/items/remove"
-    ).mock(return_value=httpx.Response(200, json={"deleted": {"movies": 1}}))
+    route = respx.post(f"{TRAKT_BASE_URL}/users/bob/lists/anime/items/remove").mock(
+        return_value=httpx.Response(200, json={"deleted": {"movies": 1}})
+    )
     client = make_client(tmp_path)
     client._tokens = dict(_TOKENS)
     result = await client.remove_items(movies=[1], list_id="anime", owner_user="bob")
@@ -419,7 +446,11 @@ async def test_get_user_lists_normalises_and_filters(tmp_path) -> None:
         return_value=httpx.Response(
             200,
             json=[
-                {"name": "Movies", "ids": {"slug": "movies", "trakt": 1}, "item_count": 19},
+                {
+                    "name": "Movies",
+                    "ids": {"slug": "movies", "trakt": 1},
+                    "item_count": 19,
+                },
                 {"name": "NoSlug", "ids": {"trakt": 42}, "item_count": 0},
                 {"name": "Bad", "ids": {}},  # no slug, no trakt -> dropped
             ],
@@ -525,9 +556,7 @@ async def test_test_connection_missing_user(tmp_path) -> None:
 
 @respx.mock
 async def test_test_connection_returns_failure_on_http_error(tmp_path) -> None:
-    respx.get(f"{TRAKT_BASE_URL}/users/settings").mock(
-        return_value=httpx.Response(401)
-    )
+    respx.get(f"{TRAKT_BASE_URL}/users/settings").mock(return_value=httpx.Response(401))
     client = make_client(tmp_path)
     client._tokens = dict(_TOKENS)
     result = await client.test_connection()

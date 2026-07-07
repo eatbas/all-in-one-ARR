@@ -166,7 +166,9 @@ async def test_get_stats_invalid_json_returns_offline() -> None:
 
 @respx.mock
 async def test_get_stats_zero_speed_rounded() -> None:
-    respx.get(_TRANSFER).mock(return_value=httpx.Response(200, json={"dl_info_speed": 0}))
+    respx.get(_TRANSFER).mock(
+        return_value=httpx.Response(200, json={"dl_info_speed": 0})
+    )
     respx.get(_TORRENTS).mock(return_value=httpx.Response(200, json=[]))
     result = await make_client().get_stats()
     assert result["online"] is True
@@ -183,7 +185,9 @@ async def test_get_stats_non_dict_transfer_returns_offline() -> None:
 
 @respx.mock
 async def test_get_stats_non_numeric_speed_returns_offline() -> None:
-    respx.get(_TRANSFER).mock(return_value=httpx.Response(200, json={"dl_info_speed": "fast"}))
+    respx.get(_TRANSFER).mock(
+        return_value=httpx.Response(200, json={"dl_info_speed": "fast"})
+    )
     respx.get(_TORRENTS).mock(return_value=httpx.Response(200, json=[]))
     result = await make_client().get_stats()
     assert result["online"] is False
@@ -191,7 +195,9 @@ async def test_get_stats_non_numeric_speed_returns_offline() -> None:
 
 @respx.mock
 async def test_get_stats_non_list_torrents_returns_offline() -> None:
-    respx.get(_TRANSFER).mock(return_value=httpx.Response(200, json={"dl_info_speed": 0}))
+    respx.get(_TRANSFER).mock(
+        return_value=httpx.Response(200, json={"dl_info_speed": 0})
+    )
     respx.get(_TORRENTS).mock(return_value=httpx.Response(200, json={"bad": True}))
     result = await make_client().get_stats()
     assert result["online"] is False
@@ -199,7 +205,9 @@ async def test_get_stats_non_list_torrents_returns_offline() -> None:
 
 @respx.mock
 async def test_get_stats_non_dict_torrent_entry_returns_offline() -> None:
-    respx.get(_TRANSFER).mock(return_value=httpx.Response(200, json={"dl_info_speed": 0}))
+    respx.get(_TRANSFER).mock(
+        return_value=httpx.Response(200, json={"dl_info_speed": 0})
+    )
     respx.get(_TORRENTS).mock(return_value=httpx.Response(200, json=["not-a-dict"]))
     result = await make_client().get_stats()
     assert result["online"] is False

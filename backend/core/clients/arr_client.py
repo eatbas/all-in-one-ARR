@@ -87,7 +87,10 @@ class ArrClient:
             if version:
                 detail += f" {version}"
             return {"ok": True, "detail": detail}
-        return {"ok": False, "detail": f"{self._name} returned HTTP {response.status_code}"}
+        return {
+            "ok": False,
+            "detail": f"{self._name} returned HTTP {response.status_code}",
+        }
 
     async def aclose(self) -> None:
         """Close the underlying HTTP client."""

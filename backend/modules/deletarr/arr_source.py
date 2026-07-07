@@ -56,7 +56,7 @@ class DeletarrArrClient(ServarrClient):
         )
 
 
-def client_for(ctx: "AppContext", library_type: LibraryType) -> DeletarrArrClient:
+def client_for(ctx: AppContext, library_type: LibraryType) -> DeletarrArrClient:
     """Build a Deletarr Servarr client from the context's Radarr/Sonarr connection.
 
     Movies map to Radarr and TV to Sonarr; the connection URL and API key are read

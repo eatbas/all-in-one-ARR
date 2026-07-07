@@ -325,7 +325,10 @@ class SeerClient:
         if response.status_code == 200:
             data = response.json()
             user = data.get("displayName") or data.get("username") or data.get("email")
-            return {"ok": True, "detail": f"Connected as {user}" if user else "Connected"}
+            return {
+                "ok": True,
+                "detail": f"Connected as {user}" if user else "Connected",
+            }
         return {"ok": False, "detail": f"Seer returned HTTP {response.status_code}"}
 
     async def aclose(self) -> None:

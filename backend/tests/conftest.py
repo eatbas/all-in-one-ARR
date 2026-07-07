@@ -251,7 +251,11 @@ class StubSettingsStore:
             for name, values in apps.items():
                 if name in self._findarr_settings["apps"] and isinstance(values, dict):
                     self._findarr_settings["apps"][name].update(
-                        {key: value for key, value in values.items() if value is not None}
+                        {
+                            key: value
+                            for key, value in values.items()
+                            if value is not None
+                        }
                     )
         return self.findarr_settings()
 
@@ -266,9 +270,13 @@ class StubSettingsStore:
         use_arr_source: bool | None = None,
     ) -> dict[str, Any]:
         if movies_path is not None:
-            self._deletarr_settings["movies_path"] = movies_path.strip() or self._deletarr_settings["movies_path"]
+            self._deletarr_settings["movies_path"] = (
+                movies_path.strip() or self._deletarr_settings["movies_path"]
+            )
         if tv_path is not None:
-            self._deletarr_settings["tv_path"] = tv_path.strip() or self._deletarr_settings["tv_path"]
+            self._deletarr_settings["tv_path"] = (
+                tv_path.strip() or self._deletarr_settings["tv_path"]
+            )
         if use_arr_source is not None:
             self._deletarr_settings["use_arr_source"] = bool(use_arr_source)
         return self.deletarr_settings()
@@ -295,10 +303,14 @@ class StubSeer:
         self.create_request = AsyncMock(return_value=request_id)
         self.delete_request = AsyncMock(return_value=None)
         self.discover_trending = AsyncMock(return_value=[])
-        self.discover_trending_buckets = AsyncMock(return_value={"movie": [], "show": []})
+        self.discover_trending_buckets = AsyncMock(
+            return_value={"movie": [], "show": []}
+        )
         self.discover_popular = AsyncMock(return_value=[])
         self.update_credentials = MagicMock()
-        self.test_connection = AsyncMock(return_value={"ok": True, "detail": "Connected"})
+        self.test_connection = AsyncMock(
+            return_value={"ok": True, "detail": "Connected"}
+        )
         self.aclose = AsyncMock()
 
 
@@ -307,7 +319,9 @@ class StubArr:
 
     def __init__(self) -> None:
         self.update_credentials = MagicMock()
-        self.test_connection = AsyncMock(return_value={"ok": True, "detail": "Connected"})
+        self.test_connection = AsyncMock(
+            return_value={"ok": True, "detail": "Connected"}
+        )
         # Trending in-library matching lists the Arr library; default to empty.
         self.library_items = AsyncMock(return_value=[])
         self.aclose = AsyncMock()
@@ -377,7 +391,9 @@ class StubService:
 
     def __init__(self) -> None:
         self.update_credentials = MagicMock()
-        self.test_connection = AsyncMock(return_value={"ok": True, "detail": "Connected"})
+        self.test_connection = AsyncMock(
+            return_value={"ok": True, "detail": "Connected"}
+        )
         # TMDB trending/discovery + external-id resolution (Trending feature); OMDb
         # rating overlay. Harmless extra attributes on the other simple-service stubs.
         self.get_trending = AsyncMock(return_value=[])

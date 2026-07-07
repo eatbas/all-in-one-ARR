@@ -284,7 +284,9 @@ async def test_get_stats_non_json_returns_offline() -> None:
 async def test_get_stats_invalid_key_json_returns_offline() -> None:
     # SABnzbd returns HTTP 200 with status=False for an invalid API key.
     respx.get(_API).mock(
-        return_value=httpx.Response(200, json={"status": False, "error": "API Key Incorrect"})
+        return_value=httpx.Response(
+            200, json={"status": False, "error": "API Key Incorrect"}
+        )
     )
     result = await SabnzbdClient(base_url=_BASE, api_key="x").get_stats()
     assert result["online"] is False
@@ -306,7 +308,9 @@ async def test_get_stats_non_dict_queue_returns_offline() -> None:
 
 @respx.mock
 async def test_get_stats_non_list_slots_returns_offline() -> None:
-    respx.get(_API).mock(return_value=httpx.Response(200, json={"queue": {"slots": "bad"}}))
+    respx.get(_API).mock(
+        return_value=httpx.Response(200, json={"queue": {"slots": "bad"}})
+    )
     result = await SabnzbdClient(base_url=_BASE, api_key="x").get_stats()
     assert result["online"] is False
 

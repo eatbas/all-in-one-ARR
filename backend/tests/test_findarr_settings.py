@@ -32,7 +32,11 @@ def test_findarr_updates_are_normalised_and_persisted(tmp_path) -> None:
             "command_sleep_seconds": 999,
             "state_reset_hours": 99999,
             "apps": {
-                "sonarr": {"missing_limit": 999, "skip_future": False, "missing_mode": "seasons"},
+                "sonarr": {
+                    "missing_limit": 999,
+                    "skip_future": False,
+                    "missing_mode": "seasons",
+                },
             },
         }
     )
@@ -60,7 +64,13 @@ def test_findarr_invalid_values_fall_back_to_defaults(tmp_path) -> None:
             "queue_limit": "bad",
             "command_sleep_seconds": "bad",
             "state_reset_hours": "bad",
-            "apps": {"sonarr": {"upgrade_limit": "bad", "missing_limit": None, "upgrade_mode": "bogus"}},
+            "apps": {
+                "sonarr": {
+                    "upgrade_limit": "bad",
+                    "missing_limit": None,
+                    "upgrade_mode": "bogus",
+                }
+            },
         }
     )
     assert updated["hourly_cap"] == 20

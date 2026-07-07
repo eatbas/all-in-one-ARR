@@ -13,10 +13,10 @@ the request handlers can share it within one Uvicorn worker.
 
 from __future__ import annotations
 
+import copy
 import json
 import os
 import threading
-import copy
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -142,8 +142,8 @@ class SettingsStore:
                 self._bandwidth_check_interval_seconds = normalise_bandwidth_interval(
                     bandwidth_check_interval_seconds
                 )
-                self._trending_sync_interval_minutes = (
-                    normalise_trending_sync_interval(trending_sync_interval_minutes)
+                self._trending_sync_interval_minutes = normalise_trending_sync_interval(
+                    trending_sync_interval_minutes
                 )
                 self._findarr_settings = normalise_findarr_settings()
                 self._deletarr_settings = normalise_deletarr_settings(
@@ -209,8 +209,7 @@ class SettingsStore:
         # key is present the store is re-saved under the new key on load (see the
         # ``migrated_auto_remove`` save trigger below).
         migrated_auto_remove = (
-            "auto_remove_when_available" not in data
-            and "auto_remove_on_import" in data
+            "auto_remove_when_available" not in data and "auto_remove_on_import" in data
         )
         self._auto_remove_when_available = bool(
             data.get(
@@ -504,9 +503,7 @@ class SettingsStore:
             key = (owner_user, slug)
             if any(item.key == key for item in self._lists):
                 return False
-            self._lists.append(
-                TrackedList(owner_user=owner_user, slug=slug, name=name)
-            )
+            self._lists.append(TrackedList(owner_user=owner_user, slug=slug, name=name))
             self._save_locked()
             self._log.info("added list owner=%s slug=%s", owner_user, slug)
             return True

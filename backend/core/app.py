@@ -9,10 +9,10 @@ API/webhook routers and finally serves the built React SPA.
 from __future__ import annotations
 
 import asyncio
+from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from pathlib import Path
-from typing import AsyncIterator
 
 from fastapi import FastAPI, Request
 from fastapi.responses import FileResponse, HTMLResponse
@@ -24,10 +24,10 @@ from core.api import create_api_router
 from core.app_metrics import observe_scheduler_job
 from core.bandwidth_api import create_bandwidth_router
 from core.clients.arr_client import ArrClient
-from core.clients.seer import SeerClient
 from core.clients.omdb import OmdbClient
 from core.clients.qbittorrent import QbittorrentClient
 from core.clients.sabnzbd import SabnzbdClient
+from core.clients.seer import SeerClient
 from core.clients.tmdb import TmdbClient
 from core.clients.trakt import TraktClient
 from core.config import Settings
@@ -42,9 +42,9 @@ from core.services_api import create_services_router
 from core.settings_store import SettingsStore
 from core.status_checker import StatusChecker
 from core.trakt_api import create_trakt_router
+from core.trakt_auth import cancel_device_auth, start_device_auth
 from core.trending_api import create_trending_router
 from core.trending_sync import start_trending_sync
-from core.trakt_auth import cancel_device_auth, start_device_auth
 from core.webhooks import WebhookRegistry
 
 # Location of the built frontend bundle (overridable in tests).
@@ -165,6 +165,7 @@ async def _poster_churn_job() -> None:
 
     Filesystem work runs off the event loop via :func:`asyncio.to_thread`.
     """
+
     async def evict_posters() -> None:
         cache = _poster_churn.cache
         if cache is None:  # pragma: no cover - cache is set before scheduling
@@ -220,9 +221,7 @@ def _mount_frontend(app: FastAPI) -> None:
         async def _spa_entry() -> FileResponse:
             return FileResponse(index_file)
 
-        app.mount(
-            "/", StaticFiles(directory=str(FRONTEND_DIST), html=True), name="spa"
-        )
+        app.mount("/", StaticFiles(directory=str(FRONTEND_DIST), html=True), name="spa")
         _log.info("serving frontend from %s", FRONTEND_DIST)
     else:
         _log.warning(

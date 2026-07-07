@@ -144,9 +144,7 @@ class LibraryManifest:
         return any(known.startswith(prefix) for known in self.known_folders)
 
 
-def _collect_roots(
-    items: list[dict], root_folders: list[dict]
-) -> list[str]:
+def _collect_roots(items: list[dict], root_folders: list[dict]) -> list[str]:
     """Gather Arr root-folder paths from the rootfolder list and item fields."""
     roots: set[str] = {
         str(entry["path"]) for entry in root_folders if entry.get("path")

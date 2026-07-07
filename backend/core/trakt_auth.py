@@ -34,7 +34,7 @@ class TraktAuthSession:
     user_code: str | None = None
     verification_url: str | None = None
     message: str | None = None
-    task: "asyncio.Task[None] | None" = field(default=None, repr=False)
+    task: asyncio.Task[None] | None = field(default=None, repr=False)
 
     @property
     def is_pending(self) -> bool:
@@ -42,7 +42,7 @@ class TraktAuthSession:
         return self.state == PENDING
 
 
-async def start_device_auth(ctx: "AppContext") -> TraktAuthSession:
+async def start_device_auth(ctx: AppContext) -> TraktAuthSession:
     """Begin device authorisation and spawn the background polling task.
 
     If an attempt is already pending the existing session is returned unchanged,
@@ -61,7 +61,7 @@ async def start_device_auth(ctx: "AppContext") -> TraktAuthSession:
     return session
 
 
-async def _poll_device_auth(ctx: "AppContext", device: dict[str, Any]) -> None:
+async def _poll_device_auth(ctx: AppContext, device: dict[str, Any]) -> None:
     """Poll Trakt until the device code is authorised, denied, or expires."""
     session = ctx.trakt_auth
     try:
@@ -82,7 +82,7 @@ async def _poll_device_auth(ctx: "AppContext", device: dict[str, Any]) -> None:
         session.message = "Authorisation did not complete"
 
 
-def cancel_device_auth(ctx: "AppContext") -> None:
+def cancel_device_auth(ctx: AppContext) -> None:
     """Cancel any in-flight polling task (called on application shutdown)."""
     task = ctx.trakt_auth.task
     if task is not None and not task.done():

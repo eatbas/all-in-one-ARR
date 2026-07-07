@@ -8,7 +8,7 @@ mutates.
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
 from core.bandwidth_metrics import update_bandwidth_metrics
@@ -24,7 +24,7 @@ _STATUS_ACTIVE = "Active torrents — SABnzbd paused"
 _STATUS_IDLE = "No active torrents"
 
 
-async def gather_status(ctx: "AppContext") -> dict:
+async def gather_status(ctx: AppContext) -> dict:
     """Return the full status payload exposed by the API.
 
     Combines real-time client statistics with the live control-state mirror.
@@ -43,7 +43,7 @@ async def gather_status(ctx: "AppContext") -> dict:
     }
 
 
-async def apply_control(ctx: "AppContext") -> None:
+async def apply_control(ctx: AppContext) -> None:
     """Run one control tick: gather stats, decide, and issue pause/resume."""
     from modules.bandwidth_controllarr import _STATE
 
@@ -93,12 +93,8 @@ async def apply_control(ctx: "AppContext") -> None:
 
         _STATE.enabled = enabled
         _STATE.status = status
-        _STATE.last_run_at = datetime.now(timezone.utc).isoformat().replace(
-            "+00:00", "Z"
-        )
+        _STATE.last_run_at = datetime.now(UTC).isoformat().replace("+00:00", "Z")
         update_bandwidth_metrics(qb_stats, sab_stats, check_ok=True)
     except Exception:
-        update_bandwidth_metrics(
-            {"online": False}, {"online": False}, check_ok=False
-        )
+        update_bandwidth_metrics({"online": False}, {"online": False}, check_ok=False)
         raise

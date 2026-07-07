@@ -33,7 +33,12 @@ def test_build_units_episodes_emits_one_unit_per_item() -> None:
 
 def test_build_units_radarr_emits_movie_units() -> None:
     item = FindarrItem(
-        app="radarr", mode="missing", item_id="9", title="Movie", monitored=False, is_future=True
+        app="radarr",
+        mode="missing",
+        item_id="9",
+        title="Movie",
+        monitored=False,
+        is_future=True,
     )
     units = grouping.build_units("radarr", "missing", [item], "episodes")
     assert units[0].command == "MoviesSearch"
@@ -74,7 +79,9 @@ def test_build_units_shows_groups_by_series() -> None:
 
 
 def test_build_units_falls_back_to_unknown_series_title() -> None:
-    units = grouping.build_units("sonarr", "missing", [_item(series_title=None)], "shows")
+    units = grouping.build_units(
+        "sonarr", "missing", [_item(series_title=None)], "shows"
+    )
     assert units[0].title == "Unknown series"
 
 

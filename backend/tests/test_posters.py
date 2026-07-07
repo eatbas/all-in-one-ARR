@@ -54,9 +54,7 @@ async def test_tmdb_miss_falls_back_to_omdb(tmp_path) -> None:
 
 async def test_both_sources_fail_returns_none(tmp_path) -> None:
     cache = _cache(tmp_path)
-    assert (
-        await cache.get_poster(media_type="movie", tmdb_id=1, imdb_id="tt1") is None
-    )
+    assert await cache.get_poster(media_type="movie", tmdb_id=1, imdb_id="tt1") is None
 
 
 async def test_no_imdb_skips_omdb_fallback(tmp_path) -> None:

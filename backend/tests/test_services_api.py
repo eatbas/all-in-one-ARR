@@ -44,9 +44,7 @@ def test_put_service_updates_store_and_client(db) -> None:
     sonarr.update_credentials.assert_called_once_with(
         base_url="http://sonarr:8989", api_key="sk"
     )
-    assert any(
-        a["action"] == "Sonarr connection saved" for a in db.recent_activity()
-    )
+    assert any(a["action"] == "Sonarr connection saved" for a in db.recent_activity())
 
 
 def test_put_service_without_change_does_not_record_activity(db) -> None:
@@ -109,9 +107,7 @@ def test_get_services_masks_new_service_shapes(db) -> None:
 def test_put_api_key_only_service_applies_just_the_key(db) -> None:
     tmdb = StubService()
     ctx = make_ctx(db=db, tmdb=tmdb)
-    resp = build_client(ctx).put(
-        "/api/settings/services/tmdb", json={"api_key": "tk"}
-    )
+    resp = build_client(ctx).put("/api/settings/services/tmdb", json={"api_key": "tk"})
     assert resp.status_code == 200
     assert resp.json()["tmdb"] == {"api_key_set": True}
     tmdb.update_credentials.assert_called_once_with(api_key="tk")

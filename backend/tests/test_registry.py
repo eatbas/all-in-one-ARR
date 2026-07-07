@@ -30,7 +30,9 @@ async def test_load_real_list_syncarr(db) -> None:
     scheduler.add_cron.assert_not_awaited()
 
 
-async def test_load_handles_missing_setup_errors_and_sync_setup(db, monkeypatch) -> None:
+async def test_load_handles_missing_setup_errors_and_sync_setup(
+    db, monkeypatch
+) -> None:
     calls: list[str] = []
 
     def sync_setup(scheduler, app, ctx):

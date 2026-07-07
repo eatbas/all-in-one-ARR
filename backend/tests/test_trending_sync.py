@@ -82,7 +82,10 @@ async def test_refresh_fills_every_feed_and_stamps_sync(db) -> None:
 async def test_refresh_keeps_previous_snapshot_when_a_feed_fails(db) -> None:
     ctx = make_ctx(db=db)
     ctx.trending_store.set(
-        source="trakt", media="movie", category="trending", window="week",
+        source="trakt",
+        media="movie",
+        category="trending",
+        window="week",
         rows=[_row(99)],
     )
     ctx.trakt.get_trending.side_effect = RuntimeError("trakt down")
@@ -132,12 +135,18 @@ async def test_seer_trending_stores_filled_buckets(db) -> None:
 
     await refresh_trending_store(ctx)
 
-    assert ctx.trending_store.get(
-        source="seer", media="movie", category="trending", window="week"
-    ) == movies
-    assert ctx.trending_store.get(
-        source="seer", media="show", category="trending", window="week"
-    ) == shows
+    assert (
+        ctx.trending_store.get(
+            source="seer", media="movie", category="trending", window="week"
+        )
+        == movies
+    )
+    assert (
+        ctx.trending_store.get(
+            source="seer", media="show", category="trending", window="week"
+        )
+        == shows
+    )
 
 
 async def test_seer_trending_stores_exhausted_short_bucket(db) -> None:
@@ -151,20 +160,29 @@ async def test_seer_trending_stores_exhausted_short_bucket(db) -> None:
 
     await refresh_trending_store(ctx)
 
-    assert len(
-        ctx.trending_store.get(
-            source="seer", media="movie", category="trending", window="week"
+    assert (
+        len(
+            ctx.trending_store.get(
+                source="seer", media="movie", category="trending", window="week"
+            )
         )
-    ) == 40
-    assert ctx.trending_store.get(
-        source="seer", media="show", category="trending", window="week"
-    ) == shows
+        == 40
+    )
+    assert (
+        ctx.trending_store.get(
+            source="seer", media="show", category="trending", window="week"
+        )
+        == shows
+    )
 
 
 async def test_refresh_keeps_seer_trending_snapshot_when_it_fails(db) -> None:
     ctx = make_ctx(db=db)
     ctx.trending_store.set(
-        source="seer", media="movie", category="trending", window="week",
+        source="seer",
+        media="movie",
+        category="trending",
+        window="week",
         rows=[_row(42)],
     )
     ctx.seer.discover_trending_buckets.side_effect = RuntimeError("seer down")
@@ -195,7 +213,9 @@ async def test_job_invokes_refresh_when_ctx_set(db, monkeypatch) -> None:
     assert seen["ctx"] is ctx
 
 
-async def test_start_schedules_job_primes_store_and_reschedules(db, monkeypatch) -> None:
+async def test_start_schedules_job_primes_store_and_reschedules(
+    db, monkeypatch
+) -> None:
     ctx = make_ctx(db=db)  # scheduler is an AsyncMock
     ctx.trakt.get_trending.return_value = [_row(1)]
     monkeypatch.setattr(_trending_sync, "ctx", None)
@@ -226,12 +246,12 @@ async def test_start_schedules_job_primes_store_and_reschedules(db, monkeypatch)
 
 def test_prewarm_targets_dedups_and_keeps_first_imdb() -> None:
     rows = [
-        {"media_type": "movie", "tmdb": 1, "imdb": None},   # TMDB row: no imdb yet
+        {"media_type": "movie", "tmdb": 1, "imdb": None},  # TMDB row: no imdb yet
         {"media_type": "movie", "tmdb": 1, "imdb": "tt1"},  # dup: upgrade to carry imdb
         {"media_type": "movie", "tmdb": 1, "imdb": "tt9"},  # dup: keep the first imdb
         {"media_type": "show", "tmdb": 2, "imdb": "tt2"},
-        {"media_type": "movie", "tmdb": None},              # skipped: no tmdb
-        {"media_type": "person", "tmdb": 5},                # skipped: not movie/show
+        {"media_type": "movie", "tmdb": None},  # skipped: no tmdb
+        {"media_type": "person", "tmdb": 5},  # skipped: not movie/show
     ]
     assert sorted(_prewarm_targets(rows)) == [("movie", 1, "tt1"), ("show", 2, "tt2")]
 
@@ -240,11 +260,17 @@ async def test_prewarm_posters_fetches_each_unique_target(db) -> None:
     ctx = make_ctx(db=db)
     ctx.poster_cache = _StubPosterCache()
     ctx.trending_store.set(
-        source="trakt", media="movie", category="trending", window="week",
+        source="trakt",
+        media="movie",
+        category="trending",
+        window="week",
         rows=[{"media_type": "movie", "tmdb": 1, "imdb": "tt1"}],
     )
     ctx.trending_store.set(
-        source="tmdb", media="movie", category="popular", window="week",
+        source="tmdb",
+        media="movie",
+        category="popular",
+        window="week",
         rows=[{"media_type": "movie", "tmdb": 1}, {"media_type": "movie", "tmdb": 2}],
     )
     await prewarm_posters(ctx)
@@ -260,7 +286,10 @@ async def test_prewarm_posters_fetches_each_unique_target(db) -> None:
 async def test_prewarm_posters_noop_without_cache(db) -> None:
     ctx = make_ctx(db=db)  # poster_cache defaults to None
     ctx.trending_store.set(
-        source="trakt", media="movie", category="trending", window="week",
+        source="trakt",
+        media="movie",
+        category="trending",
+        window="week",
         rows=[{"media_type": "movie", "tmdb": 1}],
     )
     await prewarm_posters(ctx)  # must not raise
@@ -271,7 +300,10 @@ async def test_prewarm_posters_noop_when_no_targets(db) -> None:
     ctx = make_ctx(db=db)
     ctx.poster_cache = _StubPosterCache()
     ctx.trending_store.set(
-        source="trakt", media="movie", category="trending", window="week",
+        source="trakt",
+        media="movie",
+        category="trending",
+        window="week",
         rows=[{"media_type": "movie", "tmdb": None}],  # no usable id
     )
     await prewarm_posters(ctx)
@@ -283,7 +315,10 @@ async def test_prewarm_posters_swallows_fetch_failures(db) -> None:
     ctx.poster_cache = _StubPosterCache()
     ctx.poster_cache.get_poster.side_effect = RuntimeError("tmdb down")
     ctx.trending_store.set(
-        source="trakt", media="movie", category="trending", window="week",
+        source="trakt",
+        media="movie",
+        category="trending",
+        window="week",
         rows=[{"media_type": "movie", "tmdb": 1, "imdb": "tt1"}],
     )
     await prewarm_posters(ctx)  # failure is swallowed, no raise

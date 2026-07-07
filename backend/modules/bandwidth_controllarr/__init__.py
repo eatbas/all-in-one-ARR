@@ -12,8 +12,9 @@ single module-level reference set in ``setup()``.
 
 from __future__ import annotations
 
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Awaitable, Callable
+from typing import TYPE_CHECKING
 
 from fastapi import FastAPI
 
@@ -29,7 +30,7 @@ _log = get_logger("bandwidth_controllarr")
 
 # The active context, set during setup() so the top-level scheduled job can reach
 # the shared clients/db without the scheduler needing to reference a closure.
-_CONTEXT: "AppContext | None" = None
+_CONTEXT: AppContext | None = None
 
 
 @dataclass
@@ -45,13 +46,13 @@ class _ControlState:
 _STATE = _ControlState()
 
 
-def register_context(ctx: "AppContext") -> None:
+def register_context(ctx: AppContext) -> None:
     """Store the active context for the scheduled job to use."""
     global _CONTEXT
     _CONTEXT = ctx
 
 
-def _require_context() -> "AppContext":
+def _require_context() -> AppContext:
     if _CONTEXT is None:  # pragma: no cover
         raise RuntimeError("bandwidth_controllarr context not initialised")
     return _CONTEXT
@@ -63,9 +64,7 @@ async def control_job() -> None:
     await observe_scheduler_job("bandwidth_control", lambda: apply_control(ctx))
 
 
-async def setup(
-    scheduler: "SchedulerService", app: FastAPI, ctx: "AppContext"
-) -> None:
+async def setup(scheduler: SchedulerService, app: FastAPI, ctx: AppContext) -> None:
     """Register the control job and the status/settings callables."""
     register_context(ctx)
 
@@ -84,8 +83,8 @@ async def setup(
 
 
 def _make_update_settings(
-    scheduler: "SchedulerService", ctx: "AppContext"
-) -> "Callable[..., Awaitable[dict]]":
+    scheduler: SchedulerService, ctx: AppContext
+) -> Callable[..., Awaitable[dict]]:
     """Build the closure used by the settings endpoint.
 
     Applying an interval change also reschedules the control loop so the new

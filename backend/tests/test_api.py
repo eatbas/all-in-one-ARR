@@ -13,8 +13,14 @@ from core.api import _SYNC_TASKS, _remember_task, create_api_router
 from tests.conftest import StubSettingsStore, StubTrakt, make_ctx
 
 _ITEM = dict(
-    trakt_id=1, type="movie", title="Dune", year=2021, tmdb=100,
-    tvdb=None, imdb="tt1", list_id="watchlist",
+    trakt_id=1,
+    type="movie",
+    title="Dune",
+    year=2021,
+    tmdb=100,
+    tvdb=None,
+    imdb="tt1",
+    list_id="watchlist",
 )
 
 
@@ -163,9 +169,7 @@ async def test_sync_endpoint_returns_409_while_sync_already_running(db) -> None:
         assert resp.status_code == 409
         assert resp.json() == {"detail": "sync already running"}
         ctx.sync_now.assert_not_awaited()
-        assert any(
-            a["action"] == "Sync already running" for a in db.recent_activity()
-        )
+        assert any(a["action"] == "Sync already running" for a in db.recent_activity())
     finally:
         ctx.sync_gate._get_lock().release()
 
@@ -188,8 +192,10 @@ async def test_sync_endpoint_rejects_concurrent_manual_requests(db) -> None:
     ctx.sync_now = slow_sync
 
     transport = ASGITransport(app=app)
-    async with AsyncClient(transport=transport, base_url="http://test") as client1, \
-            AsyncClient(transport=transport, base_url="http://test") as client2:
+    async with (
+        AsyncClient(transport=transport, base_url="http://test") as client1,
+        AsyncClient(transport=transport, base_url="http://test") as client2,
+    ):
         first = asyncio.create_task(client1.post("/api/sync"))
         await asyncio.wait_for(entered.wait(), timeout=2)
 
@@ -273,9 +279,7 @@ def test_put_general_settings_updates_status_interval(db) -> None:
         "auto_remove_when_available": True,
     }
     assert ctx.settings_store.status_check_interval_seconds() == 30
-    assert any(
-        a["action"] == "Status interval updated" for a in db.recent_activity()
-    )
+    assert any(a["action"] == "Status interval updated" for a in db.recent_activity())
 
 
 def test_put_general_settings_rejects_invalid_status_interval(db) -> None:
@@ -305,9 +309,7 @@ def test_put_general_settings_updates_sync_interval_and_reschedules(db) -> None:
     }
     assert ctx.settings_store.sync_interval_minutes() == 30
     ctx.reschedule_sync.assert_awaited_once_with(30)
-    assert any(
-        a["action"] == "Sync interval updated" for a in db.recent_activity()
-    )
+    assert any(a["action"] == "Sync interval updated" for a in db.recent_activity())
 
 
 def test_put_general_settings_rejects_invalid_sync_interval(db) -> None:
@@ -425,8 +427,7 @@ def test_remove_available_endpoint_triggers_handler(db) -> None:
     assert resp.json() == {"status": "triggered"}
     ctx.remove_available.assert_awaited()
     assert any(
-        a["action"] == "Remove available items triggered"
-        for a in db.recent_activity()
+        a["action"] == "Remove available items triggered" for a in db.recent_activity()
     )
 
 

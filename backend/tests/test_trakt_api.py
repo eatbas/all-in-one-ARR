@@ -199,7 +199,12 @@ def test_get_lists_handles_error(db, tmp_path) -> None:
 def test_add_list_by_url(db, tmp_path) -> None:
     trakt = StubTrakt()
     trakt.get_list_summary = AsyncMock(
-        return_value={"name": "Anime", "slug": "anime", "owner_user": "me", "item_count": 7}
+        return_value={
+            "name": "Anime",
+            "slug": "anime",
+            "owner_user": "me",
+            "item_count": 7,
+        }
     )
     ctx = _ctx(db, tmp_path, trakt=trakt)
     resp = _client(ctx).post(

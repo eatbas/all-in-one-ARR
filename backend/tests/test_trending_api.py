@@ -35,7 +35,8 @@ def test_trakt_trending_and_popular(db) -> None:
     client = build_client(ctx)
 
     trending = client.get(
-        "/api/trending", params={"source": "trakt", "media": "movie", "category": "trending"}
+        "/api/trending",
+        params={"source": "trakt", "media": "movie", "category": "trending"},
     ).json()
     assert trending[0]["source"] == "trakt"
     assert trending[0]["imdb"] == "tt1"
@@ -55,7 +56,12 @@ def test_tmdb_trending_and_popular(db) -> None:
 
     trending = client.get(
         "/api/trending",
-        params={"source": "tmdb", "media": "movie", "category": "trending", "window": "day"},
+        params={
+            "source": "tmdb",
+            "media": "movie",
+            "category": "trending",
+            "window": "day",
+        },
     ).json()
     assert trending[0]["tmdb"] == 200
     ctx.tmdb.get_trending.assert_awaited_once()
@@ -75,7 +81,8 @@ def test_seer_trending_filters_to_requested_media(db) -> None:
     }
     client = build_client(ctx)
     result = client.get(
-        "/api/trending", params={"source": "seer", "media": "movie", "category": "trending"}
+        "/api/trending",
+        params={"source": "seer", "media": "movie", "category": "trending"},
     ).json()
     assert [item["tmdb"] for item in result] == [300]
     assert result[0]["seer_status"] == 5
@@ -84,7 +91,10 @@ def test_seer_trending_filters_to_requested_media(db) -> None:
 async def test_seer_trending_fetch_uses_bucket_helper_for_requested_media(db) -> None:
     ctx = make_ctx(db=db)
     ctx.seer.discover_trending_buckets.return_value = {
-        "movie": [_row(media_type="movie", tmdb=300), _row(media_type="movie", tmdb=301)],
+        "movie": [
+            _row(media_type="movie", tmdb=300),
+            _row(media_type="movie", tmdb=301),
+        ],
         "show": [_row(media_type="show", tmdb=400)],
     }
 
@@ -110,7 +120,8 @@ def test_seer_popular(db) -> None:
     ctx.seer.discover_popular.return_value = [_row(media_type="show", tmdb=400)]
     client = build_client(ctx)
     result = client.get(
-        "/api/trending", params={"source": "seer", "media": "show", "category": "popular"}
+        "/api/trending",
+        params={"source": "seer", "media": "show", "category": "popular"},
     ).json()
     assert result[0]["tmdb"] == 400
 
@@ -118,12 +129,24 @@ def test_seer_popular(db) -> None:
 def test_already_tracked_reflects_db(db) -> None:
     # One item with a TMDB id and one without, to exercise both filter branches.
     db.upsert_item(
-        trakt_id=1, type="movie", title="Tracked", year=2020,
-        tmdb=100, tvdb=None, imdb=None, list_id="my-list",
+        trakt_id=1,
+        type="movie",
+        title="Tracked",
+        year=2020,
+        tmdb=100,
+        tvdb=None,
+        imdb=None,
+        list_id="my-list",
     )
     db.upsert_item(
-        trakt_id=2, type="movie", title="NoTmdb", year=2020,
-        tmdb=None, tvdb=None, imdb=None, list_id="my-list",
+        trakt_id=2,
+        type="movie",
+        title="NoTmdb",
+        year=2020,
+        tmdb=None,
+        tvdb=None,
+        imdb=None,
+        list_id="my-list",
     )
     ctx = make_ctx(db=db)
     ctx.trakt.get_trending.return_value = [_row(tmdb=100), _row(tmdb=999)]
@@ -139,15 +162,23 @@ def test_already_tracked_reflects_db(db) -> None:
 
 def test_removed_items_are_not_tracked(db) -> None:
     db.upsert_item(
-        trakt_id=1, type="movie", title="Gone", year=2020,
-        tmdb=100, tvdb=None, imdb=None, list_id="my-list",
+        trakt_id=1,
+        type="movie",
+        title="Gone",
+        year=2020,
+        tmdb=100,
+        tvdb=None,
+        imdb=None,
+        list_id="my-list",
     )
     db.set_status(trakt_id=1, list_id="my-list", status="removed")
     ctx = make_ctx(db=db)
     ctx.trakt.get_trending.return_value = [_row(tmdb=100)]
-    result = build_client(ctx).get(
-        "/api/trending", params={"source": "trakt", "category": "trending"}
-    ).json()
+    result = (
+        build_client(ctx)
+        .get("/api/trending", params={"source": "trakt", "category": "trending"})
+        .json()
+    )
     assert result[0]["already_tracked"] is False
 
 
@@ -156,9 +187,14 @@ def test_in_library_flags_radarr_movie_and_sonarr_show(db) -> None:
     ctx.radarr.library_items.return_value = [{"tmdbId": 100}]
     ctx.sonarr.library_items.return_value = [{"tvdbId": 300, "tmdbId": 555}]
     ctx.trakt.get_trending.return_value = [_row(tmdb=100), _row(tmdb=999)]
-    movies = build_client(ctx).get(
-        "/api/trending", params={"source": "trakt", "media": "movie", "category": "trending"}
-    ).json()
+    movies = (
+        build_client(ctx)
+        .get(
+            "/api/trending",
+            params={"source": "trakt", "media": "movie", "category": "trending"},
+        )
+        .json()
+    )
     assert {m["tmdb"]: m["in_library"] for m in movies} == {100: True, 999: False}
 
     ctx.trakt.get_trending.return_value = [
@@ -166,9 +202,14 @@ def test_in_library_flags_radarr_movie_and_sonarr_show(db) -> None:
         _row(media_type="show", tmdb=555, tvdb=None),  # in Sonarr by tmdb
         _row(media_type="show", tmdb=7, tvdb=8),  # not in Sonarr
     ]
-    shows = build_client(ctx).get(
-        "/api/trending", params={"source": "trakt", "media": "show", "category": "trending"}
-    ).json()
+    shows = (
+        build_client(ctx)
+        .get(
+            "/api/trending",
+            params={"source": "trakt", "media": "show", "category": "trending"},
+        )
+        .json()
+    )
     assert [s["in_library"] for s in shows] == [True, True, False]
 
 
@@ -180,15 +221,19 @@ def test_in_library_available_reflects_download_state(db) -> None:
         {"tmdbId": 200, "hasFile": False},
     ]
     ctx.trakt.get_trending.return_value = [
-        _row(tmdb=100), _row(tmdb=200), _row(tmdb=999),
+        _row(tmdb=100),
+        _row(tmdb=200),
+        _row(tmdb=999),
     ]
-    movies = build_client(ctx).get(
-        "/api/trending",
-        params={"source": "trakt", "media": "movie", "category": "trending"},
-    ).json()
-    flags = {
-        m["tmdb"]: (m["in_library"], m["in_library_available"]) for m in movies
-    }
+    movies = (
+        build_client(ctx)
+        .get(
+            "/api/trending",
+            params={"source": "trakt", "media": "movie", "category": "trending"},
+        )
+        .json()
+    )
+    flags = {m["tmdb"]: (m["in_library"], m["in_library_available"]) for m in movies}
     assert flags == {100: (True, True), 200: (True, False), 999: (False, False)}
 
 
@@ -225,12 +270,17 @@ def test_get_trending_serves_warm_store_without_fetching(db) -> None:
     # A feed kept warm by the scheduler is served from the store; no provider call.
     ctx = make_ctx(db=db)
     ctx.trending_store.set(
-        source="trakt", media="movie", category="trending", window="week",
+        source="trakt",
+        media="movie",
+        category="trending",
+        window="week",
         rows=[_row(tmdb=100)],
     )
-    result = build_client(ctx).get(
-        "/api/trending", params={"source": "trakt", "category": "trending"}
-    ).json()
+    result = (
+        build_client(ctx)
+        .get("/api/trending", params={"source": "trakt", "category": "trending"})
+        .json()
+    )
     assert [item["tmdb"] for item in result] == [100]
     ctx.trakt.get_trending.assert_not_awaited()
 
@@ -245,12 +295,17 @@ def test_get_trending_caches_cold_fetch_in_store(db) -> None:
     ctx.trakt.get_trending.assert_awaited_once()
 
 
-def test_get_trending_uses_stale_library_index_while_refreshing(db, monkeypatch) -> None:
+def test_get_trending_uses_stale_library_index_while_refreshing(
+    db, monkeypatch
+) -> None:
     clock = {"now": 1000.0}
     monkeypatch.setattr(trending_mod, "_now", lambda: clock["now"])
     ctx = make_ctx(db=db)
     ctx.trending_store.set(
-        source="trakt", media="movie", category="trending", window="week",
+        source="trakt",
+        media="movie",
+        category="trending",
+        window="week",
         rows=[_row(tmdb=100)],
     )
     ctx.radarr.library_items.return_value = [{"tmdbId": 100, "hasFile": True}]
@@ -344,7 +399,9 @@ def _owned_ctx(db, **kwargs):
     store_lists = [TrackedList(owner_user="me", slug="my-list", name="My List")]
     from tests.conftest import StubSettingsStore
 
-    return make_ctx(db=db, settings_store=StubSettingsStore(lists=store_lists), **kwargs)
+    return make_ctx(
+        db=db, settings_store=StubSettingsStore(lists=store_lists), **kwargs
+    )
 
 
 def test_add_movie_triggers_sync(db) -> None:
@@ -357,14 +414,22 @@ def test_add_movie_triggers_sync(db) -> None:
     ctx.sync_now = sync_now
     response = build_client(ctx).post(
         "/api/trending/add",
-        json={"media_type": "movie", "owner_user": "me", "slug": "my-list", "tmdb": 100, "title": "Dune"},
+        json={
+            "media_type": "movie",
+            "owner_user": "me",
+            "slug": "my-list",
+            "tmdb": 100,
+            "title": "Dune",
+        },
     )
     assert response.json() == {"status": "added"}
     assert ran["sync"] is True
     ctx.trakt.add_items.assert_awaited_once()
     # No trakt id in the body, so the tmdb id is resolved to one before the add.
     ctx.trakt.lookup_ids_by_tmdb.assert_awaited_once()
-    assert ctx.trakt.add_items.await_args.kwargs["movies"] == [{"trakt": 500, "tmdb": 100}]
+    assert ctx.trakt.add_items.await_args.kwargs["movies"] == [
+        {"trakt": 500, "tmdb": 100}
+    ]
 
 
 def test_add_resolves_tmdb_only_item(db) -> None:
@@ -377,10 +442,17 @@ def test_add_resolves_tmdb_only_item(db) -> None:
     ctx.sync_now = sync_now
     response = build_client(ctx).post(
         "/api/trending/add",
-        json={"media_type": "movie", "owner_user": "me", "slug": "my-list", "tmdb": 100},
+        json={
+            "media_type": "movie",
+            "owner_user": "me",
+            "slug": "my-list",
+            "tmdb": 100,
+        },
     )
     assert response.json() == {"status": "added"}
-    assert ctx.trakt.add_items.await_args.kwargs["movies"] == [{"trakt": 500, "tmdb": 100}]
+    assert ctx.trakt.add_items.await_args.kwargs["movies"] == [
+        {"trakt": 500, "tmdb": 100}
+    ]
 
 
 def test_add_skips_lookup_when_trakt_id_present(db) -> None:
@@ -394,13 +466,18 @@ def test_add_skips_lookup_when_trakt_id_present(db) -> None:
     response = build_client(ctx).post(
         "/api/trending/add",
         json={
-            "media_type": "movie", "owner_user": "me", "slug": "my-list",
-            "tmdb": 100, "trakt": 7,
+            "media_type": "movie",
+            "owner_user": "me",
+            "slug": "my-list",
+            "tmdb": 100,
+            "trakt": 7,
         },
     )
     assert response.json() == {"status": "added"}
     ctx.trakt.lookup_ids_by_tmdb.assert_not_awaited()
-    assert ctx.trakt.add_items.await_args.kwargs["movies"] == [{"trakt": 7, "tmdb": 100}]
+    assert ctx.trakt.add_items.await_args.kwargs["movies"] == [
+        {"trakt": 7, "tmdb": 100}
+    ]
 
 
 def test_add_lookup_failure_falls_back_to_tmdb(db) -> None:
@@ -414,7 +491,12 @@ def test_add_lookup_failure_falls_back_to_tmdb(db) -> None:
     ctx.sync_now = sync_now
     response = build_client(ctx).post(
         "/api/trending/add",
-        json={"media_type": "movie", "owner_user": "me", "slug": "my-list", "tmdb": 100},
+        json={
+            "media_type": "movie",
+            "owner_user": "me",
+            "slug": "my-list",
+            "tmdb": 100,
+        },
     )
     assert response.json() == {"status": "added"}
     assert ctx.trakt.add_items.await_args.kwargs["movies"] == [{"tmdb": 100}]
@@ -435,7 +517,12 @@ def test_add_not_found_is_502(db) -> None:
     ctx.sync_now = sync_now
     response = build_client(ctx).post(
         "/api/trending/add",
-        json={"media_type": "movie", "owner_user": "me", "slug": "my-list", "tmdb": 100},
+        json={
+            "media_type": "movie",
+            "owner_user": "me",
+            "slug": "my-list",
+            "tmdb": 100,
+        },
     )
     assert response.status_code == 502
     assert "could not find" in response.json()["detail"].lower()
@@ -452,8 +539,13 @@ def test_add_show_with_all_ids(db) -> None:
     response = build_client(ctx).post(
         "/api/trending/add",
         json={
-            "media_type": "show", "owner_user": "me", "slug": "my-list",
-            "tmdb": 200, "imdb": "tt9", "trakt": 7, "tvdb": 42,
+            "media_type": "show",
+            "owner_user": "me",
+            "slug": "my-list",
+            "tmdb": 200,
+            "imdb": "tt9",
+            "trakt": 7,
+            "tvdb": 42,
         },
     )
     assert response.json() == {"status": "added"}
@@ -467,7 +559,12 @@ def test_add_without_sync_callable(db) -> None:
     ctx.sync_now = None
     response = build_client(ctx).post(
         "/api/trending/add",
-        json={"media_type": "movie", "owner_user": "me", "slug": "my-list", "tmdb": 100},
+        json={
+            "media_type": "movie",
+            "owner_user": "me",
+            "slug": "my-list",
+            "tmdb": 100,
+        },
     )
     assert response.json() == {"status": "added"}
 
@@ -487,7 +584,12 @@ def test_add_pending_when_sync_already_running(db) -> None:
     ctx.sync_now = sync_now
     response = build_client(ctx).post(
         "/api/trending/add",
-        json={"media_type": "movie", "owner_user": "me", "slug": "my-list", "tmdb": 100},
+        json={
+            "media_type": "movie",
+            "owner_user": "me",
+            "slug": "my-list",
+            "tmdb": 100,
+        },
     )
     assert response.json() == {"status": "added_pending_sync"}
 
@@ -512,7 +614,12 @@ def test_add_to_watchlist_is_rejected(db) -> None:
     )
     response = build_client(ctx).post(
         "/api/trending/add",
-        json={"media_type": "movie", "owner_user": "me", "slug": "watchlist", "tmdb": 100},
+        json={
+            "media_type": "movie",
+            "owner_user": "me",
+            "slug": "watchlist",
+            "tmdb": 100,
+        },
     )
     assert response.status_code == 404
 
@@ -531,7 +638,12 @@ def test_add_trakt_failure_is_502(db) -> None:
     ctx.trakt.add_items.side_effect = RuntimeError("trakt rejected")
     response = build_client(ctx).post(
         "/api/trending/add",
-        json={"media_type": "movie", "owner_user": "me", "slug": "my-list", "tmdb": 100},
+        json={
+            "media_type": "movie",
+            "owner_user": "me",
+            "slug": "my-list",
+            "tmdb": 100,
+        },
     )
     assert response.status_code == 502
     assert "trakt rejected" in response.json()["detail"]

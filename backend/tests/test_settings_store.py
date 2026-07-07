@@ -83,9 +83,10 @@ def test_update_credentials_survives_reload(tmp_path) -> None:
     store = SettingsStore(str(path))
     _seed(store)
     store.update_trakt_credentials(client_id="persisted")
-    assert SettingsStore(str(path)) and json.loads(path.read_text())["trakt"][
-        "client_id"
-    ] == "persisted"
+    assert (
+        SettingsStore(str(path))
+        and json.loads(path.read_text())["trakt"]["client_id"] == "persisted"
+    )
 
 
 def test_owner_for_found_and_default(tmp_path) -> None:

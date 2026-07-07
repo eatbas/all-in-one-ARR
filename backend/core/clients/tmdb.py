@@ -118,7 +118,9 @@ class TmdbClient:
         """
         endpoint = "movie" if media_type == "movie" else "tv"
         url = f"{_BASE_URL}/3/trending/{endpoint}/{window}"
-        return await self._discover(url, media_type=media_type, limit=limit, pages=pages)
+        return await self._discover(
+            url, media_type=media_type, limit=limit, pages=pages
+        )
 
     async def get_popular(
         self, *, media_type: str, limit: int = 20, pages: int = 1
@@ -129,11 +131,11 @@ class TmdbClient:
         """
         endpoint = "movie" if media_type == "movie" else "tv"
         url = f"{_BASE_URL}/3/{endpoint}/popular"
-        return await self._discover(url, media_type=media_type, limit=limit, pages=pages)
+        return await self._discover(
+            url, media_type=media_type, limit=limit, pages=pages
+        )
 
-    async def fetch_external_ids(
-        self, *, media_type: str, tmdb_id: int
-    ) -> str | None:
+    async def fetch_external_ids(self, *, media_type: str, tmdb_id: int) -> str | None:
         """Return the IMDb id for a TMDB item, or ``None`` if unavailable.
 
         Used to resolve an IMDb id for the rating overlay on items that only carry a

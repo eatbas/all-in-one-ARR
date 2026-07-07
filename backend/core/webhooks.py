@@ -9,7 +9,8 @@ registered for that sub-path).
 from __future__ import annotations
 
 import json
-from typing import Any, Awaitable, Callable
+from collections.abc import Awaitable, Callable
+from typing import Any
 
 from fastapi import APIRouter, Request, Response
 
@@ -26,9 +27,7 @@ class WebhookRegistry:
         self._handlers: dict[str, WebhookHandler] = {}
         self._log = get_logger("webhooks")
         self.router = APIRouter(prefix="/webhook")
-        self.router.add_api_route(
-            "/{subpath}", self._dispatch, methods=["POST"]
-        )
+        self.router.add_api_route("/{subpath}", self._dispatch, methods=["POST"])
 
     def register(self, subpath: str, handler: WebhookHandler) -> None:
         """Register ``handler`` for ``POST /webhook/{subpath}``."""

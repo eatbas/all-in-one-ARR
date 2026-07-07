@@ -12,9 +12,7 @@ _URL = "https://api.themoviedb.org/3/configuration"
 
 @respx.mock
 async def test_v3_key_uses_query_param_and_succeeds() -> None:
-    route = respx.get(_URL).mock(
-        return_value=httpx.Response(200, json={"images": {}})
-    )
+    route = respx.get(_URL).mock(return_value=httpx.Response(200, json={"images": {}}))
     result = await TmdbClient(api_key="v3key").test_connection()
     assert result == {"ok": True, "detail": "Connected to TMDB"}
     # A v3 key is presented as the api_key query parameter.
@@ -144,14 +142,21 @@ async def test_get_trending_movie_normalises_and_caps() -> None:
             200,
             json={
                 "results": [
-                    {"id": 603, "title": "The Matrix", "release_date": "1999-03-31", "vote_average": 8.2},
+                    {
+                        "id": 603,
+                        "title": "The Matrix",
+                        "release_date": "1999-03-31",
+                        "vote_average": 8.2,
+                    },
                     {"id": 604, "title": "Extra", "release_date": "2003-05-15"},
                 ]
             },
         )
     )
     rows = await TmdbClient(api_key="v3key").get_trending(media_type="movie", limit=1)
-    assert rows == [{"media_type": "movie", "tmdb": 603, "title": "The Matrix", "year": 1999}]
+    assert rows == [
+        {"media_type": "movie", "tmdb": 603, "title": "The Matrix", "year": 1999}
+    ]
 
 
 @respx.mock
@@ -159,14 +164,20 @@ async def test_get_trending_tv_uses_name_and_day_window() -> None:
     respx.get(_TRENDING_TV).mock(
         return_value=httpx.Response(
             200,
-            json={"results": [{"id": 1399, "name": "Game of Thrones", "first_air_date": ""}]},
+            json={
+                "results": [
+                    {"id": 1399, "name": "Game of Thrones", "first_air_date": ""}
+                ]
+            },
         )
     )
     rows = await TmdbClient(api_key="v3key").get_trending(
         media_type="show", window="day", limit=5
     )
     # A blank air date yields a null year.
-    assert rows == [{"media_type": "show", "tmdb": 1399, "title": "Game of Thrones", "year": None}]
+    assert rows == [
+        {"media_type": "show", "tmdb": 1399, "title": "Game of Thrones", "year": None}
+    ]
 
 
 @respx.mock
@@ -181,11 +192,15 @@ async def test_get_popular_fetches_and_concatenates_pages() -> None:
         side_effect=[
             httpx.Response(
                 200,
-                json={"results": [{"id": 1, "title": "A", "release_date": "2020-01-01"}]},
+                json={
+                    "results": [{"id": 1, "title": "A", "release_date": "2020-01-01"}]
+                },
             ),
             httpx.Response(
                 200,
-                json={"results": [{"id": 2, "title": "B", "release_date": "2021-01-01"}]},
+                json={
+                    "results": [{"id": 2, "title": "B", "release_date": "2021-01-01"}]
+                },
             ),
         ]
     )
@@ -201,7 +216,9 @@ async def test_get_trending_stops_on_empty_page() -> None:
         side_effect=[
             httpx.Response(
                 200,
-                json={"results": [{"id": 1, "title": "A", "release_date": "2020-01-01"}]},
+                json={
+                    "results": [{"id": 1, "title": "A", "release_date": "2020-01-01"}]
+                },
             ),
             httpx.Response(200, json={"results": []}),
         ]
@@ -238,7 +255,9 @@ async def test_fetch_external_ids_tv_blank_returns_none() -> None:
 async def test_fetch_external_ids_non_200_returns_none() -> None:
     respx.get(_EXTERNAL_IDS_MOVIE).mock(return_value=httpx.Response(404, json={}))
     assert (
-        await TmdbClient(api_key="x").fetch_external_ids(media_type="movie", tmdb_id=603)
+        await TmdbClient(api_key="x").fetch_external_ids(
+            media_type="movie", tmdb_id=603
+        )
         is None
     )
 
@@ -247,7 +266,9 @@ async def test_fetch_external_ids_non_200_returns_none() -> None:
 async def test_fetch_external_ids_network_error_returns_none() -> None:
     respx.get(_EXTERNAL_IDS_MOVIE).mock(side_effect=httpx.ConnectError("down"))
     assert (
-        await TmdbClient(api_key="x").fetch_external_ids(media_type="movie", tmdb_id=603)
+        await TmdbClient(api_key="x").fetch_external_ids(
+            media_type="movie", tmdb_id=603
+        )
         is None
     )
 

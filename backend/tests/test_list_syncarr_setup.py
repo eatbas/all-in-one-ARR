@@ -8,8 +8,8 @@ from unittest.mock import AsyncMock
 import pytest
 from fastapi import FastAPI
 
-from core.context import SyncAlreadyRunning, SyncGate
 import modules.list_syncarr as list_syncarr
+from core.context import SyncAlreadyRunning, SyncGate
 from tests.conftest import StubSeer, StubSettingsStore, StubTrakt, make_ctx
 
 
@@ -77,8 +77,14 @@ async def test_poll_job_records_error_and_reraises(db, monkeypatch) -> None:
 async def test_remove_available_callable_runs_reconcile(db) -> None:
     # An available item is swept off its Trakt list by the manual sweep.
     db.upsert_item(
-        trakt_id=1, type="movie", title="Dune", year=2021, tmdb=438631,
-        tvdb=None, imdb=None, list_id="watchlist",
+        trakt_id=1,
+        type="movie",
+        title="Dune",
+        year=2021,
+        tmdb=438631,
+        tvdb=None,
+        imdb=None,
+        list_id="watchlist",
     )
     ctx = make_ctx(
         db=db,
@@ -92,8 +98,14 @@ async def test_remove_available_callable_runs_reconcile(db) -> None:
 
 async def test_remove_item_callable_removes_one(db) -> None:
     db.upsert_item(
-        trakt_id=2, type="movie", title="Arrival", year=2016, tmdb=329865,
-        tvdb=None, imdb=None, list_id="watchlist",
+        trakt_id=2,
+        type="movie",
+        title="Arrival",
+        year=2016,
+        tmdb=329865,
+        tvdb=None,
+        imdb=None,
+        list_id="watchlist",
     )
     ctx = make_ctx(db=db, trakt=StubTrakt(items=[]))
     await list_syncarr.setup(AsyncMock(), FastAPI(), ctx)

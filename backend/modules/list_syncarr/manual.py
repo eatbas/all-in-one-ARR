@@ -19,7 +19,7 @@ if TYPE_CHECKING:  # pragma: no cover
 _log = get_logger("list_syncarr.manual")
 
 
-async def remove_one(ctx: "AppContext", list_id: str, trakt_id: int) -> bool:
+async def remove_one(ctx: AppContext, list_id: str, trakt_id: int) -> bool:
     """Remove a single tracked item from its Trakt list.
 
     Returns ``True`` when the item exists and removal was attempted, ``False``

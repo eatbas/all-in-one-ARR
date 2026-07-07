@@ -9,8 +9,13 @@ from modules.list_syncarr.reconcile import reconcile
 from tests.conftest import StubSeer, StubTrakt, make_ctx
 
 _MOVIE = {
-    "trakt_id": 1, "type": "movie", "title": "Dune", "year": 2021,
-    "tmdb": 100, "tvdb": None, "imdb": "tt1",
+    "trakt_id": 1,
+    "type": "movie",
+    "title": "Dune",
+    "year": 2021,
+    "tmdb": 100,
+    "tvdb": None,
+    "imdb": "tt1",
 }
 
 
@@ -23,7 +28,8 @@ async def test_available_item_removed(db) -> None:
     seed(db)
     trakt = StubTrakt()
     ctx = make_ctx(
-        db=db, trakt=trakt,
+        db=db,
+        trakt=trakt,
         seer=StubSeer(status=AVAILABLE),
     )
     await reconcile(ctx)
@@ -71,5 +77,7 @@ async def test_error_recorded(db) -> None:
     ctx = make_ctx(db=db, seer=seer)
     await reconcile(ctx)
     assert any(a["action"] == "Availability check failed" for a in db.recent_activity())
-    assert any("Could not check availability" in a["detail"] for a in db.recent_activity())
+    assert any(
+        "Could not check availability" in a["detail"] for a in db.recent_activity()
+    )
     assert not any("boom" in a["detail"] for a in db.recent_activity())

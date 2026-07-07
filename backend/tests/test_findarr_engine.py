@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 from fastapi import FastAPI
 
@@ -79,7 +79,9 @@ class StubFindarrClient:
         pass
 
 
-def _sonarr_record(episode_id: int, *, series_id: int, season: int, episode: int, future: bool = False) -> dict:
+def _sonarr_record(
+    episode_id: int, *, series_id: int, season: int, episode: int, future: bool = False
+) -> dict:
     air = "2999-01-01T00:00:00Z" if future else "2020-01-01T00:00:00Z"
     return {
         "id": episode_id,
@@ -173,7 +175,9 @@ async def test_run_handles_disabled_app_and_command_error(db, monkeypatch) -> No
     monkeypatch.setattr(
         engine,
         "_client_for",
-        lambda _ctx, app: StubFindarrClient(app, command_error=FindarrClientError("boom")),
+        lambda _ctx, app: StubFindarrClient(
+            app, command_error=FindarrClientError("boom")
+        ),
     )
     result = await engine.run(ctx)
     assert result["processed"] == 0
@@ -202,7 +206,9 @@ async def test_run_blocks_unsupported_and_queue_full(db, monkeypatch) -> None:
     assert {row["status"] for row in history} == {"error", "skipped"}
 
 
-async def test_run_records_connection_error_and_queue_limit_passes(db, monkeypatch) -> None:
+async def test_run_records_connection_error_and_queue_limit_passes(
+    db, monkeypatch
+) -> None:
     ctx = make_ctx(db=db, settings_store=_enabled_store(queue_limit=10))
 
     class ErrorClient(StubFindarrClient):
@@ -232,7 +238,14 @@ async def test_reset_state_clears_processed_and_restarts_window(db) -> None:
 
 async def test_history_returns_recent_rows(db) -> None:
     ctx = make_ctx(db=db, settings_store=_enabled_store())
-    db.findarr_add_history(app="sonarr", mode="missing", item_id="1", title="One", status="success", detail="done")
+    db.findarr_add_history(
+        app="sonarr",
+        mode="missing",
+        item_id="1",
+        title="One",
+        status="success",
+        detail="done",
+    )
     rows = await engine.history(ctx)
     assert rows[0]["title"] == "One"
 
@@ -240,19 +253,30 @@ async def test_history_returns_recent_rows(db) -> None:
 async def test_clear_history_empties_log_and_records_audit(db) -> None:
     ctx = make_ctx(db=db, settings_store=_enabled_store())
     db.findarr_mark_processed(app="radarr", mode="missing", item_id="7", title="Seven")
-    db.findarr_add_history(app="sonarr", mode="missing", item_id="1", title="One", status="success", detail="done")
+    db.findarr_add_history(
+        app="sonarr",
+        mode="missing",
+        item_id="1",
+        title="One",
+        status="success",
+        detail="done",
+    )
     result = await engine.clear_history(ctx)
     assert result == {"status": "cleared", "removed": 1}
     # Only the audit row documenting the clearance itself remains.
     rows = db.findarr_recent_history()
     assert len(rows) == 1
     assert "history cleared" in rows[0]["detail"]
-    assert any(row["action"] == "Findarr history cleared" for row in db.recent_activity())
+    assert any(
+        row["action"] == "Findarr history cleared" for row in db.recent_activity()
+    )
     # A history clear must not touch processed-state bookkeeping (that is reset_state).
     assert db.findarr_is_processed(app="radarr", mode="missing", item_id="7") is True
 
 
-def _episode_unit(key: str, *, monitored: bool = True, is_future: bool = False) -> SearchUnit:
+def _episode_unit(
+    key: str, *, monitored: bool = True, is_future: bool = False
+) -> SearchUnit:
     return SearchUnit(
         app="sonarr",
         mode="missing",
@@ -271,15 +295,35 @@ def test_unit_allowed_filters_monitored_future_and_processed(db) -> None:
     ctx.db.init_db()
     try:
         base = _episode_unit("1")
-        assert engine._unit_allowed(ctx, base, monitored_only=True, skip_future=True) is True
-        assert engine._unit_allowed(
-            ctx, _episode_unit("2", monitored=False), monitored_only=True, skip_future=True
-        ) is False
-        assert engine._unit_allowed(
-            ctx, _episode_unit("3", is_future=True), monitored_only=True, skip_future=True
-        ) is False
-        ctx.db.findarr_mark_processed(app="sonarr", mode="missing", item_id="1", title="One")
-        assert engine._unit_allowed(ctx, base, monitored_only=False, skip_future=False) is False
+        assert (
+            engine._unit_allowed(ctx, base, monitored_only=True, skip_future=True)
+            is True
+        )
+        assert (
+            engine._unit_allowed(
+                ctx,
+                _episode_unit("2", monitored=False),
+                monitored_only=True,
+                skip_future=True,
+            )
+            is False
+        )
+        assert (
+            engine._unit_allowed(
+                ctx,
+                _episode_unit("3", is_future=True),
+                monitored_only=True,
+                skip_future=True,
+            )
+            is False
+        )
+        ctx.db.findarr_mark_processed(
+            app="sonarr", mode="missing", item_id="1", title="One"
+        )
+        assert (
+            engine._unit_allowed(ctx, base, monitored_only=False, skip_future=False)
+            is False
+        )
     finally:
         ctx.db.close()
 
@@ -385,7 +429,9 @@ async def test_run_reports_already_searched_when_all_processed(db, monkeypatch) 
     assert db.findarr_run_state()["sonarr_missing_wanted"] == "1"
 
 
-async def test_run_reports_skipped_by_settings_when_items_filtered(db, monkeypatch) -> None:
+async def test_run_reports_skipped_by_settings_when_items_filtered(
+    db, monkeypatch
+) -> None:
     store = _sonarr_only_store()
     ctx = make_ctx(db=db, settings_store=store)
     # A future episode is excluded by skip_future — not "already searched". Both
@@ -417,11 +463,15 @@ async def test_run_records_activity_when_wanted_fetch_fails(db, monkeypatch) -> 
     assert any(row["detail"] == "wanted down" for row in db.findarr_recent_history())
 
 
-async def test_run_reports_nothing_wanted_activity_when_no_records(db, monkeypatch) -> None:
+async def test_run_reports_nothing_wanted_activity_when_no_records(
+    db, monkeypatch
+) -> None:
     store = _sonarr_only_store()
     ctx = make_ctx(db=db, settings_store=store)
     monkeypatch.setattr(
-        engine, "_client_for", lambda _ctx, app: StubFindarrClient(app, sonarr_records=[])
+        engine,
+        "_client_for",
+        lambda _ctx, app: StubFindarrClient(app, sonarr_records=[]),
     )
     await engine.run(ctx, app="sonarr")
     assert db.findarr_run_state()["sonarr_activity"] == "Nothing wanted — all caught up"
@@ -434,10 +484,15 @@ async def test_run_records_search_error_activity(db, monkeypatch) -> None:
     monkeypatch.setattr(
         engine,
         "_client_for",
-        lambda _ctx, app: StubFindarrClient(app, command_error=FindarrClientError("boom")),
+        lambda _ctx, app: StubFindarrClient(
+            app, command_error=FindarrClientError("boom")
+        ),
     )
     await engine.run(ctx, app="sonarr")
-    assert db.findarr_run_state()["sonarr_activity"] == "Search errors on the last run — see history"
+    assert (
+        db.findarr_run_state()["sonarr_activity"]
+        == "Search errors on the last run — see history"
+    )
 
 
 async def test_run_seeds_state_anchor_on_first_enabled_run(db, monkeypatch) -> None:
@@ -452,21 +507,25 @@ async def test_run_auto_resets_state_when_window_elapses(db, monkeypatch) -> Non
     store = _enabled_store(hourly_cap=10, state_reset_hours=1)
     ctx = make_ctx(db=db, settings_store=store)
     db.findarr_mark_processed(app="sonarr", mode="missing", item_id="old", title="Old")
-    past = engine._format_iso(datetime.now(timezone.utc) - timedelta(hours=2))
+    past = engine._format_iso(datetime.now(UTC) - timedelta(hours=2))
     db.findarr_set_run_state("state_created_at", past)
     monkeypatch.setattr(engine, "_client_for", lambda _ctx, app: StubFindarrClient(app))
     await engine.run(ctx)
     assert db.findarr_is_processed(app="sonarr", mode="missing", item_id="old") is False
     assert any("auto-reset" in row["detail"] for row in db.findarr_recent_history())
-    assert any(row["action"] == "Findarr state auto-reset" for row in db.recent_activity())
+    assert any(
+        row["action"] == "Findarr state auto-reset" for row in db.recent_activity()
+    )
     assert db.findarr_run_state()["state_created_at"] != past
 
 
 async def test_run_keeps_state_when_window_not_elapsed(db, monkeypatch) -> None:
     store = _enabled_store(hourly_cap=10, state_reset_hours=24)
     ctx = make_ctx(db=db, settings_store=store)
-    db.findarr_mark_processed(app="sonarr", mode="missing", item_id="keep", title="Keep")
-    recent = engine._format_iso(datetime.now(timezone.utc) - timedelta(hours=1))
+    db.findarr_mark_processed(
+        app="sonarr", mode="missing", item_id="keep", title="Keep"
+    )
+    recent = engine._format_iso(datetime.now(UTC) - timedelta(hours=1))
     db.findarr_set_run_state("state_created_at", recent)
     monkeypatch.setattr(engine, "_client_for", lambda _ctx, app: StubFindarrClient(app))
     await engine.run(ctx)

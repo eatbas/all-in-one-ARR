@@ -39,7 +39,7 @@ class BandwidthStatusResponse(BaseModel):
     sabnzbd: dict
 
 
-def create_bandwidth_router(ctx: "AppContext") -> APIRouter:
+def create_bandwidth_router(ctx: AppContext) -> APIRouter:
     """Build the ``/api/bandwidth`` router."""
     router = APIRouter(prefix="/api/bandwidth")
 

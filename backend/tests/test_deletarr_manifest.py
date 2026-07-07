@@ -104,7 +104,9 @@ async def test_movie_manifest_maps_files_and_skips_fileless_and_unresolved() -> 
     assert manifest.media_paths == {_n("/media/movies/A (2020)/A.mkv")}
 
 
-async def test_movie_manifest_preserves_category_folders_across_multiple_roots() -> None:
+async def test_movie_manifest_preserves_category_folders_across_multiple_roots() -> (
+    None
+):
     # Mirrors a real Radarr with several category root folders nested under a
     # shared parent that maps onto Deletarr's single local movies mount.
     client = FakeDeletarrArr(
@@ -151,7 +153,9 @@ async def test_movie_manifest_preserves_category_folders_across_multiple_roots()
 
 
 async def test_movie_manifest_unavailable_on_error() -> None:
-    manifest = await build_movie_manifest(FakeDeletarrArr(fail=("movies",)), "/media/movies")
+    manifest = await build_movie_manifest(
+        FakeDeletarrArr(fail=("movies",)), "/media/movies"
+    )
     assert manifest.available is False
     assert manifest.detail is not None and "boom" in manifest.detail
     assert manifest.folders == {}

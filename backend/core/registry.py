@@ -31,7 +31,7 @@ def discover_module_names() -> list[str]:
 
 
 async def load_modules(
-    scheduler: "SchedulerService", app: FastAPI, ctx: "AppContext"
+    scheduler: SchedulerService, app: FastAPI, ctx: AppContext
 ) -> list[str]:
     """Import each module package and call its ``setup``; return loaded names.
 

@@ -16,9 +16,7 @@ if TYPE_CHECKING:  # pragma: no cover
 _log = get_logger("deletarr")
 
 
-async def setup(
-    scheduler: "SchedulerService", app: FastAPI, ctx: "AppContext"
-) -> None:
+async def setup(scheduler: SchedulerService, app: FastAPI, ctx: AppContext) -> None:
     """Register Deletarr API callables on the shared context."""
     del scheduler, app
     service = DeletarrService(ctx)

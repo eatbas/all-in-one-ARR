@@ -219,9 +219,7 @@ async def test_test_connection_ok_with_user() -> None:
 
 @respx.mock
 async def test_test_connection_ok_without_user() -> None:
-    respx.get(f"{_BASE}/api/v1/auth/me").mock(
-        return_value=httpx.Response(200, json={})
-    )
+    respx.get(f"{_BASE}/api/v1/auth/me").mock(return_value=httpx.Response(200, json={}))
     result = await make_client().test_connection()
     assert result == {"ok": True, "detail": "Connected"}
 
@@ -236,9 +234,7 @@ async def test_test_connection_forbidden() -> None:
 
 @respx.mock
 async def test_test_connection_network_error() -> None:
-    respx.get(f"{_BASE}/api/v1/auth/me").mock(
-        side_effect=httpx.ConnectError("boom")
-    )
+    respx.get(f"{_BASE}/api/v1/auth/me").mock(side_effect=httpx.ConnectError("boom"))
     result = await make_client().test_connection()
     assert result["ok"] is False
     assert "boom" in result["detail"]
@@ -304,12 +300,22 @@ async def test_discover_popular_movies_uses_default_media_type() -> None:
         return_value=httpx.Response(
             200,
             # No mediaType on the result; the type-specific endpoint supplies the default.
-            json={"results": [{"id": 603, "title": "The Matrix", "release_date": "1999-03-31"}]},
+            json={
+                "results": [
+                    {"id": 603, "title": "The Matrix", "release_date": "1999-03-31"}
+                ]
+            },
         )
     )
     rows = await make_client().discover_popular(media_type="movie", limit=10)
     assert rows == [
-        {"media_type": "movie", "tmdb": 603, "title": "The Matrix", "year": 1999, "seer_status": None}
+        {
+            "media_type": "movie",
+            "tmdb": 603,
+            "title": "The Matrix",
+            "year": 1999,
+            "seer_status": None,
+        }
     ]
     assert route.calls.last.request.url.params["sortBy"] == "popularity.desc"
 
@@ -337,11 +343,15 @@ async def test_discover_popular_concatenates_pages_and_stops_when_empty() -> Non
         side_effect=[
             httpx.Response(
                 200,
-                json={"results": [{"id": 1, "title": "A", "release_date": "2020-01-01"}]},
+                json={
+                    "results": [{"id": 1, "title": "A", "release_date": "2020-01-01"}]
+                },
             ),
             httpx.Response(
                 200,
-                json={"results": [{"id": 2, "title": "B", "release_date": "2021-01-01"}]},
+                json={
+                    "results": [{"id": 2, "title": "B", "release_date": "2021-01-01"}]
+                },
             ),
             httpx.Response(200, json={"results": []}),
         ]
@@ -500,9 +510,13 @@ async def test_discover_trending_buckets_respect_page_cap_when_still_short() -> 
 
 
 @respx.mock
-async def test_discover_trending_buckets_returns_empty_for_non_positive_bounds() -> None:
+async def test_discover_trending_buckets_returns_empty_for_non_positive_bounds() -> (
+    None
+):
     route = respx.get(f"{_BASE}/api/v1/discover/trending").mock(
-        return_value=httpx.Response(200, json={"results": [{"id": 1, "mediaType": "movie"}]})
+        return_value=httpx.Response(
+            200, json={"results": [{"id": 1, "mediaType": "movie"}]}
+        )
     )
     client = make_client()
 
@@ -519,7 +533,9 @@ async def test_discover_trending_buckets_returns_empty_for_non_positive_bounds()
 
 @respx.mock
 async def test_discover_non_200_raises() -> None:
-    respx.get(f"{_BASE}/api/v1/discover/trending").mock(return_value=httpx.Response(500))
+    respx.get(f"{_BASE}/api/v1/discover/trending").mock(
+        return_value=httpx.Response(500)
+    )
     with pytest.raises(SeerError):
         await make_client().discover_trending()
 

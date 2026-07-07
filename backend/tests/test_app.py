@@ -81,7 +81,9 @@ async def test_build_context_real(tmp_path) -> None:
         ctx.db.close()
 
 
-def test_lifespan_authenticated_placeholder_frontend(_env, monkeypatch, tmp_path) -> None:
+def test_lifespan_authenticated_placeholder_frontend(
+    _env, monkeypatch, tmp_path
+) -> None:
     ctx = _stub_ctx(authenticated=True)
     monkeypatch.setattr(app_mod, "build_context", lambda settings: ctx)
     monkeypatch.setattr(app_mod, "FRONTEND_DIST", tmp_path / "missing")
@@ -166,7 +168,9 @@ def test_lifespan_serves_built_frontend(_env, monkeypatch, tmp_path) -> None:
         assert client.get("/api/status").status_code == 200
 
 
-def test_lifespan_unauthenticated_spawns_device_auth(_env, monkeypatch, tmp_path) -> None:
+def test_lifespan_unauthenticated_spawns_device_auth(
+    _env, monkeypatch, tmp_path
+) -> None:
     ctx = _stub_ctx(authenticated=False)
     monkeypatch.setattr(app_mod, "build_context", lambda settings: ctx)
     monkeypatch.setattr(app_mod, "FRONTEND_DIST", tmp_path / "missing")
@@ -184,7 +188,9 @@ def test_lifespan_unauthenticated_spawns_device_auth(_env, monkeypatch, tmp_path
     assert spawned["called"] is True
 
 
-async def test_maybe_start_device_auth_starts_when_unauthenticated(db, monkeypatch) -> None:
+async def test_maybe_start_device_auth_starts_when_unauthenticated(
+    db, monkeypatch
+) -> None:
     ctx = make_ctx(db=db, trakt=StubTrakt(authenticated=False))
     started = AsyncMock()
     monkeypatch.setattr(app_mod, "start_device_auth", started)
@@ -192,7 +198,9 @@ async def test_maybe_start_device_auth_starts_when_unauthenticated(db, monkeypat
     started.assert_awaited_once_with(ctx)
 
 
-async def test_maybe_start_device_auth_skips_when_authenticated(db, monkeypatch) -> None:
+async def test_maybe_start_device_auth_skips_when_authenticated(
+    db, monkeypatch
+) -> None:
     ctx = make_ctx(db=db, trakt=StubTrakt(authenticated=True))
     started = AsyncMock()
     monkeypatch.setattr(app_mod, "start_device_auth", started)
@@ -200,7 +208,9 @@ async def test_maybe_start_device_auth_skips_when_authenticated(db, monkeypatch)
     started.assert_not_awaited()
 
 
-async def test_maybe_start_device_auth_skips_without_credentials(db, monkeypatch) -> None:
+async def test_maybe_start_device_auth_skips_without_credentials(
+    db, monkeypatch
+) -> None:
     ctx = make_ctx(
         db=db,
         trakt=StubTrakt(authenticated=False),

@@ -26,7 +26,7 @@ _log = get_logger("list_syncarr.removal")
 
 
 async def remove_tracked_item(
-    ctx: "AppContext", item: dict[str, Any], *, reason: str
+    ctx: AppContext, item: dict[str, Any], *, reason: str
 ) -> None:
     """Remove a tracked item from its Trakt list and mark it removed in SQLite.
 
@@ -125,7 +125,7 @@ async def remove_tracked_item(
     )
 
 
-async def _delete_seer_request(ctx: "AppContext", item: dict[str, Any]) -> bool:
+async def _delete_seer_request(ctx: AppContext, item: dict[str, Any]) -> bool:
     """Delete the item's Seer request(s).
 
     Prefers the request id this app stored when it created the request; when none

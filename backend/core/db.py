@@ -11,9 +11,10 @@ from __future__ import annotations
 import os
 import sqlite3
 import threading
-from datetime import datetime, timedelta, timezone
+from collections.abc import Iterable
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
-from typing import Any, Iterable
+from typing import Any
 
 from core.db_schema import INIT_SQL
 
@@ -26,7 +27,7 @@ ITEM_STATUSES = ("synced", "requested", "available", "removed")
 
 def utcnow_iso() -> str:
     """Return the current UTC time as an ISO-8601 string."""
-    return datetime.now(timezone.utc).isoformat()
+    return datetime.now(UTC).isoformat()
 
 
 class Database:
@@ -246,7 +247,9 @@ class Database:
                 (utcnow_iso(), action, detail),
             )
             self._prune_activity(
-                (datetime.now(timezone.utc) - timedelta(days=ACTIVITY_RETENTION_DAYS)).isoformat()
+                (
+                    datetime.now(UTC) - timedelta(days=ACTIVITY_RETENTION_DAYS)
+                ).isoformat()
             )
             self._conn.commit()
 
@@ -264,8 +267,7 @@ class Database:
     def recent_activity(self, limit: int = 50) -> list[dict[str, Any]]:
         """Return the most recent activity entries, newest first."""
         rows = self._conn.execute(
-            "SELECT id, ts, action, detail FROM activity "
-            "ORDER BY id DESC LIMIT ?",
+            "SELECT id, ts, action, detail FROM activity ORDER BY id DESC LIMIT ?",
             (limit,),
         ).fetchall()
         return [dict(row) for row in rows]
@@ -310,9 +312,7 @@ class Database:
         """Return row counts for the tracked tables."""
         counts: dict[str, int] = {}
         for table in ("items", "activity", "list_state"):
-            row = self._conn.execute(
-                f"SELECT COUNT(*) AS n FROM {table}"
-            ).fetchone()
+            row = self._conn.execute(f"SELECT COUNT(*) AS n FROM {table}").fetchone()
             counts[table] = row["n"]
         return counts
 

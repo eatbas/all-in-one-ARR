@@ -112,7 +112,7 @@ def _unavailable() -> JSONResponse:
     return JSONResponse(status_code=503, content={"detail": "Findarr unavailable"})
 
 
-def create_findarr_router(ctx: "AppContext") -> APIRouter:
+def create_findarr_router(ctx: AppContext) -> APIRouter:
     """Build the `/api/findarr` router."""
     router = APIRouter(prefix="/api/findarr", tags=["findarr"])
 
@@ -149,7 +149,9 @@ def create_findarr_router(ctx: "AppContext") -> APIRouter:
         try:
             result = await ctx.findarr_run_now(app=body.app)
         except SyncAlreadyRunning:
-            return JSONResponse(status_code=409, content={"detail": "Findarr is already running"})
+            return JSONResponse(
+                status_code=409, content={"detail": "Findarr is already running"}
+            )
         return FindarrRunResponse(**result)
 
     @router.post("/reset", response_model=FindarrCountResponse)

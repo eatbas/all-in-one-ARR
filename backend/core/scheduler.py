@@ -7,7 +7,8 @@ the mature 3.x ``AsyncIOScheduler``/``add_job`` API is a single-file change.
 
 from __future__ import annotations
 
-from typing import Any, Awaitable, Callable
+from collections.abc import Awaitable, Callable
+from typing import Any
 
 from apscheduler import AsyncScheduler, ScheduleLookupError
 from apscheduler.triggers.cron import CronTrigger

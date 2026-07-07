@@ -113,7 +113,7 @@ class JunkPatterns:
             if re.match(pattern, filename_lower, re.IGNORECASE):
                 return {
                     "is_junk": True,
-                    "reason": f'Junk pattern: {pattern.replace(".*", "")}',
+                    "reason": f"Junk pattern: {pattern.replace('.*', '')}",
                 }
 
         if any(filename_lower.endswith(ext) for ext in cls.JUNK_EXTENSIONS):

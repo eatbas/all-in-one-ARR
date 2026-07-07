@@ -11,12 +11,24 @@ import pytest
 from core.db import Database, rows_to_dicts, utcnow_iso
 
 _MOVIE = dict(
-    trakt_id=1, type="movie", title="Dune", year=2021, tmdb=438631,
-    tvdb=None, imdb="tt1160419", list_id="watchlist",
+    trakt_id=1,
+    type="movie",
+    title="Dune",
+    year=2021,
+    tmdb=438631,
+    tvdb=None,
+    imdb="tt1160419",
+    list_id="watchlist",
 )
 _SHOW = dict(
-    trakt_id=2, type="show", title="Severance", year=2022, tmdb=95396,
-    tvdb=371980, imdb="tt11280740", list_id="watchlist",
+    trakt_id=2,
+    type="show",
+    title="Severance",
+    year=2022,
+    tmdb=95396,
+    tvdb=371980,
+    imdb="tt11280740",
+    list_id="watchlist",
 )
 
 
@@ -76,9 +88,7 @@ def test_init_db_migrates_legacy_jellyseerr_column(tmp_path) -> None:
     # The migrated database is fully usable and the migration is idempotent.
     database.upsert_item(**_MOVIE)
     database.init_db()  # second run must be a harmless no-op
-    assert (
-        database.get_item(trakt_id=1, list_id="watchlist")["seer_request_id"] == 77
-    )
+    assert database.get_item(trakt_id=1, list_id="watchlist")["seer_request_id"] == 77
     database.close()
 
 
@@ -289,8 +299,7 @@ def test_disk_size_bytes_sums_db_and_wal_and_shm(tmp_path) -> None:
             sidecar.write_bytes(b"x")
 
     expected = sum(
-        Path(str(path) + suffix).stat().st_size
-        for suffix in ("", "-wal", "-shm")
+        Path(str(path) + suffix).stat().st_size for suffix in ("", "-wal", "-shm")
     )
     assert database.disk_size_bytes() == expected
     database.close()

@@ -17,8 +17,13 @@ from modules.list_syncarr.sync import _SeerOutage, poll_and_request
 from tests.conftest import StubSeer, StubSettingsStore, StubTrakt, make_ctx
 
 _MOVIE = {
-    "trakt_id": 1, "type": "movie", "title": "Dune", "year": 2021,
-    "tmdb": 100, "tvdb": None, "imdb": "tt1",
+    "trakt_id": 1,
+    "type": "movie",
+    "title": "Dune",
+    "year": 2021,
+    "tmdb": 100,
+    "tvdb": None,
+    "imdb": "tt1",
 }
 
 
@@ -65,7 +70,8 @@ async def test_already_available_sets_available(db) -> None:
     # auto-remove off so the item stays 'available'; the enabled path is covered
     # by test_available_auto_removed_when_enabled.
     ctx = make_ctx(
-        db=db, trakt=StubTrakt(items=[_MOVIE]),
+        db=db,
+        trakt=StubTrakt(items=[_MOVIE]),
         seer=StubSeer(status=AVAILABLE),
         settings_store=StubSettingsStore(auto_remove_when_available=False),
     )
@@ -80,8 +86,10 @@ async def test_available_auto_removed_when_enabled(db) -> None:
     # Only the Trakt list entry is removed — no Radarr/Sonarr call is made.
     trakt = StubTrakt(items=[_MOVIE])
     ctx = make_ctx(
-        db=db, trakt=trakt,
-        seer=StubSeer(status=AVAILABLE),    )
+        db=db,
+        trakt=trakt,
+        seer=StubSeer(status=AVAILABLE),
+    )
     await poll_and_request(ctx)
     assert db.get_item(trakt_id=1, list_id="watchlist")["status"] == "removed"
     trakt.remove_items.assert_awaited_once_with(
@@ -95,8 +103,10 @@ async def test_available_kept_when_auto_remove_disabled(db) -> None:
     trakt = StubTrakt(items=[_MOVIE])
     store = StubSettingsStore(auto_remove_when_available=False)
     ctx = make_ctx(
-        db=db, trakt=trakt,
-        seer=StubSeer(status=AVAILABLE),        settings_store=store,
+        db=db,
+        trakt=trakt,
+        seer=StubSeer(status=AVAILABLE),
+        settings_store=store,
     )
     await poll_and_request(ctx)
     assert db.get_item(trakt_id=1, list_id="watchlist")["status"] == "available"
@@ -137,7 +147,9 @@ async def test_partially_available_kept_when_disabled(db) -> None:
     # auto-remove off: a partially-available item stays 'requested' on the Trakt list.
     trakt = StubTrakt(items=[_MOVIE])
     ctx = make_ctx(
-        db=db, trakt=trakt, seer=StubSeer(status=PARTIALLY_AVAILABLE),
+        db=db,
+        trakt=trakt,
+        seer=StubSeer(status=PARTIALLY_AVAILABLE),
         settings_store=StubSettingsStore(auto_remove_when_available=False),
     )
     await poll_and_request(ctx)
@@ -186,9 +198,7 @@ async def test_requested_item_rechecked_without_duplicate_request(db) -> None:
 async def test_removed_status_skips_processing(db) -> None:
     db.upsert_item(**_MOVIE, list_id="watchlist")
     db.set_status(trakt_id=1, list_id="watchlist", status="removed")
-    ctx = make_ctx(
-        db=db, trakt=StubTrakt(items=[_MOVIE]), seer=StubSeer()
-    )
+    ctx = make_ctx(db=db, trakt=StubTrakt(items=[_MOVIE]), seer=StubSeer())
     await poll_and_request(ctx)
     assert db.get_item(trakt_id=1, list_id="watchlist")["status"] == "removed"
     ctx.seer.get_status.assert_not_awaited()
@@ -236,7 +246,9 @@ async def test_seer_status_error_recorded(db) -> None:
     await poll_and_request(ctx)
     assert db.get_item(trakt_id=1, list_id="watchlist")["status"] == "synced"
     assert any(a["action"] == "List sync failed" for a in db.recent_activity())
-    assert any("Could not check Seer status" in a["detail"] for a in db.recent_activity())
+    assert any(
+        "Could not check Seer status" in a["detail"] for a in db.recent_activity()
+    )
     assert not any("boom" in a["detail"] for a in db.recent_activity())
 
 
@@ -271,8 +283,7 @@ async def test_seer_outage_latch_records_first_trip_only(db) -> None:
     outage.trip(ctx, SeerUnavailableError("still down"))
     assert outage.down is True
     assert (
-        len([a for a in db.recent_activity() if a["action"] == "Seer unreachable"])
-        == 1
+        len([a for a in db.recent_activity() if a["action"] == "Seer unreachable"]) == 1
     )
 
 
@@ -321,7 +332,8 @@ async def test_list_read_failure_recorded(db) -> None:
     ctx = make_ctx(db=db, trakt=trakt)
     await poll_and_request(ctx)  # must not raise
     assert any(
-        a["action"] == "List sync failed" and "Could not read the Trakt list" in a["detail"]
+        a["action"] == "List sync failed"
+        and "Could not read the Trakt list" in a["detail"]
         for a in db.recent_activity()
     )
     assert not any("not authorised" in a["detail"] for a in db.recent_activity())
@@ -413,7 +425,8 @@ async def test_one_failing_list_does_not_abort_others(db) -> None:
     # The anime list was still processed despite the movies list failing.
     assert db.get_item(trakt_id=2, list_id="anime")["status"] == "available"
     assert any(
-        a["action"] == "List sync failed" and "Could not read the Trakt list \"movies\"" in a["detail"]
+        a["action"] == "List sync failed"
+        and 'Could not read the Trakt list "movies"' in a["detail"]
         for a in db.recent_activity()
     )
     assert not any("not authorised" in a["detail"] for a in db.recent_activity())
@@ -425,8 +438,14 @@ async def test_one_failing_list_does_not_abort_others(db) -> None:
 def _seed_offlist(db, *, status="requested", tmdb=100, type="movie", tvdb=None) -> None:
     """Seed an active item that is NOT returned by the Trakt read (it has left the list)."""
     db.upsert_item(
-        trakt_id=1, type=type, title="Dune", year=2021,
-        tmdb=tmdb, tvdb=tvdb, imdb="tt1", list_id="watchlist",
+        trakt_id=1,
+        type=type,
+        title="Dune",
+        year=2021,
+        tmdb=tmdb,
+        tvdb=tvdb,
+        imdb="tt1",
+        list_id="watchlist",
     )
     db.set_status(trakt_id=1, list_id="watchlist", status=status)
 
@@ -438,7 +457,9 @@ async def test_refresh_updates_offlist_available_item(db) -> None:
     trakt = StubTrakt(items=[])  # the item is gone from the list read
     seer = StubSeer(status=AVAILABLE)
     ctx = make_ctx(
-        db=db, trakt=trakt, seer=seer,
+        db=db,
+        trakt=trakt,
+        seer=seer,
         settings_store=StubSettingsStore(auto_remove_when_available=False),
     )
     await poll_and_request(ctx)
@@ -504,8 +525,14 @@ async def test_refresh_stops_at_first_seer_outage(db) -> None:
     # connect timeout — and adding a traceback plus an activity row — per item.
     _seed_offlist(db)
     db.upsert_item(
-        trakt_id=2, type="movie", title="Arrival", year=2016,
-        tmdb=200, tvdb=None, imdb="tt2", list_id="watchlist",
+        trakt_id=2,
+        type="movie",
+        title="Arrival",
+        year=2016,
+        tmdb=200,
+        tvdb=None,
+        imdb="tt2",
+        list_id="watchlist",
     )
     db.set_status(trakt_id=2, list_id="watchlist", status="requested")
     trakt = StubTrakt(items=[])
@@ -527,8 +554,14 @@ async def test_refresh_skipped_when_outage_tripped_during_poll(db) -> None:
     # The latch tripped while polling the list also mutes the off-list refresh: the
     # single failed check for the on-list item is the only Seer call of the cycle.
     db.upsert_item(
-        trakt_id=2, type="movie", title="Arrival", year=2016,
-        tmdb=200, tvdb=None, imdb="tt2", list_id="watchlist",
+        trakt_id=2,
+        type="movie",
+        title="Arrival",
+        year=2016,
+        tmdb=200,
+        tvdb=None,
+        imdb="tt2",
+        list_id="watchlist",
     )
     db.set_status(trakt_id=2, list_id="watchlist", status="requested")
     seer = StubSeer()
@@ -538,8 +571,7 @@ async def test_refresh_skipped_when_outage_tripped_during_poll(db) -> None:
     assert seer.get_status.await_count == 1
     assert db.get_item(trakt_id=2, list_id="watchlist")["status"] == "requested"
     assert (
-        len([a for a in db.recent_activity() if a["action"] == "Seer unreachable"])
-        == 1
+        len([a for a in db.recent_activity() if a["action"] == "Seer unreachable"]) == 1
     )
 
 
@@ -561,8 +593,14 @@ async def test_refresh_skips_untracked_list_items(db) -> None:
     # by the refresh, even if Seer would report it available — only successfully-polled
     # lists are refreshed.
     db.upsert_item(
-        trakt_id=9, type="movie", title="Orphan", year=2020,
-        tmdb=999, tvdb=None, imdb="tt9", list_id="oldlist",
+        trakt_id=9,
+        type="movie",
+        title="Orphan",
+        year=2020,
+        tmdb=999,
+        tvdb=None,
+        imdb="tt9",
+        list_id="oldlist",
     )
     db.set_status(trakt_id=9, list_id="oldlist", status="requested")
     trakt = StubTrakt(items=[])  # only the tracked 'watchlist' is polled
@@ -593,8 +631,14 @@ async def test_refresh_processes_offlist_while_skipping_onlist(db) -> None:
     # refresh) and another has left it (must be refreshed). Distinct tmdb ids prove the
     # loop both skips the processed item AND processes the off-list one.
     db.upsert_item(
-        trakt_id=2, type="movie", title="Arrival", year=2016,
-        tmdb=200, tvdb=None, imdb="tt2", list_id="watchlist",
+        trakt_id=2,
+        type="movie",
+        title="Arrival",
+        year=2016,
+        tmdb=200,
+        tvdb=None,
+        imdb="tt2",
+        list_id="watchlist",
     )
     db.set_status(trakt_id=2, list_id="watchlist", status="requested")
 
@@ -622,8 +666,14 @@ async def test_refresh_removes_offlist_show_when_enabled(db) -> None:
     # The refresh -> auto-remove path for a SHOW: status checked as media_type='tv',
     # removed from Trakt by TVDB id.
     db.upsert_item(
-        trakt_id=3, type="show", title="Severance", year=2022,
-        tmdb=300, tvdb=400, imdb="tt3", list_id="watchlist",
+        trakt_id=3,
+        type="show",
+        title="Severance",
+        year=2022,
+        tmdb=300,
+        tvdb=400,
+        imdb="tt3",
+        list_id="watchlist",
     )
     db.set_status(trakt_id=3, list_id="watchlist", status="requested")
     trakt = StubTrakt(items=[])
@@ -641,13 +691,25 @@ async def test_refresh_isolates_item_failure(db) -> None:
     # A failure on one off-list item (a non-Seer error here) is recorded and the next
     # item is still refreshed — the refresh isolates per-item failures like the poll.
     db.upsert_item(
-        trakt_id=1, type="movie", title="Boom", year=2020,
-        tmdb=100, tvdb=None, imdb="tt1", list_id="watchlist",
+        trakt_id=1,
+        type="movie",
+        title="Boom",
+        year=2020,
+        tmdb=100,
+        tvdb=None,
+        imdb="tt1",
+        list_id="watchlist",
     )
     db.set_status(trakt_id=1, list_id="watchlist", status="requested")
     db.upsert_item(
-        trakt_id=2, type="movie", title="Fine", year=2020,
-        tmdb=200, tvdb=None, imdb="tt2", list_id="watchlist",
+        trakt_id=2,
+        type="movie",
+        title="Fine",
+        year=2020,
+        tmdb=200,
+        tvdb=None,
+        imdb="tt2",
+        list_id="watchlist",
     )
     db.set_status(trakt_id=2, list_id="watchlist", status="requested")
 
@@ -660,7 +722,9 @@ async def test_refresh_isolates_item_failure(db) -> None:
     seer = StubSeer()
     seer.get_status = AsyncMock(side_effect=status)
     ctx = make_ctx(
-        db=db, trakt=trakt, seer=seer,
+        db=db,
+        trakt=trakt,
+        seer=seer,
         settings_store=StubSettingsStore(auto_remove_when_available=False),
     )
     await poll_and_request(ctx)

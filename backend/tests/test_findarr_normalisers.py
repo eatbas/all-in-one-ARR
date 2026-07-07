@@ -10,7 +10,9 @@ def test_sonarr_normalise_handles_edge_cases() -> None:
     invalid_date = sonarr.normalise({"id": 1, "airDateUtc": "bad"}, mode="missing")
     assert invalid_date is not None
     assert invalid_date.is_future is False
-    naive_date = sonarr.normalise({"id": 4, "airDateUtc": "2020-01-01T00:00:00"}, mode="missing")
+    naive_date = sonarr.normalise(
+        {"id": 4, "airDateUtc": "2020-01-01T00:00:00"}, mode="missing"
+    )
     assert naive_date is not None
     assert naive_date.is_future is False
 
@@ -56,7 +58,8 @@ def test_sonarr_normalise_captures_series_grouping_fields() -> None:
     # with the episode number absent the label carries no SxxExx and no dangling
     # separator, and the year stays None when the series omits one.
     fallback = sonarr.normalise(
-        {"id": 10, "seasonNumber": 1, "series": {"id": 7, "title": "Other"}}, mode="missing"
+        {"id": 10, "seasonNumber": 1, "series": {"id": 7, "title": "Other"}},
+        mode="missing",
     )
     assert fallback is not None
     assert fallback.series_id == 7
@@ -66,10 +69,20 @@ def test_sonarr_normalise_captures_series_grouping_fields() -> None:
 
 def test_radarr_normalise_handles_edge_cases() -> None:
     assert radarr.normalise({}, mode="missing") is None
-    assert radarr.normalise({"id": 1, "digitalRelease": "bad"}, mode="missing").is_future is False
+    assert (
+        radarr.normalise({"id": 1, "digitalRelease": "bad"}, mode="missing").is_future
+        is False
+    )
     assert radarr.normalise({"id": 2}, mode="missing").title == "Unknown movie"
     nested = radarr.normalise(
-        {"movie": {"id": 3, "title": "Movie", "year": 2024, "digitalRelease": "2999-01-01T00:00:00"}},
+        {
+            "movie": {
+                "id": 3,
+                "title": "Movie",
+                "year": 2024,
+                "digitalRelease": "2999-01-01T00:00:00",
+            }
+        },
         mode="upgrade",
     )
     assert nested is not None

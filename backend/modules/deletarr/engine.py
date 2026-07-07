@@ -6,7 +6,7 @@ import asyncio
 import os
 import shutil
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -55,7 +55,7 @@ class LibraryState:
 class DeletarrService:
     """Owns Deletarr state and filesystem operations for one app process."""
 
-    def __init__(self, ctx: "AppContext") -> None:
+    def __init__(self, ctx: AppContext) -> None:
         settings = ctx.settings_store.deletarr_settings()
         self._ctx = ctx
         self._states: dict[LibraryType, LibraryState] = {
@@ -270,7 +270,9 @@ class DeletarrService:
 
         if deleted:
             deleted_set = set(deleted)
-            state.results = [item for item in state.results if item.path not in deleted_set]
+            state.results = [
+                item for item in state.results if item.path not in deleted_set
+            ]
 
         return {
             "success": len(failed) == 0,
@@ -354,4 +356,4 @@ def format_size(bytes_size: int) -> str:
 
 
 def _now_iso() -> str:
-    return datetime.now(timezone.utc).isoformat()
+    return datetime.now(UTC).isoformat()

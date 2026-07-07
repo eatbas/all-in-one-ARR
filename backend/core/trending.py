@@ -12,8 +12,9 @@ or the Arr APIs on every render.
 from __future__ import annotations
 
 import time
+from collections.abc import Callable, Iterable
 from dataclasses import dataclass, field
-from typing import Any, Callable, Iterable
+from typing import Any
 
 # Default per-tab item cap and IMDb-rating cache bounds.
 TRENDING_ITEM_LIMIT = 20

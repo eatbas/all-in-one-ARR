@@ -114,7 +114,7 @@ def _bad_request(exc: ValueError) -> HTTPException:
     return HTTPException(status_code=400, detail=str(exc))
 
 
-def create_deletarr_router(ctx: "AppContext") -> APIRouter:
+def create_deletarr_router(ctx: AppContext) -> APIRouter:
     """Create the Deletarr API router."""
     router = APIRouter(prefix="/api/deletarr", tags=["deletarr"])
 
@@ -154,7 +154,9 @@ def create_deletarr_router(ctx: "AppContext") -> APIRouter:
         try:
             return await ctx.deletarr_scan(body.type)
         except SyncAlreadyRunning as exc:
-            raise HTTPException(status_code=409, detail="Deletarr is already running") from exc
+            raise HTTPException(
+                status_code=409, detail="Deletarr is already running"
+            ) from exc
         except ValueError as exc:
             raise _bad_request(exc) from exc
 
@@ -165,7 +167,9 @@ def create_deletarr_router(ctx: "AppContext") -> APIRouter:
         try:
             return await ctx.deletarr_delete(body.type, body.paths)
         except SyncAlreadyRunning as exc:
-            raise HTTPException(status_code=409, detail="Deletarr is already running") from exc
+            raise HTTPException(
+                status_code=409, detail="Deletarr is already running"
+            ) from exc
         except ValueError as exc:
             raise _bad_request(exc) from exc
 
