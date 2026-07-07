@@ -62,6 +62,18 @@ async def test_poll_job_runs_through_sync_gate(db, monkeypatch) -> None:
     assert gate_held is True
 
 
+async def test_poll_job_records_error_and_reraises(db, monkeypatch) -> None:
+    ctx = make_ctx(db=db, trakt=StubTrakt(items=[]))
+    list_syncarr.register_context(ctx)
+
+    async def poll_and_request_boom(context):
+        raise RuntimeError("poll boom")
+
+    monkeypatch.setattr(list_syncarr, "poll_and_request", poll_and_request_boom)
+    with pytest.raises(RuntimeError, match="poll boom"):
+        await list_syncarr.poll_job()
+
+
 async def test_remove_available_callable_runs_reconcile(db) -> None:
     # An available item is swept off its Trakt list by the manual sweep.
     db.upsert_item(

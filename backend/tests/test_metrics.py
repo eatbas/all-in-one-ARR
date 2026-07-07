@@ -49,6 +49,18 @@ async def test_scheduler_job_metrics_update() -> None:
     assert _counter_value(scheduler_job_runs_total, "findarr_poll", "success") == before + 1
 
 
+@pytest.mark.asyncio
+async def test_scheduler_job_metrics_record_error_and_reraise() -> None:
+    before = _counter_value(scheduler_job_runs_total, "findarr_poll", "error")
+
+    async def job() -> str:
+        raise RuntimeError("job boom")
+
+    with pytest.raises(RuntimeError, match="job boom"):
+        await observe_scheduler_job("findarr_poll", job)
+    assert _counter_value(scheduler_job_runs_total, "findarr_poll", "error") == before + 1
+
+
 def test_findarr_metrics_update() -> None:
     run_before = _counter_value(findarr_runs_total, "sonarr", "completed")
     search_before = _counter_value(findarr_searches_total, "sonarr", "missing", "success")

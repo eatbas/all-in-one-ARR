@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 from unittest.mock import AsyncMock
 
+import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
@@ -141,6 +142,15 @@ def test_sync_endpoint_without_handler_returns_503(db) -> None:
     resp = build_client(ctx).post("/api/sync")
     assert resp.status_code == 503
     assert resp.json() == {"detail": "sync unavailable"}
+
+
+def test_sync_endpoint_propagates_handler_error(db) -> None:
+    # A non-SyncAlreadyRunning failure records an error run and propagates (500).
+    ctx = make_ctx(db=db)
+    ctx.sync_now = AsyncMock(side_effect=RuntimeError("sync exploded"))
+    with pytest.raises(RuntimeError, match="sync exploded"):
+        build_client(ctx).post("/api/sync")
+    ctx.sync_now.assert_awaited()
 
 
 async def test_sync_endpoint_returns_409_while_sync_already_running(db) -> None:
@@ -448,7 +458,7 @@ def test_delete_item_endpoint_503_without_handler(db) -> None:
     assert resp.status_code == 503
 
 
-def test_get_database_settings_returns_counts_and_sizes(db: Database) -> None:
+def test_get_database_settings_returns_counts_and_sizes(db) -> None:
     db.upsert_item(**_ITEM)
     db.add_activity("sync", "synced")
     db.touch_list_synced("watchlist")
@@ -461,7 +471,7 @@ def test_get_database_settings_returns_counts_and_sizes(db: Database) -> None:
     assert body["poster_cache_bytes"] == 0  # no poster cache configured
 
 
-def test_clear_activity_endpoint_empties_log_and_records_audit(db: Database) -> None:
+def test_clear_activity_endpoint_empties_log_and_records_audit(db) -> None:
     db.add_activity("one", "first")
     db.add_activity("two", "second")
     ctx = make_ctx(db=db)
@@ -474,7 +484,7 @@ def test_clear_activity_endpoint_empties_log_and_records_audit(db: Database) -> 
     assert [a["action"] for a in activity] == ["Activity log cleared"]
 
 
-def test_clear_items_endpoint_deletes_items_and_state(db: Database) -> None:
+def test_clear_items_endpoint_deletes_items_and_state(db) -> None:
     db.upsert_item(**_ITEM)
     db.touch_list_synced("watchlist")
     ctx = make_ctx(db=db)
@@ -488,7 +498,7 @@ def test_clear_items_endpoint_deletes_items_and_state(db: Database) -> None:
     assert [a["action"] for a in activity] == ["Synced items cleared"]
 
 
-def test_clear_posters_endpoint_no_op_when_cache_unset(db: Database) -> None:
+def test_clear_posters_endpoint_no_op_when_cache_unset(db) -> None:
     ctx = make_ctx(db=db)
     ctx.poster_cache = None
     resp = build_client(ctx).post("/api/settings/database/clear-posters")
