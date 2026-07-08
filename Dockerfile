@@ -9,7 +9,7 @@ COPY frontend/ ./
 RUN npm run build
 
 # ---- Stage 2: Python runtime (no Node toolchain) ----
-FROM python:3.11-slim AS runtime
+FROM python:3.14-slim AS runtime
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
     PIP_NO_CACHE_DIR=1
