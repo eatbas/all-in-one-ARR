@@ -58,10 +58,10 @@ function items(n: number): TrendingItem[] {
 
 /**
  * Install a controllable `IntersectionObserver` for the current test (restored
- * by `vi.unstubAllGlobals()` in `afterEach`). The returned `scrollToSentinel`
- * fires the most recently constructed observer as "scrolled into view", which is
- * how the Trending grid reveals its next batch. The grid re-subscribes on each
- * reveal, so firing the latest observer mirrors a real scroll.
+ * by `vi.unstubAllGlobals()` in `afterEach`). The returned controls fire the most
+ * recently constructed observer with an explicit intersection state. The grid
+ * re-subscribes on each reveal, so firing the latest observer mirrors a real
+ * scroll.
  */
 function installIntersectionObserver() {
   const callbacks: IntersectionObserverCallback[] = []
@@ -80,17 +80,19 @@ function installIntersectionObserver() {
     "IntersectionObserver",
     IO as unknown as typeof IntersectionObserver,
   )
+  function notifySentinel(isIntersecting: boolean) {
+    const callback = callbacks.at(-1)
+    if (!callback) throw new Error("No IntersectionObserver was constructed")
+    act(() => {
+      callback(
+        [{ isIntersecting } as IntersectionObserverEntry],
+        {} as IntersectionObserver,
+      )
+    })
+  }
   return {
-    scrollToSentinel() {
-      const cb = callbacks.at(-1)
-      if (!cb) throw new Error("No IntersectionObserver was constructed")
-      act(() => {
-        cb(
-          [{ isIntersecting: true } as IntersectionObserverEntry],
-          {} as IntersectionObserver,
-        )
-      })
-    },
+    notifySentinel,
+    scrollToSentinel: () => notifySentinel(true),
   }
 }
 
@@ -332,6 +334,17 @@ describe("Trending", () => {
     expect(
       screen.queryByTestId("trending-scroll-sentinel"),
     ).not.toBeInTheDocument()
+  })
+
+  it("does not reveal more rows while the sentinel is outside the viewport", () => {
+    vi.mocked(useTrending).mockReturnValue(queryResult(items(16)))
+    const observer = installIntersectionObserver()
+    render(<Trending />)
+
+    observer.notifySentinel(false)
+
+    expect(screen.queryByTitle("Item 16")).not.toBeInTheDocument()
+    expect(screen.getByTestId("trending-scroll-sentinel")).toBeInTheDocument()
   })
 
   it("widens the first batch when the per-row density increases (7 → 21)", async () => {

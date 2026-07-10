@@ -163,6 +163,7 @@ function SourcePanel({ source }: { source: TrendingSource }) {
   useEffect(() => {
     if (visibleCount >= total) return
     const node = sentinelRef.current
+    /* v8 ignore next -- hasMore renders and attaches the sentinel before this effect runs. */
     if (!node) return
     const observer = new IntersectionObserver((entries) => {
       if (entries[0]?.isIntersecting) {
