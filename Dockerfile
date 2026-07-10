@@ -43,7 +43,7 @@ LABEL org.opencontainers.image.title="all-in-one-ARR" \
 
 EXPOSE 3223
 
-# python:3.11-slim ships python3 only (no `python` symlink) and no curl/wget, so
+# python:3.14-slim ships python3 only (no `python` symlink) and no curl/wget, so
 # the healthcheck probes /health with the standard library; any error exits 1
 # quietly (no traceback in the container health log).
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \

@@ -6,7 +6,7 @@ build-backend = "setuptools.build_meta"
 name = "aio-arr"
 version = "1.6.3"
 description = "All-in-One ARR: a plugin core with a list_syncarr module that keeps a Trakt list in sync with Seer and removes items from the Trakt list once they are available or partially available in Seer."
-requires-python = ">=3.11"
+requires-python = ">=3.14"
 license = { text = "MIT" }
 authors = [{ name = "Eren Atbas" }]
 
@@ -70,7 +70,7 @@ exclude_lines = [
 ]
 
 [tool.ruff]
-target-version = "py311"
+target-version = "py314"
 line-length = 88
 
 [tool.ruff.lint]
@@ -106,7 +106,7 @@ extend-immutable-calls = [
 docstring-code-format = false
 
 [tool.mypy]
-python_version = "3.11"
+python_version = "3.14"
 files = ["core", "modules"]
 # Pydantic v2 ships a mypy plugin that teaches mypy about model fields,
 # validators, and constructor signatures.

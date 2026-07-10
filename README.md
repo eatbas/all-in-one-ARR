@@ -524,7 +524,7 @@ Backend (run from the repository root so `.env`, `data/` and `frontend/dist`
 resolve as they do in Docker):
 
 ```bash
-python3.11 -m venv .venv && . .venv/bin/activate
+python3.14 -m venv .venv && . .venv/bin/activate
 pip install -e "./backend[dev]"
 uvicorn main:app --app-dir backend --reload --port 3223
 ```
