@@ -258,4 +258,30 @@ describe("Slider", () => {
     await user.keyboard("{ArrowRight}")
     expect(thumb).toHaveAttribute("aria-valuenow", "6")
   })
+
+  it("does not duplicate shared accessible names across range thumbs", () => {
+    render(
+      <Slider
+        aria-label="Price range"
+        aria-labelledby="price-range-label"
+        value={[25, 75]}
+      />,
+    )
+
+    const thumbs = screen.getAllByRole("slider")
+    expect(thumbs).toHaveLength(2)
+    for (const thumb of thumbs) {
+      expect(thumb).not.toHaveAttribute("aria-label", "Price range")
+      expect(thumb).not.toHaveAttribute("aria-labelledby", "price-range-label")
+    }
+  })
+
+  it("defaults to one thumb at the minimum when no values are supplied", () => {
+    render(<Slider aria-label="Density" min={5} max={11} />)
+
+    expect(screen.getByRole("slider", { name: "Density" })).toHaveAttribute(
+      "aria-valuenow",
+      "5",
+    )
+  })
 })
