@@ -90,28 +90,6 @@ export function formatBytes(bytes: number): string {
 }
 
 /**
- * Compact vote/count string, at most four characters (for counts below one
- * billion) and never a decimal-K: the raw number below 10,000, a floored integer
- * "…K" up to 100,000, a one-decimal "…M" up to ~9.95M, then a rounded integer
- * "…M". The ~9.95M cut-over keeps a value that would round to "10.0M" as the
- * shorter "10M". e.g. 999→"999", 9999→"9999", 44000→"44K", 123200→"0.1M",
- * 1234567→"1.2M", 9999999→"10M".
- */
-export function formatCompactVotes(votes: number): string {
-  if (votes < 10_000) {
-    return String(votes)
-  }
-  if (votes < 100_000) {
-    return `${Math.floor(votes / 1_000)}K`
-  }
-  // Below the point where one decimal would round up to "10.0M" (5 chars).
-  if (votes < 9_950_000) {
-    return `${(votes / 1_000_000).toFixed(1)}M`
-  }
-  return `${Math.round(votes / 1_000_000)}M`
-}
-
-/**
  * Shared countdown core for {@link formatNextSync} and {@link formatCountdown}:
  * formats the gap to a future `iso` as "in N min" / "in N hours" / "in N days"
  * ("due now" when overdue, "—" when null, the raw value when unparseable).

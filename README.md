@@ -476,12 +476,12 @@ Trakt list without leaving the app. It is organised as **per-source tabs**:
 - **Open on the source** — each poster's **top-right** corner has a link to the
   title's dedicated page on its source: the Trakt page (by slug), the TMDB page,
   or — for Seer items — your configured Overseerr/Seer instance's media page.
-- **IMDb rating overlay** — each card shows the title's **IMDb rating and vote
-  count** (on the same line as the year and media type), fetched on demand from
-  **OMDb** (IMDb has no official trending API, so it is an enrichment overlay, not
-  a source). Ratings are cached server-side with a 24-hour TTL and fetched lazily,
-  so a grid does not exhaust the OMDb free-tier quota; a card simply omits the
-  rating when none is available.
+- **IMDb rating overlay** — each card shows the title's **IMDb star and rating**
+  in the poster's top-left corner, fetched on demand from **OMDb** (IMDb has no
+  official trending API, so it is an enrichment overlay, not a source). Ratings
+  are cached server-side with a 24-hour TTL and fetched lazily, so a grid does not
+  exhaust the OMDb free-tier quota; a card simply omits the rating when none is
+  available.
 - **Library status (Seer tab)** — cards also show the item's Seer library status
   (Requested / Processing / Partial / Available) read from `mediaInfo`, so you can
   see what is already in your library. Items already mirrored in a tracked list

@@ -3,34 +3,12 @@ import { describe, expect, it } from "vitest"
 import {
   displayTitle,
   formatBytes,
-  formatCompactVotes,
   formatCountdown,
   formatNextSync,
   formatRelativeTime,
   formatTimestamp,
   formatYear,
 } from "@/shared/lib/format"
-
-describe("formatCompactVotes", () => {
-  it.each([
-    [0, "0"],
-    [999, "999"],
-    [9999, "9999"],
-    [10_000, "10K"],
-    [44_000, "44K"],
-    [99_999, "99K"],
-    [100_000, "0.1M"],
-    [123_200, "0.1M"],
-    [1_234_567, "1.2M"],
-    [9_949_999, "9.9M"],
-    [9_999_999, "10M"],
-    [12_000_000, "12M"],
-  ])("formats %i as %s (≤4 chars, never a decimal-K)", (votes, expected) => {
-    const formatted = formatCompactVotes(votes)
-    expect(formatted).toBe(expected)
-    expect(formatted.length).toBeLessThanOrEqual(4)
-  })
-})
 
 describe("displayTitle", () => {
   it("returns the title when present", () => {

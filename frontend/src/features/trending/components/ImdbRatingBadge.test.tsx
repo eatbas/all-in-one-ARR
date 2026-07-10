@@ -41,35 +41,10 @@ describe("ImdbRatingBadge", () => {
     expect(container).toBeEmptyDOMElement()
   })
 
-  it("shows the rating with millions-formatted votes", () => {
+  it("shows the rating without the vote count", () => {
     setRating({ imdb_rating: 8.62, imdb_votes: 1_234_567 })
     render(<ImdbRatingBadge item={ITEM} />)
     expect(screen.getByText("8.6")).toBeInTheDocument()
-    expect(screen.getByText("(1.2M)")).toBeInTheDocument()
-  })
-
-  it("compresses 100k+ votes to one-decimal millions", () => {
-    setRating({ imdb_rating: 7.5, imdb_votes: 123_200 })
-    render(<ImdbRatingBadge item={ITEM} />)
-    expect(screen.getByText("(0.1M)")).toBeInTheDocument()
-  })
-
-  it("shows sub-10k votes as the raw number", () => {
-    setRating({ imdb_rating: 7, imdb_votes: 4200 })
-    render(<ImdbRatingBadge item={ITEM} />)
-    expect(screen.getByText("(4200)")).toBeInTheDocument()
-  })
-
-  it("formats small vote counts", () => {
-    setRating({ imdb_rating: 6, imdb_votes: 999 })
-    render(<ImdbRatingBadge item={ITEM} />)
-    expect(screen.getByText("(999)")).toBeInTheDocument()
-  })
-
-  it("omits the vote count when it is null", () => {
-    setRating({ imdb_rating: 6, imdb_votes: null })
-    render(<ImdbRatingBadge item={ITEM} />)
-    expect(screen.getByText("6.0")).toBeInTheDocument()
     expect(screen.queryByText(/\(/)).not.toBeInTheDocument()
   })
 })
