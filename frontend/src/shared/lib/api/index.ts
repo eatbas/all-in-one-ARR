@@ -414,6 +414,25 @@ export interface BandwidthClientStats {
   paused?: boolean
 }
 
+export interface BandwidthDownloadItem {
+  client: "qbittorrent" | "sabnzbd"
+  id: string
+  name: string
+  status: string
+  progress: number | null
+  size_bytes: number | null
+  size_label: string | null
+  speed_mbps: number | null
+  eta_seconds: number | null
+  added_at: string | null
+  completed_at: string | null
+}
+
+export interface BandwidthQueue {
+  qbittorrent: BandwidthDownloadItem[]
+  sabnzbd: BandwidthDownloadItem[]
+}
+
 /** Full live status returned by `GET /api/bandwidth/status`. */
 export interface BandwidthStatus {
   enabled: boolean
@@ -422,6 +441,8 @@ export interface BandwidthStatus {
   check_interval_seconds: number
   qbittorrent: BandwidthClientStats
   sabnzbd: BandwidthClientStats
+  recent_downloads: BandwidthDownloadItem[]
+  queue: BandwidthQueue
 }
 
 /** Body of `PUT /api/bandwidth/settings`; omitted fields stay unchanged. */

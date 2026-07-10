@@ -45,6 +45,102 @@ export type AddListRequest = {
 };
 
 /**
+ * BandwidthClientStatsResponse
+ *
+ * Aggregate statistics for one download client.
+ */
+export type BandwidthClientStatsResponse = {
+    /**
+     * Active Downloads
+     */
+    active_downloads: number;
+    /**
+     * Online
+     */
+    online: boolean;
+    /**
+     * Paused
+     */
+    paused?: boolean | null;
+    /**
+     * Queue Size
+     */
+    queue_size: number;
+    /**
+     * Speed Mbps
+     */
+    speed_mbps: number;
+};
+
+/**
+ * BandwidthDownloadItem
+ *
+ * Display-safe queue or recent-download item.
+ */
+export type BandwidthDownloadItem = {
+    /**
+     * Added At
+     */
+    added_at?: string | null;
+    /**
+     * Client
+     */
+    client: 'qbittorrent' | 'sabnzbd';
+    /**
+     * Completed At
+     */
+    completed_at?: string | null;
+    /**
+     * Eta Seconds
+     */
+    eta_seconds?: number | null;
+    /**
+     * Id
+     */
+    id: string;
+    /**
+     * Name
+     */
+    name: string;
+    /**
+     * Progress
+     */
+    progress?: number | null;
+    /**
+     * Size Bytes
+     */
+    size_bytes?: number | null;
+    /**
+     * Size Label
+     */
+    size_label?: string | null;
+    /**
+     * Speed Mbps
+     */
+    speed_mbps?: number | null;
+    /**
+     * Status
+     */
+    status: string;
+};
+
+/**
+ * BandwidthQueueResponse
+ *
+ * Current queue items grouped by downloader.
+ */
+export type BandwidthQueueResponse = {
+    /**
+     * Qbittorrent
+     */
+    qbittorrent?: Array<BandwidthDownloadItem>;
+    /**
+     * Sabnzbd
+     */
+    sabnzbd?: Array<BandwidthDownloadItem>;
+};
+
+/**
  * BandwidthSettingsRequest
  *
  * Body for updating Bandwidth-Controllarr settings.
@@ -80,18 +176,13 @@ export type BandwidthStatusResponse = {
      * Last Run At
      */
     last_run_at: string | null;
+    qbittorrent: BandwidthClientStatsResponse;
+    queue?: BandwidthQueueResponse;
     /**
-     * Qbittorrent
+     * Recent Downloads
      */
-    qbittorrent: {
-        [key: string]: unknown;
-    };
-    /**
-     * Sabnzbd
-     */
-    sabnzbd: {
-        [key: string]: unknown;
-    };
+    recent_downloads?: Array<BandwidthDownloadItem>;
+    sabnzbd: BandwidthClientStatsResponse;
     /**
      * Status
      */

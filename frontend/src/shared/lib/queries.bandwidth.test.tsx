@@ -39,6 +39,8 @@ beforeEach(() => {
       queue_size: 0,
       paused: false,
     },
+    recent_downloads: [],
+    queue: { qbittorrent: [], sabnzbd: [] },
   })
 })
 
@@ -71,6 +73,8 @@ describe("bandwidth hooks", () => {
         queue_size: 0,
         paused: false,
       },
+      recent_downloads: [],
+      queue: { qbittorrent: [], sabnzbd: [] },
     })
     const { queryClient, wrapper } = setup()
     const invalidate = vi.spyOn(queryClient, "invalidateQueries")

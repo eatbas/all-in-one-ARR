@@ -543,6 +543,8 @@ const sampleBandwidthStatus: BandwidthStatus = {
     queue_size: 0,
     paused: false,
   },
+  recent_downloads: [],
+  queue: { qbittorrent: [], sabnzbd: [] },
 }
 
 describe("bandwidth controllarr", () => {

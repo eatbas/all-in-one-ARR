@@ -3,6 +3,7 @@ import { Card, CardContent } from "@/shared/components/ui/card"
 import { SettingsHelp } from "@/shared/components/settings-help"
 import { Switch } from "@/shared/components/ui/switch"
 import { ClientCard } from "@/features/bandwidth-controllarr/components/client-card"
+import { DownloadActivityPanel } from "@/features/bandwidth-controllarr/components/download-activity-panel"
 import {
   useBandwidthStatus,
   useUpdateBandwidthSettings,
@@ -23,6 +24,8 @@ export function Status() {
   const isActive = status?.status.includes("Active torrents") ?? false
   const qb = status?.qbittorrent
   const sab = status?.sabnzbd
+  const recentDownloads = status?.recent_downloads ?? []
+  const queue = status?.queue ?? { qbittorrent: [], sabnzbd: [] }
   const controlLabel = enabled ? "Enabled" : "Disabled"
   const badgeLabel = enabled ? statusText : `${statusText} (Disabled)`
 
@@ -85,6 +88,8 @@ export function Status() {
           paused={sab?.paused}
         />
       </div>
+
+      <DownloadActivityPanel recentDownloads={recentDownloads} queue={queue} />
     </div>
   )
 }

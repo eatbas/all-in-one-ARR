@@ -40,6 +40,8 @@ const BASE: BandwidthStatus = {
     queue_size: 0,
     paused: false,
   },
+  recent_downloads: [],
+  queue: { qbittorrent: [], sabnzbd: [] },
 }
 
 function render(ui: ReactElement) {
@@ -59,7 +61,7 @@ describe("Status", () => {
     const { container } = render(<Status />)
     const statusTab = container.firstElementChild
 
-    expect(statusTab?.children).toHaveLength(2)
+    expect(statusTab?.children).toHaveLength(3)
     expect(statusTab?.firstElementChild).toContainElement(
       screen.getByText("System Status"),
     )
@@ -71,6 +73,8 @@ describe("Status", () => {
     expect(screen.getByText("SABnzbd")).toBeInTheDocument()
     expect(screen.getByText("5.50 MB/s")).toBeInTheDocument()
     expect(screen.getByText("RESUMED")).toBeInTheDocument()
+    expect(screen.getByText("Recent downloads")).toBeInTheDocument()
+    expect(screen.getByText("No recent downloads")).toBeInTheDocument()
   })
 
   it("uses safe defaults before status data is available", () => {
@@ -81,7 +85,58 @@ describe("Status", () => {
     expect(screen.getByText("Monitoring only (Disabled)")).toBeInTheDocument()
     expect(screen.getByText("Waiting for first check…")).toBeInTheDocument()
     expect(screen.getAllByText("0.00 MB/s")).toHaveLength(2)
-    expect(screen.getAllByText("0")).toHaveLength(4)
+    expect(screen.getAllByText("0").length).toBeGreaterThanOrEqual(4)
+    expect(screen.getByText("No recent downloads")).toBeInTheDocument()
+  })
+
+  it("renders recent downloads and expandable queue details", async () => {
+    const user = userEvent.setup()
+    vi.mocked(useBandwidthStatus).mockReturnValue(
+      queryResult({
+        ...BASE,
+        recent_downloads: [
+          {
+            client: "sabnzbd",
+            id: "done",
+            name: "Finished.Show",
+            status: "Completed",
+            progress: 100,
+            size_bytes: 1024,
+            size_label: "1.0 KB",
+            speed_mbps: null,
+            eta_seconds: null,
+            added_at: "2026-06-26T20:00:00Z",
+            completed_at: "2026-06-26T20:30:00Z",
+          },
+        ],
+        queue: {
+          qbittorrent: [
+            {
+              client: "qbittorrent",
+              id: "queued",
+              name: "Queued.Movie",
+              status: "queuedDL",
+              progress: 25,
+              size_bytes: 2048,
+              size_label: "2.0 KB",
+              speed_mbps: 0.5,
+              eta_seconds: 60,
+              added_at: "2026-06-26T20:00:00Z",
+              completed_at: null,
+            },
+          ],
+          sabnzbd: [],
+        },
+      }),
+    )
+
+    render(<Status />)
+
+    expect(screen.getByText("Finished.Show")).toBeInTheDocument()
+    await user.click(
+      screen.getByRole("button", { name: "Expand downloader queue" }),
+    )
+    expect(screen.getByText("Queued.Movie")).toBeInTheDocument()
   })
 
   it("shows the active-torrents danger state", () => {
