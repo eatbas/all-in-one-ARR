@@ -4,11 +4,8 @@ from __future__ import annotations
 
 from collections.abc import Awaitable, Callable
 from time import perf_counter, time
-from typing import TypeVar
 
 from prometheus_client import Counter, Gauge, Histogram
-
-T = TypeVar("T")
 
 sync_runs_total = Counter(
     "aio_arr_sync_runs_total",
@@ -151,7 +148,7 @@ def update_service_metrics(
     service_last_check_timestamp_seconds.labels(name).set(checked_at or time())
 
 
-async def observe_scheduler_job(job_id: str, job: Callable[[], Awaitable[T]]) -> T:
+async def observe_scheduler_job[T](job_id: str, job: Callable[[], Awaitable[T]]) -> T:
     """Run ``job`` and record bounded scheduler metrics around it."""
     started = perf_counter()
     status = "success"

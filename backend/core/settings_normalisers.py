@@ -111,7 +111,7 @@ def _normalise_findarr_limit(value: Any, *, default: int) -> int:
     """Return a bounded non-negative Findarr per-cycle/API limit."""
     try:
         parsed = int(value)
-    except (TypeError, ValueError):
+    except TypeError, ValueError:
         parsed = default
     return max(0, min(parsed, _FINDARR_LIMIT_MAX))
 
@@ -120,7 +120,7 @@ def _normalise_findarr_queue_limit(value: Any) -> int:
     """Return a Findarr queue limit, where ``-1`` means no queue guard."""
     try:
         parsed = int(value)
-    except (TypeError, ValueError):
+    except TypeError, ValueError:
         return -1
     return -1 if parsed < 0 else min(parsed, _FINDARR_LIMIT_MAX)
 
@@ -134,7 +134,7 @@ def _normalise_findarr_sleep_seconds(value: Any) -> int:
     """Return a bounded inter-command sleep in seconds, defaulting to 0."""
     try:
         parsed = int(value)
-    except (TypeError, ValueError):
+    except TypeError, ValueError:
         return 0
     return max(0, min(parsed, _FINDARR_SLEEP_MAX))
 
@@ -143,7 +143,7 @@ def _normalise_findarr_reset_hours(value: Any) -> int:
     """Return a bounded stateful-reset window in hours, defaulting to 168."""
     try:
         parsed = int(value)
-    except (TypeError, ValueError):
+    except TypeError, ValueError:
         return 168
     return max(_FINDARR_RESET_HOURS_MIN, min(parsed, _FINDARR_RESET_HOURS_MAX))
 
@@ -151,7 +151,7 @@ def _normalise_findarr_reset_hours(value: Any) -> int:
 def _coerce_int(value: Any, default: int) -> int:
     try:
         return int(value)
-    except (TypeError, ValueError):
+    except TypeError, ValueError:
         return default
 
 

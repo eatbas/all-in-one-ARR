@@ -26,7 +26,7 @@ def _parse_rating(value: Any) -> float | None:
         return None
     try:
         return float(value)
-    except (TypeError, ValueError):
+    except TypeError, ValueError:
         return None
 
 
@@ -36,7 +36,7 @@ def _parse_votes(value: Any) -> int | None:
         return None
     try:
         return int(str(value).replace(",", ""))
-    except (TypeError, ValueError):
+    except TypeError, ValueError:
         return None
 
 
