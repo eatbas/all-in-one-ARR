@@ -6,7 +6,7 @@ import asyncio
 from unittest.mock import AsyncMock, call
 
 from core import trending_sync
-from core.trending import SCHEDULED_TRENDING_LIMIT, SEER_TRENDING_SYNC_PAGES
+from core.trending import SEER_TRENDING_SYNC_PAGES, TRENDING_ITEM_LIMIT
 from core.trending_sync import (
     _PREWARM_TASKS,
     _prewarm_targets,
@@ -61,17 +61,17 @@ async def test_refresh_fills_every_feed_and_stamps_sync(db) -> None:
         ctx.tmdb.get_trending.await_args.kwargs["pages"]
         == trending_sync.TRENDING_SYNC_PAGES
     )
-    assert ctx.trakt.get_trending.await_args.kwargs["limit"] == 40
+    assert ctx.trakt.get_trending.await_args.kwargs["limit"] == TRENDING_ITEM_LIMIT
     ctx.seer.discover_popular.assert_has_awaits(
         [
             call(
                 media_type="movie",
-                limit=SCHEDULED_TRENDING_LIMIT,
+                limit=TRENDING_ITEM_LIMIT,
                 pages=trending_sync.TRENDING_SYNC_PAGES,
             ),
             call(
                 media_type="show",
-                limit=SCHEDULED_TRENDING_LIMIT,
+                limit=TRENDING_ITEM_LIMIT,
                 pages=trending_sync.TRENDING_SYNC_PAGES,
             ),
         ],
@@ -113,7 +113,7 @@ async def test_seer_trending_is_fetched_once_and_split_by_media(db) -> None:
     }
     await refresh_trending_store(ctx)
     ctx.seer.discover_trending_buckets.assert_awaited_once_with(
-        limit_per_media=SCHEDULED_TRENDING_LIMIT,
+        limit_per_media=TRENDING_ITEM_LIMIT,
         pages=SEER_TRENDING_SYNC_PAGES,
     )
     assert ctx.trending_store.get(

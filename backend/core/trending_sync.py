@@ -17,7 +17,7 @@ from typing import TYPE_CHECKING
 from core.app_metrics import observe_scheduler_job
 from core.db import utcnow_iso
 from core.logging import get_logger
-from core.trending import SCHEDULED_TRENDING_LIMIT, TRENDING_SYNC_PAGES
+from core.trending import TRENDING_ITEM_LIMIT, TRENDING_SYNC_PAGES
 from core.trending_api import fetch_feed, fetch_seer_trending_buckets
 
 if TYPE_CHECKING:  # pragma: no cover
@@ -59,7 +59,7 @@ async def _store_feed(
             media=media,
             category=category,
             window=SYNC_WINDOW,
-            limit=SCHEDULED_TRENDING_LIMIT,
+            limit=TRENDING_ITEM_LIMIT,
             pages=TRENDING_SYNC_PAGES,
         )
     except Exception as exc:  # noqa: BLE001 - one dead feed must not abort the cycle
@@ -85,7 +85,7 @@ async def _store_seer_trending(ctx: AppContext) -> None:
     """
     try:
         buckets = await fetch_seer_trending_buckets(
-            ctx, limit=SCHEDULED_TRENDING_LIMIT, pages=TRENDING_SYNC_PAGES
+            ctx, limit=TRENDING_ITEM_LIMIT, pages=TRENDING_SYNC_PAGES
         )
     except Exception as exc:  # noqa: BLE001 - a dead feed must not abort the cycle
         _log.warning("trending refresh failed (source=seer category=trending): %s", exc)

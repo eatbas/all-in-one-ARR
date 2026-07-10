@@ -16,16 +16,21 @@ from collections.abc import Callable, Iterable
 from dataclasses import dataclass, field
 from typing import Any
 
-# Default per-tab item cap and IMDb-rating cache bounds.
-TRENDING_ITEM_LIMIT = 20
-# The scheduled refresh fetches a deeper grid than a single live page, since it
-# runs off the request path. ``TRENDING_SYNC_PAGES`` bounds the upstream paging so
-# the deeper fetch stays predictable (TMDB/Seer return ~20 rows per page).
-SCHEDULED_TRENDING_LIMIT = 40
-TRENDING_SYNC_PAGES = 2
-# Seer trending is a mixed movie/show feed. Fetch extra pages so both media buckets
-# can fill to the same per-tab limit before the mixed feed is exhausted.
-SEER_TRENDING_SYNC_PAGES = 6
+# Per-tab item cap for both the live and scheduled feeds: fetch up to this many
+# rows per (source, media, category), or the provider's maximum when it offers
+# fewer. "Stop at 100" — providers page ~20 rows at a time and every client caps
+# its concatenated results at the requested limit, so this is the hard ceiling.
+TRENDING_ITEM_LIMIT = 100
+# Pages to fetch for the paged single-type feeds (TMDB trending/popular, Seer
+# popular): ceil(TRENDING_ITEM_LIMIT / ~20 rows per page). Each client breaks on
+# the first empty page, so a provider with fewer pages stops at its own maximum.
+# Trakt takes the limit in one request and ignores this.
+TRENDING_SYNC_PAGES = 5
+# Seer trending is a single mixed movie/show feed, so it needs extra pages for
+# BOTH media buckets to reach TRENDING_ITEM_LIMIT before the feed is exhausted
+# (the bucket fetch stops once both are full or Seer runs out of pages).
+SEER_TRENDING_SYNC_PAGES = 15
+# IMDb-rating cache bounds (entry TTL and max entries).
 _RATING_TTL_SECONDS = 24 * 60 * 60
 _RATING_CACHE_MAX = 512
 # The combined Radarr/Sonarr library is re-listed at most this often.

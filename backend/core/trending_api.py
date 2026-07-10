@@ -23,6 +23,7 @@ from core.timefmt import next_sync_at
 from core.trending import (
     SEER_TRENDING_SYNC_PAGES,
     TRENDING_ITEM_LIMIT,
+    TRENDING_SYNC_PAGES,
     LibraryCache,
     LibraryIndex,
     RatingCache,
@@ -282,6 +283,7 @@ def create_trending_router(ctx: AppContext) -> APIRouter:
                     category=category,
                     window=window,
                     limit=TRENDING_ITEM_LIMIT,
+                    pages=TRENDING_SYNC_PAGES,
                 )
             except Exception as exc:  # noqa: BLE001 - a dead source must not break the page
                 log.warning(
