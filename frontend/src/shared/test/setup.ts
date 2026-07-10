@@ -30,6 +30,24 @@ class ResizeObserverStub {
 globalThis.ResizeObserver =
   ResizeObserverStub as unknown as typeof ResizeObserver
 
+// jsdom lacks `IntersectionObserver`; the Trending grid uses one to drive its
+// infinite scroll. Default to an inert stub so components can construct one;
+// tests that need to simulate "scrolled into view" override
+// `window.IntersectionObserver` locally (see Trending.test.tsx).
+class IntersectionObserverStub {
+  readonly root = null
+  readonly rootMargin = ""
+  readonly thresholds: ReadonlyArray<number> = []
+  observe(): void {}
+  unobserve(): void {}
+  disconnect(): void {}
+  takeRecords(): IntersectionObserverEntry[] {
+    return []
+  }
+}
+globalThis.IntersectionObserver =
+  IntersectionObserverStub as unknown as typeof IntersectionObserver
+
 // jsdom either omits or throws for these element APIs that Radix touches when a
 // menu/dropdown opens; replace them with no-ops so interactions can proceed.
 Element.prototype.scrollIntoView = (): void => {}

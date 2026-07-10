@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react"
+import { act, render, screen } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
@@ -54,6 +54,55 @@ function items(n: number): TrendingItem[] {
     tmdb: index + 1,
     title: `Item ${index + 1}`,
   }))
+}
+
+/**
+ * Install a controllable `IntersectionObserver` for the current test (restored
+ * by `vi.unstubAllGlobals()` in `afterEach`). The returned `scrollToSentinel`
+ * fires the most recently constructed observer as "scrolled into view", which is
+ * how the Trending grid reveals its next batch. The grid re-subscribes on each
+ * reveal, so firing the latest observer mirrors a real scroll.
+ */
+function installIntersectionObserver() {
+  const callbacks: IntersectionObserverCallback[] = []
+  class IO {
+    constructor(cb: IntersectionObserverCallback) {
+      callbacks.push(cb)
+    }
+    observe(): void {}
+    unobserve(): void {}
+    disconnect(): void {}
+    takeRecords(): IntersectionObserverEntry[] {
+      return []
+    }
+  }
+  vi.stubGlobal(
+    "IntersectionObserver",
+    IO as unknown as typeof IntersectionObserver,
+  )
+  return {
+    scrollToSentinel() {
+      const cb = callbacks.at(-1)
+      if (!cb) throw new Error("No IntersectionObserver was constructed")
+      act(() => {
+        cb(
+          [{ isIntersecting: true } as IntersectionObserverEntry],
+          {} as IntersectionObserver,
+        )
+      })
+    },
+  }
+}
+
+/** Focus the density slider thumb and step it right `times` times (one per step). */
+async function stepDensity(
+  user: ReturnType<typeof userEvent.setup>,
+  times = 1,
+) {
+  const thumb = screen.getByRole("slider", { name: "Posters per row" })
+  thumb.focus()
+  await user.keyboard("{ArrowRight}".repeat(times))
+  return thumb
 }
 
 beforeEach(() => {
@@ -264,66 +313,92 @@ describe("Trending", () => {
       expect.objectContaining({ source: "seer" }),
     )
     // Changing the per-row density without localStorage must not throw.
-    await user.click(screen.getByRole("button", { name: "7" }))
-    expect(screen.getByRole("button", { name: "7" })).toHaveAttribute(
-      "aria-pressed",
-      "true",
-    )
+    const thumb = await stepDensity(user)
+    expect(thumb).toHaveAttribute("aria-valuenow", "6")
   })
 
-  it("paginates 3 rows per page (default 5 per row → 15 items)", async () => {
+  it("reveals the first three rows then loads three more on scroll", async () => {
     vi.mocked(useTrending).mockReturnValue(queryResult(items(16)))
-    const user = userEvent.setup()
+    const scroll = installIntersectionObserver()
     render(<Trending />)
-    expect(screen.getByText("Showing 1–15 of 16")).toBeInTheDocument()
+    // Default 5 per row × 3 rows = 15 items shown; the 16th waits below the fold.
     expect(screen.getByTitle("Item 15")).toBeInTheDocument()
     expect(screen.queryByTitle("Item 16")).not.toBeInTheDocument()
-    await user.click(screen.getByRole("button", { name: "Next page" }))
-    expect(screen.getByText("Showing 16–16 of 16")).toBeInTheDocument()
+    // The sentinel is present while rows remain below the fold.
+    expect(screen.getByTestId("trending-scroll-sentinel")).toBeInTheDocument()
+    scroll.scrollToSentinel()
     expect(screen.getByTitle("Item 16")).toBeInTheDocument()
+    // With every row revealed the sentinel unmounts, so no further loads fire.
+    expect(
+      screen.queryByTestId("trending-scroll-sentinel"),
+    ).not.toBeInTheDocument()
   })
 
-  it("widens the page size when the per-row density increases (7 → 21)", async () => {
+  it("widens the first batch when the per-row density increases (7 → 21)", async () => {
     vi.mocked(useTrending).mockReturnValue(queryResult(items(16)))
     const user = userEvent.setup()
     render(<Trending />)
     expect(screen.queryByTitle("Item 16")).not.toBeInTheDocument()
-    await user.click(screen.getByRole("button", { name: "7" }))
-    // 7 × 3 = 21 ≥ 16, so every item now fits on a single page.
+    // Step the slider 5 → 7; 7 × 3 = 21 ≥ 16, so every item now fits the batch.
+    await stepDensity(user, 2)
     expect(screen.getByTitle("Item 16")).toBeInTheDocument()
-    expect(screen.getByText("Showing 1–16 of 16")).toBeInTheDocument()
   })
 
   it("restores the stored per-row density on mount", () => {
     localStorage.setItem(TRENDING_PER_ROW_STORAGE_KEY, "7")
     vi.mocked(useTrending).mockReturnValue(queryResult(items(21)))
     render(<Trending />)
-    expect(screen.getByText("Showing 1–21 of 21")).toBeInTheDocument()
+    // 7 × 3 = 21, so the whole list is in the first batch — no scroll needed.
+    expect(screen.getByTitle("Item 1")).toBeInTheDocument()
     expect(screen.getByTitle("Item 21")).toBeInTheDocument()
   })
 
-  it("labels the density toggle as posters per row, not pagination", () => {
+  it("exposes the density control as a labelled slider, not a pager", () => {
     render(<Trending />)
     expect(
-      screen.getByRole("group", { name: "Posters per row" }),
+      screen.getByRole("slider", { name: "Posters per row" }),
     ).toBeInTheDocument()
+    // The old pager copy must be gone from this page.
+    expect(screen.queryByText(/^Showing /)).not.toBeInTheDocument()
+    expect(
+      screen.queryByRole("button", { name: "Next page" }),
+    ).not.toBeInTheDocument()
   })
 
   it("persists the chosen per-row density to localStorage", async () => {
     vi.mocked(useTrending).mockReturnValue(queryResult(items(3)))
     const user = userEvent.setup()
     render(<Trending />)
-    await user.click(screen.getByRole("button", { name: "6" }))
+    await stepDensity(user)
     expect(localStorage.getItem(TRENDING_PER_ROW_STORAGE_KEY)).toBe("6")
   })
 
-  it("resets to page 1 when a control changes", async () => {
+  it("collapses the reveal back to the first batch when a control changes", async () => {
     vi.mocked(useTrending).mockReturnValue(queryResult(items(16)))
+    const scroll = installIntersectionObserver()
     const user = userEvent.setup()
     render(<Trending />)
-    await user.click(screen.getByRole("button", { name: "Next page" }))
-    expect(screen.getByText("Showing 16–16 of 16")).toBeInTheDocument()
+    scroll.scrollToSentinel()
+    expect(screen.getByTitle("Item 16")).toBeInTheDocument()
     await user.click(screen.getByRole("button", { name: "Shows" }))
-    expect(screen.getByText("Showing 1–15 of 16")).toBeInTheDocument()
+    // Back to the first three rows: the 16th item is hidden again.
+    expect(screen.queryByTitle("Item 16")).not.toBeInTheDocument()
+    expect(screen.getByTitle("Item 15")).toBeInTheDocument()
+  })
+
+  it("collapses the reveal when the hide-available toggle changes", async () => {
+    vi.mocked(useTrending).mockReturnValue(queryResult(items(16)))
+    const scroll = installIntersectionObserver()
+    const user = userEvent.setup()
+    render(<Trending />)
+    scroll.scrollToSentinel()
+    expect(screen.getByTitle("Item 16")).toBeInTheDocument()
+    // Every item here is unavailable, so the toggle filters nothing out — it
+    // isolates the reveal reset in changeHideAvailable.
+    await user.click(
+      screen.getByRole("switch", { name: "Hide available items" }),
+    )
+    expect(screen.queryByTitle("Item 16")).not.toBeInTheDocument()
+    expect(screen.getByTitle("Item 15")).toBeInTheDocument()
   })
 })

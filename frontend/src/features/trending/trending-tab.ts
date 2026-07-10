@@ -6,8 +6,12 @@ export const TRENDING_TAB_STORAGE_KEY = "aio-arr.trending.active-tab"
 /** localStorage key remembering the chosen posters-per-row density. */
 export const TRENDING_PER_ROW_STORAGE_KEY = "aio-arr.trending.per-row"
 
-/** Selectable posters-per-row densities (large screens); the first is the default. */
-export const VALID_PER_ROW_VALUES = [5, 6, 7] as const
+/**
+ * Selectable posters-per-row densities (large screens); the first is the
+ * default and the last is the slider's maximum. Contiguous with step 1, so the
+ * range doubles as the density slider's `min`/`max`.
+ */
+export const VALID_PER_ROW_VALUES = [5, 6, 7, 8, 9, 10, 11] as const
 
 export type PerRow = (typeof VALID_PER_ROW_VALUES)[number]
 

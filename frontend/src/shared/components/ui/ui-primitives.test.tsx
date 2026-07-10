@@ -3,10 +3,12 @@
  * and exported sub-components are not exercised by the page/component tests.
  */
 import { render, screen } from "@testing-library/react"
+import userEvent from "@testing-library/user-event"
 import { describe, expect, it } from "vitest"
 
 import { Badge } from "@/shared/components/ui/badge"
 import { Button } from "@/shared/components/ui/button"
+import { Slider } from "@/shared/components/ui/slider"
 import {
   Card,
   CardAction,
@@ -233,5 +235,27 @@ describe("Tooltip open content", () => {
     // Radix renders the open content into a portal (and a visually-hidden copy for
     // assistive tech), so assert at least one match rather than a unique node.
     expect((await screen.findAllByText("Tip text")).length).toBeGreaterThan(0)
+  })
+})
+
+describe("Slider", () => {
+  it("exposes a labelled thumb and steps with the keyboard", async () => {
+    const user = userEvent.setup()
+    render(
+      <Slider
+        aria-label="Density"
+        min={5}
+        max={11}
+        step={1}
+        defaultValue={[5]}
+      />,
+    )
+    // Radix places the `slider` role and its accessible name on the thumb; the
+    // wrapper must forward `aria-label` there for this query to resolve.
+    const thumb = screen.getByRole("slider", { name: "Density" })
+    expect(thumb).toHaveAttribute("aria-valuenow", "5")
+    thumb.focus()
+    await user.keyboard("{ArrowRight}")
+    expect(thumb).toHaveAttribute("aria-valuenow", "6")
   })
 })

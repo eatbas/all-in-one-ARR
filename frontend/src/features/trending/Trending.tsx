@@ -1,7 +1,8 @@
-import { useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import { LayoutGridIcon } from "lucide-react"
 
 import { Button } from "@/shared/components/ui/button"
+import { Slider } from "@/shared/components/ui/slider"
 import { Switch } from "@/shared/components/ui/switch"
 import {
   Tabs,
@@ -9,8 +10,6 @@ import {
   TabsList,
   TabsTrigger,
 } from "@/shared/components/ui/tabs"
-import { Pagination } from "@/shared/components/pagination/pagination"
-import { pageCount } from "@/shared/components/pagination/pagination-utils"
 import { formatRelativeTime } from "@/shared/lib/format"
 import {
   useServiceSettings,
@@ -35,8 +34,8 @@ import {
   type TrendingTab,
 } from "@/features/trending/trending-tab"
 
-/** Rows shown per page; the page size is this times the chosen per-row density. */
-const ROWS_PER_PAGE = 3
+/** Rows revealed per infinite-scroll batch — also the initial number of rows. */
+const ROWS_PER_BATCH = 3
 
 /**
  * Grid column classes per posters-per-row density. The selector varies only the
@@ -47,6 +46,10 @@ const GRID_COLS: Record<PerRow, string> = {
   5: "grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5",
   6: "grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6",
   7: "grid grid-cols-3 gap-4 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-7",
+  8: "grid grid-cols-3 gap-4 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8",
+  9: "grid grid-cols-3 gap-4 sm:grid-cols-5 md:grid-cols-6 lg:grid-cols-9",
+  10: "grid grid-cols-4 gap-4 sm:grid-cols-5 md:grid-cols-7 lg:grid-cols-10",
+  11: "grid grid-cols-4 gap-4 sm:grid-cols-5 md:grid-cols-7 lg:grid-cols-11",
 }
 
 /** Read the persisted per-row density, falling back to the first valid value. */
@@ -94,14 +97,19 @@ function Toggle<T extends string>({
 
 /**
  * Data toggles (media / category) on the left, display options (per-row
- * density / hide-available) on the right, then the grid and its pager.
+ * density / hide-available) on the right, then the grid. Results are revealed
+ * {@link ROWS_PER_BATCH} rows at a time via an infinite-scroll sentinel rather
+ * than paged.
  */
 function SourcePanel({ source }: { source: TrendingSource }) {
   const [media, setMedia] = useState<ItemType>("movie")
   const [category, setCategory] = useState<TrendingCategory>("trending")
   const [hideAvailable, setHideAvailable] = useState(false)
   const [perRow, setPerRow] = useState<PerRow>(readStoredPerRow)
-  const [page, setPage] = useState(1)
+  const [visibleCount, setVisibleCount] = useState(
+    () => ROWS_PER_BATCH * perRow,
+  )
+  const sentinelRef = useRef<HTMLDivElement | null>(null)
   const query: TrendingQuery = { source, media, category }
   const { data, isFetching, isLoading } = useTrending(query)
   const { data: services } = useServiceSettings()
@@ -110,23 +118,29 @@ function SourcePanel({ source }: { source: TrendingSource }) {
   const items = data ?? []
   const isInitialLoading = isLoading && data === undefined
 
-  // Any control that changes which/how-many items are shown resets to page 1; the
-  // page is then clamped at render so a shrinking list never strands an empty page.
+  // Collapse the infinite-scroll reveal to the first batch (three rows). Any
+  // control that changes which/how-many items are shown calls this, so a filter
+  // change never leaves a long list expanded.
+  function resetReveal() {
+    setVisibleCount(ROWS_PER_BATCH * perRow)
+  }
   function changeMedia(next: ItemType) {
     setMedia(next)
-    setPage(1)
+    resetReveal()
   }
   function changeCategory(next: TrendingCategory) {
     setCategory(next)
-    setPage(1)
+    resetReveal()
   }
   function changeHideAvailable(next: boolean) {
     setHideAvailable(next)
-    setPage(1)
+    resetReveal()
   }
   function changePerRow(next: PerRow) {
     setPerRow(next)
-    setPage(1)
+    // The batch follows the new density (not the current perRow), so the first
+    // batch stays three rows even as the row width changes.
+    setVisibleCount(ROWS_PER_BATCH * next)
     if (typeof localStorage !== "undefined") {
       localStorage.setItem(TRENDING_PER_ROW_STORAGE_KEY, String(next))
     }
@@ -138,12 +152,28 @@ function SourcePanel({ source }: { source: TrendingSource }) {
     ? items.filter((item) => !isAvailable(item))
     : items
 
-  const pageSize = perRow * ROWS_PER_PAGE
-  const currentPage = Math.min(page, pageCount(visible.length, pageSize))
-  const paged = visible.slice(
-    (currentPage - 1) * pageSize,
-    currentPage * pageSize,
-  )
+  const total = visible.length
+  const shown = visible.slice(0, visibleCount)
+  const hasMore = visibleCount < total
+
+  // Reveal the next batch when the sentinel scrolls into view. Re-subscribing on
+  // visibleCount means a sentinel still in view after a reveal (viewport taller
+  // than the batch) keeps loading until it is pushed off-screen or the list ends;
+  // Math.min and the hasMore guard bound the growth to the fetched list.
+  useEffect(() => {
+    if (visibleCount >= total) return
+    const node = sentinelRef.current
+    if (!node) return
+    const observer = new IntersectionObserver((entries) => {
+      if (entries[0]?.isIntersecting) {
+        setVisibleCount((count) =>
+          Math.min(count + ROWS_PER_BATCH * perRow, total),
+        )
+      }
+    })
+    observer.observe(node)
+    return () => observer.disconnect()
+  }, [perRow, total, visibleCount])
 
   return (
     <div className="flex flex-col gap-4">
@@ -175,22 +205,27 @@ function SourcePanel({ source }: { source: TrendingSource }) {
               Updated {formatRelativeTime(status.last_synced_at)}
             </span>
           ) : null}
-          {/* The density toggle lives with the display options (not the data
-              toggles) so its bare numbers cannot be misread as page numbers. */}
-          <div className="flex items-center gap-1.5" title="Posters per row">
+          {/* Posters-per-row density slider; the numeric read-out echoes the
+              current value so the bare grid icon is not the only cue. `min`/`max`
+              are the ends of VALID_PER_ROW_VALUES and `step={1}` walks it, which
+              assumes that allow-list stays contiguous (see trending-tab.ts). */}
+          <div className="flex items-center gap-2" title="Posters per row">
             <LayoutGridIcon
               aria-hidden="true"
               className="size-4 text-muted-foreground"
             />
-            <Toggle
-              ariaLabel="Posters per row"
-              value={String(perRow)}
-              onChange={(value) => changePerRow(Number(value) as PerRow)}
-              options={VALID_PER_ROW_VALUES.map((value) => ({
-                value: String(value),
-                label: String(value),
-              }))}
+            <Slider
+              aria-label="Posters per row"
+              className="w-28"
+              min={VALID_PER_ROW_VALUES[0]}
+              max={VALID_PER_ROW_VALUES[VALID_PER_ROW_VALUES.length - 1]}
+              step={1}
+              value={[perRow]}
+              onValueChange={([next]) => changePerRow(next as PerRow)}
             />
+            <span className="w-4 text-sm tabular-nums text-muted-foreground">
+              {perRow}
+            </span>
           </div>
           <div className="flex items-center gap-2">
             <Switch
@@ -220,7 +255,7 @@ function SourcePanel({ source }: { source: TrendingSource }) {
       ) : (
         <>
           <ul className={GRID_COLS[perRow]}>
-            {paged.map((item, index) => (
+            {shown.map((item, index) => (
               <TrendingCard
                 // The index keeps the key unique even if two items share a tmdb/title.
                 key={`${item.source}:${item.media_type}:${item.tmdb ?? item.title}:${index}`}
@@ -230,12 +265,14 @@ function SourcePanel({ source }: { source: TrendingSource }) {
               />
             ))}
           </ul>
-          <Pagination
-            page={currentPage}
-            pageSize={pageSize}
-            totalItems={visible.length}
-            onPageChange={setPage}
-          />
+          {hasMore ? (
+            <div
+              ref={sentinelRef}
+              aria-hidden="true"
+              className="h-8"
+              data-testid="trending-scroll-sentinel"
+            />
+          ) : null}
         </>
       )}
     </div>
