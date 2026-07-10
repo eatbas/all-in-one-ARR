@@ -9,7 +9,7 @@ mutates.
 from __future__ import annotations
 
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from core.bandwidth_metrics import update_bandwidth_metrics
 from core.logging import get_logger
@@ -31,8 +31,13 @@ async def gather_status(ctx: AppContext) -> dict:
     """
     from modules.bandwidth_controllarr import _STATE
 
-    qb_stats = await ctx.qbittorrent.get_stats()
-    sab_stats = await ctx.sabnzbd.get_stats()
+    qb_stats, qb_activity = await _status_snapshot(ctx.qbittorrent)
+    sab_stats, sab_activity = await _status_snapshot(ctx.sabnzbd)
+    recent_downloads = sorted(
+        qb_activity["recent"] + sab_activity["recent"],
+        key=_recent_sort_key,
+        reverse=True,
+    )
     return {
         "enabled": _STATE.enabled,
         "status": _STATE.status,
@@ -40,6 +45,11 @@ async def gather_status(ctx: AppContext) -> dict:
         "check_interval_seconds": ctx.settings_store.bandwidth_check_interval_seconds(),
         "qbittorrent": qb_stats,
         "sabnzbd": sab_stats,
+        "recent_downloads": recent_downloads,
+        "queue": {
+            "qbittorrent": qb_activity["queue"],
+            "sabnzbd": sab_activity["queue"],
+        },
     }
 
 
@@ -98,3 +108,31 @@ async def apply_control(ctx: AppContext) -> None:
     except Exception:
         update_bandwidth_metrics({"online": False}, {"online": False}, check_ok=False)
         raise
+
+
+async def _download_activity(client: Any) -> dict[str, list[dict[str, Any]]]:
+    """Return optional downloader activity for clients that expose it."""
+    get_download_activity = getattr(client, "get_download_activity", None)
+    if get_download_activity is None:
+        return {"queue": [], "recent": []}
+    return await get_download_activity()
+
+
+async def _status_snapshot(
+    client: Any,
+) -> tuple[dict[str, Any], dict[str, list[dict[str, Any]]]]:
+    """Return downloader stats and activity, preferring a shared fetch path."""
+    get_status_snapshot = getattr(client, "get_status_snapshot", None)
+    if get_status_snapshot is not None:
+        snapshot = await get_status_snapshot()
+        return snapshot["stats"], snapshot["activity"]
+    return await client.get_stats(), await _download_activity(client)
+
+
+def _recent_sort_key(item: dict[str, Any]) -> str:
+    """Sort recent downloads by completion time, then by add time."""
+    completed_at = item.get("completed_at")
+    if isinstance(completed_at, str):
+        return completed_at
+    added_at = item.get("added_at")
+    return added_at if isinstance(added_at, str) else ""

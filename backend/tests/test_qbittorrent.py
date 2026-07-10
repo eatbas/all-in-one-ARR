@@ -211,3 +211,199 @@ async def test_get_stats_non_dict_torrent_entry_returns_offline() -> None:
     respx.get(_TORRENTS).mock(return_value=httpx.Response(200, json=["not-a-dict"]))
     result = await make_client().get_stats()
     assert result["online"] is False
+
+
+@respx.mock
+async def test_get_status_snapshot_reuses_single_torrent_response() -> None:
+    transfer = respx.get(_TRANSFER).mock(
+        return_value=httpx.Response(200, json={"dl_info_speed": 1_500_000})
+    )
+    torrents = respx.get(_TORRENTS).mock(
+        return_value=httpx.Response(
+            200,
+            json=[
+                {
+                    "hash": "active",
+                    "name": "Active.Movie",
+                    "state": "downloading",
+                    "progress": 0.5,
+                    "size": 2 * 1024 * 1024,
+                    "dlspeed": 1_500_000,
+                    "eta": 600,
+                    "added_on": 1_704_067_200,
+                    "completion_on": 0,
+                },
+                {
+                    "hash": "done",
+                    "name": "Finished.Movie",
+                    "state": "pausedUP",
+                    "progress": 1,
+                    "size": 1024,
+                    "completion_on": 1_704_068_000,
+                },
+            ],
+        )
+    )
+
+    result = await make_client().get_status_snapshot()
+
+    assert len(transfer.calls) == 1
+    assert len(torrents.calls) == 1
+    assert result["stats"] == {
+        "online": True,
+        "speed_mbps": 1.5,
+        "active_downloads": 1,
+        "queue_size": 0,
+    }
+    assert [item["name"] for item in result["activity"]["queue"]] == ["Active.Movie"]
+    assert [item["name"] for item in result["activity"]["recent"]] == ["Finished.Movie"]
+
+
+@respx.mock
+async def test_get_download_activity_parses_queue_and_recent_items() -> None:
+    route = respx.get(_TORRENTS).mock(
+        return_value=httpx.Response(
+            200,
+            json=[
+                {
+                    "hash": "queued",
+                    "name": "Queued.Movie",
+                    "state": "queuedDL",
+                    "progress": 0.25,
+                    "size": 2 * 1024 * 1024,
+                    "dlspeed": 500_000,
+                    "eta": -1,
+                    "added_on": 1_704_067_200,
+                    "completion_on": 0,
+                    "content_path": "/downloads/Queued.Movie",
+                },
+                {
+                    "hash": "bool-completion",
+                    "name": "Bool.Completion",
+                    "state": "uploading",
+                    "completion_on": True,
+                },
+                {
+                    "hash": "done-new",
+                    "name": "Finished.New",
+                    "state": "uploading",
+                    "progress": 1,
+                    "size": 4 * 1024 * 1024,
+                    "dlspeed": 0,
+                    "eta": 8_640_000,
+                    "added_on": 1_704_060_000,
+                    "completion_on": 1_704_068_000,
+                    "save_path": "/downloads",
+                },
+                {
+                    "hash": "done-old",
+                    "name": "Finished.Old",
+                    "state": "pausedUP",
+                    "progress": 1,
+                    "size": 1024,
+                    "dlspeed": 0,
+                    "eta": 0,
+                    "added_on": 1_704_050_000,
+                    "completion_on": 1_704_055_000,
+                },
+            ],
+        )
+    )
+
+    result = await make_client().get_download_activity()
+
+    assert route.calls.last.request.headers["Authorization"] == f"Bearer {_KEY}"
+    assert result["queue"] == [
+        {
+            "client": "qbittorrent",
+            "id": "queued",
+            "name": "Queued.Movie",
+            "status": "queuedDL",
+            "progress": 25,
+            "size_bytes": 2 * 1024 * 1024,
+            "size_label": "2.0 MB",
+            "speed_mbps": 0.5,
+            "eta_seconds": None,
+            "added_at": "2024-01-01T00:00:00Z",
+            "completed_at": None,
+        }
+    ]
+    assert [item["name"] for item in result["recent"]] == [
+        "Finished.New",
+        "Finished.Old",
+    ]
+    assert result["recent"][0]["completed_at"] == "2024-01-01T00:13:20Z"
+    assert "content_path" not in result["queue"][0]
+    assert "save_path" not in result["recent"][0]
+
+
+@respx.mock
+async def test_get_download_activity_applies_limits_and_queue_order() -> None:
+    respx.get(_TORRENTS).mock(
+        return_value=httpx.Response(
+            200,
+            json=[
+                {
+                    "hash": "paused",
+                    "name": "Paused",
+                    "state": "pausedDL",
+                    "added_on": 1,
+                },
+                {
+                    "hash": "active",
+                    "name": "Active",
+                    "state": "downloading",
+                    "added_on": 2,
+                    "completion_on": 10,
+                },
+                {
+                    "hash": "queued",
+                    "name": "Queued",
+                    "state": "queuedDL",
+                    "added_on": 0,
+                    "completion_on": 20,
+                },
+            ],
+        )
+    )
+
+    result = await make_client().get_download_activity(recent_limit=1, queue_limit=2)
+
+    assert [item["name"] for item in result["queue"]] == ["Active", "Queued"]
+    assert [item["name"] for item in result["recent"]] == ["Queued"]
+
+
+@respx.mock
+async def test_get_download_activity_blank_key_returns_empty_without_request() -> None:
+    route = respx.get(_TORRENTS).mock(return_value=httpx.Response(200, json=[]))
+    result = await make_client(api_key=" ").get_download_activity()
+    assert result == {"queue": [], "recent": []}
+    assert not route.called
+
+
+@respx.mock
+async def test_get_download_activity_invalid_payload_returns_empty() -> None:
+    respx.get(_TORRENTS).mock(return_value=httpx.Response(200, json={"bad": True}))
+    result = await make_client().get_download_activity()
+    assert result == {"queue": [], "recent": []}
+
+
+@respx.mock
+async def test_get_download_activity_network_error_returns_empty() -> None:
+    respx.get(_TORRENTS).mock(side_effect=httpx.ConnectError("down"))
+    result = await make_client().get_download_activity()
+    assert result == {"queue": [], "recent": []}
+
+
+@respx.mock
+async def test_get_download_activity_non_200_returns_empty() -> None:
+    respx.get(_TORRENTS).mock(return_value=httpx.Response(500))
+    result = await make_client().get_download_activity()
+    assert result == {"queue": [], "recent": []}
+
+
+@respx.mock
+async def test_get_download_activity_invalid_json_returns_empty() -> None:
+    respx.get(_TORRENTS).mock(return_value=httpx.Response(200, text="not json"))
+    result = await make_client().get_download_activity()
+    assert result == {"queue": [], "recent": []}

@@ -93,6 +93,114 @@ async def test_gather_status_merges_state_and_stats(db) -> None:
     assert result["check_interval_seconds"] == 15
     assert result["qbittorrent"]["active_downloads"] == 2
     assert result["sabnzbd"]["paused"] is True
+    assert result["recent_downloads"] == []
+    assert result["queue"] == {"qbittorrent": [], "sabnzbd": []}
+
+
+async def test_gather_status_includes_download_activity_sorted_by_completion(
+    db,
+) -> None:
+    qbit = _make_qbit_stub(active_downloads=1)
+    qbit.get_download_activity = AsyncMock(
+        return_value={
+            "queue": [{"client": "qbittorrent", "name": "Queued torrent"}],
+            "recent": [
+                {
+                    "client": "qbittorrent",
+                    "name": "Older torrent",
+                    "completed_at": "2024-01-01T00:00:00Z",
+                },
+                {
+                    "client": "qbittorrent",
+                    "name": "Added-only torrent",
+                    "added_at": "2023-12-31T23:00:00Z",
+                },
+                {
+                    "client": "qbittorrent",
+                    "name": "No timestamp torrent",
+                },
+            ],
+        }
+    )
+    sab = _make_sab_stub(active_downloads=1)
+    sab.get_download_activity = AsyncMock(
+        return_value={
+            "queue": [{"client": "sabnzbd", "name": "Queued NZB"}],
+            "recent": [
+                {
+                    "client": "sabnzbd",
+                    "name": "Newer NZB",
+                    "completed_at": "2024-01-01T00:10:00Z",
+                }
+            ],
+        }
+    )
+    ctx = make_ctx(db=db, qbittorrent=qbit, sabnzbd=sab)
+
+    result = await gather_status(ctx)
+
+    assert [item["name"] for item in result["recent_downloads"]] == [
+        "Newer NZB",
+        "Older torrent",
+        "Added-only torrent",
+        "No timestamp torrent",
+    ]
+    assert result["queue"] == {
+        "qbittorrent": [{"client": "qbittorrent", "name": "Queued torrent"}],
+        "sabnzbd": [{"client": "sabnzbd", "name": "Queued NZB"}],
+    }
+
+
+async def test_gather_status_uses_combined_snapshots_when_available(db) -> None:
+    qbit = _make_qbit_stub(active_downloads=9)
+    qbit.get_status_snapshot = AsyncMock(
+        return_value={
+            "stats": {
+                "online": True,
+                "speed_mbps": 4.2,
+                "active_downloads": 1,
+                "queue_size": 1,
+            },
+            "activity": {
+                "queue": [{"client": "qbittorrent", "name": "Queued torrent"}],
+                "recent": [],
+            },
+        }
+    )
+    qbit.get_download_activity = AsyncMock()
+    sab = _make_sab_stub(active_downloads=9)
+    sab.get_status_snapshot = AsyncMock(
+        return_value={
+            "stats": {
+                "online": True,
+                "speed_mbps": 1.1,
+                "active_downloads": 1,
+                "queue_size": 1,
+                "paused": False,
+            },
+            "activity": {
+                "queue": [{"client": "sabnzbd", "name": "Queued NZB"}],
+                "recent": [],
+            },
+        }
+    )
+    sab.get_download_activity = AsyncMock()
+    ctx = make_ctx(db=db, qbittorrent=qbit, sabnzbd=sab)
+
+    result = await gather_status(ctx)
+
+    qbit.get_status_snapshot.assert_awaited_once()
+    sab.get_status_snapshot.assert_awaited_once()
+    qbit.get_stats.assert_not_awaited()
+    sab.get_stats.assert_not_awaited()
+    qbit.get_download_activity.assert_not_awaited()
+    sab.get_download_activity.assert_not_awaited()
+    assert result["qbittorrent"]["active_downloads"] == 1
+    assert result["sabnzbd"]["active_downloads"] == 1
+    assert result["queue"] == {
+        "qbittorrent": [{"client": "qbittorrent", "name": "Queued torrent"}],
+        "sabnzbd": [{"client": "sabnzbd", "name": "Queued NZB"}],
+    }
 
 
 async def test_apply_control_disabled_resumes_sab(db) -> None:

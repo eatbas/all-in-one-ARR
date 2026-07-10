@@ -68,6 +68,185 @@
         "title": "AddListRequest",
         "type": "object"
       },
+      "BandwidthClientStatsResponse": {
+        "description": "Aggregate statistics for one download client.",
+        "properties": {
+          "active_downloads": {
+            "minimum": 0.0,
+            "title": "Active Downloads",
+            "type": "integer"
+          },
+          "online": {
+            "title": "Online",
+            "type": "boolean"
+          },
+          "paused": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Paused"
+          },
+          "queue_size": {
+            "minimum": 0.0,
+            "title": "Queue Size",
+            "type": "integer"
+          },
+          "speed_mbps": {
+            "minimum": 0.0,
+            "title": "Speed Mbps",
+            "type": "number"
+          }
+        },
+        "required": [
+          "online",
+          "speed_mbps",
+          "active_downloads",
+          "queue_size"
+        ],
+        "title": "BandwidthClientStatsResponse",
+        "type": "object"
+      },
+      "BandwidthDownloadItem": {
+        "description": "Display-safe queue or recent-download item.",
+        "properties": {
+          "added_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Added At"
+          },
+          "client": {
+            "enum": [
+              "qbittorrent",
+              "sabnzbd"
+            ],
+            "title": "Client",
+            "type": "string"
+          },
+          "completed_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Completed At"
+          },
+          "eta_seconds": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Eta Seconds"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "progress": {
+            "anyOf": [
+              {
+                "maximum": 100.0,
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Progress"
+          },
+          "size_bytes": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Size Bytes"
+          },
+          "size_label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Size Label"
+          },
+          "speed_mbps": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Speed Mbps"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "client",
+          "id",
+          "name",
+          "status"
+        ],
+        "title": "BandwidthDownloadItem",
+        "type": "object"
+      },
+      "BandwidthQueueResponse": {
+        "description": "Current queue items grouped by downloader.",
+        "properties": {
+          "qbittorrent": {
+            "items": {
+              "$ref": "#/components/schemas/BandwidthDownloadItem"
+            },
+            "title": "Qbittorrent",
+            "type": "array"
+          },
+          "sabnzbd": {
+            "items": {
+              "$ref": "#/components/schemas/BandwidthDownloadItem"
+            },
+            "title": "Sabnzbd",
+            "type": "array"
+          }
+        },
+        "title": "BandwidthQueueResponse",
+        "type": "object"
+      },
       "BandwidthSettingsRequest": {
         "description": "Body for updating Bandwidth-Controllarr settings.\n\nAll fields are optional so the dashboard can change one setting at a time.",
         "properties": {
@@ -121,14 +300,20 @@
             "title": "Last Run At"
           },
           "qbittorrent": {
-            "additionalProperties": true,
-            "title": "Qbittorrent",
-            "type": "object"
+            "$ref": "#/components/schemas/BandwidthClientStatsResponse"
+          },
+          "queue": {
+            "$ref": "#/components/schemas/BandwidthQueueResponse"
+          },
+          "recent_downloads": {
+            "items": {
+              "$ref": "#/components/schemas/BandwidthDownloadItem"
+            },
+            "title": "Recent Downloads",
+            "type": "array"
           },
           "sabnzbd": {
-            "additionalProperties": true,
-            "title": "Sabnzbd",
-            "type": "object"
+            "$ref": "#/components/schemas/BandwidthClientStatsResponse"
           },
           "status": {
             "title": "Status",

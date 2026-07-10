@@ -3,9 +3,17 @@
 from __future__ import annotations
 
 import httpx
+import pytest
 import respx
 
-from core.clients.sabnzbd import SabnzbdClient
+from core.clients.sabnzbd import (
+    SabnzbdClient,
+    _format_bytes,
+    _percent_value,
+    _slot_size_bytes,
+    _timeleft_seconds,
+    _unix_to_iso,
+)
 
 _BASE = "http://sab:8080"
 _API = f"{_BASE}/api"
@@ -169,6 +177,70 @@ async def test_get_stats_no_unit_speed() -> None:
 
 
 @respx.mock
+async def test_get_status_snapshot_reuses_single_queue_response() -> None:
+    route = respx.get(_API).mock(
+        side_effect=[
+            httpx.Response(
+                200,
+                json={
+                    "queue": {
+                        "speed": "2 M",
+                        "paused": False,
+                        "slots": [
+                            {
+                                "nzo_id": "active",
+                                "filename": "Active.Show",
+                                "status": "Downloading",
+                                "percentage": "50",
+                            },
+                            {
+                                "nzo_id": "queued",
+                                "filename": "Queued.Show",
+                                "status": "Queued",
+                                "percentage": "0",
+                            },
+                        ],
+                    }
+                },
+            ),
+            httpx.Response(
+                200,
+                json={
+                    "history": {
+                        "slots": [
+                            {
+                                "nzo_id": "done",
+                                "name": "Finished.Show",
+                                "status": "Completed",
+                                "completed": 1_704_068_000,
+                            }
+                        ]
+                    }
+                },
+            ),
+        ]
+    )
+
+    result = await SabnzbdClient(base_url=_BASE, api_key="x").get_status_snapshot(
+        queue_limit=1
+    )
+
+    assert len(route.calls) == 2
+    assert route.calls[0].request.url.params["mode"] == "queue"
+    assert route.calls[0].request.url.params["limit"] == "0"
+    assert route.calls[1].request.url.params["mode"] == "history"
+    assert result["stats"] == {
+        "online": True,
+        "speed_mbps": 2.0,
+        "active_downloads": 1,
+        "queue_size": 2,
+        "paused": False,
+    }
+    assert [item["name"] for item in result["activity"]["queue"]] == ["Active.Show"]
+    assert [item["name"] for item in result["activity"]["recent"]] == ["Finished.Show"]
+
+
+@respx.mock
 async def test_get_stats_empty_speed() -> None:
     respx.get(_API).mock(
         return_value=httpx.Response(
@@ -322,6 +394,230 @@ async def test_get_stats_non_dict_slot_returns_offline() -> None:
     )
     result = await SabnzbdClient(base_url=_BASE, api_key="x").get_stats()
     assert result["online"] is False
+
+
+@respx.mock
+async def test_get_download_activity_parses_queue_and_history() -> None:
+    route = respx.get(_API).mock(
+        side_effect=[
+            httpx.Response(
+                200,
+                json={
+                    "queue": {
+                        "slots": [
+                            {
+                                "nzo_id": "SABnzbd_nzo_queue",
+                                "filename": "Queued.Show.S01E01",
+                                "status": "Downloading",
+                                "percentage": "42",
+                                "mb": "2048",
+                                "size": "2.0 GB",
+                                "timeleft": "0:10:30",
+                                "time_added": 1_704_067_200,
+                                "path": "/downloads/incomplete",
+                            }
+                        ]
+                    }
+                },
+            ),
+            httpx.Response(
+                200,
+                json={
+                    "history": {
+                        "slots": [
+                            {
+                                "nzo_id": "SABnzbd_nzo_done",
+                                "name": "Finished.Show.S01E01",
+                                "nzb_name": "Finished.Show.S01E01.nzb",
+                                "status": "Completed",
+                                "size": "1.5 GB",
+                                "bytes": 1_610_612_736,
+                                "time_added": 1_704_060_000,
+                                "completed": 1_704_068_000,
+                                "storage": "/downloads/complete",
+                                "url": "https://indexer.example/nzb",
+                            }
+                        ]
+                    }
+                },
+            ),
+        ]
+    )
+
+    result = await SabnzbdClient(base_url=_BASE, api_key="x").get_download_activity()
+
+    assert route.calls[0].request.url.params["mode"] == "queue"
+    assert route.calls[0].request.url.params["limit"] == "12"
+    assert route.calls[1].request.url.params["mode"] == "history"
+    assert route.calls[1].request.url.params["limit"] == "8"
+    assert result["queue"] == [
+        {
+            "client": "sabnzbd",
+            "id": "SABnzbd_nzo_queue",
+            "name": "Queued.Show.S01E01",
+            "status": "Downloading",
+            "progress": 42,
+            "size_bytes": 2 * 1024 * 1024 * 1024,
+            "size_label": "2.0 GB",
+            "speed_mbps": None,
+            "eta_seconds": 630,
+            "added_at": "2024-01-01T00:00:00Z",
+            "completed_at": None,
+        }
+    ]
+    assert result["recent"] == [
+        {
+            "client": "sabnzbd",
+            "id": "SABnzbd_nzo_done",
+            "name": "Finished.Show.S01E01",
+            "status": "Completed",
+            "progress": 100,
+            "size_bytes": 1_610_612_736,
+            "size_label": "1.5 GB",
+            "speed_mbps": None,
+            "eta_seconds": None,
+            "added_at": "2023-12-31T22:00:00Z",
+            "completed_at": "2024-01-01T00:13:20Z",
+        }
+    ]
+    assert "path" not in result["queue"][0]
+    assert "storage" not in result["recent"][0]
+    assert "url" not in result["recent"][0]
+
+
+@respx.mock
+async def test_get_download_activity_applies_limits() -> None:
+    route = respx.get(_API).mock(
+        side_effect=[
+            httpx.Response(
+                200,
+                json={
+                    "queue": {
+                        "slots": [
+                            {"nzo_id": "first", "filename": "First"},
+                            {"nzo_id": "second", "filename": "Second"},
+                        ]
+                    }
+                },
+            ),
+            httpx.Response(
+                200,
+                json={
+                    "history": {
+                        "slots": [
+                            {"nzo_id": "done-1", "name": "Done 1"},
+                            {"nzo_id": "done-2", "name": "Done 2"},
+                        ]
+                    }
+                },
+            ),
+        ]
+    )
+
+    result = await SabnzbdClient(base_url=_BASE, api_key="x").get_download_activity(
+        recent_limit=1, queue_limit=1
+    )
+
+    assert route.calls[0].request.url.params["limit"] == "1"
+    assert route.calls[1].request.url.params["limit"] == "1"
+    assert [item["name"] for item in result["queue"]] == ["First"]
+    assert [item["name"] for item in result["recent"]] == ["Done 1"]
+
+
+@respx.mock
+async def test_get_download_activity_invalid_queue_still_returns_history() -> None:
+    respx.get(_API).mock(
+        side_effect=[
+            httpx.Response(200, json={"queue": {"slots": "bad"}}),
+            httpx.Response(
+                200,
+                json={"history": {"slots": [{"nzo_id": "done", "name": "Done"}]}},
+            ),
+        ]
+    )
+
+    result = await SabnzbdClient(base_url=_BASE, api_key="x").get_download_activity()
+
+    assert result["queue"] == []
+    assert [item["name"] for item in result["recent"]] == ["Done"]
+
+
+@respx.mock
+async def test_get_download_activity_invalid_history_returns_empty_recent() -> None:
+    respx.get(_API).mock(
+        side_effect=[
+            httpx.Response(
+                200,
+                json={"queue": {"slots": [{"nzo_id": "queued", "filename": "Queued"}]}},
+            ),
+            httpx.Response(200, json={"history": {"slots": "bad"}}),
+        ]
+    )
+
+    result = await SabnzbdClient(base_url=_BASE, api_key="x").get_download_activity()
+
+    assert [item["name"] for item in result["queue"]] == ["Queued"]
+    assert result["recent"] == []
+
+
+@respx.mock
+@pytest.mark.parametrize(
+    "response",
+    [
+        httpx.ConnectError("down"),
+        httpx.Response(500),
+        httpx.Response(200, text="not json"),
+        httpx.Response(200, json=["bad"]),
+        httpx.Response(200, json={"queue": "bad"}),
+        httpx.Response(200, json={"queue": {"slots": ["bad"]}}),
+    ],
+)
+async def test_queue_slots_failure_branches_return_empty(response) -> None:
+    route = respx.get(_API)
+    if isinstance(response, Exception):
+        route.mock(side_effect=response)
+    else:
+        route.mock(return_value=response)
+    result = await SabnzbdClient(base_url=_BASE, api_key="x")._queue_slots(limit=1)
+    assert result == []
+
+
+@respx.mock
+@pytest.mark.parametrize(
+    "response",
+    [
+        httpx.ConnectError("down"),
+        httpx.Response(500),
+        httpx.Response(200, text="not json"),
+        httpx.Response(200, json=["bad"]),
+        httpx.Response(200, json={"history": "bad"}),
+        httpx.Response(200, json={"history": {"slots": ["bad"]}}),
+    ],
+)
+async def test_history_slots_failure_branches_return_empty(response) -> None:
+    route = respx.get(_API)
+    if isinstance(response, Exception):
+        route.mock(side_effect=response)
+    else:
+        route.mock(return_value=response)
+    result = await SabnzbdClient(base_url=_BASE, api_key="x")._history_slots(limit=1)
+    assert result == []
+
+
+def test_download_activity_helpers_handle_edge_cases() -> None:
+    assert _slot_size_bytes({"bytes": True, "downloaded": 42}) == 42
+    assert _slot_size_bytes({"bytes": -1, "mb": True, "mbleft": "bad"}) is None
+    assert _percent_value(True) is None
+    assert _percent_value(150) == 100
+    assert _percent_value(-5) == 0
+    assert _timeleft_seconds("") is None
+    assert _timeleft_seconds("bad") is None
+    assert _timeleft_seconds("1:bad") is None
+    assert _timeleft_seconds("05:06") == 306
+    assert _unix_to_iso(True) is None
+    assert _format_bytes(None) is None
+    assert _format_bytes(512) == "512 B"
+    assert _format_bytes(1024 * 1024 * 1024 * 1024) == "1.0 TB"
 
 
 @respx.mock

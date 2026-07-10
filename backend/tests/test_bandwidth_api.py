@@ -63,6 +63,39 @@ def bandwidth_app(db):
             "queue_size": 2,
             "paused": False,
         },
+        "recent_downloads": [
+            {
+                "client": "sabnzbd",
+                "id": "SABnzbd_nzo_1",
+                "name": "Finished.Show.S01E01",
+                "status": "Completed",
+                "progress": 100,
+                "size_bytes": 1024,
+                "size_label": "1.0 KB",
+                "speed_mbps": None,
+                "eta_seconds": None,
+                "added_at": "2024-01-01T00:00:00Z",
+                "completed_at": "2024-01-01T00:10:00Z",
+            }
+        ],
+        "queue": {
+            "qbittorrent": [
+                {
+                    "client": "qbittorrent",
+                    "id": "abc",
+                    "name": "Queued.Movie",
+                    "status": "queuedDL",
+                    "progress": 25,
+                    "size_bytes": 2048,
+                    "size_label": "2.0 KB",
+                    "speed_mbps": 0.5,
+                    "eta_seconds": 60,
+                    "added_at": "2024-01-01T00:00:00Z",
+                    "completed_at": None,
+                }
+            ],
+            "sabnzbd": [],
+        },
     }
     ctx.bandwidth_status = AsyncMock(return_value=default_payload)
     ctx.bandwidth_update_settings = AsyncMock(return_value=default_payload)
@@ -81,6 +114,9 @@ async def test_get_status_returns_bandwidth_payload(bandwidth_app) -> None:
     body = response.json()
     assert body["enabled"] is True
     assert body["status"] == "No active torrents"
+    assert body["recent_downloads"][0]["name"] == "Finished.Show.S01E01"
+    assert body["queue"]["qbittorrent"][0]["status"] == "queuedDL"
+    assert "content_path" not in body["queue"]["qbittorrent"][0]
     ctx.bandwidth_status.assert_awaited_once()
 
 

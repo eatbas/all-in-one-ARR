@@ -7,7 +7,7 @@ state live in ``modules/bandwidth_controllarr``.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Literal
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
@@ -28,6 +28,39 @@ class BandwidthSettingsRequest(BaseModel):
     check_interval_seconds: int | None = Field(default=None, ge=1)
 
 
+class BandwidthClientStatsResponse(BaseModel):
+    """Aggregate statistics for one download client."""
+
+    online: bool
+    speed_mbps: float = Field(ge=0)
+    active_downloads: int = Field(ge=0)
+    queue_size: int = Field(ge=0)
+    paused: bool | None = None
+
+
+class BandwidthDownloadItem(BaseModel):
+    """Display-safe queue or recent-download item."""
+
+    client: Literal["qbittorrent", "sabnzbd"]
+    id: str
+    name: str
+    status: str
+    progress: float | None = Field(default=None, ge=0, le=100)
+    size_bytes: int | None = Field(default=None, ge=0)
+    size_label: str | None = None
+    speed_mbps: float | None = Field(default=None, ge=0)
+    eta_seconds: int | None = Field(default=None, ge=0)
+    added_at: str | None = None
+    completed_at: str | None = None
+
+
+class BandwidthQueueResponse(BaseModel):
+    """Current queue items grouped by downloader."""
+
+    qbittorrent: list[BandwidthDownloadItem] = Field(default_factory=list)
+    sabnzbd: list[BandwidthDownloadItem] = Field(default_factory=list)
+
+
 class BandwidthStatusResponse(BaseModel):
     """Live Bandwidth-Controllarr status returned by both endpoints."""
 
@@ -35,8 +68,10 @@ class BandwidthStatusResponse(BaseModel):
     status: str
     last_run_at: str | None
     check_interval_seconds: int
-    qbittorrent: dict
-    sabnzbd: dict
+    qbittorrent: BandwidthClientStatsResponse
+    sabnzbd: BandwidthClientStatsResponse
+    recent_downloads: list[BandwidthDownloadItem] = Field(default_factory=list)
+    queue: BandwidthQueueResponse = Field(default_factory=BandwidthQueueResponse)
 
 
 def create_bandwidth_router(ctx: AppContext) -> APIRouter:
