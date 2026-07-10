@@ -10,20 +10,22 @@ const SIZE: Record<
 > = {
   // Label fonts are one step smaller than the pills they sit in, so the revealed
   // word stays compact against the poster.
+  // `shell` fixes only the height; the width hugs the content (see pillShell), so
+  // the icon slot keeps the square `size-*` that renders the resting circle.
   5: {
-    shell: "size-8",
+    shell: "h-8",
     iconSlot: "size-8",
     label: "text-[11px]",
     icon: "size-4",
   },
   6: {
-    shell: "size-7",
+    shell: "h-7",
     iconSlot: "size-7",
     label: "text-[10px]",
     icon: "size-3.5",
   },
   7: {
-    shell: "size-6",
+    shell: "h-6",
     iconSlot: "size-6",
     label: "text-[9px]",
     icon: "size-3",
@@ -31,25 +33,25 @@ const SIZE: Record<
   // Dense grids (8–11) keep shrinking so the overlay pills track the smaller
   // posters instead of clamping at the density-7 size.
   8: {
-    shell: "size-[22px]",
+    shell: "h-[22px]",
     iconSlot: "size-[22px]",
     label: "text-[9px]",
     icon: "size-3",
   },
   9: {
-    shell: "size-5",
+    shell: "h-5",
     iconSlot: "size-5",
     label: "text-[8px]",
     icon: "size-[11px]",
   },
   10: {
-    shell: "size-[18px]",
+    shell: "h-[18px]",
     iconSlot: "size-[18px]",
     label: "text-[8px]",
     icon: "size-2.5",
   },
   11: {
-    shell: "size-4",
+    shell: "h-4",
     iconSlot: "size-4",
     label: "text-[8px]",
     icon: "size-2",
@@ -57,13 +59,18 @@ const SIZE: Record<
 }
 
 /**
- * Shared container recipe. At rest every pill has a fixed square size and
- * therefore renders as a perfect circle; group-specific expansion classes let
- * the hovered or focused pill grow into a lozenge.
+ * Shared container recipe. The height is fixed per density while the width hugs
+ * the content (`w-fit`): at rest the label is collapsed to zero width, so the
+ * pill is a perfect circle; on hover it grows into a lozenge as the label
+ * reveals. The width is deliberately content-driven rather than animated — only
+ * colours transition here, and the smooth expand/collapse comes entirely from
+ * the label's own `max-width` transition. Transitioning the shell width instead
+ * would leave `justify-center` briefly re-centring the icon mid-animation, so
+ * the glyph would visibly jitter each time the pointer enters or leaves.
  */
 export function pillShell(density: PillDensity): string {
   return cn(
-    "inline-flex items-center justify-center overflow-hidden rounded-full shadow-sm transition-all outline-none motion-reduce:transition-none",
+    "inline-flex w-fit items-center justify-center overflow-hidden rounded-full shadow-sm transition-colors outline-none motion-reduce:transition-none",
     SIZE[density].shell,
   )
 }
@@ -81,13 +88,6 @@ export function pillIcon(density: PillDensity): string {
 /** Tailwind classes for the expanded label text of the given density. */
 export function pillLabelText(density: PillDensity): string {
   return SIZE[density].label
-}
-
-/** Width expansion for the shell itself while a label is revealed. */
-export const PILL_EXPAND: Record<PillGroup, string> = {
-  link: "hover:w-auto focus-visible:w-auto",
-  status: "hover:w-auto",
-  add: "hover:w-auto focus-visible:w-auto",
 }
 
 /**

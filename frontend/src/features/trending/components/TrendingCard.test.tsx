@@ -119,11 +119,10 @@ describe("TrendingCard", () => {
         <TrendingCard item={item({})} />
       </ul>,
     )
-    // The rating and its compact vote count sit in the top-left overlay wrapper,
-    // not the caption line below the poster.
+    // The rating sits in the top-left overlay wrapper, not the caption below.
     const rating = screen.getByText("7.8")
     expect(rating.closest(".absolute.left-1.top-1")).not.toBeNull()
-    expect(screen.getByText("(44K)")).toBeInTheDocument()
+    expect(screen.queryByText("(44K)")).not.toBeInTheDocument()
   })
 
   it("marks a Seer-available title with a green tick indicator", () => {
@@ -132,7 +131,10 @@ describe("TrendingCard", () => {
         <TrendingCard item={item({ seer_status: 5 })} />
       </ul>,
     )
-    expect(screen.getByLabelText("Available")).toHaveClass("bg-emerald-500")
+    expect(screen.getByLabelText("Available")).toHaveClass(
+      "ring-emerald-500",
+      "ring-inset",
+    )
   })
 
   it("marks a processing title with an amber status indicator", () => {
@@ -173,7 +175,10 @@ describe("TrendingCard", () => {
         />
       </ul>,
     )
-    expect(screen.getByLabelText("Available")).toHaveClass("bg-emerald-500")
+    expect(screen.getByLabelText("Available")).toHaveClass(
+      "ring-emerald-500",
+      "ring-inset",
+    )
   })
 
   it("marks an in-library-but-undownloaded item with an amber status indicator", () => {
@@ -190,12 +195,16 @@ describe("TrendingCard", () => {
   })
 
   it.each([
-    [5, "size-8", "size-4"],
-    [6, "size-7", "size-3.5"],
-    [7, "size-6", "size-3"],
+    [5, "h-8", "size-8", "size-4"],
+    [6, "h-7", "size-7", "size-3.5"],
+    [7, "h-6", "size-6", "size-3"],
+    [8, "h-[22px]", "size-[22px]", "size-3"],
+    [9, "h-5", "size-5", "size-[11px]"],
+    [10, "h-[18px]", "size-[18px]", "size-2.5"],
+    [11, "h-4", "size-4", "size-2"],
   ] as const)(
     "uses matching collapsed pill geometry at density %i",
-    (density, shellSize, iconSize) => {
+    (density, shellHeight, slotSize, iconSize) => {
       render(
         <ul>
           <TrendingCard item={item({ seer_status: 3 })} density={density} />
@@ -207,20 +216,24 @@ describe("TrendingCard", () => {
       const status = screen.getByLabelText("Processing")
 
       for (const control of [source, add, status]) {
-        expect(control).toHaveClass(shellSize)
+        // The shell fixes only the height and hugs its content; the icon slot
+        // keeps the square size that renders the resting circle.
+        expect(control).toHaveClass(shellHeight, "w-fit")
         expect(control).toHaveClass("rounded-full")
         expect(control.querySelector("[data-pill-icon-slot]")).toHaveClass(
-          shellSize,
+          slotSize,
         )
         expect(control.querySelector("svg")).toHaveClass(iconSize)
       }
 
       expect(source).not.toHaveClass("px-2")
       expect(source).not.toHaveClass("px-1.5")
+      // The add control is a Button; its `sm` variant's own height and padding
+      // (h-8, px-3) must be merged away by the pill shell so it stays a circle
+      // matching the link and status pills. Its height already tracks the shell
+      // height asserted above; here we confirm the variant padding is gone.
       expect(add).toHaveClass("px-0")
-      // The Button variant's fixed h-8 must be merged away so the add pill
-      // matches the link and status circles at every density.
-      expect(add).not.toHaveClass("h-8")
+      expect(add).not.toHaveClass("px-3")
     },
   )
 

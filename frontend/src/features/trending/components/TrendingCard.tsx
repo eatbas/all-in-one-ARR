@@ -9,7 +9,6 @@ import { AddToListControl } from "@/features/trending/components/AddToListContro
 import { ImdbRatingBadge } from "@/features/trending/components/ImdbRatingBadge"
 import { PillLabel } from "@/features/trending/components/poster-pill"
 import {
-  PILL_EXPAND,
   pillIcon,
   pillIconSlot,
   pillShell,
@@ -26,7 +25,7 @@ import { SOURCE_LABELS } from "@/features/trending/trending-tab"
  * One trending result: poster with corner overlays — a link to the source's
  * dedicated page (top-right), the add-to-list control (bottom-right), and the
  * availability indicator (bottom-left) — plus a hover overlay with the full
- * title and year, and the static title and IMDb rating lines beneath.
+ * title and year, and the static title and media details beneath.
  */
 export function TrendingCard({
   item,
@@ -100,7 +99,6 @@ export function TrendingCard({
             className={cn(
               pillShell(density),
               "group/link absolute right-1 top-1 bg-background/85 text-muted-foreground backdrop-blur-sm hover:z-10 hover:text-foreground focus-visible:z-10",
-              PILL_EXPAND.link,
             )}
           >
             <PillLabel group="link" side="left" density={density}>
@@ -115,7 +113,7 @@ export function TrendingCard({
             </span>
           </a>
         ) : null}
-        {/* IMDb rating sits top-left: star + rating over the compact vote count. */}
+        {/* IMDb star and rating sit in the poster's top-left corner. */}
         <div className="absolute left-1 top-1">
           <ImdbRatingBadge item={item} density={density} />
         </div>
@@ -130,7 +128,7 @@ export function TrendingCard({
       <span className="truncate text-xs font-medium" title={label}>
         {label}
       </span>
-      {/* Year · media type beneath the poster; the IMDb rating now sits on it. */}
+      {/* Year · media type beneath the poster. */}
       <div className="flex items-center gap-2 text-xs text-muted-foreground">
         <span className="truncate capitalize">
           {formatYear(item.year)} · {item.media_type}

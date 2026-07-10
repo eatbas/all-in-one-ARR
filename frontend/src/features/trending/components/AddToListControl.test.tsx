@@ -104,26 +104,29 @@ describe("AddToListControl", () => {
   })
 
   it.each([
-    [5, "size-8", "size-4", "group-hover/add:pl-2"],
-    [6, "size-7", "size-3.5", "group-hover/add:pl-1.5"],
-    [7, "size-6", "size-3", "group-hover/add:pl-1.5"],
+    [5, "h-8", "size-8", "size-4", "group-hover/add:pl-2"],
+    [6, "h-7", "size-7", "size-3.5", "group-hover/add:pl-1.5"],
+    [7, "h-6", "size-6", "size-3", "group-hover/add:pl-1.5"],
   ] as const)(
     "uses the shared pill shell at density %i",
-    (density, shellSize, iconSize, labelOuterPadding) => {
+    (density, shellHeight, slotSize, iconSize, labelOuterPadding) => {
       vi.mocked(useLists).mockReturnValue(
         queryResult([listSummary({ slug: "movies", name: "Movies" })]),
       )
       render(<AddToListControl item={ITEM} density={density} />)
 
       const button = screen.getByRole("button", { name: /add/i })
-      expect(button).toHaveClass(shellSize)
-      // The Button variant's fixed h-8 must be merged away so the add pill
-      // matches the link and status circles at every density.
-      expect(button).not.toHaveClass("h-8")
+      // The shell fixes only the height and hugs its content (w-fit); the icon
+      // slot keeps the square size that renders the resting circle.
+      expect(button).toHaveClass(shellHeight, "w-fit")
       expect(button).toHaveClass("rounded-full")
+      // The Button `sm` variant's own height and padding (h-8, px-3) must be
+      // merged away so the add pill matches the link and status circles; its
+      // height already tracks the shell height asserted above.
       expect(button).toHaveClass("px-0")
+      expect(button).not.toHaveClass("px-3")
       expect(button.querySelector("[data-pill-icon-slot]")).toHaveClass(
-        shellSize,
+        slotSize,
       )
       expect(button.querySelector("svg")).toHaveClass(iconSize)
       expect(screen.getByText("Add")).toHaveClass(labelOuterPadding)

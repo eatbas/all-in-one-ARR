@@ -30,12 +30,18 @@ describe("TrendingStatusIndicator", () => {
         item={item({ in_library: true, in_library_available: true })}
       />,
     )
-    expect(screen.getByLabelText("Available")).toHaveClass("bg-emerald-500")
+    expect(screen.getByLabelText("Available")).toHaveClass(
+      "ring-emerald-500",
+      "ring-inset",
+    )
   })
 
   it("shows a green tick labelled Available for a Seer-available title", () => {
     render(<TrendingStatusIndicator item={item({ seer_status: 5 })} />)
-    expect(screen.getByLabelText("Available")).toHaveClass("bg-emerald-500")
+    expect(screen.getByLabelText("Available")).toHaveClass(
+      "ring-emerald-500",
+      "ring-inset",
+    )
   })
 
   it.each([
@@ -67,25 +73,56 @@ describe("TrendingStatusIndicator", () => {
   })
 
   it.each([
-    [5, "size-8", "size-4"],
-    [6, "size-7", "size-3.5"],
-    [7, "size-6", "size-3"],
+    [5, "h-8", "size-8", "size-4"],
+    [6, "h-7", "size-7", "size-3.5"],
+    [7, "h-6", "size-6", "size-3"],
+    [8, "h-[22px]", "size-[22px]", "size-3"],
+    [9, "h-5", "size-5", "size-[11px]"],
+    [10, "h-[18px]", "size-[18px]", "size-2.5"],
+    [11, "h-4", "size-4", "size-2"],
   ] as const)(
-    "uses the shared shell and icon slot at density %i",
-    (density, shellSize, iconSize) => {
-      render(
+    "centres both status icons within the shared slot at density %i",
+    (density, shellHeight, slotSize, iconSize) => {
+      const { rerender } = render(
+        <TrendingStatusIndicator
+          item={item({ seer_status: 5 })}
+          density={density}
+        />,
+      )
+
+      const available = screen.getByLabelText("Available")
+      const availableSlot = available.querySelector("[data-pill-icon-slot]")
+      const availableIcon = available.querySelector("svg")
+      expect(available).toHaveClass(shellHeight, "rounded-full")
+      expect(availableSlot).toHaveClass(
+        slotSize,
+        "inline-grid",
+        "shrink-0",
+        "place-items-center",
+      )
+      // The check stroke sits high in its viewBox, so it takes a small downward
+      // nudge; the clock is already concentric and takes none.
+      expect(availableIcon).toHaveClass(iconSize, "block", "translate-y-[4%]")
+
+      rerender(
         <TrendingStatusIndicator
           item={item({ seer_status: 3 })}
           density={density}
         />,
       )
 
-      const indicator = screen.getByLabelText("Processing")
-      expect(indicator).toHaveClass(shellSize)
-      expect(indicator.querySelector("[data-pill-icon-slot]")).toHaveClass(
-        shellSize,
+      const pending = screen.getByLabelText("Processing")
+      const pendingSlot = pending.querySelector("[data-pill-icon-slot]")
+      const pendingIcon = pending.querySelector("svg")
+      expect(pending).toHaveClass(shellHeight, "rounded-full")
+      expect(pendingSlot).toHaveClass(
+        slotSize,
+        "inline-grid",
+        "shrink-0",
+        "place-items-center",
       )
-      expect(indicator.querySelector("svg")).toHaveClass(iconSize)
+      expect(pendingIcon).toHaveClass(iconSize, "block")
+      expect(pendingIcon).not.toHaveClass("translate-y-[4%]")
     },
   )
 

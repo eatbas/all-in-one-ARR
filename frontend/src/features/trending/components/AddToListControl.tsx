@@ -3,7 +3,6 @@ import { PlusIcon } from "lucide-react"
 import { Button } from "@/shared/components/ui/button"
 import { PillLabel } from "@/features/trending/components/poster-pill"
 import {
-  PILL_EXPAND,
   pillIcon,
   pillIconSlot,
   pillShell,
@@ -27,7 +26,6 @@ import type { TrendingItem } from "@/shared/lib/api"
 function addButtonClasses(density: PillDensity): string {
   return cn(
     pillShell(density),
-    PILL_EXPAND.add,
     "group/add gap-0 bg-black px-0 py-0 text-white hover:z-10 hover:bg-black/85 focus-visible:z-10 has-[>svg]:px-0",
   )
 }
