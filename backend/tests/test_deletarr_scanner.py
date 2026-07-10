@@ -89,6 +89,26 @@ def test_movie_scan_flags_sidecars_duplicates_and_misplaced_videos(tmp_path) -> 
     assert scanner.get_stats().total_folders == 1
 
 
+def test_movie_scan_keeps_manager_companion_metadata(tmp_path) -> None:
+    folder_name = "Man of War (2026) {tmdb-1705729}"
+    video_basename = (
+        "Man of War (2026) {tmdb-1705729} - [AMZN][WEBDL-1080p][EAC3 5.1][h264]-playWEB"
+    )
+    movie = tmp_path / folder_name
+    _write(movie / f"{video_basename}.mkv", b"video" * 10)
+    _write(movie / "folder.jpg")
+    _write(movie / f"{folder_name}.jpg")
+    _write(movie / f"{video_basename}.xml")
+    _write(movie / "unrelated.xml")
+
+    scanner = MediaScanner([str(tmp_path)])
+    scanner.scan("movies")
+    results = scanner.get_sorted_results()
+    reasons = {item.name: item.reason for item in results}
+
+    assert reasons == {"unrelated.xml": "Metadata file not matching video or folder"}
+
+
 def test_tv_scan_flags_non_episode_files_and_unexpected_folders(tmp_path) -> None:
     season = tmp_path / "Example Show" / "Season 01"
     _write(season / "Example Show S01E01.mkv", b"episode")
@@ -547,6 +567,29 @@ def test_scan_arr_flags_untracked_keeps_tracked_and_companions(tmp_path) -> None
     assert ".DS_Store" not in items
     assert items["Inception.nfo"].videos_in_folder[0].name == "Inception.mkv"
     assert all(item.origin == "arr" for item in scanner.get_sorted_results())
+
+
+def test_scan_arr_keeps_manager_companion_metadata(tmp_path) -> None:
+    root = tmp_path / "movies"
+    folder_name = "The Sheep Detectives (2026) {tmdb-1301421}"
+    video_basename = (
+        "The Sheep Detectives (2026) {tmdb-1301421} - "
+        "[AMZN][WEBDL-1080p][EAC3 Atmos 5.1][h264]-Kitsune"
+    )
+    movie = root / folder_name
+    video = _write(movie / f"{video_basename}.mkv", b"video" * 10)
+    _write(movie / "folder.jpg")
+    _write(movie / f"{folder_name}.jpg")
+    _write(movie / f"{video_basename}.xml")
+    _write(movie / "unrelated.xml")
+
+    manifest = _manifest("movies", root, {str(movie): [str(video)]})
+    scanner = MediaScanner([str(root)])
+    scanner.scan_arr(manifest)
+    items = {item.name: item for item in scanner.get_sorted_results()}
+
+    assert set(items) == {"unrelated.xml"}
+    assert items["unrelated.xml"].reason == "Metadata file not matching video or folder"
 
 
 def test_scan_arr_descends_into_category_folders(tmp_path) -> None:

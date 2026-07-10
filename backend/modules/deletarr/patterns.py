@@ -183,18 +183,29 @@ class JunkPatterns:
         """Return whether an image/xml sidecar is a recognised companion to keep.
 
         Comparisons are case-insensitive. A file is kept when its basename matches a
-        video basename or the folder name, is a well-known artwork name (e.g.
-        ``fanart``), a season-poster style name, or follows the ``<title>-<suffix>``
-        artwork convention (e.g. ``Movie-poster``).
+        video basename or the folder name, is a recognised metadata identity for
+        either, is a well-known artwork name (e.g. ``fanart``), a season-poster style
+        name, or follows the ``<title>-<suffix>`` artwork convention (e.g.
+        ``Movie-poster``). This is intentionally not a blanket image/XML exemption:
+        unrelated metadata remains reviewable.
         """
-        base = file_basename.lower()
-        videos = {video.lower() for video in video_basenames}
-        folder = folder_name.lower() if folder_name else None
+        base_keys = cls._metadata_identity_keys(file_basename)
+        videos = {
+            key
+            for video in video_basenames
+            for key in cls._metadata_identity_keys(video)
+        }
+        folder_keys = (
+            cls._metadata_identity_keys(folder_name)
+            if folder_name is not None
+            else set()
+        )
 
-        if base in videos:
+        if base_keys & videos:
             return True
-        if folder is not None and base == folder:
+        if base_keys & folder_keys:
             return True
+        base = file_basename.lower()
         if base in cls.ARTWORK_NAMES:
             return True
         if cls._SEASON_ARTWORK.match(base):
@@ -203,9 +214,33 @@ class JunkPatterns:
             marker = f"-{suffix}"
             if base.endswith(marker):
                 stem = base[: -len(marker)]
-                if stem in videos or (folder is not None and stem == folder):
+                stem_keys = cls._metadata_identity_keys(stem)
+                if stem_keys & videos or stem_keys & folder_keys:
                     return True
         return False
+
+    @classmethod
+    def _metadata_identity_keys(cls, name: str) -> set[str]:
+        """Return conservative comparison keys for companion metadata names."""
+        lowered = name.lower().strip()
+        keys = {lowered}
+
+        without_brace_tags = re.sub(r"\{[^}]*\}", "", lowered)
+        without_brace_tags = cls._collapse_metadata_separators(without_brace_tags)
+        if without_brace_tags:
+            keys.add(without_brace_tags)
+
+        return keys
+
+    @staticmethod
+    def _collapse_metadata_separators(name: str) -> str:
+        """Collapse separator noise left after removing media-manager tags."""
+        collapsed = re.sub(r"\s+", " ", name)
+        collapsed = re.sub(r"\s+([)\]])", r"\1", collapsed)
+        collapsed = re.sub(r"([(])\s+", r"\1", collapsed)
+        collapsed = re.sub(r"\s*-\s*", " - ", collapsed)
+        collapsed = re.sub(r"(?:\s+-\s+)+$", "", collapsed)
+        return collapsed.strip(" ._-")
 
     @classmethod
     def is_video_file(cls, filename: str) -> bool:

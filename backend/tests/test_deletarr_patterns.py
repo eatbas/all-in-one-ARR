@@ -50,6 +50,97 @@ def test_metadata_must_match_video_or_folder_name() -> None:
     }
 
 
+def test_movie_manager_companion_metadata_examples_are_kept() -> None:
+    examples = (
+        (
+            "Man of War (2026) {tmdb-1705729}",
+            "Man of War (2026) {tmdb-1705729} - "
+            "[AMZN][WEBDL-1080p][EAC3 5.1][h264]-playWEB",
+        ),
+        (
+            "The Sheep Detectives (2026) {tmdb-1301421}",
+            "The Sheep Detectives (2026) {tmdb-1301421} - "
+            "[AMZN][WEBDL-1080p][EAC3 Atmos 5.1][h264]-Kitsune",
+        ),
+        (
+            "Lee Cronins The Mummy (2026) {tmdb-1304313}",
+            "Lee Cronins The Mummy (2026) {tmdb-1304313} - "
+            "[WEBDL-1080p][EAC3 5.1][x264]-CYBER",
+        ),
+    )
+
+    for folder_name, video_basename in examples:
+        companion_names = (
+            "folder.jpg",
+            f"{folder_name}.jpg",
+            f"{video_basename}.xml",
+            f"{video_basename}.xml",
+        )
+        for companion_name in companion_names:
+            assert (
+                _is_junk(
+                    companion_name,
+                    video_basenames=[video_basename],
+                    folder_name=folder_name,
+                )
+                is False
+            ), companion_name
+
+        assert (
+            _is_junk(
+                "unrelated.xml",
+                video_basenames=[video_basename],
+                folder_name=folder_name,
+            )
+            is True
+        )
+        assert (
+            _is_junk(
+                "random.png",
+                video_basenames=[video_basename],
+                folder_name=folder_name,
+            )
+            is True
+        )
+
+
+def test_metadata_identity_matching_tolerates_removed_manager_tags() -> None:
+    assert (
+        _is_junk(
+            "Man of War (2026).jpg",
+            video_basenames=[
+                "Man of War (2026) {tmdb-1705729} - "
+                "[AMZN][WEBDL-1080p][EAC3 5.1][h264]-playWEB"
+            ],
+            folder_name="Man of War (2026) {tmdb-1705729}",
+        )
+        is False
+    )
+    assert (
+        _is_junk(
+            "Man of War (2026)-poster.jpg",
+            video_basenames=[],
+            folder_name="Man of War (2026) {tmdb-1705729}",
+        )
+        is False
+    )
+    assert (
+        _is_junk(
+            "Other Film (2026).jpg",
+            video_basenames=[
+                "Man of War (2026) {tmdb-1705729} - "
+                "[AMZN][WEBDL-1080p][EAC3 5.1][h264]-playWEB"
+            ],
+            folder_name="Man of War (2026) {tmdb-1705729}",
+        )
+        is True
+    )
+
+
+def test_metadata_identity_keys_drop_empty_normalised_key() -> None:
+    assert JunkPatterns._metadata_identity_keys("{tmdb-1705729}") == {"{tmdb-1705729}"}
+
+
 def test_movie_and_tv_name_helpers() -> None:
     assert JunkPatterns.is_junk_folder("Samples") is True
     assert (
