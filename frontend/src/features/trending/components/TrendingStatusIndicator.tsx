@@ -30,14 +30,21 @@ function pendingLabel(item: TrendingItem): string {
   return seerLabel ?? "In library, media not downloaded"
 }
 
+/** Visible pill words: the full word, or a prefix once the poster is dense. */
+const AVAILABLE_LABEL = { full: "Available", short: "Ava." }
+const PENDING_LABEL = { full: "Pending", short: "Pend." }
 /**
- * Concise visible label for the pending pill. Falls back to "In progress" so
- * the expanded lozenge stays short and never overruns the card centre.
+ * Density at/above which the status label switches to its prefix form, so the
+ * expanded lozenge does not exceed roughly 60% of the (now narrow) poster width.
  */
-function shortPendingLabel(item: TrendingItem): string {
-  const seerLabel =
-    item.seer_status !== null ? SEER_STATUS_LABELS[item.seer_status] : undefined
-  return seerLabel ?? "In progress"
+const ABBREVIATE_AT_DENSITY: PillDensity = 9
+
+/** Pick the full word or its prefix for the given density. */
+function statusLabel(
+  text: { full: string; short: string },
+  density: PillDensity,
+): string {
+  return density >= ABBREVIATE_AT_DENSITY ? text.short : text.full
 }
 
 type StatusIcon = typeof CheckIcon
@@ -107,11 +114,10 @@ export function TrendingStatusIndicator({
   density?: PillDensity
 }) {
   if (isAvailable(item)) {
-    const detail = item.in_library_available ? "In library" : "Available"
     return (
       <StatusPill
-        detail={detail}
-        label={detail}
+        detail="Available"
+        label={statusLabel(AVAILABLE_LABEL, density)}
         density={density}
         tone="available"
         Icon={CheckIcon}
@@ -119,11 +125,10 @@ export function TrendingStatusIndicator({
     )
   }
   if (isPending(item)) {
-    const detail = pendingLabel(item)
     return (
       <StatusPill
-        detail={detail}
-        label={shortPendingLabel(item)}
+        detail={pendingLabel(item)}
+        label={statusLabel(PENDING_LABEL, density)}
         density={density}
         tone="pending"
         Icon={ClockIcon}

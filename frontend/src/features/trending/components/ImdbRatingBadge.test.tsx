@@ -48,10 +48,16 @@ describe("ImdbRatingBadge", () => {
     expect(screen.getByText("(1.2M)")).toBeInTheDocument()
   })
 
-  it("formats thousands-scale votes", () => {
+  it("compresses 100k+ votes to one-decimal millions", () => {
+    setRating({ imdb_rating: 7.5, imdb_votes: 123_200 })
+    render(<ImdbRatingBadge item={ITEM} />)
+    expect(screen.getByText("(0.1M)")).toBeInTheDocument()
+  })
+
+  it("shows sub-10k votes as the raw number", () => {
     setRating({ imdb_rating: 7, imdb_votes: 4200 })
     render(<ImdbRatingBadge item={ITEM} />)
-    expect(screen.getByText("(4.2k)")).toBeInTheDocument()
+    expect(screen.getByText("(4200)")).toBeInTheDocument()
   })
 
   it("formats small vote counts", () => {

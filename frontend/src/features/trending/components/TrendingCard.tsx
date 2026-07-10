@@ -1,5 +1,5 @@
 import { useState } from "react"
-import { ExternalLinkIcon, FilmIcon } from "lucide-react"
+import { FilmIcon, LinkIcon } from "lucide-react"
 
 import { posterUrl, trendingSourceUrl } from "@/shared/lib/api"
 import type { TrendingItem } from "@/shared/lib/api"
@@ -111,10 +111,14 @@ export function TrendingCard({
               className={pillIconSlot(density)}
               data-pill-icon-slot
             >
-              <ExternalLinkIcon className={pillIcon(density)} />
+              <LinkIcon className={pillIcon(density)} />
             </span>
           </a>
         ) : null}
+        {/* IMDb rating sits top-left: star + rating over the compact vote count. */}
+        <div className="absolute left-1 top-1">
+          <ImdbRatingBadge item={item} density={density} />
+        </div>
         {/* The availability indicator sits bottom-left, clear of the add control. */}
         <div className="absolute left-1 bottom-1">
           <TrendingStatusIndicator item={item} density={density} />
@@ -126,12 +130,11 @@ export function TrendingCard({
       <span className="truncate text-xs font-medium" title={label}>
         {label}
       </span>
-      {/* Year · type on the left, IMDb rating on the right of the same line. */}
-      <div className="flex items-center justify-between gap-2 text-xs text-muted-foreground">
+      {/* Year · media type beneath the poster; the IMDb rating now sits on it. */}
+      <div className="flex items-center gap-2 text-xs text-muted-foreground">
         <span className="truncate capitalize">
           {formatYear(item.year)} · {item.media_type}
         </span>
-        <ImdbRatingBadge item={item} />
       </div>
     </li>
   )

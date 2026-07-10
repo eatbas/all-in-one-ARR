@@ -24,13 +24,13 @@ function item(over: Partial<TrendingItem>): TrendingItem {
 }
 
 describe("TrendingStatusIndicator", () => {
-  it("shows a green tick labelled In library for a downloaded title", () => {
+  it("shows a green tick labelled Available for a downloaded title", () => {
     render(
       <TrendingStatusIndicator
         item={item({ in_library: true, in_library_available: true })}
       />,
     )
-    expect(screen.getByLabelText("In library")).toHaveClass("bg-emerald-500")
+    expect(screen.getByLabelText("Available")).toHaveClass("bg-emerald-500")
   })
 
   it("shows a green tick labelled Available for a Seer-available title", () => {
@@ -44,12 +44,14 @@ describe("TrendingStatusIndicator", () => {
     [4, "Partial"],
   ])("shows an amber clock circle for Seer status %i (%s)", (status, label) => {
     render(<TrendingStatusIndicator item={item({ seer_status: status })} />)
+    // The precise Seer status stays in the aria-label/title; the visible chip
+    // reads "Pending" for every in-progress state.
     const indicator = screen.getByLabelText(label)
     expect(indicator).toHaveClass("ring-amber-500")
     expect(indicator).toHaveClass("ring-inset")
     expect(indicator.querySelector("[data-pill-icon-slot]")).toBeInTheDocument()
     expect(indicator.querySelector("svg")).toBeInTheDocument()
-    expect(screen.getByText(label)).toBeInTheDocument()
+    expect(screen.getByText("Pending")).toBeInTheDocument()
   })
 
   it("shows an amber clock circle for a library record without the media", () => {
@@ -61,7 +63,7 @@ describe("TrendingStatusIndicator", () => {
     expect(
       screen.getByLabelText("In library, media not downloaded"),
     ).toHaveClass("ring-inset")
-    expect(screen.getByText("In progress")).toBeInTheDocument()
+    expect(screen.getByText("Pending")).toBeInTheDocument()
   })
 
   it.each([
@@ -101,11 +103,31 @@ describe("TrendingStatusIndicator", () => {
         />,
       )
 
-      const label = screen.getByText("Processing")
+      const label = screen.getByText("Pending")
       expect(label).toHaveClass(revealCap)
       expect(label).toHaveClass(outerPadding)
     },
   )
+
+  it("uses full words at low density and prefixes on dense grids", () => {
+    const { rerender } = render(
+      <TrendingStatusIndicator item={item({ seer_status: 5 })} density={5} />,
+    )
+    expect(screen.getByText("Available")).toBeInTheDocument()
+    rerender(
+      <TrendingStatusIndicator item={item({ seer_status: 5 })} density={9} />,
+    )
+    expect(screen.getByText("Ava.")).toBeInTheDocument()
+
+    rerender(
+      <TrendingStatusIndicator item={item({ seer_status: 3 })} density={5} />,
+    )
+    expect(screen.getByText("Pending")).toBeInTheDocument()
+    rerender(
+      <TrendingStatusIndicator item={item({ seer_status: 3 })} density={11} />,
+    )
+    expect(screen.getByText("Pend.")).toBeInTheDocument()
+  })
 
   it("prefers the Seer detail when both pending signals are present", () => {
     render(

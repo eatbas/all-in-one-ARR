@@ -110,6 +110,22 @@ describe("TrendingCard", () => {
     expect(screen.getByText("TMDB")).toBeInTheDocument()
   })
 
+  it("places the IMDb rating pill in the poster's top-left corner", () => {
+    vi.mocked(useTrendingRating).mockReturnValue(
+      queryResult<TrendingRating>({ imdb_rating: 7.8, imdb_votes: 44_000 }),
+    )
+    render(
+      <ul>
+        <TrendingCard item={item({})} />
+      </ul>,
+    )
+    // The rating and its compact vote count sit in the top-left overlay wrapper,
+    // not the caption line below the poster.
+    const rating = screen.getByText("7.8")
+    expect(rating.closest(".absolute.left-1.top-1")).not.toBeNull()
+    expect(screen.getByText("(44K)")).toBeInTheDocument()
+  })
+
   it("marks a Seer-available title with a green tick indicator", () => {
     render(
       <ul>
@@ -157,7 +173,7 @@ describe("TrendingCard", () => {
         />
       </ul>,
     )
-    expect(screen.getByLabelText("In library")).toHaveClass("bg-emerald-500")
+    expect(screen.getByLabelText("Available")).toHaveClass("bg-emerald-500")
   })
 
   it("marks an in-library-but-undownloaded item with an amber status indicator", () => {
@@ -217,7 +233,7 @@ describe("TrendingCard", () => {
       </ul>,
     )
 
-    for (const label of ["Trakt", "Processing", "Add"]) {
+    for (const label of ["Trakt", "Pending", "Add"]) {
       expect(screen.getByText(label)).toHaveClass("overflow-hidden")
       expect(screen.getByText(label)).toHaveClass("text-ellipsis")
       expect(screen.getByText(label)).toHaveClass("whitespace-nowrap")
@@ -237,9 +253,7 @@ describe("TrendingCard", () => {
     // the status pill; the expanded padding always lands on the outer edge.
     expect(screen.getByText("Trakt")).toHaveClass("group-hover/link:pl-2")
     expect(screen.getByText("Add")).toHaveClass("group-hover/add:pl-2")
-    expect(screen.getByText("Processing")).toHaveClass(
-      "group-hover/status:pr-2",
-    )
+    expect(screen.getByText("Pending")).toHaveClass("group-hover/status:pr-2")
   })
 
   it("omits the status indicator when the item is not in the library", () => {
@@ -248,7 +262,7 @@ describe("TrendingCard", () => {
         <TrendingCard item={item({})} />
       </ul>,
     )
-    expect(screen.queryByLabelText("In library")).not.toBeInTheDocument()
+    expect(screen.queryByLabelText("Available")).not.toBeInTheDocument()
   })
 
   it("renders a hover overlay with the full title and year", () => {

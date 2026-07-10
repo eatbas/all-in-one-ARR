@@ -71,18 +71,44 @@ export function formatRelativeTime(
   return `${weeks} ${weeks === 1 ? "week" : "weeks"} ago`
 }
 
-/** Format a byte count as a human-readable size (B, KB, or MB). */
+/** Format a byte count as a human-readable size from B through TB. */
 export function formatBytes(bytes: number): string {
   if (bytes === 0) {
     return "0 B"
   }
-  if (bytes < 1024) {
-    return `${bytes} B`
+  const units = ["B", "KB", "MB", "GB", "TB"] as const
+  let value = bytes
+  let unitIndex = 0
+  while (value >= 1024 && unitIndex < units.length - 1) {
+    value /= 1024
+    unitIndex += 1
   }
-  if (bytes < 1024 * 1024) {
-    return `${(bytes / 1024).toFixed(1)} KB`
+  if (unitIndex === 0) {
+    return `${value} ${units[unitIndex]}`
   }
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
+  return `${value.toFixed(1)} ${units[unitIndex]}`
+}
+
+/**
+ * Compact vote/count string, at most four characters (for counts below one
+ * billion) and never a decimal-K: the raw number below 10,000, a floored integer
+ * "…K" up to 100,000, a one-decimal "…M" up to ~9.95M, then a rounded integer
+ * "…M". The ~9.95M cut-over keeps a value that would round to "10.0M" as the
+ * shorter "10M". e.g. 999→"999", 9999→"9999", 44000→"44K", 123200→"0.1M",
+ * 1234567→"1.2M", 9999999→"10M".
+ */
+export function formatCompactVotes(votes: number): string {
+  if (votes < 10_000) {
+    return String(votes)
+  }
+  if (votes < 100_000) {
+    return `${Math.floor(votes / 1_000)}K`
+  }
+  // Below the point where one decimal would round up to "10.0M" (5 chars).
+  if (votes < 9_950_000) {
+    return `${(votes / 1_000_000).toFixed(1)}M`
+  }
+  return `${Math.round(votes / 1_000_000)}M`
 }
 
 /**

@@ -1,25 +1,58 @@
 import { cn } from "@/shared/lib/utils"
 
 export type PillGroup = "link" | "status" | "add"
-export type PillDensity = 5 | 6 | 7
+export type PillDensity = 5 | 6 | 7 | 8 | 9 | 10 | 11
 export type PillLabelSide = "left" | "right"
 
 const SIZE: Record<
   PillDensity,
   { shell: string; iconSlot: string; label: string; icon: string }
 > = {
-  5: { shell: "size-8", iconSlot: "size-8", label: "text-xs", icon: "size-4" },
+  // Label fonts are one step smaller than the pills they sit in, so the revealed
+  // word stays compact against the poster.
+  5: {
+    shell: "size-8",
+    iconSlot: "size-8",
+    label: "text-[11px]",
+    icon: "size-4",
+  },
   6: {
     shell: "size-7",
     iconSlot: "size-7",
-    label: "text-[11px]",
+    label: "text-[10px]",
     icon: "size-3.5",
   },
   7: {
     shell: "size-6",
     iconSlot: "size-6",
-    label: "text-[10px]",
+    label: "text-[9px]",
     icon: "size-3",
+  },
+  // Dense grids (8–11) keep shrinking so the overlay pills track the smaller
+  // posters instead of clamping at the density-7 size.
+  8: {
+    shell: "size-[22px]",
+    iconSlot: "size-[22px]",
+    label: "text-[9px]",
+    icon: "size-3",
+  },
+  9: {
+    shell: "size-5",
+    iconSlot: "size-5",
+    label: "text-[8px]",
+    icon: "size-[11px]",
+  },
+  10: {
+    shell: "size-[18px]",
+    iconSlot: "size-[18px]",
+    label: "text-[8px]",
+    icon: "size-2.5",
+  },
+  11: {
+    shell: "size-4",
+    iconSlot: "size-4",
+    label: "text-[8px]",
+    icon: "size-2",
   },
 }
 
@@ -57,22 +90,35 @@ export const PILL_EXPAND: Record<PillGroup, string> = {
   add: "hover:w-auto focus-visible:w-auto",
 }
 
+/**
+ * Extend a 5/6/7 density map to the full 5–11 range: the dense grids (8–11)
+ * reuse the density-7 hover-reveal treatment. Only the resting pill size shrinks
+ * further (via {@link SIZE}); the expanded lozenge needs no extra tuning because
+ * the smaller-font labels fit within the same caps. Keeping one literal per
+ * value also keeps the Tailwind class list free of duplicates.
+ */
+function withDenseFallback<T>(
+  base: Record<5 | 6 | 7, T>,
+): Record<PillDensity, T> {
+  return { ...base, 8: base[7], 9: base[7], 10: base[7], 11: base[7] }
+}
+
 const REVEAL_WIDTH: Record<PillGroup, Record<PillDensity, string>> = {
-  link: {
+  link: withDenseFallback({
     5: "group-hover/link:max-w-20 group-focus-visible/link:max-w-20",
     6: "group-hover/link:max-w-16 group-focus-visible/link:max-w-16",
     7: "group-hover/link:max-w-14 group-focus-visible/link:max-w-14",
-  },
-  status: {
+  }),
+  status: withDenseFallback({
     5: "group-hover/status:max-w-24",
     6: "group-hover/status:max-w-20",
     7: "group-hover/status:max-w-20",
-  },
-  add: {
+  }),
+  add: withDenseFallback({
     5: "group-hover/add:max-w-10 group-focus-visible/add:max-w-10",
     6: "group-hover/add:max-w-9 group-focus-visible/add:max-w-9",
     7: "group-hover/add:max-w-8 group-focus-visible/add:max-w-8",
-  },
+  }),
 }
 
 const REVEAL_OPACITY: Record<PillGroup, string> = {
@@ -92,7 +138,7 @@ const REVEAL_PADDING: Record<
   PillGroup,
   Record<PillDensity, Record<PillLabelSide, string>>
 > = {
-  link: {
+  link: withDenseFallback({
     5: {
       left: "group-hover/link:pl-2 group-focus-visible/link:pl-2",
       right: "group-hover/link:pr-2 group-focus-visible/link:pr-2",
@@ -105,8 +151,8 @@ const REVEAL_PADDING: Record<
       left: "group-hover/link:pl-1.5 group-focus-visible/link:pl-1.5",
       right: "group-hover/link:pr-1.5 group-focus-visible/link:pr-1.5",
     },
-  },
-  status: {
+  }),
+  status: withDenseFallback({
     5: { left: "group-hover/status:pl-2", right: "group-hover/status:pr-2" },
     6: {
       left: "group-hover/status:pl-1.5",
@@ -116,8 +162,8 @@ const REVEAL_PADDING: Record<
       left: "group-hover/status:pl-1.5",
       right: "group-hover/status:pr-1.5",
     },
-  },
-  add: {
+  }),
+  add: withDenseFallback({
     5: {
       left: "group-hover/add:pl-2 group-focus-visible/add:pl-2",
       right: "group-hover/add:pr-2 group-focus-visible/add:pr-2",
@@ -130,7 +176,7 @@ const REVEAL_PADDING: Record<
       left: "group-hover/add:pl-1.5 group-focus-visible/add:pl-1.5",
       right: "group-hover/add:pr-1.5 group-focus-visible/add:pr-1.5",
     },
-  },
+  }),
 }
 
 /**
