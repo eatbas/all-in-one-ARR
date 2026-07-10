@@ -6,8 +6,9 @@
 # version from the requested bump level, updates the in-repo version manifests,
 # commits them, creates an annotated `vX.Y.Z` tag, and pushes the branch and tag
 # to `origin`. GitHub Actions (.github/workflows/docker-publish.yml) then publishes
-# the Docker image: the tag push builds `erenatbas/aio-arr:X.Y.Z` (+ `:X.Y`) and
-# the branch push refreshes `:latest`.
+# the Docker image and, after the tag build succeeds, creates the GitHub Release.
+# The tag push builds `erenatbas/aio-arr:X.Y.Z` (+ `:X.Y`) and the branch push
+# refreshes `:latest`.
 #
 # Usage:
 #   scripts/release.sh [major|minor|patch] [flags]
@@ -133,6 +134,7 @@ Dry run — no changes made. A real release would:
   3. git tag -a ${new_tag} -m "Release ${new_tag}"
   4. git push --follow-tags ${REMOTE} ${RELEASE_BRANCH}
      -> CI publishes docker.io/erenatbas/aio-arr:${new_version} (+ :latest from ${RELEASE_BRANCH})
+     -> CI creates the GitHub Release after the tag build succeeds
 EOF
   exit 0
 fi
@@ -195,7 +197,8 @@ git push --follow-tags "$REMOTE" "$RELEASE_BRANCH"
 
 cat <<EOF
 
-Released ${new_tag}.
+Pushed ${new_tag}. CI will publish the image and GitHub Release after its checks pass.
   Actions: https://github.com/eatbas/all-in-one-ARR/actions
+  Release: https://github.com/eatbas/all-in-one-ARR/releases/tag/${new_tag}
   Image:   docker.io/erenatbas/aio-arr:${new_version}  (and :latest)
 EOF

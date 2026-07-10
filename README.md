@@ -261,7 +261,8 @@ version from the latest `vX.Y.Z` git tag, bumps it, updates the version in
 `backend/pyproject.toml` and `frontend/package.json` (the sidebar footer shows the
 latter), commits, creates an annotated `vX.Y.Z` tag, and pushes `main` plus the
 tag. The tag push publishes `erenatbas/aio-arr:X.Y.Z` (+ `X.Y`) and the `main`
-push refreshes `:latest`.
+push refreshes `:latest`. After the tagged image is published successfully, the
+workflow also creates a GitHub Release with automatically generated release notes.
 
 ```bash
 bash scripts/release.sh          # patch: 1.6.0 -> 1.6.1 (default)
@@ -277,6 +278,12 @@ Prettier, tests, and build) — and prompts before pushing (`-y` to skip).
 the pushed tag and branch, so a failing check still blocks the Docker publish. Only
 `vX.Y.Z` tags trigger the publish, so the `v` prefix is required; a mistaken tag can
 be removed with `git tag -d vX.Y.Z && git push origin :refs/tags/vX.Y.Z`.
+
+To backfill a GitHub Release for an existing tag, run the **Build and publish
+Docker image** workflow manually in GitHub Actions and enter the tag (for example,
+`v1.6.3`) in the optional `release_tag` input. The workflow verifies that the tag
+exists before creating the release, skips the checks and image build during a
+backfill, and does nothing if that release already exists.
 
 ### One-time Trakt device authorisation
 
