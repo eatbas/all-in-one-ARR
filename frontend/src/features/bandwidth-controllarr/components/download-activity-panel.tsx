@@ -55,11 +55,7 @@ export function DownloadActivityPanel({
           {recentDownloads.length === 0 ? (
             <p className="text-sm text-muted-foreground">No recent downloads</p>
           ) : (
-            <DownloadTable
-              items={recentDownloads}
-              timestampLabel="Finished"
-              emptyText="No recent downloads"
-            />
+            <DownloadTable items={recentDownloads} timestampLabel="Finished" />
           )}
         </CardContent>
       </Card>
@@ -125,11 +121,7 @@ function QueueGroup({ label, items }: QueueGroupProps) {
       {items.length === 0 ? (
         <p className="text-sm text-muted-foreground">No queued downloads</p>
       ) : (
-        <DownloadTable
-          items={items}
-          timestampLabel="Added"
-          emptyText="Queue is empty"
-        />
+        <DownloadTable items={items} timestampLabel="Added" />
       )}
     </section>
   )
@@ -138,18 +130,9 @@ function QueueGroup({ label, items }: QueueGroupProps) {
 interface DownloadTableProps {
   items: BandwidthDownloadItem[]
   timestampLabel: string
-  emptyText: string
 }
 
-function DownloadTable({
-  items,
-  timestampLabel,
-  emptyText,
-}: DownloadTableProps) {
-  if (items.length === 0) {
-    return <p className="text-sm text-muted-foreground">{emptyText}</p>
-  }
-
+function DownloadTable({ items, timestampLabel }: DownloadTableProps) {
   return (
     <Table>
       <TableHeader>

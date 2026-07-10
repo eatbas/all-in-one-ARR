@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react"
+import { render, screen, within } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { describe, expect, it } from "vitest"
 
@@ -63,6 +63,54 @@ describe("DownloadActivityPanel", () => {
     expect(screen.getByText("Finished.Show")).toBeInTheDocument()
     expect(screen.getAllByText("qBittorrent").length).toBeGreaterThan(0)
     expect(screen.getAllByText("SABnzbd").length).toBeGreaterThan(0)
+  })
+
+  it("formats download values and their missing fallbacks", () => {
+    render(
+      <DownloadActivityPanel
+        recentDownloads={[
+          item({
+            id: "fallback",
+            name: "Fallback.Download",
+            progress: null,
+            size_label: null,
+            size_bytes: null,
+            speed_mbps: null,
+            eta_seconds: null,
+            added_at: null,
+            completed_at: null,
+          }),
+          item({
+            id: "short",
+            name: "Short.Download",
+            progress: 12.5,
+            size_label: null,
+            size_bytes: 1024,
+            eta_seconds: 45,
+          }),
+          item({
+            id: "exact-hour",
+            name: "Exact.Hour",
+            eta_seconds: 3600,
+          }),
+          item({
+            id: "hour-minute",
+            name: "Hour.Minute",
+            eta_seconds: 3720,
+          }),
+        ]}
+        queue={queue()}
+      />,
+    )
+
+    const fallbackRow = screen.getByText("Fallback.Download").closest("tr")
+    expect(fallbackRow).not.toBeNull()
+    expect(within(fallbackRow!).getAllByText("—")).toHaveLength(5)
+    expect(screen.getByText("12.5%")).toBeInTheDocument()
+    expect(screen.getByText("1.0 KB")).toBeInTheDocument()
+    expect(screen.getByText("45s")).toBeInTheDocument()
+    expect(screen.getByText("1h")).toBeInTheDocument()
+    expect(screen.getByText("1h 2m")).toBeInTheDocument()
   })
 
   it("keeps the queue collapsed by default and expands it on demand", async () => {
