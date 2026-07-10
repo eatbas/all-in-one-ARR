@@ -22,14 +22,17 @@ interface SidebarProps {
  * {@link SidebarProps.collapsed} is set the labels collapse to an icon-only
  * rail; labels stay in the accessibility tree (via `sr-only`) so links keep
  * their accessible names, and the native `title` tooltip surfaces each label on
- * hover.
+ * hover. The sidebar is pinned to the viewport (`sticky`, full height) so its
+ * `mt-auto` version footer stays visible however tall the routed page grows —
+ * `<html>` remains the document scroller (see `index.css`), so only the right
+ * pane scrolls past it.
  */
 function Sidebar({ collapsed, onToggle }: SidebarProps) {
   return (
     <aside
       id="primary-sidebar"
       className={cn(
-        "hidden shrink-0 flex-col border-r bg-sidebar transition-[width] duration-200 md:flex",
+        "sticky top-0 z-30 hidden h-screen shrink-0 flex-col self-start border-r bg-sidebar transition-[width] duration-200 md:flex",
         collapsed ? "w-16" : "w-56",
       )}
     >

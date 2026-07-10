@@ -53,6 +53,16 @@ describe("AppShell", () => {
     expect(screen.getByText(`v${APP_VERSION}`)).toBeInTheDocument()
   })
 
+  it("pins the sidebar to the viewport so its footer never scrolls away", () => {
+    const { container } = renderAt("/")
+
+    // The sidebar is sticky and a full viewport tall, so a tall routed page
+    // scrolls past it instead of pushing the version footer below the fold.
+    const sidebar = container.querySelector("#primary-sidebar")
+    expect(sidebar).not.toBeNull()
+    expect(sidebar).toHaveClass("sticky", "top-0", "h-screen")
+  })
+
   it("marks the List-Syncarr link active on its route", () => {
     renderAt("/list-syncarr")
 
