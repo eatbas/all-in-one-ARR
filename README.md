@@ -261,9 +261,10 @@ version from the latest `vX.Y.Z` git tag, bumps it, updates the version in
 `backend/pyproject.toml` and `frontend/package.json` (the sidebar footer shows the
 latter), commits, creates an annotated `vX.Y.Z` tag, and pushes `main` plus the
 tag. The tag push publishes `erenatbas/aio-arr:X.Y.Z` (+ `X.Y`) and refreshes
-`:latest`; pushes to `main` run the checks but publish no image. After the tagged
-image is published successfully, the workflow also creates a GitHub Release with
-automatically generated release notes.
+`:latest`. The workflow now runs **only** on `vX.Y.Z` tags; commits to `main` and
+pull requests no longer trigger it. After the tagged image is published
+successfully, the workflow also creates a GitHub Release with automatically
+generated release notes.
 
 ```bash
 bash scripts/release.sh          # patch: 1.6.0 -> 1.6.1 (default)
@@ -276,7 +277,8 @@ The release must be cut from a clean `main` (override with `RELEASE_BRANCH`). It
 runs `scripts/check.sh` first — the full quality gate (Ruff lint + format, mypy,
 Prettier, tests, and build) — and prompts before pushing (`-y` to skip).
 `--skip-checks` only bypasses this *local* pre-flight; CI re-runs the same gates on
-the pushed tag and branch, so a failing check still blocks the Docker publish. Only
+the pushed tag (before the image build), so a failing check still blocks the
+Docker publish. Only
 `vX.Y.Z` tags trigger the publish, so the `v` prefix is required; a mistaken tag can
 be removed with `git tag -d vX.Y.Z && git push origin :refs/tags/vX.Y.Z`.
 

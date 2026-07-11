@@ -8,7 +8,7 @@
 # to `origin`. GitHub Actions (.github/workflows/docker-publish.yml) then publishes
 # the Docker image and, after the tag build succeeds, creates the GitHub Release.
 # The tag push builds `erenatbas/aio-arr:X.Y.Z` (+ `:X.Y`) and also refreshes
-# `:latest`; pushes to the branch no longer publish an image.
+# `:latest`; pushes to the branch no longer trigger the workflow.
 #
 # Usage:
 #   scripts/release.sh [major|minor|patch] [flags]
@@ -22,7 +22,7 @@
 #   --dry-run       Show the computed version and planned actions; change nothing.
 #   --skip-checks   Skip the local ./scripts/check.sh pre-flight (Ruff lint + format,
 #                   mypy, Prettier, tests, build). CI re-runs the same gates on the
-#                   pushed tag/branch, so they still gate the Docker publish.
+#                   pushed tag, so they still gate the Docker publish.
 #   -y, --yes       Do not prompt for confirmation before committing/pushing.
 #   -h, --help      Show this help and exit.
 #
@@ -56,7 +56,7 @@ Usage: scripts/release.sh [major|minor|patch] [flags]
 Flags:
   --dry-run       Show the computed version and planned actions; change nothing.
   --skip-checks   Skip the local scripts/check.sh pre-flight (Ruff, mypy, Prettier,
-                  tests, build). CI re-runs these gates on the pushed tag/branch.
+                  tests, build). CI re-runs these gates on the pushed tag.
   -y, --yes       Do not prompt for confirmation before committing/pushing.
   -h, --help      Show this help and exit.
 

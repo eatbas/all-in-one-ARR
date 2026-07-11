@@ -2,12 +2,11 @@ name: Build and publish Docker image
 
 on:
   push:
-    branches: [main]
-    # Release tags only — each segment must begin with a digit (vX.Y.Z), so a
-    # non-version tag such as `vbeta` never triggers a publish.
+    # Release tags only (vX.Y.Z) — each segment must begin with a digit, so a
+    # non-version tag such as `vbeta` never triggers the workflow. The workflow
+    # runs solely on these tags: commits to `main` and pull requests do not
+    # trigger it at all (no per-commit CI, no per-commit image builds).
     tags: ['v[0-9]*.[0-9]*.[0-9]*']
-  pull_request:
-    branches: [main]
   workflow_dispatch:
     inputs:
       release_tag:
@@ -21,6 +20,8 @@ env:
 jobs:
   backend-checks:
     runs-on: ubuntu-latest
+    # Runs on a release-tag push; skipped for the workflow_dispatch backfill,
+    # which only (re)creates the GitHub Release for an already-built tag.
     if: github.event_name != 'workflow_dispatch'
     steps:
       - name: Checkout
@@ -53,6 +54,8 @@ jobs:
 
   frontend-checks:
     runs-on: ubuntu-latest
+    # Runs on a release-tag push; skipped for the workflow_dispatch backfill,
+    # which only (re)creates the GitHub Release for an already-built tag.
     if: github.event_name != 'workflow_dispatch'
     steps:
       - name: Checkout
@@ -111,9 +114,12 @@ jobs:
   build-and-push:
     runs-on: ubuntu-latest
     needs: [backend-checks, frontend-checks]
-    # Publish images only for release tags (vX.Y.Z) — never for intermediate
-    # commits to main or for pull requests. The tag push is the single event
-    # that produces docker.io/erenatbas/aio-arr:X.Y.Z (+ :X.Y and :latest).
+    # The workflow only runs on release-tag pushes and the workflow_dispatch
+    # backfill (commits to `main` and pull requests no longer trigger it), so
+    # this guard now only separates a tag push (build + publish) from the
+    # backfill (skip). The tag push produces docker.io/erenatbas/aio-arr:X.Y.Z
+    # (+ :X.Y and :latest); the startsWith check stays as defence-in-depth so a
+    # future re-added branch trigger can never publish from `main`.
     if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
     permissions:
       contents: read
