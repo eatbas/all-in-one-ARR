@@ -259,6 +259,36 @@ async def test_get_status_snapshot_reuses_single_torrent_response() -> None:
     assert [item["name"] for item in result["activity"]["recent"]] == ["Finished.Movie"]
 
 
+_OFFLINE_SNAPSHOT = {
+    "stats": {
+        "online": False,
+        "speed_mbps": 0,
+        "active_downloads": 0,
+        "queue_size": 0,
+    },
+    "activity": {"queue": [], "recent": []},
+}
+
+
+@respx.mock
+async def test_get_status_snapshot_blank_key_returns_offline() -> None:
+    # A blank key short-circuits to the offline snapshot without any request.
+    transfer = respx.get(_TRANSFER).mock(return_value=httpx.Response(200, json={}))
+    torrents = respx.get(_TORRENTS).mock(return_value=httpx.Response(200, json=[]))
+    result = await make_client(api_key="   ").get_status_snapshot()
+    assert result == _OFFLINE_SNAPSHOT
+    assert not transfer.called
+    assert not torrents.called
+
+
+@respx.mock
+async def test_get_status_snapshot_offline_payload_returns_offline() -> None:
+    # A failed status fetch yields the offline snapshot rather than raising.
+    respx.get(_TRANSFER).mock(side_effect=httpx.ConnectError("down"))
+    result = await make_client().get_status_snapshot()
+    assert result == _OFFLINE_SNAPSHOT
+
+
 @respx.mock
 async def test_get_download_activity_parses_queue_and_recent_items() -> None:
     route = respx.get(_TORRENTS).mock(

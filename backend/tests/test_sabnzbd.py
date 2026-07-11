@@ -10,6 +10,7 @@ from core.clients.sabnzbd import (
     SabnzbdClient,
     _format_bytes,
     _percent_value,
+    _queue_slots_from_payload,
     _slot_size_bytes,
     _timeleft_seconds,
     _unix_to_iso,
@@ -237,6 +238,39 @@ async def test_get_status_snapshot_reuses_single_queue_response() -> None:
         "paused": False,
     }
     assert [item["name"] for item in result["activity"]["queue"]] == ["Active.Show"]
+    assert [item["name"] for item in result["activity"]["recent"]] == ["Finished.Show"]
+
+
+@respx.mock
+async def test_get_status_snapshot_offline_queue_still_returns_history() -> None:
+    # A failed queue request yields offline stats and an empty queue, but the
+    # history request is independent and its recent completions still surface.
+    respx.get(_API).mock(
+        side_effect=[
+            httpx.Response(500),
+            httpx.Response(
+                200,
+                json={
+                    "history": {
+                        "slots": [
+                            {
+                                "nzo_id": "done",
+                                "name": "Finished.Show",
+                                "status": "Completed",
+                                "completed": 1_704_068_000,
+                            }
+                        ]
+                    }
+                },
+            ),
+        ]
+    )
+
+    result = await SabnzbdClient(base_url=_BASE, api_key="x").get_status_snapshot()
+
+    assert result["stats"]["online"] is False
+    assert result["stats"]["paused"] is False
+    assert result["activity"]["queue"] == []
     assert [item["name"] for item in result["activity"]["recent"]] == ["Finished.Show"]
 
 
@@ -580,6 +614,30 @@ async def test_queue_slots_failure_branches_return_empty(response) -> None:
         route.mock(return_value=response)
     result = await SabnzbdClient(base_url=_BASE, api_key="x")._queue_slots(limit=1)
     assert result == []
+
+
+@respx.mock
+async def test_queue_slots_success_returns_payload_slots() -> None:
+    respx.get(_API).mock(
+        return_value=httpx.Response(
+            200,
+            json={"queue": {"slots": [{"nzo_id": "a", "filename": "A"}]}},
+        )
+    )
+    result = await SabnzbdClient(base_url=_BASE, api_key="x")._queue_slots(limit=5)
+    assert [slot["nzo_id"] for slot in result] == ["a"]
+
+
+def test_queue_slots_from_payload_guards_bad_slots_and_limits() -> None:
+    # `_queue_payload` already validates slots before this helper sees them, so
+    # these guards are defensive; exercise them directly. Malformed slots and a
+    # non-positive limit both collapse to an empty list.
+    assert _queue_slots_from_payload({"slots": "bad"}, limit=5) == []
+    assert _queue_slots_from_payload({"slots": [1, 2]}, limit=5) == []
+    payload = {"slots": [{"nzo_id": "a"}, {"nzo_id": "b"}]}
+    assert _queue_slots_from_payload(payload, limit=None) == payload["slots"]
+    assert _queue_slots_from_payload(payload, limit=0) == []
+    assert _queue_slots_from_payload(payload, limit=1) == [{"nzo_id": "a"}]
 
 
 @respx.mock
