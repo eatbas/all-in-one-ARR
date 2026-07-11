@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "aio-arr"
-version = "1.7.1"
+version = "1.7.2"
 description = "All-in-One ARR: a plugin core with a list_syncarr module that keeps a Trakt list in sync with Seer and removes items from the Trakt list once they are available or partially available in Seer."
 requires-python = ">=3.14"
 license = { text = "MIT" }
