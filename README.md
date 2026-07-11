@@ -178,10 +178,9 @@ docker compose -f docker-compose.yml -f docker-compose.build.yml up --build
 
 | Tag | Meaning |
 | --- | --- |
-| `latest` | Tip of `main`, rebuilt on every push |
+| `latest` | Newest release — the latest `vX.Y.Z` tag |
 | `X.Y.Z` (e.g. `0.1.0`) | Immutable release, published from the `vX.Y.Z` git tag |
 | `X.Y` (e.g. `0.1`) | Latest patch of that minor release |
-| `sha-xxxxxxx` | Exact commit build |
 
 Every tag is a multi-arch manifest covering `linux/amd64` and `linux/arm64`, so
 the same reference runs on x86-64 NAS boxes, ARM boards, and Apple Silicon.
@@ -246,8 +245,9 @@ In Container Manager, re-pull the image and recreate the container. If you run
 ### How the images are built
 
 Images are built and pushed automatically by GitHub Actions
-(`.github/workflows/docker-publish.yml`) on every push to `main` and every
-`vX.Y.Z` tag. Maintainers can also publish a multi-arch image by hand:
+(`.github/workflows/docker-publish.yml`) on every `vX.Y.Z` release tag; pushes to
+`main` and pull requests run the checks but publish no image. Maintainers can
+also publish a multi-arch image by hand:
 
 ```bash
 docker buildx build --platform linux/amd64,linux/arm64 \
@@ -260,9 +260,10 @@ Maintainers publish a release with `scripts/release.sh`. It reads the current
 version from the latest `vX.Y.Z` git tag, bumps it, updates the version in
 `backend/pyproject.toml` and `frontend/package.json` (the sidebar footer shows the
 latter), commits, creates an annotated `vX.Y.Z` tag, and pushes `main` plus the
-tag. The tag push publishes `erenatbas/aio-arr:X.Y.Z` (+ `X.Y`) and the `main`
-push refreshes `:latest`. After the tagged image is published successfully, the
-workflow also creates a GitHub Release with automatically generated release notes.
+tag. The tag push publishes `erenatbas/aio-arr:X.Y.Z` (+ `X.Y`) and refreshes
+`:latest`; pushes to `main` run the checks but publish no image. After the tagged
+image is published successfully, the workflow also creates a GitHub Release with
+automatically generated release notes.
 
 ```bash
 bash scripts/release.sh          # patch: 1.6.0 -> 1.6.1 (default)
@@ -281,7 +282,7 @@ be removed with `git tag -d vX.Y.Z && git push origin :refs/tags/vX.Y.Z`.
 
 To backfill a GitHub Release for an existing tag, run the **Build and publish
 Docker image** workflow manually in GitHub Actions and enter the tag (for example,
-`v1.6.3`) in the optional `release_tag` input. The workflow verifies that the tag
+`v1.6.3`) in the required `release_tag` input. The workflow verifies that the tag
 exists before creating the release, skips the checks and image build during a
 backfill, and does nothing if that release already exists.
 

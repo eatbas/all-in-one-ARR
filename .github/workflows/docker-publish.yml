@@ -3,14 +3,16 @@ name: Build and publish Docker image
 on:
   push:
     branches: [main]
-    tags: ['v*.*.*']
+    # Release tags only — each segment must begin with a digit (vX.Y.Z), so a
+    # non-version tag such as `vbeta` never triggers a publish.
+    tags: ['v[0-9]*.[0-9]*.[0-9]*']
   pull_request:
     branches: [main]
   workflow_dispatch:
     inputs:
       release_tag:
-        description: Existing vX.Y.Z tag to publish as a GitHub Release (optional)
-        required: false
+        description: Existing vX.Y.Z tag to publish as a GitHub Release (backfill)
+        required: true
         type: string
 
 env:
@@ -19,7 +21,7 @@ env:
 jobs:
   backend-checks:
     runs-on: ubuntu-latest
-    if: github.event_name != 'workflow_dispatch' || inputs.release_tag == ''
+    if: github.event_name != 'workflow_dispatch'
     steps:
       - name: Checkout
         uses: actions/checkout@v7
@@ -51,7 +53,7 @@ jobs:
 
   frontend-checks:
     runs-on: ubuntu-latest
-    if: github.event_name != 'workflow_dispatch' || inputs.release_tag == ''
+    if: github.event_name != 'workflow_dispatch'
     steps:
       - name: Checkout
         uses: actions/checkout@v7
@@ -109,7 +111,10 @@ jobs:
   build-and-push:
     runs-on: ubuntu-latest
     needs: [backend-checks, frontend-checks]
-    if: github.event_name != 'pull_request'
+    # Publish images only for release tags (vX.Y.Z) — never for intermediate
+    # commits to main or for pull requests. The tag push is the single event
+    # that produces docker.io/erenatbas/aio-arr:X.Y.Z (+ :X.Y and :latest).
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
     permissions:
       contents: read
     steps:
@@ -135,11 +140,12 @@ jobs:
         uses: docker/metadata-action@v6
         with:
           images: docker.io/${{ env.IMAGE_NAME }}
+          # Default flavour is latest=auto, so a pushed vX.Y.Z tag also refreshes
+          # :latest. Only release tags reach this job now, so the default-branch
+          # :latest and the per-commit :sha tags are removed.
           tags: |
-            type=raw,value=latest,enable={{is_default_branch}}
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
-            type=sha,format=short
 
       - name: Build and push (linux/amd64, linux/arm64)
         uses: docker/build-push-action@v7

@@ -7,8 +7,8 @@
 # commits them, creates an annotated `vX.Y.Z` tag, and pushes the branch and tag
 # to `origin`. GitHub Actions (.github/workflows/docker-publish.yml) then publishes
 # the Docker image and, after the tag build succeeds, creates the GitHub Release.
-# The tag push builds `erenatbas/aio-arr:X.Y.Z` (+ `:X.Y`) and the branch push
-# refreshes `:latest`.
+# The tag push builds `erenatbas/aio-arr:X.Y.Z` (+ `:X.Y`) and also refreshes
+# `:latest`; pushes to the branch no longer publish an image.
 #
 # Usage:
 #   scripts/release.sh [major|minor|patch] [flags]
@@ -133,7 +133,7 @@ Dry run — no changes made. A real release would:
   2. git commit -m "chore(release): ${new_tag}"
   3. git tag -a ${new_tag} -m "Release ${new_tag}"
   4. git push --follow-tags ${REMOTE} ${RELEASE_BRANCH}
-     -> CI publishes docker.io/erenatbas/aio-arr:${new_version} (+ :latest from ${RELEASE_BRANCH})
+     -> CI publishes docker.io/erenatbas/aio-arr:${new_version} (+ :X.Y and :latest)
      -> CI creates the GitHub Release after the tag build succeeds
 EOF
   exit 0
