@@ -633,6 +633,14 @@
       },
       "DeletarrScanItem": {
         "properties": {
+          "category": {
+            "enum": [
+              "junk",
+              "untracked_media"
+            ],
+            "title": "Category",
+            "type": "string"
+          },
           "is_checked": {
             "title": "Is Checked",
             "type": "boolean"
@@ -710,6 +718,7 @@
           "size",
           "reason",
           "parent",
+          "category",
           "movie_folder",
           "movie_folder_path",
           "is_checked",

@@ -51,6 +51,23 @@ class LibraryState:
     arr_available: bool = False
     arr_detail: str | None = None
 
+    def reset_scan_state(self) -> None:
+        """Drop scan-derived results and Arr metadata after a settings change.
+
+        The previously computed results and their scan mode describe the setting
+        in force when the scan ran; once ``use_arr_source`` changes they no longer
+        reflect what a fresh scan would produce. Clearing them keeps status and
+        results consistent with the live settings and stops the delete path acting
+        on stale heuristic results that were never verified against Radarr/Sonarr.
+        """
+        self.results = []
+        self.scan_progress = 0
+        self.last_scan_at = None
+        self.last_error = None
+        self.scan_mode = "heuristic"
+        self.arr_available = False
+        self.arr_detail = None
+
 
 class DeletarrService:
     """Owns Deletarr state and filesystem operations for one app process."""
@@ -102,7 +119,7 @@ class DeletarrService:
             try:
                 scanner = MediaScanner([state.path])
                 manifest = await self._resolve_manifest(selected, state)
-                if manifest is not None and manifest.folders:
+                if manifest is not None:
                     await asyncio.to_thread(scanner.scan_arr, manifest)
                     state.scan_mode = "arr"
                 else:
@@ -118,7 +135,7 @@ class DeletarrService:
                     results_count=len(state.results),
                 )
                 detail = (
-                    f"Found {len(state.results)} junk item(s) in "
+                    f"Found {len(state.results)} review candidate(s) in "
                     f"{LIBRARY_LABELS[selected]} ({state.scan_mode} scan)."
                 )
                 self._ctx.db.add_activity("Deletarr scan completed", detail)
@@ -186,7 +203,14 @@ class DeletarrService:
         tv_path: str | None = None,
         use_arr_source: bool | None = None,
     ) -> dict:
-        """Persist path/source settings and update live state paths."""
+        """Persist path/source settings and update live state paths.
+
+        A change to ``use_arr_source`` invalidates every library's scan-derived
+        state, since existing results were produced under the previous source of
+        truth; those states are reset so status and results never contradict the
+        live toggle.
+        """
+        previous = self._ctx.settings_store.deletarr_settings()
         settings = self._ctx.settings_store.update_deletarr_settings(
             movies_path=movies_path,
             tv_path=tv_path,
@@ -194,6 +218,14 @@ class DeletarrService:
         )
         self._states["movies"].path = settings["movies_path"]
         self._states["tv"].path = settings["tv_path"]
+        if settings["use_arr_source"] != previous["use_arr_source"]:
+            # Settings updates are deliberately not serialised against the scan
+            # gate, so this reset targets the common case of toggling while no
+            # scan is running. A toggle saved during an in-flight scan is an
+            # accepted, self-correcting edge: that scan finishes writing state for
+            # the source of truth it read at start, and the next scan reconciles.
+            for state in self._states.values():
+                state.reset_scan_state()
         self._ctx.db.add_activity("Deletarr settings saved", "Deletarr paths updated")
         return await self.status()
 
@@ -258,7 +290,10 @@ class DeletarrService:
                     os.remove(path)
                 elif os.path.isdir(path):
                     size = self._folder_size(path)
-                    shutil.rmtree(path)
+                    if item.reason == "Empty folder":
+                        self._remove_empty_tree(path)
+                    else:
+                        shutil.rmtree(path)
                 else:
                     failed.append({"path": path, "error": "Path no longer exists"})
                     continue
@@ -284,6 +319,18 @@ class DeletarrService:
             "deleted_paths": deleted,
             "errors": failed,
         }
+
+    @staticmethod
+    def _remove_empty_tree(folder_path: str) -> None:
+        """Remove an empty directory tree without ever unlinking content.
+
+        ``os.rmdir`` is deliberately used bottom-up instead of ``rmtree``. If a
+        file, hidden entry, symlink, or concurrently created item is present,
+        the containing directory remains and the operating system reports the
+        deletion as a failure.
+        """
+        for directory, _, _ in os.walk(folder_path, topdown=False):
+            os.rmdir(directory)
 
     @staticmethod
     def _covers_tracked(path: str, tracked: set[str]) -> bool:

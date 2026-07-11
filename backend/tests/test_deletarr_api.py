@@ -140,6 +140,53 @@ def test_delete_rejects_empty_paths(db) -> None:
     ctx.deletarr_delete.assert_not_awaited()
 
 
+def test_results_contract_requires_typed_candidate_category(db) -> None:
+    ctx = make_ctx(db=db)
+    stats = {
+        "total_files": 1,
+        "total_folders": 0,
+        "total_size": 1,
+        "is_scanning": False,
+        "scan_progress": 100,
+    }
+    ctx.deletarr_results = AsyncMock(
+        return_value={
+            "type": "movies",
+            "path": "/movies",
+            "scan_mode": "arr",
+            "arr_available": True,
+            "arr_detail": None,
+            "results": [
+                {
+                    "path": "/movies/loose.mkv",
+                    "name": "loose.mkv",
+                    "type": "file",
+                    "size": 1,
+                    "reason": "Loose file (not in Radarr)",
+                    "parent": "/movies",
+                    "category": "untracked_media",
+                    "movie_folder": "Loose files",
+                    "movie_folder_path": "/movies",
+                    "is_checked": False,
+                    "videos_in_folder": [],
+                    "origin": "arr",
+                }
+            ],
+            "stats": stats,
+        }
+    )
+
+    client = build_client(ctx)
+    response = client.get("/api/deletarr/results?type=movies")
+
+    assert response.status_code == 200
+    assert response.json()["results"][0]["category"] == "untracked_media"
+    category_schema = client.get("/openapi.json").json()["components"]["schemas"][
+        "DeletarrScanItem"
+    ]["properties"]["category"]
+    assert category_schema["enum"] == ["junk", "untracked_media"]
+
+
 def test_busy_scan_and_delete_return_409(db) -> None:
     async def _raise(*_args):
         raise SyncAlreadyRunning()

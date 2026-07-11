@@ -12,6 +12,7 @@ ItemKind = Literal["file", "folder"]
 # truth for which files belong on disk.
 ScanMode = Literal["heuristic", "arr"]
 ItemOrigin = Literal["heuristic", "arr"]
+CandidateCategory = Literal["junk", "untracked_media"]
 
 LIBRARY_TYPES: tuple[LibraryType, ...] = ("movies", "tv")
 LIBRARY_LABELS: dict[LibraryType, str] = {
@@ -48,9 +49,10 @@ class ScanItem:
     size: int
     reason: str
     parent: str
+    category: CandidateCategory
     movie_folder: str | None = None
     movie_folder_path: str | None = None
-    is_checked: bool = True
+    is_checked: bool = False
     videos_in_folder: list[VideoReference] = field(default_factory=list)
     # "heuristic" for pattern-only candidates; "arr" when the candidate was
     # flagged because Radarr/Sonarr does not track the file.
@@ -64,6 +66,7 @@ class ScanItem:
             "size": self.size,
             "reason": self.reason,
             "parent": self.parent,
+            "category": self.category,
             "movie_folder": self.movie_folder,
             "movie_folder_path": self.movie_folder_path,
             "is_checked": self.is_checked,

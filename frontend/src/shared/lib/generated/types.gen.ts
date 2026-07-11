@@ -378,6 +378,10 @@ export type DeletarrResults = {
  */
 export type DeletarrScanItem = {
     /**
+     * Category
+     */
+    category: 'junk' | 'untracked_media';
+    /**
      * Is Checked
      */
     is_checked: boolean;

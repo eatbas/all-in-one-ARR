@@ -48,6 +48,7 @@ class DeletarrScanItem(BaseModel):
     size: int
     reason: str
     parent: str
+    category: Literal["junk", "untracked_media"]
     movie_folder: str | None
     movie_folder_path: str | None
     is_checked: bool
