@@ -42,4 +42,19 @@ describe("PosterThumb", () => {
       screen.getByRole("img", { name: "No poster for Dune" }),
     ).toBeInTheDocument()
   })
+
+  it("exposes the title as a hover tooltip on the poster", () => {
+    render(<PosterThumb item={base} />)
+    expect(screen.getByRole("img", { name: "Dune" })).toHaveAttribute(
+      "title",
+      "Dune",
+    )
+  })
+
+  it("exposes the title as a hover tooltip on the placeholder", () => {
+    render(<PosterThumb item={{ ...base, tmdb: null, title: "NoPoster" }} />)
+    expect(
+      screen.getByRole("img", { name: "No poster for NoPoster" }),
+    ).toHaveAttribute("title", "NoPoster")
+  })
 })

@@ -147,7 +147,10 @@ function ListRow({
             This list has no items yet.
           </p>
         ) : (
-          <ul className="grid grid-cols-3 gap-4 px-7 py-3 sm:grid-cols-4 md:grid-cols-5">
+          // Ten per row from xl keeps posters compact on wide displays; the
+          // lower steps stay coarse so each track still fits the two corner
+          // controls beside the 224px sidebar.
+          <ul className="grid grid-cols-3 gap-4 px-7 py-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-8 xl:grid-cols-10">
             {visibleItems?.map((item) => (
               <li
                 key={`${item.list_id}:${item.trakt_id}`}

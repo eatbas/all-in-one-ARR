@@ -9,7 +9,8 @@ import { displayTitle } from "@/shared/lib/format"
  * Poster thumbnail for a mirrored item. Falls back to a film-icon placeholder
  * when the item has no TMDB id (so no poster can be resolved) or when the cached
  * poster request fails. The image is lazily loaded and the browser caches it via
- * the backend's `Cache-Control` header.
+ * the backend's `Cache-Control` header. The full title is exposed as a native
+ * hover tooltip, since the caption below the poster truncates long titles.
  */
 export function PosterThumb({ item }: { item: Item }) {
   const [failed, setFailed] = useState(false)
@@ -20,6 +21,7 @@ export function PosterThumb({ item }: { item: Item }) {
       <div
         role="img"
         aria-label={`No poster for ${label}`}
+        title={label}
         className="flex aspect-[2/3] w-full items-center justify-center rounded-md bg-muted text-muted-foreground"
       >
         <FilmIcon className="size-8" />
@@ -31,6 +33,7 @@ export function PosterThumb({ item }: { item: Item }) {
     <img
       src={posterUrl(item.type, item.tmdb)}
       alt={label}
+      title={label}
       loading="lazy"
       onError={() => setFailed(true)}
       className="aspect-[2/3] w-full rounded-md object-cover"
