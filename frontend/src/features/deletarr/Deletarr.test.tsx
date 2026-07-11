@@ -1,4 +1,9 @@
-import { render as rtlRender, screen, within } from "@testing-library/react"
+import {
+  render as rtlRender,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import type { ReactElement } from "react"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
@@ -93,9 +98,10 @@ const MOVIE_RESULTS: DeletarrResults = {
       parent: "/media/movies/Dune",
       movie_folder: "Dune",
       movie_folder_path: "/media/movies/Dune",
-      is_checked: true,
+      is_checked: false,
       videos_in_folder: [{ name: "Dune.mkv", size: 7_000_000_000 }],
       origin: "heuristic",
+      category: "junk",
     },
     {
       path: "/media/movies/Dune/sample.txt",
@@ -109,6 +115,7 @@ const MOVIE_RESULTS: DeletarrResults = {
       is_checked: false,
       videos_in_folder: [{ name: "Dune.mkv", size: 7_000_000_000 }],
       origin: "heuristic",
+      category: "junk",
     },
     {
       path: "/media/movies/@eaDir",
@@ -119,9 +126,10 @@ const MOVIE_RESULTS: DeletarrResults = {
       parent: "/media/movies",
       movie_folder: null,
       movie_folder_path: null,
-      is_checked: true,
+      is_checked: false,
       videos_in_folder: [],
       origin: "heuristic",
+      category: "junk",
     },
   ],
 }
@@ -146,6 +154,50 @@ const DELAYED_VIDEO_RESULTS: DeletarrResults = {
     {
       ...MOVIE_RESULTS.results[1],
       videos_in_folder: [{ name: "Dune.mkv", size: 7_000_000_000 }],
+    },
+  ],
+}
+
+const MIXED_RESULTS: DeletarrResults = {
+  ...MOVIE_RESULTS,
+  results: [
+    ...MOVIE_RESULTS.results,
+    {
+      path: "/media/movies/Unknown Thing",
+      name: "Unknown Thing",
+      type: "folder",
+      size: 4096,
+      reason: "Orphaned folder (not in Radarr)",
+      parent: "/media/movies",
+      movie_folder: "Unknown Thing",
+      movie_folder_path: "/media/movies/Unknown Thing",
+      is_checked: false,
+      videos_in_folder: [],
+      origin: "arr",
+      category: "untracked_media",
+    },
+  ],
+}
+
+const ARR_RESULTS_WITH_EMPTY_FOLDER: DeletarrResults = {
+  ...MOVIE_RESULTS,
+  scan_mode: "arr",
+  arr_available: true,
+  results: [
+    ...MOVIE_RESULTS.results,
+    {
+      path: "/media/movies/Empty Film",
+      name: "Empty Film",
+      type: "folder",
+      size: 0,
+      reason: "Empty folder",
+      parent: "/media/movies",
+      movie_folder: "Empty Film",
+      movie_folder_path: "/media/movies/Empty Film",
+      is_checked: false,
+      videos_in_folder: [],
+      origin: "arr",
+      category: "junk",
     },
   ],
 }
@@ -188,20 +240,94 @@ describe("Deletarr", () => {
     )
     expect(
       screen.getByText(
-        "Review junk files and folders in your media libraries before deleting them.",
+        "Review junk files, empty folders, and untracked media in your libraries before deleting them.",
       ),
     ).toBeInTheDocument()
     expect(screen.getByRole("region", { name: "Dune" })).toBeInTheDocument()
     expect(screen.getByText("Protected video: Dune.mkv")).toBeInTheDocument()
-    expect(screen.getByLabelText("Select movie.nfo")).toBeChecked()
+    expect(
+      screen.getByText("0 of 3 candidate(s) selected."),
+    ).toBeInTheDocument()
+    expect(
+      screen.getByRole("button", { name: "Delete selected" }),
+    ).toBeDisabled()
+    expect(screen.getByLabelText("Select movie.nfo")).not.toBeChecked()
     expect(screen.getByLabelText("Select sample.txt")).not.toBeChecked()
+    expect(screen.getByLabelText("Select all junk")).not.toBeChecked()
   })
 
-  it("shows the heuristic scan-mode banner by default", () => {
+  it("prompts a re-scan when the source of truth is on but results are heuristic", () => {
+    vi.mocked(useDeletarrStatus).mockReturnValue(
+      queryResult({
+        ...STATUS,
+        libraries: {
+          ...STATUS.libraries,
+          movies: {
+            ...STATUS.libraries.movies,
+            arr_detail: "Arr source disabled",
+          },
+        },
+      }),
+    )
     render(<Deletarr />)
 
     expect(
-      screen.getByText(/Heuristic scan\. Connect Radarr/),
+      screen.getByText(
+        "Heuristic results. Re-scan to verify candidates against Radarr library metadata.",
+      ),
+    ).toBeInTheDocument()
+    // An enabled toggle must never surface the disabled-source notice.
+    expect(screen.queryByText(/Arr source disabled/)).not.toBeInTheDocument()
+  })
+
+  it("labels the enabled re-scan prompt with Sonarr on the TV tab", async () => {
+    const user = userEvent.setup()
+    render(<Deletarr />)
+
+    await user.click(screen.getByRole("tab", { name: "TV Shows" }))
+
+    expect(
+      screen.getByText(
+        "Heuristic results. Re-scan to verify candidates against Sonarr library metadata.",
+      ),
+    ).toBeInTheDocument()
+  })
+
+  it("shows the disabled-source notice only when the toggle is off", () => {
+    vi.mocked(useDeletarrStatus).mockReturnValue(
+      queryResult({
+        ...STATUS,
+        settings: { ...SETTINGS, use_arr_source: false },
+        libraries: {
+          ...STATUS.libraries,
+          movies: {
+            ...STATUS.libraries.movies,
+            arr_detail: "Arr source disabled",
+          },
+        },
+      }),
+    )
+
+    render(<Deletarr />)
+
+    expect(screen.getByText(/Arr source disabled/)).toBeInTheDocument()
+    expect(
+      screen.getByText(/Turn on the source-of-truth setting/),
+    ).toBeInTheDocument()
+  })
+
+  it("explains how to enable Arr when no disabled-source detail is supplied", () => {
+    vi.mocked(useDeletarrStatus).mockReturnValue(
+      queryResult({
+        ...STATUS,
+        settings: { ...SETTINGS, use_arr_source: false },
+      }),
+    )
+
+    render(<Deletarr />)
+
+    expect(
+      screen.getByText(/Heuristic scan\. Turn on the source-of-truth setting/),
     ).toBeInTheDocument()
   })
 
@@ -226,19 +352,22 @@ describe("Deletarr", () => {
     ).toBeInTheDocument()
   })
 
-  it("shows the verified banner when scanning against the library manager", () => {
+  it("describes Arr verification without excluding known empty folders", () => {
     vi.mocked(useDeletarrResults).mockImplementation((type) =>
       queryResult(
-        type === "movies"
-          ? { ...MOVIE_RESULTS, scan_mode: "arr", arr_available: true }
-          : TV_RESULTS,
+        type === "movies" ? ARR_RESULTS_WITH_EMPTY_FOLDER : TV_RESULTS,
       ),
     )
 
     render(<Deletarr />)
 
-    expect(screen.getByText(/Verified against/)).toBeInTheDocument()
-    expect(screen.getByText("Radarr")).toBeInTheDocument()
+    expect(
+      screen.getByText(
+        "Candidates were checked against Radarr library metadata.",
+      ),
+    ).toBeInTheDocument()
+    expect(screen.getByText("Empty folder")).toBeInTheDocument()
+    expect(screen.getByLabelText("Select Empty Film")).not.toBeChecked()
   })
 
   it("shows a separate group for orphaned folders not in the library", () => {
@@ -263,6 +392,7 @@ describe("Deletarr", () => {
                   is_checked: false,
                   videos_in_folder: [],
                   origin: "arr",
+                  category: "untracked_media",
                 },
               ],
             }
@@ -272,12 +402,41 @@ describe("Deletarr", () => {
 
     render(<Deletarr />)
 
-    expect(screen.getByText("Not in your movies library")).toBeInTheDocument()
+    expect(
+      screen.getByRole("region", { name: "Untracked media" }),
+    ).toBeInTheDocument()
+    expect(
+      screen.getByLabelText("Select all untracked media"),
+    ).not.toBeChecked()
     expect(
       screen.getByRole("region", { name: "Unknown Thing" }),
     ).toBeInTheDocument()
     // The managed Dune group is still rendered separately.
     expect(screen.getByRole("region", { name: "Dune" })).toBeInTheDocument()
+  })
+
+  it("renders an untracked-only result set without an empty junk section", () => {
+    vi.mocked(useDeletarrResults).mockImplementation((type) =>
+      queryResult(
+        type === "movies"
+          ? {
+              ...MIXED_RESULTS,
+              results: MIXED_RESULTS.results.filter(
+                (item) => item.category === "untracked_media",
+              ),
+            }
+          : TV_RESULTS,
+      ),
+    )
+
+    render(<Deletarr />)
+
+    expect(
+      screen.queryByRole("region", { name: "Junk files and folders" }),
+    ).not.toBeInTheDocument()
+    expect(
+      screen.getByRole("region", { name: "Untracked media" }),
+    ).toBeInTheDocument()
   })
 
   it("switches to TV Shows and persists the selected tab", async () => {
@@ -292,7 +451,7 @@ describe("Deletarr", () => {
       "true",
     )
     expect(
-      screen.getByText("No junk candidates found for tv shows."),
+      screen.getByText("No review candidates found for tv shows."),
     ).toBeInTheDocument()
   })
 
@@ -335,34 +494,44 @@ describe("Deletarr", () => {
     )
   })
 
-  it("starts a scan for the active library", async () => {
+  it("clears selection and starts a scan for the active library", async () => {
     const user = userEvent.setup()
     const mutate = vi.fn()
     vi.mocked(useScanDeletarr).mockReturnValue(mutationResult(mutate, false))
     render(<Deletarr />)
 
+    await user.click(screen.getByLabelText("Select movie.nfo"))
     await user.click(screen.getByRole("button", { name: "Scan" }))
 
     expect(mutate).toHaveBeenCalledWith("movies")
+    expect(
+      screen.getByText("0 of 3 candidate(s) selected."),
+    ).toBeInTheDocument()
   })
 
-  it("shows the running scan label", () => {
-    vi.mocked(useDeletarrStatus).mockReturnValue(
-      queryResult({
-        ...STATUS,
-        libraries: {
-          ...STATUS.libraries,
-          movies: {
-            ...STATUS.libraries.movies,
-            stats: { ...STATUS.libraries.movies.stats, is_scanning: true },
-          },
-        },
-      }),
+  it("shows the running scan label and clears selection on scan transition", async () => {
+    const user = userEvent.setup()
+    let currentStatus = STATUS
+    vi.mocked(useDeletarrStatus).mockImplementation(() =>
+      queryResult(currentStatus),
     )
+    const view = render(<Deletarr />)
+    await user.click(screen.getByLabelText("Select movie.nfo"))
 
-    render(<Deletarr />)
+    currentStatus = {
+      ...STATUS,
+      libraries: {
+        ...STATUS.libraries,
+        movies: {
+          ...STATUS.libraries.movies,
+          stats: { ...STATUS.libraries.movies.stats, is_scanning: true },
+        },
+      },
+    }
+    view.rerender(<Deletarr />)
 
     expect(screen.getByRole("button", { name: "Scanning" })).toBeDisabled()
+    expect(screen.getByLabelText("Select movie.nfo")).not.toBeChecked()
   })
 
   it("selects a whole group and deletes after confirmation", async () => {
@@ -383,7 +552,6 @@ describe("Deletarr", () => {
         type: "movies",
         paths: [
           "/media/movies/Dune/movie.nfo",
-          "/media/movies/@eaDir",
           "/media/movies/Dune/sample.txt",
         ],
       },
@@ -391,7 +559,7 @@ describe("Deletarr", () => {
     )
   })
 
-  it("unselects individual and grouped candidates", async () => {
+  it("combines individual and grouped selection without affecting other groups", async () => {
     const user = userEvent.setup()
     render(<Deletarr />)
 
@@ -403,11 +571,11 @@ describe("Deletarr", () => {
     const duneGroup = screen.getByRole("region", { name: "Dune" })
     await user.click(within(duneGroup).getByLabelText("Select group"))
     expect(
-      screen.getByText("3 of 3 candidate(s) selected."),
+      screen.getByText("2 of 3 candidate(s) selected."),
     ).toBeInTheDocument()
     await user.click(within(duneGroup).getByLabelText("Select group"))
     expect(
-      screen.getByText("1 of 3 candidate(s) selected."),
+      screen.getByText("0 of 3 candidate(s) selected."),
     ).toBeInTheDocument()
   })
 
@@ -416,11 +584,141 @@ describe("Deletarr", () => {
     render(<Deletarr />)
 
     await user.click(screen.getByLabelText("Select sample.txt"))
-    await user.click(screen.getByLabelText("Select sample.txt"))
+    const duneGroup = screen.getByRole("region", { name: "Dune" })
+    await user.click(within(duneGroup).getByLabelText("Select group"))
 
     expect(
       screen.getByText("2 of 3 candidate(s) selected."),
     ).toBeInTheDocument()
+  })
+
+  it("selects and clears junk and untracked media independently", async () => {
+    const user = userEvent.setup()
+    vi.mocked(useDeletarrResults).mockImplementation((type) =>
+      queryResult(type === "movies" ? MIXED_RESULTS : TV_RESULTS),
+    )
+    render(<Deletarr />)
+
+    const junkSelector = screen.getByLabelText("Select all junk")
+    const untrackedSelector = screen.getByLabelText(
+      "Select all untracked media",
+    )
+    await user.click(junkSelector)
+
+    expect(junkSelector).toBeChecked()
+    expect(untrackedSelector).not.toBeChecked()
+    expect(
+      screen.getByText("3 of 4 candidate(s) selected."),
+    ).toBeInTheDocument()
+
+    await user.click(screen.getByLabelText("Select movie.nfo"))
+    expect(junkSelector).toBePartiallyChecked()
+
+    await user.click(untrackedSelector)
+    expect(untrackedSelector).toBeChecked()
+    expect(
+      screen.getByText("3 of 4 candidate(s) selected."),
+    ).toBeInTheDocument()
+
+    await user.click(junkSelector)
+    expect(
+      screen.getByText("4 of 4 candidate(s) selected."),
+    ).toBeInTheDocument()
+    await user.click(junkSelector)
+    expect(
+      screen.getByText("1 of 4 candidate(s) selected."),
+    ).toBeInTheDocument()
+    expect(screen.getByLabelText("Select Unknown Thing")).toBeChecked()
+  })
+
+  it("preserves equivalent polling selection but never restores A after A to B to A", async () => {
+    const user = userEvent.setup()
+    let currentResults = MOVIE_RESULTS
+    vi.mocked(useDeletarrResults).mockImplementation((type) =>
+      queryResult(type === "movies" ? currentResults : TV_RESULTS),
+    )
+    const view = render(<Deletarr />)
+
+    await user.click(screen.getByLabelText("Select sample.txt"))
+    currentResults = {
+      ...MOVIE_RESULTS,
+      results: [...MOVIE_RESULTS.results].reverse(),
+    }
+    view.rerender(<Deletarr />)
+    expect(screen.getByLabelText("Select sample.txt")).toBeChecked()
+
+    currentResults = MIXED_RESULTS
+    view.rerender(<Deletarr />)
+    expect(
+      screen.getByText("0 of 4 candidate(s) selected."),
+    ).toBeInTheDocument()
+
+    currentResults = MOVIE_RESULTS
+    view.rerender(<Deletarr />)
+    expect(screen.getByLabelText("Select sample.txt")).not.toBeChecked()
+    expect(
+      screen.getByRole("button", { name: "Delete selected" }),
+    ).toBeDisabled()
+  })
+
+  it("submits the explicit union selected from both result sections", async () => {
+    const user = userEvent.setup()
+    const mutate = vi.fn()
+    vi.mocked(useDeletarrResults).mockImplementation((type) =>
+      queryResult(type === "movies" ? MIXED_RESULTS : TV_RESULTS),
+    )
+    vi.mocked(useDeleteDeletarrItems).mockReturnValue(
+      mutationResult(mutate, false),
+    )
+    render(<Deletarr />)
+
+    await user.click(screen.getByLabelText("Select all junk"))
+    await user.click(screen.getByLabelText("Select all untracked media"))
+    await user.click(screen.getByRole("button", { name: "Delete selected" }))
+    await user.click(screen.getByRole("button", { name: "Delete" }))
+
+    expect(mutate).toHaveBeenCalledWith(
+      {
+        type: "movies",
+        paths: [
+          "/media/movies/Dune/movie.nfo",
+          "/media/movies/Dune/sample.txt",
+          "/media/movies/@eaDir",
+          "/media/movies/Unknown Thing",
+        ],
+      },
+      expect.objectContaining({ onSuccess: expect.any(Function) }),
+    )
+  })
+
+  it("collapses groups independently without coupling disclosure and selection", async () => {
+    const user = userEvent.setup()
+    render(<Deletarr />)
+
+    const duneGroup = screen.getByRole("region", { name: "Dune" })
+    const rootGroup = screen.getByRole("region", { name: "/media/movies" })
+    const collapseDune = within(duneGroup).getByRole("button", {
+      name: "Collapse Dune",
+    })
+    expect(collapseDune).toHaveAttribute("aria-expanded", "true")
+
+    await user.click(collapseDune)
+    expect(screen.queryByLabelText("Select movie.nfo")).not.toBeInTheDocument()
+    expect(
+      within(rootGroup).getByLabelText("Select @eaDir"),
+    ).toBeInTheDocument()
+
+    const expandDune = within(duneGroup).getByRole("button", {
+      name: "Expand Dune",
+    })
+    expandDune.focus()
+    await user.keyboard("{Enter}")
+    expect(screen.getByLabelText("Select movie.nfo")).toBeInTheDocument()
+
+    await user.click(within(duneGroup).getByLabelText("Select group"))
+    expect(
+      within(duneGroup).getByRole("button", { name: "Collapse Dune" }),
+    ).toHaveAttribute("aria-expanded", "true")
   })
 
   it("clears local selection when delete succeeds", async () => {
@@ -433,12 +731,16 @@ describe("Deletarr", () => {
     )
     render(<Deletarr />)
 
+    await user.click(screen.getByLabelText("Select movie.nfo"))
     await user.click(screen.getByRole("button", { name: "Delete selected" }))
     await user.click(screen.getByRole("button", { name: "Delete" }))
 
     expect(
       screen.getByText("0 of 3 candidate(s) selected."),
     ).toBeInTheDocument()
+    await waitFor(() =>
+      expect(screen.getByLabelText("Select movie.nfo")).not.toBeChecked(),
+    )
   })
 
   it("uses later group items for protected video context", () => {

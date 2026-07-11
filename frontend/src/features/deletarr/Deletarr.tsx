@@ -23,7 +23,7 @@ function storedTab(): DeletarrTab {
     : "movies"
 }
 
-/** Deletarr page: review and delete junk files discovered in media libraries. */
+/** Deletarr page: review and delete junk and untracked-media candidates. */
 export function Deletarr() {
   const [activeTab, setActiveTab] = useState<DeletarrTab>(storedTab)
 
@@ -42,8 +42,8 @@ export function Deletarr() {
       <div>
         <h1 className="text-2xl font-semibold tracking-tight">Deletarr</h1>
         <p className="text-sm text-muted-foreground">
-          Review junk files and folders in your media libraries before deleting
-          them.
+          Review junk files, empty folders, and untracked media in your
+          libraries before deleting them.
         </p>
       </div>
 
