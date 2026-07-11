@@ -46,6 +46,16 @@ updates:
         update-types:
           - "minor"
           - "patch"
+    # TypeScript 7 is the native (Go) rewrite, and typescript-eslint's parser peer
+    # range is `>=4.8.4 <6.1.0` — so anything at or above 6.1 breaks `eslint`/`tsc`
+    # here: the 7.x major and a future 6.1 minor alike. Hold both major and minor
+    # `typescript` bumps until typescript-eslint's peer range advances; only 6.0.x
+    # patch updates flow through the group above.
+    ignore:
+      - dependency-name: "typescript"
+        update-types:
+          - "version-update:semver-major"
+          - "version-update:semver-minor"
 
   # ---- Backend Python packages (backend/pyproject.toml, PEP 621) ----
   # NOTE: Dependabot updates pyproject.toml only; it does NOT regenerate

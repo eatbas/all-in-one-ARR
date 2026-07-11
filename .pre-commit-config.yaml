@@ -6,7 +6,7 @@
 # in backend/pyproject.toml.
 repos:
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.15.20
+    rev: v0.15.21
     hooks:
       # Lint and auto-fix first, then format, so any fixes are re-formatted.
       - id: ruff-check
