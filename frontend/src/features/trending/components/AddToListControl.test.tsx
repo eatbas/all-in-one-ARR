@@ -93,6 +93,23 @@ describe("AddToListControl", () => {
     })
   })
 
+  it("opens the add menu without locking body scroll, so the sticky header and sidebar stay anchored", async () => {
+    vi.mocked(useLists).mockReturnValue(
+      queryResult([listSummary({ slug: "movies", name: "Movies" })]),
+    )
+    const user = userEvent.setup()
+    render(<AddToListControl item={ITEM} />)
+    await user.click(screen.getByRole("button", { name: /add/i }))
+    // The menu is open…
+    expect(
+      await screen.findByRole("menuitem", { name: "Movies" }),
+    ).toBeInTheDocument()
+    // …but the non-modal menu must not engage react-remove-scroll's body
+    // scroll-lock (`data-scroll-locked` → `overflow: hidden` on <body>), which is
+    // what detaches the sticky Topbar/Sidebar when the page is scrolled down.
+    expect(document.body).not.toHaveAttribute("data-scroll-locked")
+  })
+
   it("keeps the hover-revealed Add label present in the DOM", () => {
     vi.mocked(useLists).mockReturnValue(
       queryResult([listSummary({ slug: "movies", name: "Movies" })]),
