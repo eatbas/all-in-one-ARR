@@ -445,18 +445,20 @@ reviewed junk candidates and deletes only what you explicitly confirm:
   settings store.
 - **Source of truth** — with the toggle on and Radarr (movies) / Sonarr (TV)
   connected, Deletarr fetches the managed inventory (each title's on-disk folder
-  and the files the app tracks) and flags only files the library manager does not
-  track, plus folders it does not know about (surfaced separately and unchecked by
-  default). The scan-mode banner shows *Verified against Radarr/Sonarr* in this
-  mode. When the matching app is unconfigured or unreachable it falls back to the
-  heuristic scan and the banner explains why.
+  and the files the app tracks). Results explicitly separate junk files and folders
+  from untracked media such as videos, loose files, and whole folders the library
+  manager does not know about. The scan-mode banner shows *Verified against
+  Radarr/Sonarr* in this mode. When the matching app is unconfigured or unreachable
+  it falls back to the heuristic scan and the banner explains why.
 - **Read-only scans** — scans inspect filenames, folders, and sizes only. The
   heuristic fallback flags common sidecars, metadata that does not match the
   protected video, junk folders, duplicate or misplaced movie videos, and
-  unexpected TV season content.
-- **Reviewed deletion** — scan candidates are rendered with checkboxes, grouped
-  by folder, and deletion requires an explicit confirmation showing the selected
-  count and reclaimable size.
+  unexpected TV season content. Both scan modes also surface empty directory trees
+  conservatively, without treating unreadable or symlinked content as empty.
+- **Reviewed deletion** — scan candidates start unselected and are rendered with
+  checkboxes in collapsible movie or TV groups. Junk and untracked-media sections
+  have independent **Select all** controls, and deletion requires an explicit
+  confirmation showing the selected count and reclaimable size.
 - **Server-side safety** — the backend deletes only paths present in the current
   scan results for that library, and it revalidates each resolved path remains
   under the configured movies or TV root. Missing files and rejected paths are
