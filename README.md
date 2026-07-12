@@ -478,6 +478,10 @@ Trakt list without leaving the app. It is organised as **per-source tabs**:
   trending/popular feed. A **Movies | Shows** toggle and a **Trending | Popular**
   toggle apply per tab. A **Hide available** switch filters out titles you already
   have — anything in Radarr/Sonarr (the green ones) or reported *Available* in Seer.
+- **Posters per row** — an adjustable density slider (5–11 posters per row on
+  large screens) lets you trade caption legibility against how many titles fit on
+  screen. The chosen density is persisted in browser `localStorage` and is shared
+  across every Trending source tab, but it does not affect other pages.
 - **Anime** — a dedicated tab with its own source toggle: **AniList** (the
   community's trending/popular feeds — no API key needed), plus anime-filtered
   **Trakt** and **TMDB** variants reusing those existing connections. AniList
@@ -490,11 +494,13 @@ Trakt list without leaving the app. It is organised as **per-source tabs**:
   title's dedicated page on its source: the Trakt page (by slug), the TMDB page,
   or — for Seer items — your configured Overseerr/Seer instance's media page.
 - **IMDb rating overlay** — each card shows the title's **IMDb star and rating**
-  in the poster's top-left corner, fetched on demand from **OMDb** (IMDb has no
-  official trending API, so it is an enrichment overlay, not a source). Ratings
-  are cached server-side with a 24-hour TTL and fetched lazily, so a grid does not
-  exhaust the OMDb free-tier quota; a card simply omits the rating when none is
-  available.
+  in the poster's top-left corner, carried on the feed payload itself (IMDb has
+  no official trending API, so it is an enrichment overlay, not a source).
+  Ratings are persisted in the database and filled by a **budgeted background
+  backfill** against **OMDb** — at most 800 requests per UTC day, so the
+  free-tier quota is never exhausted; whatever does not fit is fetched on the
+  following days. A card simply omits the rating until the backfill has covered
+  the title (or when none is available).
 - **Library status (Seer tab)** — cards also show the item's Seer library status
   (Requested / Processing / Partial / Available) read from `mediaInfo`, so you can
   see what is already in your library. Items already mirrored in a tracked list
@@ -740,9 +746,11 @@ after both check jobs have passed.
   `movie|show`, `category` is `trending|popular`, and `window` (`day|week`, TMDB
   only) defaults to `week` — the endpoint still accepts it, but the UI no longer
   exposes a time-window control. A failing/unconfigured source degrades to `[]`.
-- `GET /api/trending/rating?imdb=` *or* `?media=&tmdb=` – the IMDb rating overlay
-  `{ imdb_rating, imdb_votes }` via OMDb (resolving the IMDb id from TMDB when only
-  a TMDB id is given), served from a bounded 24-hour cache.
+- `GET /api/trending/rating?imdb=` *or* `?media=&tmdb=` – compat single-item
+  lookup of `{ imdb_rating, imdb_votes }`, served from the persistent rating
+  store the scheduled backfill fills (no live OMDb/TMDB call). The dashboard now
+  reads `imdb_rating` straight off `GET /api/trending`; this route remains for
+  pre-deploy cached bundles.
 - `POST /api/trending/add` – add `{ media_type, owner_user, slug, tmdb?, imdb?,
   trakt?, tvdb?, title? }` to an owned Trakt list and trigger a sync; returns
   `{ status: "added" | "added_pending_sync" }`.
@@ -772,11 +780,13 @@ after both check jobs have passed.
 - The dashboard **List-Syncarr → Lists** tab is collapsible: each synced list
   shows its item count, a relative *last synced* time and a *next sync*
   countdown, and expands to a poster grid of its items (title + request/
-  availability status). Posters are resolved from TMDB (falling back to OMDb)
-  and cached on disk under `POSTER_CACHE_PATH`, so each is downloaded only once.
-  The *next sync* time is derived from the last poll plus `SYNC_INTERVAL_MIN`
-  (an approximation, since the pre-release APScheduler wrapper does not expose a
-  next-fire time).
+  availability status). A **Posters per row** slider (5–11 posters per row on
+  large screens) adjusts the grid density and the size of every overlay control;
+  the choice is persisted in browser `localStorage` independently of the Trending
+  page. Posters are resolved from TMDB (falling back to OMDb) and cached on disk
+  under `POSTER_CACHE_PATH`, so each is downloaded only once. The *next sync*
+  time is derived from the last poll plus `SYNC_INTERVAL_MIN` (an approximation,
+  since the pre-release APScheduler wrapper does not expose a next-fire time).
 - The dashboard **List-Syncarr → Settings** tab manages sync behaviour: the
   **sync interval** (how often Trakt is polled) and the **remove from Trakt when
   available** toggle (off by default — when off, items leave a Trakt list only via
