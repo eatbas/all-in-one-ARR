@@ -26,6 +26,8 @@ const BASE: BandwidthStatus = {
   enabled: false,
   status: "Monitoring only",
   last_run_at: "2026-06-26T20:00:00Z",
+  tracking_suspended: false,
+  manual_paused_clients: [],
   check_interval_seconds: 15,
   qbittorrent: {
     online: true,
@@ -40,7 +42,7 @@ const BASE: BandwidthStatus = {
     queue_size: 0,
     paused: false,
   },
-  recent_downloads: [],
+  download_history: [],
   queue: { qbittorrent: [], sabnzbd: [] },
 }
 

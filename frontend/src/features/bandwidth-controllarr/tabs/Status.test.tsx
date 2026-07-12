@@ -5,11 +5,13 @@ import { beforeEach, describe, expect, it, vi } from "vitest"
 
 vi.mock("@/shared/lib/queries", () => ({
   useBandwidthStatus: vi.fn(),
+  useSetBandwidthClientPaused: vi.fn(),
   useUpdateBandwidthSettings: vi.fn(),
 }))
 
 import {
   useBandwidthStatus,
+  useSetBandwidthClientPaused,
   useUpdateBandwidthSettings,
 } from "@/shared/lib/queries"
 import { Status } from "@/features/bandwidth-controllarr/tabs/Status"
@@ -26,6 +28,8 @@ const BASE: BandwidthStatus = {
   enabled: false,
   status: "Monitoring only",
   last_run_at: "2026-06-26T20:00:00Z",
+  tracking_suspended: false,
+  manual_paused_clients: [],
   check_interval_seconds: 15,
   qbittorrent: {
     online: true,
@@ -40,7 +44,7 @@ const BASE: BandwidthStatus = {
     queue_size: 0,
     paused: false,
   },
-  recent_downloads: [],
+  download_history: [],
   queue: { qbittorrent: [], sabnzbd: [] },
 }
 
@@ -49,10 +53,13 @@ function render(ui: ReactElement) {
 }
 
 let updateMutate: ReturnType<typeof vi.fn>
+let clientMutate: ReturnType<typeof vi.fn>
 
 beforeEach(() => {
   updateMutate = vi.fn()
+  clientMutate = vi.fn()
   vi.mocked(useBandwidthStatus).mockReturnValue(queryResult(BASE))
+  vi.mocked(useSetBandwidthClientPaused).mockReturnValue(mutation(clientMutate))
   vi.mocked(useUpdateBandwidthSettings).mockReturnValue(mutation(updateMutate))
 })
 
@@ -73,8 +80,10 @@ describe("Status", () => {
     expect(screen.getByText("SABnzbd")).toBeInTheDocument()
     expect(screen.getByText("5.50 MB/s")).toBeInTheDocument()
     expect(screen.getByText("RESUMED")).toBeInTheDocument()
-    expect(screen.getByText("Recent downloads")).toBeInTheDocument()
-    expect(screen.getByText("No recent downloads")).toBeInTheDocument()
+    expect(screen.getByText("Download history")).toBeInTheDocument()
+    expect(
+      screen.getByRole("button", { name: "Expand download history" }),
+    ).toBeInTheDocument()
   })
 
   it("uses safe defaults before status data is available", () => {
@@ -86,15 +95,15 @@ describe("Status", () => {
     expect(screen.getByText("Waiting for first check…")).toBeInTheDocument()
     expect(screen.getAllByText("0.00 MB/s")).toHaveLength(2)
     expect(screen.getAllByText("0").length).toBeGreaterThanOrEqual(4)
-    expect(screen.getByText("No recent downloads")).toBeInTheDocument()
+    expect(screen.getByText("Queue is empty")).toBeInTheDocument()
   })
 
-  it("renders recent downloads and expandable queue details", async () => {
+  it("renders download history and expandable queue details", async () => {
     const user = userEvent.setup()
     vi.mocked(useBandwidthStatus).mockReturnValue(
       queryResult({
         ...BASE,
-        recent_downloads: [
+        download_history: [
           {
             client: "sabnzbd",
             id: "done",
@@ -132,11 +141,11 @@ describe("Status", () => {
 
     render(<Status />)
 
-    expect(screen.getByText("Finished.Show")).toBeInTheDocument()
+    expect(screen.getAllByText("Queued.Movie")).toHaveLength(2)
     await user.click(
-      screen.getByRole("button", { name: "Expand downloader queue" }),
+      screen.getByRole("button", { name: "Expand download history" }),
     )
-    expect(screen.getByText("Queued.Movie")).toBeInTheDocument()
+    expect(screen.getAllByText("Finished.Show")).toHaveLength(2)
   })
 
   it("shows the active-torrents danger state", () => {
@@ -166,6 +175,39 @@ describe("Status", () => {
     expect(toggle).not.toBeChecked()
     await user.click(toggle)
     expect(updateMutate).toHaveBeenCalledWith({ enabled: true })
+  })
+
+  it("pauses and resumes download clients manually", async () => {
+    const user = userEvent.setup()
+    const { unmount } = render(<Status />)
+
+    await user.click(
+      screen.getByRole("button", { name: "Pause qBittorrent downloads" }),
+    )
+    expect(clientMutate).toHaveBeenCalledWith({
+      client: "qbittorrent",
+      paused: true,
+    })
+    unmount()
+
+    vi.mocked(useBandwidthStatus).mockReturnValue(
+      queryResult({
+        ...BASE,
+        enabled: true,
+        tracking_suspended: true,
+        manual_paused_clients: ["sabnzbd"],
+        status: "Manual pause — automatic control suspended",
+      }),
+    )
+    render(<Status />)
+    expect(screen.getByText("Suspended")).toBeInTheDocument()
+    await user.click(
+      screen.getByRole("button", { name: "Resume SABnzbd downloads" }),
+    )
+    expect(clientMutate).toHaveBeenLastCalledWith({
+      client: "sabnzbd",
+      paused: false,
+    })
   })
 
   it("shows help for the enable switch", async () => {
@@ -203,6 +245,19 @@ describe("Status", () => {
     render(<Status />)
     expect(
       screen.getByRole("switch", { name: "Enable bandwidth control" }),
+    ).toBeDisabled()
+  })
+
+  it("disables both downloader controls while a command is pending", () => {
+    vi.mocked(useSetBandwidthClientPaused).mockReturnValue(
+      mutation(clientMutate, true),
+    )
+    render(<Status />)
+    expect(
+      screen.getByRole("button", { name: "Pause qBittorrent downloads" }),
+    ).toBeDisabled()
+    expect(
+      screen.getByRole("button", { name: "Pause SABnzbd downloads" }),
     ).toBeDisabled()
   })
 })

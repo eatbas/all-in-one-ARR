@@ -4,8 +4,11 @@ import {
   CardHeader,
   CardTitle,
 } from "@/shared/components/ui/card"
+import { PauseIcon, PlayIcon } from "lucide-react"
 import { Badge } from "@/shared/components/ui/badge"
+import { Button } from "@/shared/components/ui/button"
 import { cn } from "@/shared/lib/utils"
+import type { BandwidthClient } from "@/shared/lib/api"
 
 interface ClientCardProps {
   label: string
@@ -13,7 +16,11 @@ interface ClientCardProps {
   speed: number
   active: number
   queue: number
-  paused?: boolean
+  paused?: boolean | null
+  client: BandwidthClient
+  manuallyPaused: boolean
+  controlPending: boolean
+  onManualPausedChange: (paused: boolean) => void
 }
 
 /**
@@ -27,13 +34,19 @@ export function ClientCard({
   active,
   queue,
   paused,
+  client,
+  manuallyPaused,
+  controlPending,
+  onManualPausedChange,
 }: ClientCardProps) {
+  const actionLabel = manuallyPaused ? "Resume" : "Pause"
+
   return (
-    <Card>
-      <CardHeader className="flex flex-row items-center justify-between">
+    <Card data-client={client} className="gap-4 py-4">
+      <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-3 px-4 sm:px-5">
         <CardTitle>{label}</CardTitle>
-        <div className="flex items-center gap-2">
-          {paused !== undefined && (
+        <div className="flex flex-wrap items-center justify-end gap-2">
+          {paused != null && (
             <Badge variant={paused ? "destructive" : "secondary"}>
               {paused ? "PAUSED" : "RESUMED"}
             </Badge>
@@ -48,9 +61,24 @@ export function ClientCard({
           >
             {online ? "Online" : "Offline"}
           </Badge>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            disabled={!online || controlPending}
+            aria-label={`${actionLabel} ${label} downloads`}
+            onClick={() => onManualPausedChange(!manuallyPaused)}
+          >
+            {manuallyPaused ? (
+              <PlayIcon aria-hidden="true" className="size-4" />
+            ) : (
+              <PauseIcon aria-hidden="true" className="size-4" />
+            )}
+            {actionLabel}
+          </Button>
         </div>
       </CardHeader>
-      <CardContent>
+      <CardContent className="px-4 sm:px-5">
         <dl
           className={cn(
             "grid grid-cols-3 gap-4 text-sm",

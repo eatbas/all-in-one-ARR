@@ -6,6 +6,7 @@ import { ClientCard } from "@/features/bandwidth-controllarr/components/client-c
 import { DownloadActivityPanel } from "@/features/bandwidth-controllarr/components/download-activity-panel"
 import {
   useBandwidthStatus,
+  useSetBandwidthClientPaused,
   useUpdateBandwidthSettings,
 } from "@/shared/lib/queries"
 import { formatTimestamp } from "@/shared/lib/format"
@@ -18,21 +19,26 @@ import { cn } from "@/shared/lib/utils"
 export function Status() {
   const { data: status } = useBandwidthStatus()
   const updateSettings = useUpdateBandwidthSettings()
+  const updateClient = useSetBandwidthClientPaused()
 
   const enabled = status?.enabled ?? false
   const statusText = status?.status ?? "Monitoring only"
   const isActive = status?.status.includes("Active torrents") ?? false
   const qb = status?.qbittorrent
   const sab = status?.sabnzbd
-  const recentDownloads = status?.recent_downloads ?? []
+  const downloadHistory = status?.download_history ?? []
   const queue = status?.queue ?? { qbittorrent: [], sabnzbd: [] }
-  const controlLabel = enabled ? "Enabled" : "Disabled"
+  const controlLabel = enabled
+    ? status?.tracking_suspended
+      ? "Suspended"
+      : "Enabled"
+    : "Disabled"
   const badgeLabel = enabled ? statusText : `${statusText} (Disabled)`
 
   return (
-    <div className="flex flex-col gap-6">
-      <Card className={isActive ? "border-destructive" : undefined}>
-        <CardContent className="flex flex-col gap-4 sm:flex-row sm:items-center">
+    <div className="flex flex-col gap-4">
+      <Card className={cn("gap-4 py-4", isActive && "border-destructive")}>
+        <CardContent className="flex flex-col gap-4 px-4 sm:flex-row sm:items-center sm:px-5">
           <div className="min-w-0">
             <p className="font-medium">System Status</p>
             <p className="text-sm text-muted-foreground">
@@ -71,25 +77,41 @@ export function Status() {
         </CardContent>
       </Card>
 
-      <div className="grid gap-6 md:grid-cols-2">
+      <div className="grid gap-4 md:grid-cols-2">
         <ClientCard
           label="qBittorrent"
+          client="qbittorrent"
           online={qb?.online ?? false}
           speed={qb?.speed_mbps ?? 0}
           active={qb?.active_downloads ?? 0}
           queue={qb?.queue_size ?? 0}
+          manuallyPaused={
+            status?.manual_paused_clients.includes("qbittorrent") ?? false
+          }
+          controlPending={updateClient.isPending}
+          onManualPausedChange={(paused) =>
+            updateClient.mutate({ client: "qbittorrent", paused })
+          }
         />
         <ClientCard
           label="SABnzbd"
+          client="sabnzbd"
           online={sab?.online ?? false}
           speed={sab?.speed_mbps ?? 0}
           active={sab?.active_downloads ?? 0}
           queue={sab?.queue_size ?? 0}
           paused={sab?.paused}
+          manuallyPaused={
+            status?.manual_paused_clients.includes("sabnzbd") ?? false
+          }
+          controlPending={updateClient.isPending}
+          onManualPausedChange={(paused) =>
+            updateClient.mutate({ client: "sabnzbd", paused })
+          }
         />
       </div>
 
-      <DownloadActivityPanel recentDownloads={recentDownloads} queue={queue} />
+      <DownloadActivityPanel downloadHistory={downloadHistory} queue={queue} />
     </div>
   )
 }

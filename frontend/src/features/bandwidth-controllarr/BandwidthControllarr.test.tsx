@@ -5,11 +5,13 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
 vi.mock("@/shared/lib/queries", () => ({
   useBandwidthStatus: vi.fn(),
+  useSetBandwidthClientPaused: vi.fn(),
   useUpdateBandwidthSettings: vi.fn(),
 }))
 
 import {
   useBandwidthStatus,
+  useSetBandwidthClientPaused,
   useUpdateBandwidthSettings,
 } from "@/shared/lib/queries"
 import { BandwidthControllarr } from "@/features/bandwidth-controllarr/BandwidthControllarr"
@@ -27,6 +29,8 @@ const STATUS: BandwidthStatus = {
   enabled: false,
   status: "Monitoring only",
   last_run_at: "2026-06-26T20:00:00Z",
+  tracking_suspended: false,
+  manual_paused_clients: [],
   check_interval_seconds: 15,
   qbittorrent: {
     online: true,
@@ -41,7 +45,7 @@ const STATUS: BandwidthStatus = {
     queue_size: 0,
     paused: false,
   },
-  recent_downloads: [],
+  download_history: [],
   queue: { qbittorrent: [], sabnzbd: [] },
 }
 
@@ -52,6 +56,7 @@ function render(ui: ReactElement) {
 beforeEach(() => {
   localStorage.clear()
   vi.mocked(useBandwidthStatus).mockReturnValue(queryResult(STATUS))
+  vi.mocked(useSetBandwidthClientPaused).mockReturnValue(mutation(vi.fn()))
   vi.mocked(useUpdateBandwidthSettings).mockReturnValue(mutation(vi.fn()))
 })
 

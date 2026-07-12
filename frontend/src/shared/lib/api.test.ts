@@ -11,7 +11,6 @@ import {
   clearPosters,
   deleteDeletarrItems,
   getActivity,
-  getBandwidthStatus,
   getDatabaseStats,
   getDeletarrResults,
   getDeletarrSettings,
@@ -44,13 +43,11 @@ import {
   testService,
   testTrakt,
   triggerSync,
-  updateBandwidthSettings,
   updateDeletarrSettings,
   updateFindarrSettings,
   updateGeneralSettings,
   updateServiceSettings,
   updateTraktSettings,
-  type BandwidthStatus,
   type DatabaseStats,
   type Status,
   type TrendingItem,
@@ -520,53 +517,6 @@ describe("deletarr", () => {
           type: "tv",
           paths: ["/media/tv/Show/sample.txt"],
         }),
-      }),
-    )
-  })
-})
-
-const sampleBandwidthStatus: BandwidthStatus = {
-  enabled: false,
-  status: "Monitoring only",
-  last_run_at: "2026-06-26T20:00:00Z",
-  check_interval_seconds: 15,
-  qbittorrent: {
-    online: true,
-    speed_mbps: 12.5,
-    active_downloads: 2,
-    queue_size: 1,
-  },
-  sabnzbd: {
-    online: true,
-    speed_mbps: 0,
-    active_downloads: 0,
-    queue_size: 0,
-    paused: false,
-  },
-  recent_downloads: [],
-  queue: { qbittorrent: [], sabnzbd: [] },
-}
-
-describe("bandwidth controllarr", () => {
-  it("GETs the bandwidth status", async () => {
-    const fetchSpy = mockFetch(jsonResponse(sampleBandwidthStatus))
-    await expect(getBandwidthStatus()).resolves.toEqual(sampleBandwidthStatus)
-    expect(fetchSpy).toHaveBeenCalledWith(
-      "/api/bandwidth/status",
-      expect.anything(),
-    )
-  })
-
-  it("PUTs bandwidth settings", async () => {
-    const fetchSpy = mockFetch(jsonResponse(sampleBandwidthStatus))
-    await expect(updateBandwidthSettings({ enabled: true })).resolves.toEqual(
-      sampleBandwidthStatus,
-    )
-    expect(fetchSpy).toHaveBeenCalledWith(
-      "/api/bandwidth/settings",
-      expect.objectContaining({
-        method: "PUT",
-        body: JSON.stringify({ enabled: true }),
       }),
     )
   })

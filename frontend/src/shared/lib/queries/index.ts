@@ -9,22 +9,16 @@ import { toast } from "sonner"
 
 import {
   addTraktList,
-  addTrending,
   checkServiceStatuses,
   clearActivity,
-  clearFindarrHistory,
   clearItems,
   clearPosters,
   deleteDeletarrItems,
   getActivity,
-  getBandwidthStatus,
   getDatabaseStats,
   getDeletarrResults,
   getDeletarrSettings,
   getDeletarrStatus,
-  getFindarrHistory,
-  getFindarrSettings,
-  getFindarrStatus,
   getGeneralSettings,
   getItems,
   getLists,
@@ -34,29 +28,20 @@ import {
   getTraktAuthStatus,
   getTraktLists,
   getTraktSettings,
-  getTrending,
-  getTrendingRating,
-  getTrendingStatus,
   removeAvailable,
   removeItem,
   removeTraktList,
-  resetFindarrState,
-  runFindarr,
   scanDeletarr,
   startTraktAuth,
   testService,
   testTrakt,
   triggerSync,
-  updateBandwidthSettings,
   updateDeletarrSettings,
-  updateFindarrSettings,
   updateGeneralSettings,
   updateServiceSettings,
   updateTraktSettings,
   type ActivityEntry,
   type AddListPayload,
-  type BandwidthSettingsUpdate,
-  type BandwidthStatus,
   type DatabaseStats,
   type DeletarrDeleteResult,
   type DeletarrLibraryType,
@@ -64,13 +49,6 @@ import {
   type DeletarrSettings,
   type DeletarrSettingsUpdate,
   type DeletarrStatus,
-  type FindarrAppName,
-  type FindarrCountResult,
-  type FindarrHistoryEntry,
-  type FindarrRunResult,
-  type FindarrSettings,
-  type FindarrSettingsUpdate,
-  type FindarrStatus,
   type GeneralSettings,
   type Item,
   type ListSummary,
@@ -85,18 +63,32 @@ import {
   type TraktListEntry,
   type TraktSettings,
   type TraktTestResult,
-  type AddTrendingPayload,
-  type TrendingAddResult,
-  type TrendingItem,
-  type TrendingQuery,
-  type TrendingRating,
-  type TrendingStatus,
   type UpdateGeneralSettings,
   type UpdateServicePayload,
   type UpdateTraktSettings,
 } from "@/shared/lib/api"
 import { queryKeys } from "@/shared/lib/queries/keys"
 export { queryKeys } from "@/shared/lib/queries/keys"
+export {
+  useBandwidthStatus,
+  useSetBandwidthClientPaused,
+  useUpdateBandwidthSettings,
+} from "@/shared/lib/queries/bandwidth"
+export {
+  useClearFindarrHistory,
+  useFindarrHistory,
+  useFindarrSettings,
+  useFindarrStatus,
+  useResetFindarrState,
+  useRunFindarr,
+  useUpdateFindarrSettings,
+} from "@/shared/lib/queries/findarr"
+export {
+  useAddTrending,
+  useTrending,
+  useTrendingRating,
+  useTrendingStatus,
+} from "@/shared/lib/queries/trending"
 
 /** Polling interval (ms) shared by all dashboard queries. */
 const REFETCH_INTERVAL = 10_000
@@ -564,157 +556,6 @@ export function useDatabaseStats(): UseQueryResult<DatabaseStats> {
   })
 }
 
-/** Polling interval (ms) for the Bandwidth-Controllarr status page. */
-const BANDWIDTH_REFETCH_INTERVAL = 3_000
-
-export function useBandwidthStatus(): UseQueryResult<BandwidthStatus> {
-  return useQuery({
-    queryKey: queryKeys.bandwidthStatus,
-    queryFn: getBandwidthStatus,
-    refetchInterval: BANDWIDTH_REFETCH_INTERVAL,
-  })
-}
-
-export function useUpdateBandwidthSettings(): UseMutationResult<
-  BandwidthStatus,
-  Error,
-  BandwidthSettingsUpdate
-> {
-  const queryClient = useQueryClient()
-
-  return useMutation({
-    mutationFn: updateBandwidthSettings,
-    onSuccess: () => {
-      void queryClient.invalidateQueries({
-        queryKey: queryKeys.bandwidthStatus,
-      })
-    },
-    onError: (error) => {
-      toast.error("Could not update bandwidth settings", {
-        description: error.message,
-      })
-    },
-  })
-}
-
-const FINDARR_REFETCH_INTERVAL = 5_000
-
-export function useFindarrStatus(): UseQueryResult<FindarrStatus> {
-  return useQuery({
-    queryKey: queryKeys.findarrStatus,
-    queryFn: getFindarrStatus,
-    refetchInterval: FINDARR_REFETCH_INTERVAL,
-  })
-}
-
-export function useFindarrSettings(): UseQueryResult<FindarrSettings> {
-  return useQuery({
-    queryKey: queryKeys.findarrSettings,
-    queryFn: getFindarrSettings,
-  })
-}
-
-export function useFindarrHistory(): UseQueryResult<FindarrHistoryEntry[]> {
-  return useQuery({
-    queryKey: queryKeys.findarrHistory,
-    queryFn: getFindarrHistory,
-    refetchInterval: FINDARR_REFETCH_INTERVAL,
-  })
-}
-
-function invalidateFindarr(queryClient: ReturnType<typeof useQueryClient>) {
-  void queryClient.invalidateQueries({ queryKey: queryKeys.findarrStatus })
-  void queryClient.invalidateQueries({ queryKey: queryKeys.findarrSettings })
-  void queryClient.invalidateQueries({ queryKey: queryKeys.findarrHistory })
-  void queryClient.invalidateQueries({ queryKey: queryKeys.activity })
-}
-
-export function useUpdateFindarrSettings(): UseMutationResult<
-  FindarrStatus,
-  Error,
-  FindarrSettingsUpdate
-> {
-  const queryClient = useQueryClient()
-
-  return useMutation({
-    mutationFn: updateFindarrSettings,
-    onSuccess: () => {
-      toast.success("Findarr settings saved")
-      invalidateFindarr(queryClient)
-    },
-    onError: (error) => {
-      toast.error("Could not save Findarr settings", {
-        description: error.message,
-      })
-    },
-  })
-}
-
-export function useRunFindarr(): UseMutationResult<
-  FindarrRunResult,
-  Error,
-  FindarrAppName | undefined
-> {
-  const queryClient = useQueryClient()
-
-  return useMutation({
-    mutationFn: (app) => runFindarr(app),
-    onSuccess: (result) => {
-      toast.success("Findarr run complete", { description: result.detail })
-      invalidateFindarr(queryClient)
-    },
-    onError: (error) => {
-      toast.error("Could not run Findarr", { description: error.message })
-    },
-  })
-}
-
-export function useResetFindarrState(): UseMutationResult<
-  FindarrCountResult,
-  Error,
-  void
-> {
-  const queryClient = useQueryClient()
-
-  return useMutation({
-    mutationFn: resetFindarrState,
-    onSuccess: (result) => {
-      toast.success("Findarr state reset", {
-        description: `${result.removed} processed entries removed.`,
-      })
-      invalidateFindarr(queryClient)
-    },
-    onError: (error) => {
-      toast.error("Could not reset Findarr state", {
-        description: error.message,
-      })
-    },
-  })
-}
-
-export function useClearFindarrHistory(): UseMutationResult<
-  FindarrCountResult,
-  Error,
-  void
-> {
-  const queryClient = useQueryClient()
-
-  return useMutation({
-    mutationFn: clearFindarrHistory,
-    onSuccess: (result) => {
-      toast.success("Findarr history cleared", {
-        description: `${result.removed} history entries removed.`,
-      })
-      invalidateFindarr(queryClient)
-    },
-    onError: (error) => {
-      toast.error("Could not clear Findarr history", {
-        description: error.message,
-      })
-    },
-  })
-}
-
 function invalidateDatabase(queryClient: ReturnType<typeof useQueryClient>) {
   void queryClient.invalidateQueries({ queryKey: queryKeys.database })
   void queryClient.invalidateQueries({ queryKey: queryKeys.activity })
@@ -894,94 +735,6 @@ export function useDeleteDeletarrItems(): UseMutationResult<
       toast.error("Could not delete selected items", {
         description: error.message,
       })
-    },
-  })
-}
-
-/**
- * Trending feeds change slowly, so they are cached for several minutes rather
- * than polled on the shared dashboard interval (which would hammer the external
- * APIs).
- */
-const TRENDING_STALE_TIME = 5 * 60_000
-const TRENDING_GC_TIME = 60 * 60_000
-
-export function useTrending(
-  query: TrendingQuery,
-): UseQueryResult<TrendingItem[]> {
-  return useQuery({
-    queryKey: queryKeys.trending(query),
-    queryFn: () => getTrending(query),
-    staleTime: TRENDING_STALE_TIME,
-    gcTime: TRENDING_GC_TIME,
-  })
-}
-
-/**
- * Poll the scheduled trending-sync status so the Trending page can show when the
- * snapshot was last refreshed. Refetched on the shared interval (the relative-time
- * label should not drift far from the real refresh time).
- */
-export function useTrendingStatus(): UseQueryResult<TrendingStatus> {
-  return useQuery({
-    queryKey: queryKeys.trendingStatus,
-    queryFn: getTrendingStatus,
-    refetchInterval: REFETCH_INTERVAL,
-  })
-}
-
-/**
- * Fetch the IMDb rating overlay for one trending item, lazily. Disabled when the
- * item carries no usable id; the backend caches results, so the rating is fetched
- * at most once per id regardless of how often a card re-renders.
- */
-export function useTrendingRating(
-  item: Pick<TrendingItem, "imdb" | "media_type" | "tmdb">,
-  enabled: boolean,
-): UseQueryResult<TrendingRating> {
-  const hasId = item.imdb !== null || item.tmdb !== null
-  const key = item.imdb ?? `${item.media_type}:${item.tmdb}`
-  return useQuery({
-    queryKey: queryKeys.trendingRating(key),
-    queryFn: () =>
-      getTrendingRating({
-        imdb: item.imdb,
-        media: item.media_type,
-        tmdb: item.tmdb,
-      }),
-    enabled: enabled && hasId,
-    staleTime: Infinity,
-  })
-}
-
-export function useAddTrending(): UseMutationResult<
-  TrendingAddResult,
-  Error,
-  AddTrendingPayload
-> {
-  const queryClient = useQueryClient()
-
-  return useMutation({
-    mutationFn: addTrending,
-    onSuccess: (result) => {
-      if (result.status === "added_pending_sync") {
-        toast.success("Added to Trakt list", {
-          description:
-            "A sync is already running; the item will be requested on the next poll.",
-        })
-      } else {
-        toast.success("Added to Trakt list", {
-          description: "Syncing now to request it in Seer.",
-        })
-      }
-      void queryClient.invalidateQueries({ queryKey: queryKeys.status })
-      void queryClient.invalidateQueries({ queryKey: queryKeys.lists })
-      void queryClient.invalidateQueries({ queryKey: ["items"] })
-      void queryClient.invalidateQueries({ queryKey: ["trending"] })
-      void queryClient.invalidateQueries({ queryKey: queryKeys.activity })
-    },
-    onError: (error) => {
-      toast.error("Could not add to list", { description: error.message })
     },
   })
 }

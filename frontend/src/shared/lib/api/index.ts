@@ -405,52 +405,6 @@ export function deleteDeletarrItems(
   return postJson<DeletarrDeleteResult>("/api/deletarr/delete", { type, paths })
 }
 
-/** Statistics for one download client shown on the Bandwidth-Controllarr page. */
-export interface BandwidthClientStats {
-  online: boolean
-  speed_mbps: number
-  active_downloads: number
-  queue_size: number
-  paused?: boolean
-}
-
-export interface BandwidthDownloadItem {
-  client: "qbittorrent" | "sabnzbd"
-  id: string
-  name: string
-  status: string
-  progress: number | null
-  size_bytes: number | null
-  size_label: string | null
-  speed_mbps: number | null
-  eta_seconds: number | null
-  added_at: string | null
-  completed_at: string | null
-}
-
-export interface BandwidthQueue {
-  qbittorrent: BandwidthDownloadItem[]
-  sabnzbd: BandwidthDownloadItem[]
-}
-
-/** Full live status returned by `GET /api/bandwidth/status`. */
-export interface BandwidthStatus {
-  enabled: boolean
-  status: string
-  last_run_at: string | null
-  check_interval_seconds: number
-  qbittorrent: BandwidthClientStats
-  sabnzbd: BandwidthClientStats
-  recent_downloads: BandwidthDownloadItem[]
-  queue: BandwidthQueue
-}
-
-/** Body of `PUT /api/bandwidth/settings`; omitted fields stay unchanged. */
-export interface BandwidthSettingsUpdate {
-  enabled?: boolean
-  check_interval_seconds?: number
-}
-
 /**
  * Sonarr search granularity. `episodes` searches each episode, `seasons`
  * issues one season-pack search per season, and `shows` searches a whole
@@ -597,20 +551,6 @@ export function removeItem(listId: string, traktId: number): Promise<void> {
 /** Trigger removal of every Available item from its Trakt list. */
 export function removeAvailable(): Promise<SyncResult> {
   return postJson<SyncResult>("/api/items/remove-available", {})
-}
-
-export function getBandwidthStatus(): Promise<BandwidthStatus> {
-  return request<BandwidthStatus>("/api/bandwidth/status")
-}
-
-export function updateBandwidthSettings(
-  body: BandwidthSettingsUpdate,
-): Promise<BandwidthStatus> {
-  return request<BandwidthStatus>("/api/bandwidth/settings", {
-    method: "PUT",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
-  })
 }
 
 export function getFindarrStatus(): Promise<FindarrStatus> {

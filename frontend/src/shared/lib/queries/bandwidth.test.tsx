@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest"
 
 vi.mock("@/shared/lib/api", () => ({
   getBandwidthStatus: vi.fn(),
+  setBandwidthClientPaused: vi.fn(),
   updateBandwidthSettings: vi.fn(),
 }))
 
@@ -14,10 +15,11 @@ import * as api from "@/shared/lib/api"
 import { toast } from "sonner"
 
 import {
-  queryKeys,
   useBandwidthStatus,
+  useSetBandwidthClientPaused,
   useUpdateBandwidthSettings,
-} from "@/shared/lib/queries"
+} from "@/shared/lib/queries/bandwidth"
+import { queryKeys } from "@/shared/lib/queries/keys"
 import { setup } from "@/shared/test/query-provider"
 
 beforeEach(() => {
@@ -25,6 +27,8 @@ beforeEach(() => {
     enabled: false,
     status: "Monitoring only",
     last_run_at: "2026-06-26T20:00:00Z",
+    tracking_suspended: false,
+    manual_paused_clients: [],
     check_interval_seconds: 15,
     qbittorrent: {
       online: true,
@@ -39,7 +43,7 @@ beforeEach(() => {
       queue_size: 0,
       paused: false,
     },
-    recent_downloads: [],
+    download_history: [],
     queue: { qbittorrent: [], sabnzbd: [] },
   })
 })
@@ -59,6 +63,8 @@ describe("bandwidth hooks", () => {
       enabled: true,
       status: "Monitoring only",
       last_run_at: null,
+      tracking_suspended: false,
+      manual_paused_clients: [],
       check_interval_seconds: 30,
       qbittorrent: {
         online: true,
@@ -73,7 +79,7 @@ describe("bandwidth hooks", () => {
         queue_size: 0,
         paused: false,
       },
-      recent_downloads: [],
+      download_history: [],
       queue: { qbittorrent: [], sabnzbd: [] },
     })
     const { queryClient, wrapper } = setup()
@@ -110,5 +116,39 @@ describe("bandwidth hooks", () => {
         description: "bad",
       },
     )
+  })
+
+  it("useSetBandwidthClientPaused invalidates status on success", async () => {
+    vi.mocked(api.setBandwidthClientPaused).mockResolvedValue(
+      await api.getBandwidthStatus(),
+    )
+    const { queryClient, wrapper } = setup()
+    const invalidate = vi.spyOn(queryClient, "invalidateQueries")
+    const { result } = renderHook(() => useSetBandwidthClientPaused(), {
+      wrapper,
+    })
+
+    act(() => result.current.mutate({ client: "sabnzbd", paused: true }))
+
+    await waitFor(() => expect(result.current.isSuccess).toBe(true))
+    expect(api.setBandwidthClientPaused).toHaveBeenCalledWith("sabnzbd", true)
+    expect(invalidate).toHaveBeenCalledWith({
+      queryKey: queryKeys.bandwidthStatus,
+    })
+  })
+
+  it("useSetBandwidthClientPaused toasts on error", async () => {
+    vi.mocked(api.setBandwidthClientPaused).mockRejectedValue(new Error("bad"))
+    const { wrapper } = setup()
+    const { result } = renderHook(() => useSetBandwidthClientPaused(), {
+      wrapper,
+    })
+
+    act(() => result.current.mutate({ client: "qbittorrent", paused: false }))
+
+    await waitFor(() => expect(result.current.isError).toBe(true))
+    expect(toast.error).toHaveBeenCalledWith("Could not update downloader", {
+      description: "bad",
+    })
   })
 })
