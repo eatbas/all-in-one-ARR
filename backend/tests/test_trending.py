@@ -1,4 +1,4 @@
-"""Tests for core.trending (normalisation + IMDb-rating cache)."""
+"""Tests for core.trending (normalisation, rating keys and the library cache)."""
 
 from __future__ import annotations
 
@@ -6,10 +6,10 @@ from core import trending as trending_mod
 from core.trending import (
     LibraryCache,
     LibraryIndex,
-    RatingCache,
     TrendingStore,
     build_library_index,
     to_trending_items,
+    trending_rating_key,
 )
 
 
@@ -42,6 +42,7 @@ def test_to_trending_items_tags_source_and_tracked() -> None:
         "anilist": None,
         "poster_url": None,
         "seer_status": None,
+        "imdb_rating": None,
         "already_tracked": True,
         "in_library": False,
         "in_library_available": False,
@@ -163,37 +164,29 @@ def test_build_library_index_collects_available_ids() -> None:
     assert index.sonarr_available_tmdb == frozenset({11})
 
 
-def test_rating_cache_miss_then_hit() -> None:
-    cache = RatingCache(ttl_seconds=100, max_entries=10)
-    assert cache.get("tt1") is None
-    cache.set("tt1", {"imdb_rating": 8.6, "imdb_votes": 10})
-    assert cache.get("tt1") == {"imdb_rating": 8.6, "imdb_votes": 10}
+def test_trending_rating_key_prefers_imdb() -> None:
+    assert trending_rating_key(imdb="tt1", media_type="movie", tmdb=603) == "tt1"
+    # An empty imdb string is not a usable id; fall through to the alias.
+    assert trending_rating_key(imdb="", media_type="movie", tmdb=603) == "movie:603"
 
 
-def test_rating_cache_expiry(monkeypatch) -> None:
-    clock = {"now": 1000.0}
-    monkeypatch.setattr(trending_mod, "_now", lambda: clock["now"])
-    cache = RatingCache(ttl_seconds=50, max_entries=10)
-    cache.set("tt1", {"imdb_rating": 7.0, "imdb_votes": 1})
-    clock["now"] = 1049.0
-    assert cache.get("tt1") == {"imdb_rating": 7.0, "imdb_votes": 1}
-    clock["now"] = 1051.0  # past the TTL
-    assert cache.get("tt1") is None
-    # A second read after eviction still returns None (entry already removed).
-    assert cache.get("tt1") is None
+def test_trending_rating_key_alias_and_unusable_rows() -> None:
+    assert trending_rating_key(imdb=None, media_type="show", tmdb=1399) == "show:1399"
+    assert trending_rating_key(imdb=None, media_type="movie", tmdb=None) is None
+    # A non-media row (e.g. "person") never gets an alias key.
+    assert trending_rating_key(imdb=None, media_type="person", tmdb=5) is None
 
 
-def test_rating_cache_evicts_oldest_when_full() -> None:
-    cache = RatingCache(ttl_seconds=1000, max_entries=2)
-    cache.set("tt1", {"imdb_rating": 1.0, "imdb_votes": 1})
-    cache.set("tt2", {"imdb_rating": 2.0, "imdb_votes": 2})
-    cache.set("tt3", {"imdb_rating": 3.0, "imdb_votes": 3})  # evicts tt1
-    assert cache.get("tt1") is None
-    assert cache.get("tt2") is not None
-    assert cache.get("tt3") is not None
-    # Updating an existing key does not trigger eviction.
-    cache.set("tt2", {"imdb_rating": 9.0, "imdb_votes": 9})
-    assert cache.get("tt2") == {"imdb_rating": 9.0, "imdb_votes": 9}
+def test_to_trending_items_overlays_ratings_by_key() -> None:
+    rows = [
+        {"media_type": "movie", "tmdb": 603, "imdb": "tt1"},  # rated via imdb key
+        {"media_type": "movie", "tmdb": 604},  # rated via the alias key
+        {"media_type": "movie", "tmdb": 605},  # not yet backfilled
+        {"media_type": "show", "tmdb": None},  # no usable key at all
+    ]
+    ratings = {"tt1": 8.6, "movie:604": 7.2}
+    items = to_trending_items(rows, source="tmdb", tracked_tmdbs=set(), ratings=ratings)
+    assert [item["imdb_rating"] for item in items] == [8.6, 7.2, None, None]
 
 
 def test_trending_store_all_rows_flattens_every_feed() -> None:

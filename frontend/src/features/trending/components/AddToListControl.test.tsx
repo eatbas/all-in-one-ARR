@@ -30,6 +30,7 @@ const ITEM: TrendingItem = {
   anilist: null,
   poster_url: null,
   seer_status: null,
+  imdb_rating: null,
   already_tracked: false,
   in_library: false,
   in_library_available: false,

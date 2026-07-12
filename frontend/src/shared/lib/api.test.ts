@@ -28,7 +28,6 @@ import {
   getTraktLists,
   getTraktSettings,
   getTrending,
-  getTrendingRating,
   getTrendingStatus,
   trendingSourceUrl,
   seerMediaUrl,
@@ -68,6 +67,7 @@ function trendingItem(over: Partial<TrendingItem>): TrendingItem {
     anilist: null,
     poster_url: null,
     seer_status: null,
+    imdb_rating: null,
     already_tracked: false,
     in_library: false,
     in_library_available: false,
@@ -608,40 +608,6 @@ describe("getTrendingStatus", () => {
       next_sync_at: "2026-06-30T13:00:00+00:00",
     })
     expect(fetchSpy.mock.calls[0][0]).toBe("/api/trending/status")
-  })
-})
-
-describe("getTrendingRating", () => {
-  it("sends the imdb id when present", async () => {
-    const fetchSpy = mockFetch(
-      jsonResponse({ imdb_rating: 8.6, imdb_votes: 10 }),
-    )
-
-    await expect(getTrendingRating({ imdb: "tt1" })).resolves.toEqual({
-      imdb_rating: 8.6,
-      imdb_votes: 10,
-    })
-    expect(fetchSpy.mock.calls[0][0]).toBe("/api/trending/rating?imdb=tt1")
-  })
-
-  it("falls back to media+tmdb when no imdb id is given", async () => {
-    const fetchSpy = mockFetch(
-      jsonResponse({ imdb_rating: null, imdb_votes: null }),
-    )
-
-    await getTrendingRating({ media: "movie", tmdb: 603 })
-    const url = fetchSpy.mock.calls[0][0] as string
-    expect(url).toContain("media=movie")
-    expect(url).toContain("tmdb=603")
-  })
-
-  it("omits the query string when nothing is identifiable", async () => {
-    const fetchSpy = mockFetch(
-      jsonResponse({ imdb_rating: null, imdb_votes: null }),
-    )
-
-    await getTrendingRating({})
-    expect(fetchSpy.mock.calls[0][0]).toBe("/api/trending/rating")
   })
 })
 

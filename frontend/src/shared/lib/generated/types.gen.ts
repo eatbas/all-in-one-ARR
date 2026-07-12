@@ -1282,6 +1282,10 @@ export type TrendingItem = {
      */
     imdb: string | null;
     /**
+     * Imdb Rating
+     */
+    imdb_rating: number | null;
+    /**
      * In Library
      */
     in_library: boolean;

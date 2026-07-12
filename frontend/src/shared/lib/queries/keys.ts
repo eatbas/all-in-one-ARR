@@ -23,6 +23,5 @@ export const queryKeys = {
   findarrHistory: ["findarr", "history"] as const,
   trending: (query: TrendingQuery) =>
     ["trending", query.source, query.media, query.category] as const,
-  trendingRating: (key: string) => ["trending", "rating", key] as const,
   trendingStatus: ["trending", "status"] as const,
 }

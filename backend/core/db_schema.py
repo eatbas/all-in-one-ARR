@@ -71,4 +71,31 @@ CREATE TABLE IF NOT EXISTS findarr_totals (
     count INTEGER NOT NULL DEFAULT 0,
     PRIMARY KEY (app, mode)
 );
+
+CREATE TABLE IF NOT EXISTS trending_feeds (
+    source TEXT NOT NULL,
+    media TEXT NOT NULL,
+    category TEXT NOT NULL,
+    window TEXT NOT NULL,
+    rows_json TEXT NOT NULL,
+    synced_at TEXT NOT NULL,
+    PRIMARY KEY (source, media, category, window)
+);
+
+CREATE TABLE IF NOT EXISTS trending_cycle_state (
+    key TEXT PRIMARY KEY,
+    value TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS trending_ratings (
+    key TEXT PRIMARY KEY,
+    imdb_rating REAL,
+    imdb_votes INTEGER,
+    fetched_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS omdb_usage (
+    day TEXT PRIMARY KEY,
+    count INTEGER NOT NULL
+);
 """

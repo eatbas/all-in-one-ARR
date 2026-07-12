@@ -3,9 +3,13 @@
 from __future__ import annotations
 
 import asyncio
+from datetime import UTC, datetime, timedelta
 from unittest.mock import AsyncMock, call
 
+import pytest
+
 from core import trending_sync
+from core.db import utcnow_iso
 from core.trending import SEER_TRENDING_SYNC_PAGES, TRENDING_ITEM_LIMIT
 from core.trending_sync import (
     _PREWARM_TASKS,
@@ -129,7 +133,9 @@ async def test_refresh_keeps_previous_snapshot_when_a_feed_fails(db) -> None:
     assert ctx.trending_store.get(
         source="trakt", media="movie", category="popular", window="week"
     ) == [_row(2)]
-    assert ctx.trending_store.last_synced_at() is not None
+    # Partial cycles do not stamp the store or the persistent cycle timestamp.
+    assert ctx.trending_store.last_synced_at() is None
+    assert db.trending_feeds_last_synced() is None
 
 
 async def test_seer_trending_is_fetched_once_and_split_by_media(db) -> None:
@@ -226,7 +232,9 @@ async def test_refresh_keeps_seer_trending_snapshot_when_it_fails(db) -> None:
     assert ctx.trending_store.get(
         source="seer", media="movie", category="popular", window="week"
     ) == [_row(7)]
-    assert ctx.trending_store.last_synced_at() is not None
+    # Partial cycles do not stamp the store or the persistent cycle timestamp.
+    assert ctx.trending_store.last_synced_at() is None
+    assert db.trending_feeds_last_synced() is None
 
 
 async def test_job_invokes_refresh_when_ctx_set(db, monkeypatch) -> None:
@@ -239,6 +247,7 @@ async def test_job_invokes_refresh_when_ctx_set(db, monkeypatch) -> None:
     monkeypatch.setattr(trending_sync, "refresh_trending_store", fake_refresh)
     monkeypatch.setattr(_trending_sync, "ctx", ctx)
     await _trending_sync_job()
+    await asyncio.gather(*list(trending_sync._BACKFILL_TASKS))
     assert seen["ctx"] is ctx
 
 
@@ -250,24 +259,109 @@ async def test_start_schedules_job_primes_store_and_reschedules(
     monkeypatch.setattr(_trending_sync, "ctx", None)
 
     await start_trending_sync(ctx)
+    await asyncio.gather(*list(trending_sync._BACKFILL_TASKS))
 
     # The interval job is registered under the trending id at the configured interval.
     ctx.scheduler.add_interval.assert_awaited_once()
     add_call = ctx.scheduler.add_interval.await_args
     assert add_call.kwargs["id"] == "trending_sync"
-    assert add_call.kwargs["minutes"] == 60
-    # The store is primed immediately so a cold boot is not empty.
+    assert add_call.kwargs["minutes"] == 1440
+    # The immediate APScheduler-4 first fire is deferred: the boot path below
+    # already primes or restores the store.
+    assert add_call.kwargs["defer_first_run"] is True
+    # The daily rating-backfill cron is registered alongside the interval job.
+    ctx.scheduler.add_cron.assert_awaited_once()
+    cron_call = ctx.scheduler.add_cron.await_args
+    assert cron_call.kwargs["id"] == "trending_rating_backfill"
+    # Nothing persisted yet: the store is primed live so a cold boot is not empty.
     assert ctx.trending_store.last_synced_at() is not None
     assert ctx.trending_store.get(
         source="trakt", media="movie", category="trending", window="week"
     ) == [_row(1)]
-    # The reschedule hook re-points the same job id.
+    # The reschedule hook re-points the same job id, keeping the deferred
+    # first fire; the snapshot was refreshed moments ago so no catch-up
+    # refresh is kicked.
     assert ctx.reschedule_trending is not None
-    await ctx.reschedule_trending(30)
+    await ctx.reschedule_trending(2880)
     ctx.scheduler.reschedule_interval.assert_awaited_once()
     reschedule_call = ctx.scheduler.reschedule_interval.await_args
     assert reschedule_call.kwargs["id"] == "trending_sync"
-    assert reschedule_call.kwargs["minutes"] == 30
+    assert reschedule_call.kwargs["minutes"] == 2880
+    assert reschedule_call.kwargs["defer_first_run"] is True
+    assert not trending_sync._REFRESH_TASKS
+
+
+async def test_start_restores_fresh_snapshot_without_refetching(
+    db, monkeypatch
+) -> None:
+    # A snapshot persisted moments ago (well inside the 1-day interval) is
+    # restored from the database; no provider is called at boot. The cycle
+    # timestamp must also be present for the snapshot to be considered complete.
+    db.trending_feeds_save(
+        source="trakt",
+        media="movie",
+        category="trending",
+        window="week",
+        rows=[_row(1)],
+    )
+    db.trending_cycle_mark_synced()
+    ctx = make_ctx(db=db)
+    monkeypatch.setattr(_trending_sync, "ctx", None)
+
+    await start_trending_sync(ctx)
+    await asyncio.gather(*list(trending_sync._BACKFILL_TASKS))
+
+    assert ctx.trending_store.get(
+        source="trakt", media="movie", category="trending", window="week"
+    ) == [_row(1)]
+    assert ctx.trending_store.last_synced_at() == db.trending_feeds_last_synced()
+    ctx.trakt.get_trending.assert_not_awaited()
+    ctx.tmdb.get_trending.assert_not_awaited()
+
+
+async def test_start_refreshes_when_snapshot_is_stale(db, monkeypatch) -> None:
+    # Backdate the persisted snapshot beyond the configured interval: boot must
+    # refresh live rather than serve week-old feeds.
+    db.trending_feeds_save(
+        source="trakt",
+        media="movie",
+        category="trending",
+        window="week",
+        rows=[_row(1)],
+    )
+    db.trending_cycle_mark_synced("2020-01-01T00:00:00+00:00")
+    ctx = make_ctx(db=db)
+    ctx.trakt.get_trending.return_value = [_row(2)]
+    monkeypatch.setattr(_trending_sync, "ctx", None)
+
+    await start_trending_sync(ctx)
+    await asyncio.gather(*list(trending_sync._BACKFILL_TASKS))
+
+    assert ctx.trending_store.get(
+        source="trakt", media="movie", category="trending", window="week"
+    ) == [_row(2)]
+    ctx.trakt.get_trending.assert_awaited()
+
+
+async def test_start_refreshes_when_snapshot_stamp_is_unparseable(
+    db, monkeypatch
+) -> None:
+    db.trending_feeds_save(
+        source="trakt",
+        media="movie",
+        category="trending",
+        window="week",
+        rows=[_row(1)],
+    )
+    db.trending_cycle_mark_synced("not-a-timestamp")
+    ctx = make_ctx(db=db)
+    ctx.trakt.get_trending.return_value = [_row(2)]
+    monkeypatch.setattr(_trending_sync, "ctx", None)
+
+    await start_trending_sync(ctx)
+    await asyncio.gather(*list(trending_sync._BACKFILL_TASKS))
+
+    ctx.trakt.get_trending.assert_awaited()
 
 
 # ---- poster pre-warm ----
@@ -361,7 +455,537 @@ async def test_job_spawns_detached_poster_prewarm(db, monkeypatch) -> None:
     monkeypatch.setattr(_trending_sync, "ctx", ctx)
 
     await _trending_sync_job()
-    # The pre-warm runs detached; drain the retained tasks to observe it.
+    # The pre-warm and backfill run detached; drain the retained tasks.
     await asyncio.gather(*list(_PREWARM_TASKS))
+    await asyncio.gather(*list(trending_sync._BACKFILL_TASKS))
 
     ctx.poster_cache.get_poster.assert_awaited()
+
+
+# ---- IMDb-rating backfill ----
+
+
+def _feed(ctx, rows: list[dict]) -> None:
+    """Put rows into one warmed feed so the backfill sees them."""
+    ctx.trending_store.set(
+        source="trakt", media="movie", category="trending", window="week", rows=rows
+    )
+
+
+def test_rating_targets_dedupes_by_key_and_skips_unusable_rows() -> None:
+    rows = [
+        {"media_type": "movie", "tmdb": 1, "imdb": "tt1"},
+        {"media_type": "movie", "tmdb": 1, "imdb": "tt1"},  # duplicate key
+        {"media_type": "movie", "tmdb": 2},  # alias key
+        {"media_type": "movie", "tmdb": None, "imdb": None},  # no usable id
+        {"media_type": "person", "tmdb": 5},  # not movie/show
+    ]
+    targets = trending_sync._rating_targets(rows)
+    assert sorted(target.canonical for target in targets) == ["movie:2", "tt1"]
+
+
+def test_rating_targets_groups_mixed_imdb_and_alias() -> None:
+    # A title represented by both an IMDb id in one feed and a TMDB-only alias
+    # in another must become a single lookup target, preserving both aliases.
+    rows = [
+        {"media_type": "movie", "tmdb": 42, "imdb": "tt42"},
+        {"media_type": "movie", "tmdb": 42},  # alias-only duplicate
+        {"media_type": "show", "tmdb": 99, "imdb": "tt99"},
+    ]
+    targets = {
+        target.canonical: target for target in trending_sync._rating_targets(rows)
+    }
+    assert set(targets) == {"tt42", "tt99"}
+    assert targets["tt42"].imdb == "tt42"
+    assert targets["tt42"].aliases == {"tt42", "movie:42"}
+    assert targets["tt99"].aliases == {"tt99"}
+
+
+async def test_backfill_fetches_missing_and_stores_ratings(db) -> None:
+    ctx = make_ctx(db=db)
+    ctx.omdb.fetch_rating.return_value = {"imdb_rating": 8.6, "imdb_votes": 100}
+    _feed(ctx, [{"media_type": "movie", "tmdb": 1, "imdb": "tt1"}])
+
+    await trending_sync.backfill_ratings(ctx)
+
+    stored = db.trending_ratings_get_many(["tt1"])["tt1"]
+    assert stored["imdb_rating"] == 8.6
+    assert stored["imdb_votes"] == 100
+    assert db.omdb_usage_count(utcnow_iso()[:10]) == 1
+
+
+async def test_backfill_resolves_alias_and_stores_both_keys(db) -> None:
+    ctx = make_ctx(db=db)
+    ctx.tmdb.fetch_external_ids.return_value = "tt2"
+    ctx.omdb.fetch_rating.return_value = {"imdb_rating": 7.1, "imdb_votes": 5}
+    _feed(ctx, [{"media_type": "movie", "tmdb": 603}])
+
+    await trending_sync.backfill_ratings(ctx)
+
+    stored = db.trending_ratings_get_many(["movie:603", "tt2"])
+    assert stored["movie:603"]["imdb_rating"] == 7.1
+    assert stored["tt2"]["imdb_rating"] == 7.1
+
+
+async def test_backfill_upserts_every_alias_for_mixed_identity(db) -> None:
+    # One title appears as both an IMDb row and a TMDB-only alias: the backfill
+    # must perform exactly one OMDb lookup and store the rating under both keys.
+    ctx = make_ctx(db=db)
+    ctx.omdb.fetch_rating.return_value = {"imdb_rating": 8.1, "imdb_votes": 50}
+    _feed(
+        ctx,
+        [
+            {"media_type": "movie", "tmdb": 42, "imdb": "tt42"},
+            {"media_type": "movie", "tmdb": 42},
+        ],
+    )
+
+    await trending_sync.backfill_ratings(ctx)
+
+    ctx.omdb.fetch_rating.assert_awaited_once_with(imdb_id="tt42")
+    stored = db.trending_ratings_get_many(["tt42", "movie:42"])
+    assert stored["tt42"]["imdb_rating"] == 8.1
+    assert stored["movie:42"]["imdb_rating"] == 8.1
+
+
+async def test_backfill_leaves_unresolved_alias_missing(db) -> None:
+    # A failed/absent TMDB->IMDb resolution costs no OMDb budget and stores
+    # nothing, so a later run retries it.
+    ctx = make_ctx(db=db)
+    ctx.tmdb.fetch_external_ids.return_value = None
+    _feed(ctx, [{"media_type": "movie", "tmdb": 603}])
+
+    await trending_sync.backfill_ratings(ctx)
+
+    assert db.trending_ratings_get_many(["movie:603"]) == {}
+    ctx.omdb.fetch_rating.assert_not_awaited()
+    assert db.omdb_usage_count(utcnow_iso()[:10]) == 0
+
+
+async def test_backfill_skips_fresh_and_refetches_stale_entries(db) -> None:
+    ctx = make_ctx(db=db)
+    ctx.omdb.fetch_rating.return_value = {"imdb_rating": 9.0, "imdb_votes": 1}
+    db.trending_ratings_upsert(key="tt-fresh", imdb_rating=8.0, imdb_votes=1)
+    db.trending_ratings_upsert(
+        key="tt-stale",
+        imdb_rating=5.0,
+        imdb_votes=1,
+        fetched_at="2020-01-01T00:00:00+00:00",
+    )
+    _feed(
+        ctx,
+        [
+            {"media_type": "movie", "tmdb": 1, "imdb": "tt-fresh"},
+            {"media_type": "movie", "tmdb": 2, "imdb": "tt-stale"},
+        ],
+    )
+
+    await trending_sync.backfill_ratings(ctx)
+
+    ctx.omdb.fetch_rating.assert_awaited_once_with(imdb_id="tt-stale")
+    assert db.trending_ratings_get_many(["tt-stale"])["tt-stale"]["imdb_rating"] == 9.0
+    assert db.trending_ratings_get_many(["tt-fresh"])["tt-fresh"]["imdb_rating"] == 8.0
+
+
+async def test_backfill_respects_remaining_daily_budget(db, monkeypatch) -> None:
+    # Two pending titles but budget for one: the second waits for the next run.
+    ctx = make_ctx(db=db)
+    ctx.omdb.fetch_rating.return_value = {"imdb_rating": 6.0, "imdb_votes": 2}
+    monkeypatch.setattr(trending_sync, "_OMDB_DAILY_BUDGET", 1)
+    _feed(
+        ctx,
+        [
+            {"media_type": "movie", "tmdb": 1, "imdb": "tt1"},
+            {"media_type": "movie", "tmdb": 2, "imdb": "tt2"},
+        ],
+    )
+
+    await trending_sync.backfill_ratings(ctx)
+
+    assert ctx.omdb.fetch_rating.await_count == 1
+    assert db.omdb_usage_count(utcnow_iso()[:10]) == 1
+    # The next day (usage reset) picks the leftover up.
+    with db._lock:
+        db._conn.execute("DELETE FROM omdb_usage")
+        db._conn.commit()
+    await trending_sync.backfill_ratings(ctx)
+    assert ctx.omdb.fetch_rating.await_count == 2
+    assert len(db.trending_ratings_get_many(["tt1", "tt2"])) == 2
+
+
+async def test_backfill_noop_when_budget_already_spent(db) -> None:
+    ctx = make_ctx(db=db)
+    db.omdb_usage_add(utcnow_iso()[:10], trending_sync._OMDB_DAILY_BUDGET)
+    _feed(ctx, [{"media_type": "movie", "tmdb": 1, "imdb": "tt1"}])
+
+    await trending_sync.backfill_ratings(ctx)
+
+    ctx.omdb.fetch_rating.assert_not_awaited()
+
+
+async def test_backfill_noop_without_targets_or_pending(db) -> None:
+    ctx = make_ctx(db=db)
+    await trending_sync.backfill_ratings(ctx)  # empty store: no targets
+    ctx.omdb.fetch_rating.assert_not_awaited()
+
+    db.trending_ratings_upsert(key="tt1", imdb_rating=8.0, imdb_votes=1)
+    _feed(ctx, [{"media_type": "movie", "tmdb": 1, "imdb": "tt1"}])
+    await trending_sync.backfill_ratings(ctx)  # everything fresh: nothing pending
+    ctx.omdb.fetch_rating.assert_not_awaited()
+
+
+async def test_backfill_swallows_per_item_failures(db) -> None:
+    # A store write blowing up must not abort the batch (gather return_exceptions).
+    ctx = make_ctx(db=db)
+    ctx.omdb.fetch_rating.side_effect = RuntimeError("boom")
+    _feed(ctx, [{"media_type": "movie", "tmdb": 1, "imdb": "tt1"}])
+
+    await trending_sync.backfill_ratings(ctx)  # must not raise
+
+    assert db.trending_ratings_get_many(["tt1"]) == {}
+
+
+async def test_backfill_job_invokes_backfill_when_ctx_set(db, monkeypatch) -> None:
+    ctx = make_ctx(db=db)
+    seen: dict = {}
+
+    async def fake_backfill(passed_ctx) -> None:
+        seen["ctx"] = passed_ctx
+
+    monkeypatch.setattr(trending_sync, "backfill_ratings", fake_backfill)
+    monkeypatch.setattr(_trending_sync, "ctx", ctx)
+    await trending_sync._rating_backfill_job()
+    assert seen["ctx"] is ctx
+
+
+async def test_job_spawns_detached_rating_backfill(db, monkeypatch) -> None:
+    ctx = make_ctx(db=db)
+    ctx.trakt.get_trending.return_value = [
+        {"media_type": "movie", "tmdb": 1, "imdb": "tt1"}
+    ]
+    ctx.omdb.fetch_rating.return_value = {"imdb_rating": 8.0, "imdb_votes": 3}
+    monkeypatch.setattr(_trending_sync, "ctx", ctx)
+
+    await _trending_sync_job()
+    await asyncio.gather(*list(trending_sync._BACKFILL_TASKS))
+
+    ctx.omdb.fetch_rating.assert_awaited()
+    assert db.trending_ratings_get_many(["tt1"])["tt1"]["imdb_rating"] == 8.0
+
+
+async def test_refresh_persists_feeds_for_restart(db) -> None:
+    ctx = make_ctx(db=db)
+    ctx.trakt.get_trending.return_value = [_row(1)]
+    ctx.seer.discover_trending_buckets.return_value = {
+        "movie": [_row(5)],
+        "show": [_row(6, media_type="show")],
+    }
+
+    await refresh_trending_store(ctx)
+
+    persisted = {
+        (feed["source"], feed["media"], feed["category"]): feed["rows"]
+        for feed in db.trending_feeds_load()
+    }
+    assert persisted[("trakt", "movie", "trending")] == [_row(1)]
+    assert persisted[("seer", "show", "trending")] == [_row(6, media_type="show")]
+    assert db.trending_feeds_last_synced() is not None
+
+
+async def test_refresh_does_not_update_cycle_timestamp_on_partial_failure(
+    db,
+) -> None:
+    ctx = make_ctx(db=db)
+    ctx.trakt.get_trending.side_effect = RuntimeError("trakt down")
+
+    await refresh_trending_store(ctx)
+
+    # The failed feed's own row is still persisted, but the cycle timestamp
+    # must stay absent so the next restart knows the snapshot is incomplete.
+    assert db.trending_feeds_load()
+    assert db.trending_feeds_last_synced() is None
+
+
+async def test_start_refreshes_after_partial_failure_restart(db, monkeypatch) -> None:
+    # A persisted feed with no cycle timestamp means the last cycle was partial;
+    # boot must refresh instead of trusting the partial snapshot.
+    db.trending_feeds_save(
+        source="trakt",
+        media="movie",
+        category="trending",
+        window="week",
+        rows=[_row(1)],
+    )
+    ctx = make_ctx(db=db)
+    ctx.trakt.get_trending.return_value = [_row(2)]
+    monkeypatch.setattr(_trending_sync, "ctx", None)
+
+    await start_trending_sync(ctx)
+    await asyncio.gather(*list(trending_sync._BACKFILL_TASKS))
+
+    ctx.trakt.get_trending.assert_awaited()
+    assert ctx.trending_store.get(
+        source="trakt", media="movie", category="trending", window="week"
+    ) == [_row(2)]
+    # A successful full cycle now stamps the cycle timestamp.
+    assert db.trending_feeds_last_synced() is not None
+
+
+# ---- backfill concurrency guard and reschedule catch-up ----
+
+
+def test_is_fresh_treats_naive_timestamp_as_stale() -> None:
+    # A naive stamp parses but cannot be subtracted from aware now (TypeError);
+    # it must degrade to "stale" exactly like an unparseable one.
+    assert (
+        trending_sync._is_fresh("2020-01-01T00:00:00", interval_minutes=1440) is False
+    )
+
+
+async def test_spawn_backfill_skips_while_one_is_in_flight(db, monkeypatch) -> None:
+    ctx = make_ctx(db=db)
+    release = asyncio.Event()
+    calls = {"count": 0}
+
+    async def slow_backfill(_ctx) -> None:
+        calls["count"] += 1
+        await release.wait()
+
+    monkeypatch.setattr(trending_sync, "backfill_ratings", slow_backfill)
+    first = trending_sync._spawn_rating_backfill(ctx)
+    assert first is not None
+    # A duplicate trigger while the first run is in flight is a no-op, so two
+    # runs can never spend the daily OMDb budget twice.
+    assert trending_sync._spawn_rating_backfill(ctx) is None
+    assert calls["count"] <= 1
+    release.set()
+    await first
+    # Once the run finishes (done-callback cleared the slot), triggers spawn again.
+    await asyncio.sleep(0)
+    second = trending_sync._spawn_rating_backfill(ctx)
+    assert second is not None
+    await second
+    assert calls["count"] == 2
+
+
+async def test_cron_backfill_job_skips_when_backfill_in_flight(db, monkeypatch) -> None:
+    ctx = make_ctx(db=db)
+    release = asyncio.Event()
+    started = asyncio.Event()
+    calls = {"count": 0}
+
+    async def slow_backfill(_ctx) -> None:
+        calls["count"] += 1
+        started.set()
+        await release.wait()
+
+    monkeypatch.setattr(trending_sync, "backfill_ratings", slow_backfill)
+    monkeypatch.setattr(_trending_sync, "ctx", ctx)
+    in_flight = trending_sync._spawn_rating_backfill(ctx)
+    assert in_flight is not None
+    # Wait for the spawned run to actually start before asserting the call count.
+    await started.wait()
+    assert calls["count"] == 1
+    # The daily cron finds a run in flight and returns without starting another.
+    await trending_sync._rating_backfill_job()
+    assert calls["count"] == 1
+    release.set()
+    await in_flight
+
+
+async def test_reschedule_kicks_refresh_when_snapshot_stale_for_new_interval(
+    db, monkeypatch
+) -> None:
+    # Boot restores a fresh snapshot (no live fetch). Backdating it two days and
+    # switching to a 1-day cadence must catch up immediately: defer_first_run
+    # pushes the next scheduled fire a full new interval out, so without the
+    # kick the stale snapshot would survive another day.
+    db.trending_feeds_save(
+        source="trakt",
+        media="movie",
+        category="trending",
+        window="week",
+        rows=[_row(1)],
+    )
+    db.trending_cycle_mark_synced()
+    ctx = make_ctx(db=db)
+    monkeypatch.setattr(_trending_sync, "ctx", None)
+    await start_trending_sync(ctx)
+    await asyncio.gather(*list(trending_sync._BACKFILL_TASKS))
+    ctx.trakt.get_trending.assert_not_awaited()
+
+    stale = (datetime.now(UTC) - timedelta(days=2)).isoformat()
+    db.trending_cycle_mark_synced(stale)
+    ctx.trakt.get_trending.return_value = [_row(2)]
+
+    await ctx.reschedule_trending(1440)
+    await asyncio.gather(*list(trending_sync._REFRESH_TASKS))
+    await asyncio.gather(*list(trending_sync._BACKFILL_TASKS))
+
+    ctx.trakt.get_trending.assert_awaited()
+    assert ctx.trending_store.get(
+        source="trakt", media="movie", category="trending", window="week"
+    ) == [_row(2)]
+
+
+async def test_reschedule_refresh_cycle_is_exclusive(db, monkeypatch) -> None:
+    # Repeated stale reschedules must not spawn concurrent refresh cycles.
+    trending_sync._REFRESH_ACTIVE = False
+    trending_sync._REFRESH_TASKS.clear()
+    db.trending_feeds_save(
+        source="trakt",
+        media="movie",
+        category="trending",
+        window="week",
+        rows=[_row(1)],
+    )
+    db.trending_cycle_mark_synced()
+    ctx = make_ctx(db=db)
+    monkeypatch.setattr(_trending_sync, "ctx", None)
+    await start_trending_sync(ctx)
+    await asyncio.gather(*list(trending_sync._BACKFILL_TASKS))
+
+    release = asyncio.Event()
+    started = asyncio.Event()
+    calls = {"count": 0}
+
+    async def slow_refresh_store(passed_ctx) -> None:
+        calls["count"] += 1
+        started.set()
+        await release.wait()
+
+    monkeypatch.setattr(trending_sync, "refresh_trending_store", slow_refresh_store)
+
+    # Make the existing cycle state stale so rescheduling spawns a catch-up.
+    stale = (datetime.now(UTC) - timedelta(days=2)).isoformat()
+    db.trending_cycle_mark_synced(stale)
+    await ctx.reschedule_trending(1440)
+    await started.wait()
+    # Fire more reschedule calls while the first cycle is still active.
+    await ctx.reschedule_trending(1440)
+    await ctx.reschedule_trending(1440)
+    await asyncio.sleep(0)
+
+    assert calls["count"] == 1
+    release.set()
+    await asyncio.gather(*list(trending_sync._REFRESH_TASKS))
+    assert calls["count"] == 1
+    assert not trending_sync._REFRESH_ACTIVE
+
+
+async def test_scheduled_job_skips_when_refresh_cycle_active(db, monkeypatch) -> None:
+    # Scheduler overlap with an active reschedule cycle must not run a second
+    # provider sweep.
+    trending_sync._REFRESH_ACTIVE = False
+    trending_sync._REFRESH_TASKS.clear()
+    db.trending_feeds_save(
+        source="trakt",
+        media="movie",
+        category="trending",
+        window="week",
+        rows=[_row(1)],
+    )
+    db.trending_cycle_mark_synced()
+    ctx = make_ctx(db=db)
+    monkeypatch.setattr(_trending_sync, "ctx", None)
+    await start_trending_sync(ctx)
+    await asyncio.gather(*list(trending_sync._BACKFILL_TASKS))
+
+    release = asyncio.Event()
+    started = asyncio.Event()
+    calls = {"count": 0}
+
+    async def slow_refresh_store(passed_ctx) -> None:
+        calls["count"] += 1
+        started.set()
+        await release.wait()
+
+    monkeypatch.setattr(trending_sync, "refresh_trending_store", slow_refresh_store)
+
+    stale = (datetime.now(UTC) - timedelta(days=2)).isoformat()
+    db.trending_cycle_mark_synced(stale)
+    await ctx.reschedule_trending(1440)
+    await started.wait()
+    assert calls["count"] == 1
+
+    # The scheduled job sees the active cycle and returns immediately.
+    await _trending_sync_job()
+    assert calls["count"] == 1
+
+    release.set()
+    await asyncio.gather(*list(trending_sync._REFRESH_TASKS))
+    assert not trending_sync._REFRESH_ACTIVE
+
+
+async def test_reschedule_refresh_cycle_logs_detached_exception(
+    db, monkeypatch
+) -> None:
+    # A detached refresh cycle that raises must be supervised and logged rather
+    # than dropped by the asyncio runtime.
+    trending_sync._REFRESH_ACTIVE = False
+    trending_sync._REFRESH_TASKS.clear()
+    db.trending_feeds_save(
+        source="trakt",
+        media="movie",
+        category="trending",
+        window="week",
+        rows=[_row(1)],
+    )
+    db.trending_cycle_mark_synced()
+    ctx = make_ctx(db=db)
+    monkeypatch.setattr(_trending_sync, "ctx", None)
+    await start_trending_sync(ctx)
+    await asyncio.gather(*list(trending_sync._BACKFILL_TASKS))
+
+    async def failing_refresh_store(passed_ctx) -> None:
+        raise RuntimeError("detached boom")
+
+    monkeypatch.setattr(trending_sync, "refresh_trending_store", failing_refresh_store)
+
+    stale = (datetime.now(UTC) - timedelta(days=2)).isoformat()
+    db.trending_cycle_mark_synced(stale)
+    await ctx.reschedule_trending(1440)
+
+    with pytest.raises(RuntimeError, match="detached boom"):
+        await asyncio.gather(*list(trending_sync._REFRESH_TASKS))
+
+    assert not trending_sync._REFRESH_ACTIVE
+
+
+async def test_backfill_reuses_fresh_imdb_rating_for_resolved_alias(db) -> None:
+    # A TMDB-only alias resolving to a title already rated under its IMDb key
+    # copies the stored rating instead of spending a second OMDb request.
+    ctx = make_ctx(db=db)
+    db.trending_ratings_upsert(key="tt2", imdb_rating=7.1, imdb_votes=5)
+    ctx.tmdb.fetch_external_ids.return_value = "tt2"
+    _feed(ctx, [{"media_type": "movie", "tmdb": 603}])
+
+    await trending_sync.backfill_ratings(ctx)
+
+    ctx.omdb.fetch_rating.assert_not_awaited()
+    stored = db.trending_ratings_get_many(["movie:603"])["movie:603"]
+    assert stored["imdb_rating"] == 7.1
+    assert stored["imdb_votes"] == 5
+
+
+async def test_backfill_refetches_when_resolved_alias_rating_is_stale(db) -> None:
+    # A stale rating under the resolved IMDb key is not reused: the title is
+    # re-fetched and both key forms end up refreshed.
+    ctx = make_ctx(db=db)
+    db.trending_ratings_upsert(
+        key="tt2",
+        imdb_rating=5.0,
+        imdb_votes=1,
+        fetched_at="2020-01-01T00:00:00+00:00",
+    )
+    ctx.tmdb.fetch_external_ids.return_value = "tt2"
+    ctx.omdb.fetch_rating.return_value = {"imdb_rating": 8.1, "imdb_votes": 900}
+    _feed(ctx, [{"media_type": "movie", "tmdb": 603}])
+
+    await trending_sync.backfill_ratings(ctx)
+
+    ctx.omdb.fetch_rating.assert_awaited_once_with(imdb_id="tt2")
+    assert (
+        db.trending_ratings_get_many(["movie:603"])["movie:603"]["imdb_rating"] == 8.1
+    )
+    assert db.trending_ratings_get_many(["tt2"])["tt2"]["imdb_rating"] == 8.1

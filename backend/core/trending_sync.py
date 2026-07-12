@@ -1,30 +1,47 @@
-"""Scheduled trending/popular refresh.
+"""Scheduled trending/popular refresh and the budgeted IMDb-rating backfill.
 
 The Trending page is served from an in-process snapshot (``ctx.trending_store``)
 rather than calling the Trakt/TMDB/Seer providers on every request. A scheduled
 job refreshes that snapshot on the configured interval; this module owns the
-refresh routine, the APScheduler-compatible module-level job, the holder the job
-reads (APScheduler 4 cannot serialise a closure — this mirrors
+refresh routine, the APScheduler-compatible module-level jobs, the holder the
+jobs read (APScheduler 4 cannot serialise a closure — this mirrors
 ``core.app._poster_churn``), and the start/reschedule wiring.
+
+The snapshot is mirrored into the database (``trending_feeds``) so a restart
+within the configured interval reloads it instead of refetching every provider.
+IMDb ratings are filled into ``trending_ratings`` by a background backfill that
+spends at most :data:`_OMDB_DAILY_BUDGET` OMDb requests per UTC day (tracked in
+``omdb_usage``); whatever does not fit is picked up by the next run — the daily
+cron drains the backlog even on days the feed refresh does not fire.
 """
 
 from __future__ import annotations
 
 import asyncio
+from collections.abc import Coroutine
 from dataclasses import dataclass
-from typing import TYPE_CHECKING
+from datetime import UTC, datetime, timedelta
+from typing import TYPE_CHECKING, Any
 
 from core.app_metrics import observe_scheduler_job
 from core.db import utcnow_iso
 from core.logging import get_logger
-from core.trending import TRENDING_ITEM_LIMIT, TRENDING_SYNC_PAGES
+from core.trending import (
+    TRENDING_ITEM_LIMIT,
+    TRENDING_SYNC_PAGES,
+    trending_rating_key,
+)
 from core.trending_api import fetch_feed, fetch_seer_trending_buckets
 
 if TYPE_CHECKING:  # pragma: no cover
     from core.context import AppContext
 
-# The job id under which the interval schedule is registered (and rescheduled).
+# The job ids under which the schedules are registered (and rescheduled).
 _JOB_ID = "trending_sync"
+_BACKFILL_JOB_ID = "trending_rating_backfill"
+# The daily backfill cron fires at a quiet hour; the budget resets per UTC day.
+_BACKFILL_CRON_HOUR = 3
+_BACKFILL_CRON_MINUTE = 30
 _log = get_logger("trending_sync")
 
 # Poster pre-warm bounds: how many posters to fetch concurrently, and how long any
@@ -36,6 +53,63 @@ _PREWARM_TIMEOUT_SECONDS = 20
 # before completion (per the asyncio docs); cleared by a done-callback.
 _PREWARM_TASKS: set[asyncio.Task] = set()
 
+# Rating backfill bounds. The budget stays under OMDb's ~1000/day free tier,
+# leaving headroom for the poster pipeline's OMDb fallback and the compat rating
+# route. Stored ratings are refreshed once older than the TTL; missing ones come
+# first so new titles gain a badge before old ratings are re-polled.
+_OMDB_DAILY_BUDGET = 800
+_RATING_DB_TTL_DAYS = 7
+_BACKFILL_CONCURRENCY = 8
+# Strong references to in-flight backfill tasks (same rationale as _PREWARM_TASKS).
+# Also the concurrency guard: a non-empty set means a backfill is in flight, so
+# duplicate triggers are skipped rather than double-spending the daily budget.
+_BACKFILL_TASKS: set[asyncio.Task] = set()
+# Strong references to a reschedule-triggered catch-up refresh (see
+# ``start_trending_sync``'s reschedule hook).
+_REFRESH_TASKS: set[asyncio.Task] = set()
+# Guard refresh cycles so repeated reschedules or scheduler overlap cannot run
+# multiple provider sweeps concurrently.
+_REFRESH_LOCK = asyncio.Lock()
+_REFRESH_ACTIVE = False
+
+
+def _spawn_tracked(
+    tasks: set[asyncio.Task], coro: Coroutine[Any, Any, None]
+) -> asyncio.Task:
+    """Spawn ``coro`` detached, holding a strong reference until it completes.
+
+    Per the asyncio docs, fire-and-forget tasks must be referenced somewhere or
+    they can be garbage-collected mid-flight; the done-callback clears the slot.
+    """
+    task = asyncio.create_task(coro)
+    tasks.add(task)
+    task.add_done_callback(tasks.discard)
+    return task
+
+
+def _spawn_supervised(
+    tasks: set[asyncio.Task],
+    coro: Coroutine[Any, Any, None],
+    *,
+    log_msg: str = "detached task raised an exception",
+) -> asyncio.Task:
+    """Spawn ``coro`` detached, holding a strong reference and logging failures.
+
+    The done-callback clears the slot and consumes any exception so it is never
+    silently dropped by the asyncio runtime.
+    """
+    task = asyncio.create_task(coro)
+    tasks.add(task)
+
+    def _on_done(t: asyncio.Task) -> None:
+        tasks.discard(t)
+        if not t.cancelled() and (exc := t.exception()) is not None:
+            _log.exception("%s", log_msg, exc_info=exc)
+
+    task.add_done_callback(_on_done)
+    return task
+
+
 # The feed matrix refreshed each cycle. TMDB trending uses the weekly window — the
 # only window the dashboard ever requests — so it is the only one kept warm. The
 # anime variants and AniList are full members of the matrix so the Anime tab is
@@ -46,13 +120,29 @@ _CATEGORIES = ("trending", "popular")
 SYNC_WINDOW = "week"
 
 
+def _persist_feed(
+    ctx: AppContext, *, source: str, media: str, category: str, rows: list[dict]
+) -> None:
+    """Write one feed into the in-process store and its database mirror.
+
+    Kept as one helper so the snapshot a restart restores can never drift from
+    what the running process serves.
+    """
+    ctx.trending_store.set(
+        source=source, media=media, category=category, window=SYNC_WINDOW, rows=rows
+    )
+    ctx.db.trending_feeds_save(
+        source=source, media=media, category=category, window=SYNC_WINDOW, rows=rows
+    )
+
+
 async def _store_feed(
     ctx: AppContext, *, source: str, media: str, category: str
-) -> None:
+) -> bool:
     """Refresh one ``(source, media, category)`` feed into the store.
 
     A provider failure is logged and leaves the previous snapshot for that feed
-    intact rather than blanking it.
+    intact rather than blanking it. Returns ``True`` when the feed was refreshed.
     """
     try:
         rows = await fetch_feed(
@@ -72,18 +162,18 @@ async def _store_feed(
             category,
             exc,
         )
-        return
-    ctx.trending_store.set(
-        source=source, media=media, category=category, window=SYNC_WINDOW, rows=rows
-    )
+        return False
+    _persist_feed(ctx, source=source, media=media, category=category, rows=rows)
+    return True
 
 
-async def _store_seer_trending(ctx: AppContext) -> None:
+async def _store_seer_trending(ctx: AppContext) -> bool:
     """Refresh both Seer trending feeds from a single mixed-type fetch.
 
     Seer's trending endpoint returns movies and shows on one page, so it is fetched
     as bounded mixed pages and split by media type — rather than fetched separately
     for each type. A failure is logged and leaves the previous snapshots intact.
+    Returns ``True`` when both feeds were refreshed.
     """
     try:
         buckets = await fetch_seer_trending_buckets(
@@ -91,15 +181,12 @@ async def _store_seer_trending(ctx: AppContext) -> None:
         )
     except Exception as exc:  # noqa: BLE001 - a dead feed must not abort the cycle
         _log.warning("trending refresh failed (source=seer category=trending): %s", exc)
-        return
+        return False
     for media in _MEDIA:
-        ctx.trending_store.set(
-            source="seer",
-            media=media,
-            category="trending",
-            window=SYNC_WINDOW,
-            rows=buckets[media],
+        _persist_feed(
+            ctx, source="seer", media=media, category="trending", rows=buckets[media]
         )
+    return True
 
 
 async def refresh_trending_store(ctx: AppContext) -> None:
@@ -108,16 +195,27 @@ async def refresh_trending_store(ctx: AppContext) -> None:
     Each feed is fetched independently so one dead provider does not abort the cycle.
     Seer's mixed trending feed is fetched once and split by media type (see
     :func:`_store_seer_trending`); every other feed is per media type. The store's
-    last-synced timestamp is stamped once the cycle finishes.
+    last-synced timestamp is stamped only when every feed succeeds, so a partial
+    cycle cannot make stale feeds appear fresh on restart.
     """
+    any_failed = False
     for source in _SOURCES:
         for category in _CATEGORIES:
             if source == "seer" and category == "trending":
-                await _store_seer_trending(ctx)
+                if not await _store_seer_trending(ctx):
+                    any_failed = True
                 continue
             for media in _MEDIA:
-                await _store_feed(ctx, source=source, media=media, category=category)
-    ctx.trending_store.mark_synced(utcnow_iso())
+                if not await _store_feed(
+                    ctx, source=source, media=media, category=category
+                ):
+                    any_failed = True
+    if any_failed:
+        _log.warning("trending refresh cycle finished with one or more feed failures")
+        return
+    now = utcnow_iso()
+    ctx.trending_store.mark_synced(now)
+    ctx.db.trending_cycle_mark_synced(now)
     _log.info("trending store refreshed")
 
 
@@ -186,9 +284,181 @@ def _spawn_prewarm(ctx: AppContext) -> None:
     """
     if ctx.poster_cache is None:
         return
-    task = asyncio.create_task(prewarm_posters(ctx))
-    _PREWARM_TASKS.add(task)
-    task.add_done_callback(_PREWARM_TASKS.discard)
+    _spawn_tracked(_PREWARM_TASKS, prewarm_posters(ctx))
+
+
+# ---- IMDb-rating backfill ----
+
+
+@dataclass
+class _RatingGroup:
+    """One deduplicated title to rate, with every storage alias observed.
+
+    ``canonical`` is the key used for freshness checks and TMDB->IMDb resolution:
+    the IMDb id when known, otherwise the ``media_type:tmdb`` alias. ``aliases``
+    holds every key under which the rating must be stored so rows keyed by
+    either form all hit the cache.
+    """
+
+    canonical: str
+    imdb: str | None
+    media_type: str
+    tmdb: int
+    aliases: set[str]
+
+
+def _rating_targets(rows: list[dict]) -> list[_RatingGroup]:
+    """Group rows by title identity so each title is looked up once.
+
+    Rows carrying both IMDb and TMDB ids merge with rows that only carry the
+    matching TMDB alias, preventing the same title from consuming two OMDb
+    requests. Rows without a usable id are skipped.
+    """
+    # First pass: build (media_type, tmdb) -> imdb for rows that expose both ids.
+    alias_to_imdb: dict[tuple[str, int], str] = {}
+    for row in rows:
+        imdb = row.get("imdb")
+        media_type = row.get("media_type")
+        tmdb = row.get("tmdb")
+        if imdb and media_type in ("movie", "show") and isinstance(tmdb, int):
+            alias_to_imdb[(media_type, tmdb)] = imdb
+
+    groups: dict[str, _RatingGroup] = {}
+    for row in rows:
+        imdb = row.get("imdb")
+        media_type = row.get("media_type")
+        tmdb = row.get("tmdb")
+        alias = trending_rating_key(imdb=imdb, media_type=media_type, tmdb=tmdb)
+        if alias is None:
+            continue
+
+        resolved_imdb = imdb
+        if (
+            not resolved_imdb
+            and media_type in ("movie", "show")
+            and isinstance(tmdb, int)
+        ):
+            resolved_imdb = alias_to_imdb.get((media_type, tmdb))
+
+        canonical = resolved_imdb if resolved_imdb else alias
+
+        if canonical not in groups:
+            groups[canonical] = _RatingGroup(
+                canonical=canonical,
+                imdb=resolved_imdb,
+                media_type=media_type or "",
+                tmdb=tmdb if isinstance(tmdb, int) else 0,
+                aliases=set(),
+            )
+        groups[canonical].aliases.add(alias)
+
+    return list(groups.values())
+
+
+async def backfill_ratings(ctx: AppContext) -> None:
+    """Fill missing/stale IMDb ratings for the stored rows, within today's budget.
+
+    Missing keys are fetched before stale ones so new titles gain a badge first.
+    A TMDB-only target is resolved to an IMDb id first (a failed resolution is
+    left missing so a later run retries — it costs no OMDb budget); a resolved
+    rating is stored under every observed alias and the resolved IMDb key.
+    ``fetch_rating`` never raises and reports "no rating" as nulls, which are
+    stored too so a title known to lack a rating is not re-fetched daily.
+    """
+    targets = _rating_targets(ctx.trending_store.all_rows())
+    if not targets:
+        return
+    stored = ctx.db.trending_ratings_get_many([target.canonical for target in targets])
+    cutoff = (datetime.now(UTC) - timedelta(days=_RATING_DB_TTL_DAYS)).isoformat()
+    missing = [target for target in targets if target.canonical not in stored]
+    stale = [
+        target
+        for target in targets
+        if target.canonical in stored
+        and stored[target.canonical]["fetched_at"] < cutoff
+    ]
+    pending = missing + stale
+    if not pending:
+        return
+    today = utcnow_iso()[:10]
+    remaining = _OMDB_DAILY_BUDGET - ctx.db.omdb_usage_count(today)
+    if remaining <= 0:
+        _log.info(
+            "rating backfill: %d pending, daily OMDb budget exhausted", len(pending)
+        )
+        return
+    batch = pending[:remaining]
+    semaphore = asyncio.Semaphore(_BACKFILL_CONCURRENCY)
+
+    async def _one(target: _RatingGroup) -> bool:
+        async with semaphore:
+            imdb_id = target.imdb
+            if not imdb_id:
+                imdb_id = await ctx.tmdb.fetch_external_ids(
+                    media_type=target.media_type, tmdb_id=target.tmdb
+                )
+                if not imdb_id:
+                    # Unresolved: leave every alias missing so a later run retries.
+                    return False
+                stored_imdb = ctx.db.trending_ratings_get_many([imdb_id]).get(imdb_id)
+                if stored_imdb is not None and stored_imdb["fetched_at"] >= cutoff:
+                    # Another feed already paid OMDb for this title under its
+                    # IMDb key; copy the stored rating across the aliases
+                    # instead of spending a second request on the same title.
+                    for key in target.aliases:
+                        ctx.db.trending_ratings_upsert(
+                            key=key,
+                            imdb_rating=stored_imdb["imdb_rating"],
+                            imdb_votes=stored_imdb["imdb_votes"],
+                        )
+                    return True
+            rating = await ctx.omdb.fetch_rating(imdb_id=imdb_id)
+            ctx.db.omdb_usage_add(today, 1)
+            for key in target.aliases:
+                ctx.db.trending_ratings_upsert(
+                    key=key,
+                    imdb_rating=rating["imdb_rating"],
+                    imdb_votes=rating["imdb_votes"],
+                )
+            if imdb_id not in target.aliases:
+                ctx.db.trending_ratings_upsert(
+                    key=imdb_id,
+                    imdb_rating=rating["imdb_rating"],
+                    imdb_votes=rating["imdb_votes"],
+                )
+            return True
+
+    results = await asyncio.gather(
+        *(_one(target) for target in batch), return_exceptions=True
+    )
+    fetched = sum(1 for result in results if result is True)
+    failed = sum(1 for result in results if isinstance(result, Exception))
+    unresolved = len(batch) - fetched - failed
+    _log.info(
+        "rating backfill: %d pending, %d fetched, %d unresolved, %d failed, "
+        "%d left for a later run",
+        len(pending),
+        fetched,
+        unresolved,
+        failed,
+        len(pending) - len(batch),
+    )
+
+
+def _spawn_rating_backfill(ctx: AppContext) -> asyncio.Task | None:
+    """Fire the rating backfill detached, unless one is already in flight.
+
+    The guard keeps concurrent triggers (a refresh cycle and the daily cron
+    landing together) from running two backfills that would each spend the full
+    daily budget — double the OMDb quota. The in-flight run already scans the
+    latest store state; anything it leaves is picked up by the next trigger.
+    The check-then-spawn pair is atomic on the single event loop (no await
+    between them), so two triggers cannot both pass the guard.
+    """
+    if _BACKFILL_TASKS:
+        _log.info("rating backfill already in flight; skipping duplicate trigger")
+        return None
+    return _spawn_tracked(_BACKFILL_TASKS, backfill_ratings(ctx))
 
 
 @dataclass
@@ -201,35 +471,160 @@ class _TrendingSync:
 _trending_sync = _TrendingSync()
 
 
+async def _refresh_cycle(ctx: AppContext) -> None:
+    """One full refresh pass: fetch every feed, then pre-warm posters and ratings.
+
+    Guarded: overlapping calls (repeated reschedules or scheduler overlap) are
+    skipped so only one cycle runs at a time.
+    """
+    global _REFRESH_ACTIVE
+    async with _REFRESH_LOCK:
+        if _REFRESH_ACTIVE:
+            _log.info("refresh cycle already active; skipping")
+            return
+        _REFRESH_ACTIVE = True
+    await _run_refresh_cycle(ctx)
+
+
+async def _run_refresh_cycle(ctx: AppContext) -> None:
+    """The actual refresh-cycle work, with guaranteed cleanup of the active flag."""
+    global _REFRESH_ACTIVE
+    try:
+        await refresh_trending_store(ctx)
+        _spawn_prewarm(ctx)
+        _spawn_rating_backfill(ctx)
+    except Exception:
+        _log.exception("refresh cycle raised an exception")
+        raise
+    finally:
+        async with _REFRESH_LOCK:
+            _REFRESH_ACTIVE = False
+
+
 async def _trending_sync_job() -> None:
-    """Scheduled entrypoint: refresh the trending snapshot, then pre-warm posters."""
+    """Scheduled entrypoint: refresh the snapshot, then pre-warm posters and ratings."""
+    ctx = _trending_sync.ctx
+    if ctx is None:  # pragma: no cover - ctx is set before the job is scheduled
+        return
+    await observe_scheduler_job(_JOB_ID, lambda: _refresh_cycle(ctx))
+
+
+async def _rating_backfill_job() -> None:
+    """Scheduled entrypoint: drain the rating backlog within the daily budget.
+
+    Runs daily so the backlog keeps draining on days the 1–3-day feed refresh
+    does not fire (and after a day-rollover restores spent budget). Skipped when
+    a refresh-triggered backfill is already in flight (see
+    :func:`_spawn_rating_backfill`).
+    """
     ctx = _trending_sync.ctx
     if ctx is None:  # pragma: no cover - ctx is set before the job is scheduled
         return
 
-    async def refresh_and_prewarm() -> None:
-        await refresh_trending_store(ctx)
-        _spawn_prewarm(ctx)
+    async def run_exclusive() -> None:
+        task = _spawn_rating_backfill(ctx)
+        if task is not None:
+            await task
 
-    await observe_scheduler_job(_JOB_ID, refresh_and_prewarm)
+    await observe_scheduler_job(_BACKFILL_JOB_ID, run_exclusive)
+
+
+def _restore_trending_store(ctx: AppContext) -> str | None:
+    """Load the persisted feed snapshot into the store; return its last sync time.
+
+    Returns ``None`` when nothing was persisted (first boot, or a pre-persistence
+    database), in which case the caller refreshes live as before.
+    """
+    feeds = ctx.db.trending_feeds_load()
+    for feed in feeds:
+        ctx.trending_store.set(
+            source=feed["source"],
+            media=feed["media"],
+            category=feed["category"],
+            window=feed["window"],
+            rows=feed["rows"],
+        )
+    last = ctx.db.trending_feeds_last_synced()
+    if last is not None:
+        ctx.trending_store.mark_synced(last)
+    return last
+
+
+def _is_fresh(last_synced_at: str, *, interval_minutes: int) -> bool:
+    """Whether a persisted snapshot is younger than the configured interval.
+
+    An unparseable timestamp counts as stale so the boot path degrades to a
+    normal live refresh rather than serving a snapshot of unknown age. A naive
+    timestamp parses but cannot be compared against aware now (``TypeError``),
+    so it is treated the same way.
+    """
+    try:
+        last = datetime.fromisoformat(last_synced_at)
+        return datetime.now(UTC) - last < timedelta(minutes=interval_minutes)
+    except ValueError, TypeError:
+        return False
 
 
 async def start_trending_sync(ctx: AppContext) -> None:
-    """Schedule the periodic trending refresh and prime the store immediately.
+    """Schedule the refresh and backfill jobs and prime the store.
 
-    An interval trigger only fires after the first interval elapses, so the store is
-    refreshed once at start-up to avoid serving an empty grid on a cold boot. Also
-    exposes ``ctx.reschedule_trending`` so a settings change re-points the job
-    (mirrors ``reschedule_sync`` / ``findarr_reschedule``).
+    The persisted snapshot is restored first; a live refresh (and poster
+    pre-warm) runs only when that snapshot is absent or older than the
+    configured interval, so a restart inside the 1–3-day cadence serves
+    instantly without a provider fetch burst. The rating backfill is spawned on
+    every boot — it no-ops cheaply when nothing is pending. Also exposes
+    ``ctx.reschedule_trending`` so a settings change re-points the job (mirrors
+    ``reschedule_sync`` / ``findarr_reschedule``).
     """
     _trending_sync.ctx = ctx
+    # defer_first_run: APScheduler 4's interval trigger fires immediately by
+    # default, which would refetch every provider right after the boot path
+    # below has already primed (or restored) the store.
     await ctx.scheduler.add_interval(
         _trending_sync_job,
         minutes=ctx.settings_store.trending_sync_interval_minutes(),
         id=_JOB_ID,
+        defer_first_run=True,
     )
-    ctx.reschedule_trending = lambda minutes: ctx.scheduler.reschedule_interval(
-        _trending_sync_job, minutes=minutes, id=_JOB_ID
+
+    async def _reschedule_trending(minutes: int) -> None:
+        """Re-point the interval job; catch up once if the snapshot is now stale.
+
+        ``defer_first_run`` pushes the next scheduled fire one full *new*
+        interval out, so without this check a 3-day-old snapshot would survive
+        a switch to a 1-day cadence for yet another day. A catch-up cycle is
+        skipped when one is already active, and every detached cycle is
+        supervised so exceptions are never lost.
+        """
+        global _REFRESH_ACTIVE
+        await ctx.scheduler.reschedule_interval(
+            _trending_sync_job, minutes=minutes, id=_JOB_ID, defer_first_run=True
+        )
+        last_synced = ctx.db.trending_feeds_last_synced()
+        if last_synced is not None and _is_fresh(last_synced, interval_minutes=minutes):
+            return
+        async with _REFRESH_LOCK:
+            if _REFRESH_ACTIVE:
+                _log.info("refresh cycle already active; skipping duplicate catch-up")
+                return
+            _REFRESH_ACTIVE = True
+        _spawn_supervised(
+            _REFRESH_TASKS,
+            _run_refresh_cycle(ctx),
+            log_msg="reschedule-triggered refresh cycle raised an exception",
+        )
+
+    ctx.reschedule_trending = _reschedule_trending
+    await ctx.scheduler.add_cron(
+        _rating_backfill_job,
+        hour=_BACKFILL_CRON_HOUR,
+        minute=_BACKFILL_CRON_MINUTE,
+        id=_BACKFILL_JOB_ID,
     )
-    await refresh_trending_store(ctx)
-    _spawn_prewarm(ctx)
+    last = _restore_trending_store(ctx)
+    interval = ctx.settings_store.trending_sync_interval_minutes()
+    if last is None or not _is_fresh(last, interval_minutes=interval):
+        await _refresh_cycle(ctx)
+    else:
+        _log.info("trending store restored from database (last synced %s)", last)
+        _spawn_rating_backfill(ctx)

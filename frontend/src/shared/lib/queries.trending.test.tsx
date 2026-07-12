@@ -3,7 +3,6 @@ import { beforeEach, describe, expect, it, vi } from "vitest"
 
 vi.mock("@/shared/lib/api", () => ({
   getTrending: vi.fn(),
-  getTrendingRating: vi.fn(),
   getTrendingStatus: vi.fn(),
   addTrending: vi.fn(),
 }))
@@ -18,7 +17,6 @@ import {
   queryKeys,
   useAddTrending,
   useTrending,
-  useTrendingRating,
   useTrendingStatus,
 } from "@/shared/lib/queries"
 import type { TrendingItem, TrendingQuery } from "@/shared/lib/api"
@@ -43,6 +41,7 @@ const ITEM: TrendingItem = {
   anilist: null,
   poster_url: null,
   seer_status: null,
+  imdb_rating: null,
   already_tracked: false,
   in_library: false,
   in_library_available: false,
@@ -51,10 +50,6 @@ const ITEM: TrendingItem = {
 beforeEach(() => {
   vi.clearAllMocks()
   vi.mocked(api.getTrending).mockResolvedValue([ITEM])
-  vi.mocked(api.getTrendingRating).mockResolvedValue({
-    imdb_rating: 8.6,
-    imdb_votes: 10,
-  })
 })
 
 describe("useTrending", () => {
@@ -79,34 +74,6 @@ describe("useTrendingStatus", () => {
     await waitFor(() => expect(hook.result.current.isSuccess).toBe(true))
     expect(api.getTrendingStatus).toHaveBeenCalled()
     expect(hook.result.current.data?.interval_minutes).toBe(60)
-  })
-})
-
-describe("useTrendingRating", () => {
-  it("fetches the rating when enabled and an id is present", async () => {
-    const { wrapper } = setup()
-    const hook = renderHook(() => useTrendingRating(ITEM, true), { wrapper })
-    await waitFor(() => expect(hook.result.current.isSuccess).toBe(true))
-    expect(api.getTrendingRating).toHaveBeenCalledWith({
-      imdb: "tt1",
-      media: "movie",
-      tmdb: 100,
-    })
-  })
-
-  it("does not fetch when the item carries no id", async () => {
-    const { wrapper } = setup()
-    const noId = { imdb: null, media_type: "movie" as const, tmdb: null }
-    renderHook(() => useTrendingRating(noId, true), { wrapper })
-    await Promise.resolve()
-    expect(api.getTrendingRating).not.toHaveBeenCalled()
-  })
-
-  it("does not fetch when disabled", async () => {
-    const { wrapper } = setup()
-    renderHook(() => useTrendingRating(ITEM, false), { wrapper })
-    await Promise.resolve()
-    expect(api.getTrendingRating).not.toHaveBeenCalled()
   })
 })
 

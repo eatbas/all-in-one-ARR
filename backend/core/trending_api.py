@@ -2,10 +2,11 @@
 
 Backs the dashboard's Trending page: per-source trending and popular feeds
 (Trakt / TMDB / Seer, plus the anime variants ``trakt-anime`` / ``tmdb-anime``
-and the AniList source backing the Anime tab), a lazily-cached IMDb rating
-overlay (via OMDb), and an "add to an owned Trakt list, then sync" action. The
-add never creates a Seer request directly — it adds to Trakt and triggers the
-existing List-Syncarr sync, which requests the item through the normal pipeline.
+and the AniList source backing the Anime tab), an IMDb rating overlay served
+from the persistent store the budgeted backfill fills (``core.trending_sync``),
+and an "add to an owned Trakt list, then sync" action. The add never creates a
+Seer request directly — it adds to Trakt and triggers the existing List-Syncarr
+sync, which requests the item through the normal pipeline.
 """
 
 from __future__ import annotations
@@ -27,9 +28,9 @@ from core.trending import (
     TRENDING_SYNC_PAGES,
     LibraryCache,
     LibraryIndex,
-    RatingCache,
     build_library_index,
     to_trending_items,
+    trending_rating_key,
 )
 
 if TYPE_CHECKING:  # pragma: no cover
@@ -61,6 +62,9 @@ class TrendingItem(BaseModel):
     # without a TMDB id — only the anilist source sets it.
     poster_url: str | None
     seer_status: int | None
+    # IMDb rating from the persistent store; null until the budgeted backfill
+    # has covered the title (or when IMDb has no rating for it).
+    imdb_rating: float | None
     already_tracked: bool
     in_library: bool
     in_library_available: bool
@@ -214,7 +218,6 @@ def create_trending_router(ctx: AppContext) -> APIRouter:
     """Build the ``/api/trending`` router bound to a specific context."""
     router = APIRouter(prefix="/api/trending", tags=["trending"])
     log = get_logger("trending")
-    rating_cache = RatingCache()
     library_cache = LibraryCache()
     library_refresh_task: asyncio.Task[LibraryIndex] | None = None
 
@@ -338,13 +341,34 @@ def create_trending_router(ctx: AppContext) -> APIRouter:
                 source=source, media=media, category=category, window=window, rows=rows
             )
         # Overlay flags depend on fast-changing local state, so they are recomputed on
-        # every read rather than cached alongside the rows.
+        # every read rather than cached alongside the rows. Ratings are one local
+        # SQLite lookup across all row keys.
         tracked = _tracked_tmdbs(ctx.db)
         library = await _library_index()
+        keys = [
+            key
+            for key in (
+                trending_rating_key(
+                    imdb=row.get("imdb"),
+                    media_type=row.get("media_type"),
+                    tmdb=row.get("tmdb"),
+                )
+                for row in rows
+            )
+            if key is not None
+        ]
+        ratings = {
+            key: entry["imdb_rating"]
+            for key, entry in ctx.db.trending_ratings_get_many(keys).items()
+        }
         return [
             TrendingItem(**item)
             for item in to_trending_items(
-                rows, source=source, tracked_tmdbs=tracked, library=library
+                rows,
+                source=source,
+                tracked_tmdbs=tracked,
+                library=library,
+                ratings=ratings,
             )
         ]
 
@@ -365,17 +389,22 @@ def create_trending_router(ctx: AppContext) -> APIRouter:
         media: Literal["movie", "show"] | None = None,
         tmdb: int | None = None,
     ) -> TrendingRating:
-        imdb_id = imdb
-        if not imdb_id and media is not None and tmdb is not None:
-            imdb_id = await ctx.tmdb.fetch_external_ids(media_type=media, tmdb_id=tmdb)
-        if not imdb_id:
+        """Compat single-item lookup served from the persistent rating store.
+
+        Pre-deploy frontend bundles still call this once per card; the current
+        dashboard reads ``imdb_rating`` off the feed instead. Served entirely
+        from the store the backfill fills — no OMDb or TMDB call — and kept only
+        until cached bundles have cycled out.
+        """
+        key = trending_rating_key(imdb=imdb, media_type=media, tmdb=tmdb)
+        if key is None:
             return TrendingRating(imdb_rating=None, imdb_votes=None)
-        cached = rating_cache.get(imdb_id)
-        if cached is not None:
-            return TrendingRating(**cached)
-        rating = await ctx.omdb.fetch_rating(imdb_id=imdb_id)
-        rating_cache.set(imdb_id, rating)
-        return TrendingRating(**rating)
+        entry = ctx.db.trending_ratings_get_many([key]).get(key)
+        if entry is None:
+            return TrendingRating(imdb_rating=None, imdb_votes=None)
+        return TrendingRating(
+            imdb_rating=entry["imdb_rating"], imdb_votes=entry["imdb_votes"]
+        )
 
     @router.post("/add", response_model=TrendingAddResponse)
     async def post_add(

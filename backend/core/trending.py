@@ -1,12 +1,14 @@
-"""Trending discovery: normalisation, an IMDb-rating cache and a library index.
+"""Trending discovery: normalisation, rating keys and a library index.
 
 The Trakt, TMDB and Seer clients each emit a *uniform discovery row*
 (``{media_type, tmdb, [imdb, tvdb, trakt], title, year, [seer_status]}``).
 :func:`to_trending_items` tags those rows with their source, an ``already_tracked``
-flag, and an ``in_library`` flag (present in Radarr/Sonarr), producing the
-``TrendingItem`` shape the dashboard consumes. :class:`RatingCache` and
-:class:`LibraryCache` are bounded/TTL caches so a poster grid does not hammer OMDb
-or the Arr APIs on every render.
+flag, an ``in_library`` flag (present in Radarr/Sonarr) and the IMDb rating read
+from the persistent store, producing the ``TrendingItem`` shape the dashboard
+consumes. :func:`trending_rating_key` is the shared key under which a row's
+rating is stored in the database (filled by the budgeted backfill in
+``core.trending_sync``). :class:`LibraryCache` is a short-TTL cache so a poster
+grid does not hammer the Arr APIs on every render.
 """
 
 from __future__ import annotations
@@ -30,9 +32,6 @@ TRENDING_SYNC_PAGES = 5
 # BOTH media buckets to reach TRENDING_ITEM_LIMIT before the feed is exhausted
 # (the bucket fetch stops once both are full or Seer runs out of pages).
 SEER_TRENDING_SYNC_PAGES = 15
-# IMDb-rating cache bounds (entry TTL and max entries).
-_RATING_TTL_SECONDS = 24 * 60 * 60
-_RATING_CACHE_MAX = 512
 # The combined Radarr/Sonarr library is re-listed at most this often.
 _LIBRARY_TTL_SECONDS = 60
 
@@ -140,27 +139,50 @@ def build_library_index(
     )
 
 
+def trending_rating_key(
+    *, imdb: str | None, media_type: str | None, tmdb: int | None
+) -> str | None:
+    """Return the ratings-store key for a discovery row, or ``None`` without ids.
+
+    An IMDb id is the canonical key; rows carrying only a TMDB id use the
+    ``"{media_type}:{tmdb}"`` alias. The backfill writes a resolved alias under
+    both keys, so either form hits the store.
+    """
+    if imdb:
+        return imdb
+    if media_type in ("movie", "show") and isinstance(tmdb, int):
+        return f"{media_type}:{tmdb}"
+    return None
+
+
 def to_trending_items(
     rows: Iterable[dict[str, Any]],
     *,
     source: str,
     tracked_tmdbs: set[int],
     library: LibraryIndex | None = None,
+    ratings: dict[str, float | None] | None = None,
 ) -> list[dict[str, Any]]:
     """Map uniform discovery rows onto ``TrendingItem`` dicts.
 
     ``source`` tags every row with the tab that produced it; ``tracked_tmdbs`` is
     the set of TMDB ids already mirrored in a tracked list (``already_tracked``);
-    ``library`` flags items already present in Radarr/Sonarr (``in_library``).
-    Fields a source does not provide (e.g. ``imdb`` for TMDB, ``seer_status``
-    outside Seer) default to ``None``.
+    ``library`` flags items already present in Radarr/Sonarr (``in_library``);
+    ``ratings`` maps :func:`trending_rating_key` keys onto stored IMDb ratings
+    (``imdb_rating``, absent or ``None`` when unknown). Fields a source does not
+    provide (e.g. ``imdb`` for TMDB, ``seer_status`` outside Seer) default to
+    ``None``.
     """
     library = library or LibraryIndex()
+    ratings = ratings or {}
     items: list[dict[str, Any]] = []
     for row in rows:
         tmdb = row.get("tmdb")
         tvdb = row.get("tvdb")
         media_type = row.get("media_type")
+        rating_key = trending_rating_key(
+            imdb=row.get("imdb"), media_type=media_type, tmdb=tmdb
+        )
         items.append(
             {
                 "source": source,
@@ -175,6 +197,9 @@ def to_trending_items(
                 "anilist": row.get("anilist"),
                 "poster_url": row.get("poster_url"),
                 "seer_status": row.get("seer_status"),
+                "imdb_rating": (
+                    ratings.get(rating_key) if rating_key is not None else None
+                ),
                 "already_tracked": tmdb is not None and tmdb in tracked_tmdbs,
                 "in_library": library.contains(
                     media_type=media_type, tmdb=tmdb, tvdb=tvdb
@@ -185,43 +210,6 @@ def to_trending_items(
             }
         )
     return items
-
-
-class RatingCache:
-    """Bounded, time-to-live cache for IMDb ratings keyed by IMDb id.
-
-    Entries expire after ``ttl_seconds``; when ``max_entries`` is reached the
-    oldest entry (insertion order) is evicted before a new id is stored. Kept
-    deliberately small — no external dependency, single-process only.
-    """
-
-    def __init__(
-        self,
-        *,
-        ttl_seconds: int = _RATING_TTL_SECONDS,
-        max_entries: int = _RATING_CACHE_MAX,
-    ) -> None:
-        self._ttl = ttl_seconds
-        self._max = max_entries
-        self._store: dict[str, tuple[float, dict[str, Any]]] = {}
-
-    def get(self, imdb_id: str) -> dict[str, Any] | None:
-        """Return the cached rating for an id, or ``None`` if absent/expired."""
-        entry = self._store.get(imdb_id)
-        if entry is None:
-            return None
-        expires_at, value = entry
-        if _now() >= expires_at:
-            del self._store[imdb_id]
-            return None
-        return value
-
-    def set(self, imdb_id: str, value: dict[str, Any]) -> None:
-        """Store a rating for an id, evicting the oldest entry when full."""
-        if imdb_id not in self._store and len(self._store) >= self._max:
-            oldest = next(iter(self._store))
-            del self._store[oldest]
-        self._store[imdb_id] = (_now() + self._ttl, value)
 
 
 class LibraryCache:
@@ -260,8 +248,9 @@ class TrendingStore:
     ``already_tracked``/``in_library`` overlay with fresh local state on every read
     (those flags change independently of the upstream feed). The Trending page is
     served from this snapshot rather than calling a provider on each request; the
-    scheduled refresh keeps it warm. Single-process, single-event-loop use only
-    (like :class:`RatingCache`/:class:`LibraryCache`), so no lock is needed.
+    scheduled refresh keeps it warm and mirrors it into the database so a restart
+    reloads it instead of refetching. Single-process, single-event-loop use only
+    (like :class:`LibraryCache`), so no lock is needed.
     """
 
     def __init__(self) -> None:

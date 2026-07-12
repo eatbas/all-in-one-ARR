@@ -86,7 +86,6 @@ export {
 export {
   useAddTrending,
   useTrending,
-  useTrendingRating,
   useTrendingStatus,
 } from "@/shared/lib/queries/trending"
 

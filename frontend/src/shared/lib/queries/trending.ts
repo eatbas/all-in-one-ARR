@@ -10,13 +10,11 @@ import { toast } from "sonner"
 import {
   addTrending,
   getTrending,
-  getTrendingRating,
   getTrendingStatus,
   type AddTrendingPayload,
   type TrendingAddResult,
   type TrendingItem,
   type TrendingQuery,
-  type TrendingRating,
   type TrendingStatus,
 } from "@/shared/lib/api"
 import { queryKeys } from "@/shared/lib/queries/keys"
@@ -43,25 +41,6 @@ export function useTrendingStatus(): UseQueryResult<TrendingStatus> {
     queryKey: queryKeys.trendingStatus,
     queryFn: getTrendingStatus,
     refetchInterval: TRENDING_STATUS_REFETCH_INTERVAL,
-  })
-}
-
-export function useTrendingRating(
-  item: Pick<TrendingItem, "imdb" | "media_type" | "tmdb">,
-  enabled: boolean,
-): UseQueryResult<TrendingRating> {
-  const hasId = item.imdb !== null || item.tmdb !== null
-  const key = item.imdb ?? `${item.media_type}:${item.tmdb}`
-  return useQuery({
-    queryKey: queryKeys.trendingRating(key),
-    queryFn: () =>
-      getTrendingRating({
-        imdb: item.imdb,
-        media: item.media_type,
-        tmdb: item.tmdb,
-      }),
-    enabled: enabled && hasId,
-    staleTime: Infinity,
   })
 }
 

@@ -382,3 +382,113 @@ def test_clear_items_and_sync_state_removes_both_tables(db: Database) -> None:
     # The database remains usable after the clear.
     db.upsert_item(**_MOVIE)
     assert db.table_counts()["items"] == 1
+
+
+# ---- trending ----
+
+
+def test_trending_feeds_save_and_load_round_trip(db: Database) -> None:
+    rows = [{"media_type": "movie", "tmdb": 603, "title": "The Matrix"}]
+    db.trending_feeds_save(
+        source="trakt", media="movie", category="trending", window="week", rows=rows
+    )
+    loaded = db.trending_feeds_load()
+    assert len(loaded) == 1
+    feed = loaded[0]
+    assert feed["source"] == "trakt"
+    assert feed["media"] == "movie"
+    assert feed["category"] == "trending"
+    assert feed["window"] == "week"
+    assert feed["rows"] == rows
+    assert feed["synced_at"]
+
+
+def test_trending_feeds_save_replaces_previous_rows(db: Database) -> None:
+    db.trending_feeds_save(
+        source="tmdb",
+        media="show",
+        category="popular",
+        window="week",
+        rows=[{"tmdb": 1}],
+    )
+    db.trending_feeds_save(
+        source="tmdb",
+        media="show",
+        category="popular",
+        window="week",
+        rows=[{"tmdb": 2}],
+    )
+    loaded = db.trending_feeds_load()
+    assert len(loaded) == 1
+    assert loaded[0]["rows"] == [{"tmdb": 2}]
+
+
+def test_trending_feeds_last_synced_uses_cycle_timestamp(db: Database) -> None:
+    # The cycle timestamp is absent until a complete cycle is explicitly marked.
+    assert db.trending_feeds_last_synced() is None
+    db.trending_feeds_save(
+        source="trakt", media="movie", category="trending", window="week", rows=[]
+    )
+    assert db.trending_feeds_last_synced() is None
+    db.trending_cycle_mark_synced("2026-01-01T00:00:00+00:00")
+    assert db.trending_feeds_last_synced() == "2026-01-01T00:00:00+00:00"
+
+
+def test_trending_ratings_upsert_and_get_many(db: Database) -> None:
+    db.trending_ratings_upsert(key="tt1", imdb_rating=8.6, imdb_votes=1200)
+    db.trending_ratings_upsert(key="movie:603", imdb_rating=None, imdb_votes=None)
+    found = db.trending_ratings_get_many(["tt1", "movie:603", "tt-missing"])
+    assert found["tt1"]["imdb_rating"] == 8.6
+    assert found["tt1"]["imdb_votes"] == 1200
+    assert found["tt1"]["fetched_at"]
+    # A stored null rating is a valid entry (known "no rating on IMDb").
+    assert found["movie:603"]["imdb_rating"] is None
+    assert "tt-missing" not in found
+
+
+def test_trending_ratings_upsert_overwrites_and_keeps_injected_stamp(
+    db: Database,
+) -> None:
+    db.trending_ratings_upsert(
+        key="tt1",
+        imdb_rating=7.0,
+        imdb_votes=10,
+        fetched_at="2020-01-01T00:00:00+00:00",
+    )
+    assert (
+        db.trending_ratings_get_many(["tt1"])["tt1"]["fetched_at"]
+        == "2020-01-01T00:00:00+00:00"
+    )
+    db.trending_ratings_upsert(key="tt1", imdb_rating=7.5, imdb_votes=20)
+    entry = db.trending_ratings_get_many(["tt1"])["tt1"]
+    assert entry["imdb_rating"] == 7.5
+    assert entry["imdb_votes"] == 20
+    assert entry["fetched_at"] > "2020-01-01T00:00:00+00:00"
+
+
+def test_trending_ratings_get_many_chunks_and_dedupes(db: Database) -> None:
+    # More keys than one chunk (500) exercises the chunked IN-clause path; the
+    # duplicated key must not produce duplicate work or output.
+    for index in range(501):
+        db.trending_ratings_upsert(key=f"tt{index}", imdb_rating=1.0, imdb_votes=1)
+    keys = [f"tt{index}" for index in range(501)] + ["tt0"]
+    found = db.trending_ratings_get_many(keys)
+    assert len(found) == 501
+
+
+def test_omdb_usage_counts_accumulate_per_day(db: Database) -> None:
+    assert db.omdb_usage_count("2026-07-12") == 0
+    db.omdb_usage_add("2026-07-12", 5)
+    db.omdb_usage_add("2026-07-12", 3)
+    db.omdb_usage_add("2026-07-13", 1)
+    assert db.omdb_usage_count("2026-07-12") == 8
+    assert db.omdb_usage_count("2026-07-13") == 1
+
+
+def test_omdb_usage_add_prunes_old_days(db: Database) -> None:
+    db.omdb_usage_add("2020-01-01", 5)
+    today = utcnow_iso()[:10]
+    db.omdb_usage_add(today, 1)
+    # The write-side pruning drops tallies past the retention window.
+    assert db.omdb_usage_count("2020-01-01") == 0
+    assert db.omdb_usage_count(today) == 1

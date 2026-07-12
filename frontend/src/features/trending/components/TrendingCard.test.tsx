@@ -2,19 +2,14 @@ import { fireEvent, render, screen } from "@testing-library/react"
 import { beforeEach, describe, expect, it, vi } from "vitest"
 
 vi.mock("@/shared/lib/queries", () => ({
-  useTrendingRating: vi.fn(),
   useLists: vi.fn(),
   useAddTrending: vi.fn(),
 }))
 
-import {
-  useAddTrending,
-  useLists,
-  useTrendingRating,
-} from "@/shared/lib/queries"
+import { useAddTrending, useLists } from "@/shared/lib/queries"
 import { TrendingCard } from "@/features/trending/components/TrendingCard"
 import { mutationResult, queryResult } from "@/shared/test/mock-query"
-import type { TrendingItem, TrendingRating } from "@/shared/lib/api"
+import type { TrendingItem } from "@/shared/lib/api"
 
 function item(over: Partial<TrendingItem>): TrendingItem {
   return {
@@ -30,6 +25,7 @@ function item(over: Partial<TrendingItem>): TrendingItem {
     anilist: null,
     poster_url: null,
     seer_status: null,
+    imdb_rating: null,
     already_tracked: false,
     in_library: false,
     in_library_available: false,
@@ -38,10 +34,7 @@ function item(over: Partial<TrendingItem>): TrendingItem {
 }
 
 beforeEach(() => {
-  // Children hooks: no rating, no owned lists (add disabled), idle mutation.
-  vi.mocked(useTrendingRating).mockReturnValue(
-    queryResult<TrendingRating>(undefined),
-  )
+  // Children hooks: no owned lists (add disabled), idle mutation.
   vi.mocked(useLists).mockReturnValue(queryResult([]))
   vi.mocked(useAddTrending).mockReturnValue(mutationResult(vi.fn(), false))
 })
@@ -146,12 +139,9 @@ describe("TrendingCard", () => {
   })
 
   it("places the IMDb rating pill in the poster's top-left corner", () => {
-    vi.mocked(useTrendingRating).mockReturnValue(
-      queryResult<TrendingRating>({ imdb_rating: 7.8, imdb_votes: 44_000 }),
-    )
     render(
       <ul>
-        <TrendingCard item={item({})} />
+        <TrendingCard item={item({ imdb_rating: 7.8 })} />
       </ul>,
     )
     // The rating sits in the top-left overlay wrapper, not the caption below.

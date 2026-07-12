@@ -2170,6 +2170,17 @@
             ],
             "title": "Imdb"
           },
+          "imdb_rating": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Imdb Rating"
+          },
           "in_library": {
             "title": "In Library",
             "type": "boolean"
@@ -2288,6 +2299,7 @@
           "anilist",
           "poster_url",
           "seer_status",
+          "imdb_rating",
           "already_tracked",
           "in_library",
           "in_library_available"
@@ -3892,6 +3904,7 @@
     },
     "/api/trending/rating": {
       "get": {
+        "description": "Compat single-item lookup served from the persistent rating store.\n\nPre-deploy frontend bundles still call this once per card; the current\ndashboard reads ``imdb_rating`` off the feed instead. Served entirely\nfrom the store the backfill fills — no OMDb or TMDB call — and kept only\nuntil cached bundles have cycled out.",
         "operationId": "get_rating_api_trending_rating_get",
         "parameters": [
           {

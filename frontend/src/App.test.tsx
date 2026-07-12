@@ -171,7 +171,6 @@ vi.mock("@/shared/lib/queries", () => ({
   useRunFindarr: vi.fn(() => ({ mutate: vi.fn(), isPending: false })),
   useResetFindarrState: vi.fn(() => ({ mutate: vi.fn(), isPending: false })),
   useTrending: vi.fn(() => ({ data: [], isLoading: false })),
-  useTrendingRating: vi.fn(() => ({ data: undefined })),
   useAddTrending: vi.fn(() => ({ mutate: vi.fn(), isPending: false })),
 }))
 

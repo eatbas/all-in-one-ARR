@@ -1,6 +1,5 @@
 import { StarIcon } from "lucide-react"
 
-import { useTrendingRating } from "@/shared/lib/queries"
 import type { TrendingItem } from "@/shared/lib/api"
 import { cn } from "@/shared/lib/utils"
 import type { PillDensity } from "@/shared/components/poster-pill/poster-pill-variants"
@@ -17,10 +16,11 @@ const RATING_SIZE: Record<PillDensity, { star: string; rating: string }> = {
 }
 
 /**
- * IMDb rating pill for a trending card's top-left corner. Fetches the rating
- * lazily via OMDb and renders nothing until it resolves (or when no rating is
- * available), so a card never shows a broken or empty rating. The star and
- * rating scale down with the posters-per-row density.
+ * IMDb rating pill for a trending card's top-left corner. Renders the rating
+ * the feed payload carries (`item.imdb_rating`, filled by the backend's
+ * budgeted backfill) and nothing while it is still null, so a card never shows
+ * a broken or empty rating. The star and rating scale down with the
+ * posters-per-row density.
  */
 export function ImdbRatingBadge({
   item,
@@ -31,8 +31,7 @@ export function ImdbRatingBadge({
    *  largest size for consumers that do not know the grid density. */
   density?: PillDensity
 }) {
-  const { data } = useTrendingRating(item, true)
-  if (!data || data.imdb_rating === null) {
+  if (item.imdb_rating === null) {
     return null
   }
   const size = RATING_SIZE[density]
@@ -51,7 +50,7 @@ export function ImdbRatingBadge({
           aria-hidden="true"
           className={cn(size.star, "fill-amber-400 text-amber-400")}
         />
-        <span>{data.imdb_rating.toFixed(1)}</span>
+        <span>{item.imdb_rating.toFixed(1)}</span>
       </span>
     </div>
   )

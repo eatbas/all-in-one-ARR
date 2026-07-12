@@ -8,6 +8,7 @@ Uvicorn worker. Multi-worker deployment is explicitly out of scope.
 
 from __future__ import annotations
 
+import json
 import os
 import sqlite3
 import threading
@@ -20,6 +21,10 @@ from core.db_schema import INIT_SQL
 
 # Activity rows are kept for this many days; the absolute maximum is 30 days.
 ACTIVITY_RETENTION_DAYS = 15
+
+# Daily OMDb usage tallies older than this are pruned on write; only today's
+# row is ever read, the rest is short-term audit trail.
+OMDB_USAGE_RETENTION_DAYS = 30
 
 # The lifecycle states an item moves through.
 ITEM_STATUSES = ("synced", "requested", "available", "removed")
@@ -484,6 +489,179 @@ class Database:
         for row in rows:
             totals[row["app"]][row["mode"]] = row["count"]
         return totals
+
+    # ---- trending ----
+
+    def trending_feeds_save(
+        self,
+        *,
+        source: str,
+        media: str,
+        category: str,
+        window: str,
+        rows: list[dict[str, Any]],
+    ) -> None:
+        """Persist one trending feed's discovery rows (replacing any previous).
+
+        Rows are stored as compact JSON; ``synced_at`` records when this feed was
+        last successfully written. A separate cycle timestamp is updated only
+        when every expected feed succeeds (see :meth:`trending_cycle_mark_synced`).
+        """
+        with self._lock:
+            self._conn.execute(
+                """
+                INSERT INTO trending_feeds
+                    (source, media, category, window, rows_json, synced_at)
+                VALUES (?, ?, ?, ?, ?, ?)
+                ON CONFLICT(source, media, category, window) DO UPDATE SET
+                    rows_json=excluded.rows_json,
+                    synced_at=excluded.synced_at
+                """,
+                (
+                    source,
+                    media,
+                    category,
+                    window,
+                    json.dumps(rows, separators=(",", ":")),
+                    utcnow_iso(),
+                ),
+            )
+            self._conn.commit()
+
+    def trending_feeds_load(self) -> list[dict[str, Any]]:
+        """Return every persisted trending feed with its rows decoded.
+
+        Each entry carries ``source``/``media``/``category``/``window``, the
+        decoded ``rows`` list and the feed's ``synced_at`` timestamp.
+        """
+        rows = self._conn.execute(
+            "SELECT source, media, category, window, rows_json, synced_at "
+            "FROM trending_feeds"
+        ).fetchall()
+        return [
+            {
+                "source": row["source"],
+                "media": row["media"],
+                "category": row["category"],
+                "window": row["window"],
+                "rows": json.loads(row["rows_json"]),
+                "synced_at": row["synced_at"],
+            }
+            for row in rows
+        ]
+
+    def trending_cycle_last_synced(self) -> str | None:
+        """Return the timestamp of the last complete refresh cycle, or ``None``.
+
+        A complete cycle means every expected feed was refreshed without failure.
+        This is persisted separately from per-feed ``synced_at`` values so a
+        partial cycle cannot masquerade as fresh on restart.
+        """
+        row = self._conn.execute(
+            "SELECT value FROM trending_cycle_state WHERE key='last_synced_at'"
+        ).fetchone()
+        return row["value"] if row is not None else None
+
+    def trending_cycle_mark_synced(self, when: str | None = None) -> None:
+        """Record that a full refresh cycle completed successfully at ``when``."""
+        with self._lock:
+            self._conn.execute(
+                """
+                INSERT INTO trending_cycle_state (key, value)
+                VALUES ('last_synced_at', ?)
+                ON CONFLICT(key) DO UPDATE SET value=excluded.value
+                """,
+                (when or utcnow_iso(),),
+            )
+            self._conn.commit()
+
+    def trending_feeds_last_synced(self) -> str | None:
+        """Return the timestamp of the last complete refresh cycle, or ``None``."""
+        return self.trending_cycle_last_synced()
+
+    def trending_ratings_get_many(
+        self, keys: Iterable[str]
+    ) -> dict[str, dict[str, Any]]:
+        """Return stored ratings for ``keys`` as ``{key: {rating, votes, fetched_at}}``.
+
+        Absent keys are simply missing from the result. Queried in bounded chunks
+        so a large backlog scan never exceeds SQLite's bound-parameter limit.
+        """
+        unique = list(dict.fromkeys(keys))
+        result: dict[str, dict[str, Any]] = {}
+        chunk_size = 500
+        for start in range(0, len(unique), chunk_size):
+            chunk = unique[start : start + chunk_size]
+            placeholders = ",".join("?" for _ in chunk)
+            rows = self._conn.execute(
+                "SELECT key, imdb_rating, imdb_votes, fetched_at "
+                f"FROM trending_ratings WHERE key IN ({placeholders})",
+                chunk,
+            ).fetchall()
+            for row in rows:
+                result[row["key"]] = {
+                    "imdb_rating": row["imdb_rating"],
+                    "imdb_votes": row["imdb_votes"],
+                    "fetched_at": row["fetched_at"],
+                }
+        return result
+
+    def trending_ratings_upsert(
+        self,
+        *,
+        key: str,
+        imdb_rating: float | None,
+        imdb_votes: int | None,
+        fetched_at: str | None = None,
+    ) -> None:
+        """Store a rating under ``key`` (an IMDb id or a ``media:tmdb`` alias).
+
+        Null ratings are stored too, so a title known to have no IMDb rating is
+        not refetched every day. ``fetched_at`` defaults to now; tests inject an
+        older stamp to exercise staleness.
+        """
+        with self._lock:
+            self._conn.execute(
+                """
+                INSERT INTO trending_ratings (key, imdb_rating, imdb_votes, fetched_at)
+                VALUES (?, ?, ?, ?)
+                ON CONFLICT(key) DO UPDATE SET
+                    imdb_rating=excluded.imdb_rating,
+                    imdb_votes=excluded.imdb_votes,
+                    fetched_at=excluded.fetched_at
+                """,
+                (key, imdb_rating, imdb_votes, fetched_at or utcnow_iso()),
+            )
+            self._conn.commit()
+
+    def omdb_usage_count(self, day: str) -> int:
+        """Return the recorded OMDb request count for a UTC day (``YYYY-MM-DD``)."""
+        row = self._conn.execute(
+            "SELECT count FROM omdb_usage WHERE day=?", (day,)
+        ).fetchone()
+        return int(row["count"]) if row is not None else 0
+
+    def omdb_usage_add(self, day: str, n: int) -> None:
+        """Add ``n`` OMDb requests to a UTC day's usage tally.
+
+        Also prunes tallies older than :data:`OMDB_USAGE_RETENTION_DAYS` so the
+        one-row-per-day table stays bounded (mirrors the activity pruning).
+        """
+        cutoff = (
+            (datetime.now(UTC) - timedelta(days=OMDB_USAGE_RETENTION_DAYS))
+            .date()
+            .isoformat()
+        )
+        with self._lock:
+            self._conn.execute(
+                """
+                INSERT INTO omdb_usage (day, count) VALUES (?, ?)
+                ON CONFLICT(day) DO UPDATE SET count = count + excluded.count
+                """,
+                (day, n),
+            )
+            self._conn.execute("DELETE FROM omdb_usage WHERE day < ?", (cutoff,))
+            self._conn.commit()
 
     def close(self) -> None:
         """Close the underlying connection."""

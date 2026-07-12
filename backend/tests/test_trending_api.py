@@ -426,7 +426,7 @@ def test_trending_status_before_first_sync(db) -> None:
     body = build_client(make_ctx(db=db)).get("/api/trending/status").json()
     assert body == {
         "last_synced_at": None,
-        "interval_minutes": 60,
+        "interval_minutes": 1440,
         "next_sync_at": None,
     }
 
@@ -436,45 +436,69 @@ def test_trending_status_after_sync_derives_next(db) -> None:
     ctx.trending_store.mark_synced("2026-06-30T12:00:00+00:00")
     body = build_client(ctx).get("/api/trending/status").json()
     assert body["last_synced_at"] == "2026-06-30T12:00:00+00:00"
-    assert body["interval_minutes"] == 60
-    assert body["next_sync_at"] == "2026-06-30T13:00:00+00:00"
+    assert body["interval_minutes"] == 1440
+    assert body["next_sync_at"] == "2026-07-01T12:00:00+00:00"
 
 
-# ---- GET /api/trending/rating ----
+# ---- rating overlay on GET /api/trending ----
 
 
-def test_rating_by_imdb_caches(db) -> None:
+def test_get_trending_embeds_stored_ratings(db) -> None:
+    db.trending_ratings_upsert(key="tt1", imdb_rating=8.6, imdb_votes=100)
+    db.trending_ratings_upsert(key="movie:101", imdb_rating=7.2, imdb_votes=50)
     ctx = make_ctx(db=db)
-    ctx.omdb.fetch_rating.return_value = {"imdb_rating": 8.6, "imdb_votes": 100}
-    client = build_client(ctx)
-    first = client.get("/api/trending/rating", params={"imdb": "tt1"}).json()
-    second = client.get("/api/trending/rating", params={"imdb": "tt1"}).json()
-    assert first == second == {"imdb_rating": 8.6, "imdb_votes": 100}
-    # Second read is served from cache, so OMDb is hit only once.
-    ctx.omdb.fetch_rating.assert_awaited_once()
+    ctx.trakt.get_trending.return_value = [
+        _row(tmdb=100, imdb="tt1"),  # rated via its IMDb key
+        _row(tmdb=101),  # rated via the media:tmdb alias
+        _row(tmdb=102),  # not yet backfilled
+    ]
+    result = (
+        build_client(ctx)
+        .get("/api/trending", params={"source": "trakt", "category": "trending"})
+        .json()
+    )
+    assert [item["imdb_rating"] for item in result] == [8.6, 7.2, None]
+    # The overlay is a local read; no upstream rating traffic on the request path.
+    ctx.omdb.fetch_rating.assert_not_awaited()
 
 
-def test_rating_resolves_imdb_from_tmdb(db) -> None:
+# ---- GET /api/trending/rating (compat shim, served from the DB store) ----
+
+
+def test_rating_by_imdb_served_from_store(db) -> None:
+    db.trending_ratings_upsert(key="tt1", imdb_rating=8.6, imdb_votes=100)
     ctx = make_ctx(db=db)
-    ctx.tmdb.fetch_external_ids.return_value = "tt2"
-    ctx.omdb.fetch_rating.return_value = {"imdb_rating": 7.1, "imdb_votes": 5}
-    client = build_client(ctx)
-    result = client.get(
-        "/api/trending/rating", params={"media": "movie", "tmdb": 603}
-    ).json()
+    result = (
+        build_client(ctx).get("/api/trending/rating", params={"imdb": "tt1"}).json()
+    )
+    assert result == {"imdb_rating": 8.6, "imdb_votes": 100}
+    # The route never calls upstream; the backfill owns OMDb/TMDB traffic.
+    ctx.omdb.fetch_rating.assert_not_awaited()
+    ctx.tmdb.fetch_external_ids.assert_not_awaited()
+
+
+def test_rating_by_tmdb_served_from_alias_key(db) -> None:
+    db.trending_ratings_upsert(key="movie:603", imdb_rating=7.1, imdb_votes=5)
+    ctx = make_ctx(db=db)
+    result = (
+        build_client(ctx)
+        .get("/api/trending/rating", params={"media": "movie", "tmdb": 603})
+        .json()
+    )
     assert result == {"imdb_rating": 7.1, "imdb_votes": 5}
-    ctx.tmdb.fetch_external_ids.assert_awaited_once()
+    ctx.tmdb.fetch_external_ids.assert_not_awaited()
 
 
-def test_rating_unresolvable_returns_nulls(db) -> None:
+def test_rating_miss_returns_nulls_without_upstream_calls(db) -> None:
     ctx = make_ctx(db=db)
-    ctx.tmdb.fetch_external_ids.return_value = None  # TMDB has no imdb id
-    client = build_client(ctx)
-    result = client.get(
-        "/api/trending/rating", params={"media": "movie", "tmdb": 603}
-    ).json()
+    result = (
+        build_client(ctx)
+        .get("/api/trending/rating", params={"media": "movie", "tmdb": 603})
+        .json()
+    )
     assert result == {"imdb_rating": None, "imdb_votes": None}
     ctx.omdb.fetch_rating.assert_not_awaited()
+    ctx.tmdb.fetch_external_ids.assert_not_awaited()
 
 
 def test_rating_without_any_id_returns_nulls(db) -> None:

@@ -620,6 +620,11 @@ export interface TrendingItem {
   poster_url: string | null
   /** Seer `mediaInfo.status` (Seer tab only), else null. */
   seer_status: number | null
+  /**
+   * IMDb rating from the backend's persistent store; null until the budgeted
+   * backfill has covered the title (or when IMDb has no rating for it).
+   */
+  imdb_rating: number | null
   /** Whether this item's TMDB id is already mirrored in a tracked list. */
   already_tracked: boolean
   /** Whether this item is already present in Radarr (movies) or Sonarr (shows). */
@@ -637,12 +642,6 @@ export interface TrendingQuery {
   source: TrendingSource
   media: ItemType
   category: TrendingCategory
-}
-
-/** IMDb rating overlay returned by `GET /api/trending/rating`. */
-export interface TrendingRating {
-  imdb_rating: number | null
-  imdb_votes: number | null
 }
 
 /** Body of `POST /api/trending/add`. */
@@ -680,22 +679,6 @@ export function getTrending(query: TrendingQuery): Promise<TrendingItem[]> {
     category: query.category,
   })
   return request<TrendingItem[]>(`/api/trending?${params.toString()}`)
-}
-
-export function getTrendingRating(params: {
-  imdb?: string | null
-  media?: ItemType
-  tmdb?: number | null
-}): Promise<TrendingRating> {
-  const query = new URLSearchParams()
-  if (params.imdb) {
-    query.set("imdb", params.imdb)
-  } else if (params.media && params.tmdb != null) {
-    query.set("media", params.media)
-    query.set("tmdb", String(params.tmdb))
-  }
-  const qs = query.toString()
-  return request<TrendingRating>(`/api/trending/rating${qs ? `?${qs}` : ""}`)
 }
 
 export function addTrending(
