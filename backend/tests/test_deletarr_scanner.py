@@ -75,7 +75,7 @@ def test_movie_scan_keeps_manager_companion_metadata(tmp_path) -> None:
     assert reasons == {"unrelated.xml": "Metadata file not matching video or folder"}
 
 
-def test_movie_scan_keeps_yts_yify_matching_metadata(tmp_path) -> None:
+def test_movie_scan_keeps_yts_mx_matching_metadata(tmp_path) -> None:
     folder_name = "GameStop (2026) {tmdb-12345}"
     video_basename = (
         "GameStop (2026) {tmdb-12345} - [WEBDL-1080p][AAC 2.0][x264]-YTS.MX"

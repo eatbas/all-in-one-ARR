@@ -122,7 +122,7 @@ def test_scan_arr_keeps_manager_companion_metadata(tmp_path) -> None:
     assert items["unrelated.xml"].reason == "Metadata file not matching video or folder"
 
 
-def test_scan_arr_keeps_yts_yify_matching_metadata(tmp_path) -> None:
+def test_scan_arr_keeps_yts_mx_matching_metadata(tmp_path) -> None:
     root = tmp_path / "movies"
     folder_name = "GameStop (2026) {tmdb-12345}"
     video_basename = (

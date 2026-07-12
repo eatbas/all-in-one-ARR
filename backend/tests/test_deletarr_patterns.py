@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import pytest
+
 from modules.deletarr.patterns import JunkPatterns
 
 
@@ -186,33 +188,61 @@ def test_scene_tag_patterns_match_case_insensitively() -> None:
     assert _reason("Proxies.dat") == "Junk pattern: Proxies"
 
 
-def test_yts_yify_provenance_is_not_junk_by_itself() -> None:
-    """Release-group/source tokens must not make a matching companion disposable."""
-    folder_name = "GameStop (2026) {tmdb-12345}"
-    video_basename = (
-        "GameStop (2026) {tmdb-12345} - [WEBDL-1080p][AAC 2.0][x264]-YTS.MX"
-    )
+@pytest.mark.parametrize("token", ["YTS", "YTS.MX", "YTS.LT", "YIFY"])
+@pytest.mark.parametrize("ext", [".xml", ".jpg", ".png"])
+def test_yts_yify_matching_companion_is_kept(token: str, ext: str) -> None:
+    """A sidecar whose basename matches the protected video or folder is kept."""
+    folder_name = f"GameStop (2026) {{tmdb-12345}} - {token}"
+    video_basename = f"{folder_name} - [WEBDL-1080p][AAC 2.0][x264]"
 
-    # Exact-basename metadata sidecars containing YTS/YIFY provenance are kept.
-    for ext in (".xml", ".jpg"):
-        assert (
-            _is_junk(
-                f"{video_basename}{ext}",
-                video_basenames=[video_basename],
-                folder_name=folder_name,
-            )
-            is False
-        ), f"{video_basename}{ext}"
-
-    # Folder-matching metadata and artwork suffixes remain kept.
+    # Exact-basename companion containing the release provenance token.
     assert (
         _is_junk(
-            f"{folder_name}.jpg",
+            f"{video_basename}{ext}",
             video_basenames=[video_basename],
             folder_name=folder_name,
         )
         is False
     )
+    # Folder-matching companion containing the release provenance token.
+    assert (
+        _is_junk(
+            f"{folder_name}{ext}",
+            video_basenames=[video_basename],
+            folder_name=folder_name,
+        )
+        is False
+    )
+
+
+@pytest.mark.parametrize("token", ["YTS", "YTS.MX", "YTS.LT", "YIFY"])
+@pytest.mark.parametrize("ext", [".xml", ".jpg", ".png"])
+def test_yts_yify_unrelated_metadata_is_reviewable(token: str, ext: str) -> None:
+    """Unrelated metadata containing YTS/YIFY tokens remains a review candidate."""
+    folder_name = "GameStop (2026) {tmdb-12345}"
+    video_basename = (
+        "GameStop (2026) {tmdb-12345} - [WEBDL-1080p][AAC 2.0][x264]-YTS.MX"
+    )
+    name = f"unrelated-{token}{ext}"
+
+    assert (
+        _is_junk(name, video_basenames=[video_basename], folder_name=folder_name)
+        is True
+    )
+    assert (
+        _reason(name, video_basenames=[video_basename], folder_name=folder_name)
+        == "Metadata file not matching video or folder"
+    )
+
+
+def test_yts_yify_artwork_suffix_and_promotional_files() -> None:
+    """Artwork suffixes and promotional/www/extension rules stay unchanged."""
+    folder_name = "GameStop (2026) {tmdb-12345}"
+    video_basename = (
+        "GameStop (2026) {tmdb-12345} - [WEBDL-1080p][AAC 2.0][x264]-YTS.MX"
+    )
+
+    # Artwork suffix with a matching stem is kept.
     assert (
         _is_junk(
             f"{folder_name}-poster.jpg",
@@ -222,26 +252,7 @@ def test_yts_yify_provenance_is_not_junk_by_itself() -> None:
         is False
     )
 
-    # Unrelated metadata containing YTS/YIFY tokens is still reviewable.
-    for token in ("YTS", "YTS.MX", "YTS.LT", "YIFY"):
-        assert (
-            _is_junk(
-                f"unrelated-{token}.xml",
-                video_basenames=[video_basename],
-                folder_name=folder_name,
-            )
-            is True
-        )
-        assert (
-            _reason(
-                f"unrelated-{token}.xml",
-                video_basenames=[video_basename],
-                folder_name=folder_name,
-            )
-            == "Metadata file not matching video or folder"
-        )
-
-    # Promotional www.* artwork remains junk through the existing www. pattern.
+    # Promotional www.* artwork remains junk.
     assert _is_junk("www.YTS.MX.jpg") is True
     assert "www" in _reason("www.YTS.MX.jpg")
 
