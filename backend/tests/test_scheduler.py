@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import UTC, datetime, timedelta
 from unittest.mock import AsyncMock
 
 import pytest
@@ -114,3 +115,25 @@ async def test_reschedule_interval_accepts_seconds() -> None:
     assert isinstance(trigger, IntervalTrigger)
     assert trigger.seconds == 30
     assert trigger.minutes == 0
+
+
+async def test_add_interval_defers_first_run_by_one_interval() -> None:
+    stub = StubScheduler()
+    service = SchedulerService(scheduler=stub)
+    before = datetime.now(UTC)
+    await service.add_interval(def_noop, minutes=1440, id="trend", defer_first_run=True)
+    _, trigger = stub.add_schedule.call_args.args
+    assert isinstance(trigger, IntervalTrigger)
+    # The first fire is pushed one full interval out instead of firing now.
+    assert trigger.start_time >= before + timedelta(minutes=1440)
+
+
+async def test_reschedule_interval_forwards_defer_first_run() -> None:
+    stub = StubScheduler()
+    service = SchedulerService(scheduler=stub)
+    before = datetime.now(UTC)
+    await service.reschedule_interval(
+        def_noop, minutes=2880, id="trend", defer_first_run=True
+    )
+    _, trigger = stub.add_schedule.call_args.args
+    assert trigger.start_time >= before + timedelta(minutes=2880)

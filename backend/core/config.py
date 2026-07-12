@@ -77,8 +77,9 @@ class Settings(BaseSettings):
 
     # ---- Trending discovery ----
     # The background App scheduler refreshes the trending/popular feeds on this
-    # interval (minutes); seeds the store on first run, then UI-managed.
-    TRENDING_SYNC_INTERVAL_MIN: int = 60
+    # interval (minutes, whole-day multiples — Settings -> General: 1/2/3 days);
+    # seeds the store on first run, then UI-managed.
+    TRENDING_SYNC_INTERVAL_MIN: int = 1440
     # How often (days) the cached Fribb anime id mapping is re-downloaded; seeds
     # the store on first run, then UI-managed (Settings -> General: 1/3/5).
     ANIME_IDS_REFRESH_DAYS: int = 3

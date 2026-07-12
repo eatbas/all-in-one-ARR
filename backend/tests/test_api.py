@@ -277,7 +277,7 @@ def _general_settings_body(**overrides) -> dict:
     return {
         "interval_seconds": 60,
         "sync_interval_minutes": 15,
-        "trending_sync_interval_minutes": 60,
+        "trending_sync_interval_minutes": 1440,
         "anime_ids_refresh_days": 3,
         "auto_remove_when_available": True,
         **overrides,
@@ -336,27 +336,27 @@ def test_put_general_settings_updates_trending_interval_and_reschedules(db) -> N
     ctx = make_ctx(db=db)
     ctx.reschedule_trending = AsyncMock()
     resp = build_client(ctx).put(
-        "/api/settings/general", json={"trending_sync_interval_minutes": 120}
+        "/api/settings/general", json={"trending_sync_interval_minutes": 2880}
     )
     assert resp.status_code == 200
-    assert resp.json()["trending_sync_interval_minutes"] == 120
-    assert ctx.settings_store.trending_sync_interval_minutes() == 120
-    ctx.reschedule_trending.assert_awaited_once_with(120)
+    assert resp.json()["trending_sync_interval_minutes"] == 2880
+    assert ctx.settings_store.trending_sync_interval_minutes() == 2880
+    ctx.reschedule_trending.assert_awaited_once_with(2880)
     assert any(
         a["action"] == "Trending sync interval updated" for a in db.recent_activity()
     )
 
 
 def test_put_general_settings_rejects_invalid_trending_interval(db) -> None:
-    # No reschedule handler registered: the invalid value falls back to 60 and the
-    # missing handler is tolerated.
+    # No reschedule handler registered: the invalid value falls back to one day
+    # and the missing handler is tolerated.
     ctx = make_ctx(db=db)
     resp = build_client(ctx).put(
         "/api/settings/general", json={"trending_sync_interval_minutes": 7}
     )
     assert resp.status_code == 200
-    assert resp.json()["trending_sync_interval_minutes"] == 60
-    assert ctx.settings_store.trending_sync_interval_minutes() == 60
+    assert resp.json()["trending_sync_interval_minutes"] == 1440
+    assert ctx.settings_store.trending_sync_interval_minutes() == 1440
 
 
 def test_put_general_settings_updates_anime_ids_refresh_and_repoints_map(db) -> None:

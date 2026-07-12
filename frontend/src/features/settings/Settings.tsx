@@ -659,10 +659,11 @@ function GeneralCard() {
   )
 }
 
+// Whole-day cadences expressed in minutes (the API field stays minutes-based).
 const TRENDING_INTERVAL_OPTIONS = [
-  { value: 30, label: "30 minutes" },
-  { value: 60, label: "1 hour" },
-  { value: 120, label: "2 hours" },
+  { value: 1440, label: "1 day" },
+  { value: 2880, label: "2 days" },
+  { value: 4320, label: "3 days" },
 ] as const
 
 const ANIME_IDS_REFRESH_OPTIONS = [
@@ -677,7 +678,7 @@ function AppSchedulerCard() {
   const updateTrendingInterval = useUpdateTrendingInterval()
   const updateAnimeIdsRefresh = useUpdateAnimeIdsRefresh()
 
-  const interval = general?.trending_sync_interval_minutes ?? 60
+  const interval = general?.trending_sync_interval_minutes ?? 1440
   const animeIdsRefreshDays = general?.anime_ids_refresh_days ?? 3
 
   return (
@@ -704,7 +705,7 @@ function AppSchedulerCard() {
         <SettingsSelectRow
           id="anime-ids-refresh"
           label="Anime mapping refresh"
-          help="How often the cached AniList/MAL → TMDB/TVDB id mapping (Fribb's anime-lists) is refreshed. The check runs with the trending refresh, so a shorter trending interval means the new cadence applies sooner."
+          help="How often the cached AniList/MAL → TMDB/TVDB id mapping (Fribb's anime-lists) is refreshed. The check runs with the trending refresh, so it applies on the first trending refresh after the cadence elapses."
           description="How often the anime id mapping is refreshed."
           options={ANIME_IDS_REFRESH_OPTIONS}
           value={animeIdsRefreshDays}

@@ -16,9 +16,11 @@ VALID_SYNC_INTERVALS: frozenset[int] = frozenset({15, 30, 45, 60})
 # Allowed Bandwidth-Controllarr check intervals in seconds offered by the dashboard.
 VALID_BANDWIDTH_INTERVALS: frozenset[int] = frozenset({10, 15, 30, 60})
 
-# Allowed trending-sync intervals in minutes offered by the dashboard's App scheduler.
-VALID_TRENDING_SYNC_INTERVALS: frozenset[int] = frozenset({30, 60, 120})
-DEFAULT_TRENDING_SYNC_INTERVAL = 60
+# Allowed trending-sync intervals in minutes offered by the dashboard's App
+# scheduler — whole-day multiples (1/2/3 days). Legacy sub-day values from
+# earlier releases normalise to the default.
+VALID_TRENDING_SYNC_INTERVALS: frozenset[int] = frozenset({1440, 2880, 4320})
+DEFAULT_TRENDING_SYNC_INTERVAL = 1440
 
 # Allowed anime id-mapping refresh cadences in days offered by the dashboard's
 # App scheduler (the cached Fribb anime-lists file used by the anilist source).
@@ -99,7 +101,7 @@ def normalise_bandwidth_interval(value: int) -> int:
 
 
 def normalise_trending_sync_interval(value: int) -> int:
-    """Return a valid trending-sync interval in minutes, defaulting to 60."""
+    """Return a valid trending-sync interval in minutes, defaulting to one day."""
     return (
         value
         if value in VALID_TRENDING_SYNC_INTERVALS

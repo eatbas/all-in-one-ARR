@@ -540,10 +540,10 @@ def test_legacy_store_without_bandwidth_keys_defaults(tmp_path) -> None:
     assert saved["bandwidth_check_interval_seconds"] == 15
 
 
-def test_trending_sync_interval_defaults_to_sixty(tmp_path) -> None:
+def test_trending_sync_interval_defaults_to_one_day(tmp_path) -> None:
     store = SettingsStore(str(tmp_path / "settings.json"))
     _seed(store)
-    assert store.trending_sync_interval_minutes() == 60
+    assert store.trending_sync_interval_minutes() == 1440
 
 
 def test_trending_sync_interval_seed_and_reload(tmp_path) -> None:
@@ -552,29 +552,31 @@ def test_trending_sync_interval_seed_and_reload(tmp_path) -> None:
     store.load_or_seed(
         client_id="cid",
         client_secret="sec",
-        trending_sync_interval_minutes=120,
+        trending_sync_interval_minutes=2880,
     )
-    assert store.trending_sync_interval_minutes() == 120
-    assert json.loads(path.read_text())["trending_sync_interval_minutes"] == 120
+    assert store.trending_sync_interval_minutes() == 2880
+    assert json.loads(path.read_text())["trending_sync_interval_minutes"] == 2880
 
     reopened = SettingsStore(str(path))
     reopened.load_or_seed(client_id="x", client_secret="x")
-    assert reopened.trending_sync_interval_minutes() == 120
+    assert reopened.trending_sync_interval_minutes() == 2880
 
 
 def test_trending_sync_interval_invalid_value_falls_back(tmp_path) -> None:
+    # Legacy sub-day cadences (e.g. the old hourly 60) fall back to the default
+    # alongside arbitrary invalid values.
     store = SettingsStore(str(tmp_path / "settings.json"))
     _seed(store)
-    assert store.update_trending_sync_interval(30) == 30
-    assert store.update_trending_sync_interval(7) == 60
-    assert store.trending_sync_interval_minutes() == 60
+    assert store.update_trending_sync_interval(2880) == 2880
+    assert store.update_trending_sync_interval(60) == 1440
+    assert store.trending_sync_interval_minutes() == 1440
 
 
 def test_trending_sync_interval_in_masked(tmp_path) -> None:
     store = SettingsStore(str(tmp_path / "settings.json"))
     _seed(store)
-    store.update_trending_sync_interval(120)
-    assert store.masked()["trending_sync_interval_minutes"] == 120
+    store.update_trending_sync_interval(2880)
+    assert store.masked()["trending_sync_interval_minutes"] == 2880
 
 
 def test_anime_ids_refresh_defaults_to_three_days(tmp_path) -> None:
@@ -642,5 +644,5 @@ def test_legacy_store_without_trending_key_defaults(tmp_path) -> None:
 
     reopened = SettingsStore(str(path))
     reopened.load_or_seed(client_id="x", client_secret="x")
-    assert reopened.trending_sync_interval_minutes() == 60
-    assert json.loads(path.read_text())["trending_sync_interval_minutes"] == 60
+    assert reopened.trending_sync_interval_minutes() == 1440
+    assert json.loads(path.read_text())["trending_sync_interval_minutes"] == 1440

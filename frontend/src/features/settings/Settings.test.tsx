@@ -202,7 +202,7 @@ beforeEach(() => {
     queryResult({
       interval_seconds: 60,
       sync_interval_minutes: 15,
-      trending_sync_interval_minutes: 60,
+      trending_sync_interval_minutes: 1440,
       anime_ids_refresh_days: 3,
       auto_remove_when_available: false,
     }),
@@ -640,7 +640,7 @@ describe("Settings — general", () => {
       queryResult({
         interval_seconds: 45,
         sync_interval_minutes: 15,
-        trending_sync_interval_minutes: 60,
+        trending_sync_interval_minutes: 1440,
         anime_ids_refresh_days: 3,
         auto_remove_when_available: false,
       }),
@@ -703,7 +703,7 @@ describe("Settings — general", () => {
       queryResult({
         interval_seconds: 60,
         sync_interval_minutes: 15,
-        trending_sync_interval_minutes: 120,
+        trending_sync_interval_minutes: 2880,
         anime_ids_refresh_days: 3,
         auto_remove_when_available: false,
       }),
@@ -712,7 +712,7 @@ describe("Settings — general", () => {
     expect(screen.getByText("App scheduler")).toBeInTheDocument()
     expect(
       screen.getByRole("combobox", { name: "Trending sync interval" }),
-    ).toHaveTextContent("2 hours")
+    ).toHaveTextContent("2 days")
   })
 
   it("falls back to the default trending interval when general settings are unset", () => {
@@ -722,7 +722,7 @@ describe("Settings — general", () => {
     render(<Settings />)
     expect(
       screen.getByRole("combobox", { name: "Trending sync interval" }),
-    ).toHaveTextContent("1 hour")
+    ).toHaveTextContent("1 day")
   })
 
   it("updates the trending sync interval", async () => {
@@ -731,8 +731,8 @@ describe("Settings — general", () => {
     await user.click(
       screen.getByRole("combobox", { name: "Trending sync interval" }),
     )
-    await user.click(screen.getByRole("option", { name: "2 hours" }))
-    expect(updateTrendingIntervalMutate).toHaveBeenCalledWith(120)
+    await user.click(screen.getByRole("option", { name: "2 days" }))
+    expect(updateTrendingIntervalMutate).toHaveBeenCalledWith(2880)
   })
 
   it("shows the configured anime mapping refresh cadence", () => {
@@ -740,7 +740,7 @@ describe("Settings — general", () => {
       queryResult({
         interval_seconds: 60,
         sync_interval_minutes: 15,
-        trending_sync_interval_minutes: 60,
+        trending_sync_interval_minutes: 1440,
         anime_ids_refresh_days: 5,
         auto_remove_when_available: false,
       }),

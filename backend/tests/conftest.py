@@ -80,7 +80,7 @@ class StubSettingsStore:
         auto_remove_when_available: bool = True,
         bandwidth_control_enabled: bool = False,
         bandwidth_check_interval_seconds: int = 15,
-        trending_sync_interval_minutes: int = 60,
+        trending_sync_interval_minutes: int = 1440,
         anime_ids_refresh_days: int = 3,
         deletarr_movies_path: str = "/media/movies",
         deletarr_tv_path: str = "/media/tv",
@@ -220,8 +220,8 @@ class StubSettingsStore:
         return self._trending_sync_interval_minutes
 
     def update_trending_sync_interval(self, minutes: int) -> int:
-        if minutes not in {30, 60, 120}:
-            minutes = 60
+        if minutes not in {1440, 2880, 4320}:
+            minutes = 1440
         self._trending_sync_interval_minutes = minutes
         return minutes
 
