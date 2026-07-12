@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react"
 import {
   ChevronDownIcon,
-  ExternalLinkIcon,
+  LinkIcon,
   RefreshCwIcon,
   Trash2Icon,
 } from "lucide-react"
@@ -31,8 +31,15 @@ import {
   CollapsibleTrigger,
 } from "@/shared/components/ui/collapsible"
 import { Switch } from "@/shared/components/ui/switch"
+import { PillLabel } from "@/shared/components/poster-pill/poster-pill"
+import {
+  pillIcon,
+  pillIconSlot,
+  pillShell,
+  type PillDensity,
+} from "@/shared/components/poster-pill/poster-pill-variants"
+import { ItemStatusPill } from "@/features/list-syncarr/components/item-status-pill"
 import { PosterThumb } from "@/features/list-syncarr/components/poster-thumb"
-import { StatusBadge } from "@/features/list-syncarr/components/status-badge"
 import { SyncStats } from "@/features/list-syncarr/components/sync-stats"
 import { cn } from "@/shared/lib/utils"
 import {
@@ -63,6 +70,14 @@ const STATUS_ORDER: Record<ItemStatus, number> = {
   synced: 2,
   removed: 3,
 }
+
+/**
+ * Fixed density for the overlay pills. Density 7 (24px shells) keeps the
+ * pills compact against this grid's posters while staying on the exact
+ * icon-inset/cap-padding tuning the Trending pills use, and matches the size
+ * of the square controls this grid shipped with originally.
+ */
+const POSTER_PILL_DENSITY: PillDensity = 7
 
 /**
  * A `Date` that advances once per second, letting relative-time labels (the
@@ -147,17 +162,17 @@ function ListRow({
             This list has no items yet.
           </p>
         ) : (
-          // Ten per row from xl keeps posters compact on wide displays; the
+          // Eight per row from xl keeps posters compact on wide displays; the
           // lower steps stay coarse so each track still fits the two corner
           // controls beside the 224px sidebar.
-          <ul className="grid grid-cols-3 gap-4 px-7 py-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-8 xl:grid-cols-10">
+          <ul className="grid grid-cols-3 gap-4 px-7 py-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-8">
             {visibleItems?.map((item) => (
               <li
                 key={`${item.list_id}:${item.trakt_id}`}
                 className="flex flex-col gap-1"
               >
                 {/* Poster overlays: a per-item delete control top-left, the
-                    Seer request link top-right, the status pill bottom-right. */}
+                    Seer request link top-right, the status pill bottom-left. */}
                 <div className="relative">
                   <PosterThumb item={item} />
                   {/* Already-removed items are no longer on the Trakt list, so they
@@ -169,9 +184,30 @@ function ListRow({
                           type="button"
                           title={`Remove "${displayTitle(item.title)}" from the list`}
                           aria-label={`Remove "${displayTitle(item.title)}" from the list`}
-                          className="absolute left-1 top-1 inline-flex items-center justify-center rounded-md bg-background/85 p-1 text-muted-foreground shadow-sm backdrop-blur-sm transition-colors hover:text-destructive"
+                          className={cn(
+                            pillShell(POSTER_PILL_DENSITY),
+                            // pillShell strips the browser outline, so the
+                            // pill supplies its own focus-visible ring on top
+                            // of the label reveal.
+                            "group/delete absolute left-1 top-1 bg-background/85 text-muted-foreground backdrop-blur-sm hover:z-10 hover:text-destructive focus-visible:z-10 focus-visible:ring-[3px] focus-visible:ring-ring/50",
+                          )}
                         >
-                          <Trash2Icon className="size-4" />
+                          <span
+                            aria-hidden="true"
+                            className={pillIconSlot(POSTER_PILL_DENSITY)}
+                            data-pill-icon-slot
+                          >
+                            <Trash2Icon
+                              className={pillIcon(POSTER_PILL_DENSITY)}
+                            />
+                          </span>
+                          <PillLabel
+                            group="delete"
+                            side="right"
+                            density={POSTER_PILL_DENSITY}
+                          >
+                            Remove
+                          </PillLabel>
                         </button>
                       </AlertDialogTrigger>
                       <AlertDialogContent>
@@ -199,15 +235,34 @@ function ListRow({
                       rel="noreferrer noopener"
                       title={`Request "${displayTitle(item.title)}" in Seer`}
                       aria-label={`Request "${displayTitle(item.title)}" in Seer`}
-                      className="absolute right-1 top-1 inline-flex items-center justify-center rounded-md bg-background/85 p-1 text-muted-foreground shadow-sm backdrop-blur-sm transition-colors hover:text-foreground"
+                      className={cn(
+                        pillShell(POSTER_PILL_DENSITY),
+                        "group/link absolute right-1 top-1 bg-background/85 text-muted-foreground backdrop-blur-sm hover:z-10 hover:text-foreground focus-visible:z-10",
+                      )}
                     >
-                      <ExternalLinkIcon className="size-4" />
+                      <PillLabel
+                        group="link"
+                        side="left"
+                        density={POSTER_PILL_DENSITY}
+                      >
+                        Seer
+                      </PillLabel>
+                      <span
+                        aria-hidden="true"
+                        className={pillIconSlot(POSTER_PILL_DENSITY)}
+                        data-pill-icon-slot
+                      >
+                        <LinkIcon className={pillIcon(POSTER_PILL_DENSITY)} />
+                      </span>
                     </a>
                   ) : null}
-                  <StatusBadge
-                    status={item.status}
-                    className="absolute right-1 bottom-1 bg-background/85 shadow-sm backdrop-blur-sm"
-                  />
+                  {/* The status pill sits bottom-left, mirroring Trending. */}
+                  <div className="absolute left-1 bottom-1">
+                    <ItemStatusPill
+                      status={item.status}
+                      density={POSTER_PILL_DENSITY}
+                    />
+                  </div>
                 </div>
                 <span
                   className="truncate text-xs font-medium"

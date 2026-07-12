@@ -236,13 +236,10 @@ describe("Lists page", () => {
     // (CSS `capitalize` does not change textContent, so the type stays lowercase.)
     expect(screen.getByText("2021 · movie")).toBeInTheDocument()
     expect(screen.getByText("— · movie")).toBeInTheDocument()
-    // The availability pill is overlaid on each poster with its full status name.
-    expect(
-      screen.getByText("Available", { selector: "[data-slot='badge']" }),
-    ).toBeInTheDocument()
-    expect(
-      screen.getByText("Requested", { selector: "[data-slot='badge']" }),
-    ).toBeInTheDocument()
+    // The status pill is overlaid on each poster; the precise status lives in
+    // its aria-label while the visible hover word stays collapsed.
+    expect(screen.getByLabelText("Available")).toBeInTheDocument()
+    expect(screen.getByLabelText("Requested")).toBeInTheDocument()
     // The item with a TMDB id links to its Seer request page.
     expect(
       screen.getByRole("link", { name: 'Request "Dune" in Seer' }),
@@ -322,6 +319,36 @@ describe("Lists page", () => {
     })
   })
 
+  it("carries a hover-revealed Remove label on the delete pill", async () => {
+    const user = userEvent.setup()
+    render(<Lists />)
+
+    await user.click(screen.getByRole("button", { name: /Movies/ }))
+    // The word is always in the DOM (collapsed via max-width until hover or
+    // keyboard focus), so the pill expands like the Trending overlay pills.
+    const deleteButton = screen.getByRole("button", {
+      name: 'Remove "Dune" from the list',
+    })
+    expect(deleteButton).toHaveTextContent("Remove")
+  })
+
+  it("keeps a visible keyboard-focus ring on the delete pill", async () => {
+    const user = userEvent.setup()
+    render(<Lists />)
+
+    await user.click(screen.getByRole("button", { name: /Movies/ }))
+    // The pill shell strips the browser's default outline, and the icon-only
+    // delete pill has no hover-reveal label, so it must carry its own
+    // focus-visible ring for keyboard users.
+    const deleteButton = screen.getByRole("button", {
+      name: 'Remove "Dune" from the list',
+    })
+    expect(deleteButton).toHaveClass(
+      "focus-visible:ring-[3px]",
+      "focus-visible:ring-ring/50",
+    )
+  })
+
   const removedItem: Item = {
     ...itemBase,
     trakt_id: 9,
@@ -341,7 +368,7 @@ describe("Lists page", () => {
     // By default the removed item is hidden, so the expanded list looks empty.
     await user.click(screen.getByRole("button", { name: /Movies/ }))
     expect(
-      screen.queryByText("Removed", { selector: "[data-slot='badge']" }),
+      screen.queryByLabelText("Removed from the list"),
     ).not.toBeInTheDocument()
     expect(screen.getByText("This list has no items yet.")).toBeInTheDocument()
   })
@@ -398,17 +425,17 @@ describe("Lists page", () => {
     await user.click(screen.getByRole("switch", { name: "Show removed items" }))
     await user.click(screen.getByRole("button", { name: /Movies/ }))
 
-    const badges = screen.getAllByText(
-      /^(Available|Requested|Synced|Removed)$/,
-      {
-        selector: "[data-slot='badge']",
-      },
+    // Ordering is read from the pills' aria-labels (the precise status words);
+    // visible reveal labels stay in the DOM even when collapsed, so text
+    // queries would be ambiguous here.
+    const pills = screen.getAllByLabelText(
+      /^(Available|Requested|Synced from Trakt|Removed from the list)$/,
     )
-    expect(badges.map((b) => b.textContent)).toEqual([
+    expect(pills.map((pill) => pill.getAttribute("aria-label"))).toEqual([
       "Available",
       "Requested",
-      "Synced",
-      "Removed",
+      "Synced from Trakt",
+      "Removed from the list",
     ])
   })
 
@@ -420,9 +447,7 @@ describe("Lists page", () => {
     await user.click(screen.getByRole("switch", { name: "Show removed items" }))
     await user.click(screen.getByRole("button", { name: /Movies/ }))
     // The removed item now renders (with its status pill) but offers no delete.
-    expect(
-      screen.getByText("Removed", { selector: "[data-slot='badge']" }),
-    ).toBeInTheDocument()
+    expect(screen.getByLabelText("Removed from the list")).toBeInTheDocument()
     expect(
       screen.queryByRole("button", { name: 'Remove "Gone" from the list' }),
     ).not.toBeInTheDocument()
