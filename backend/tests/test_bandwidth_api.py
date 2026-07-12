@@ -9,7 +9,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from core.bandwidth_api import create_bandwidth_router
-from core.context import AppContext
+from core.context import AppContext, BandwidthClientControlError
 from core.webhooks import WebhookRegistry
 from tests.conftest import StubService, StubSettingsStore, StubTrakt, _StubSettings
 
@@ -49,6 +49,8 @@ def bandwidth_app(db):
         "enabled": True,
         "status": "No active torrents",
         "last_run_at": "2024-01-01T00:00:00Z",
+        "tracking_suspended": False,
+        "manual_paused_clients": [],
         "check_interval_seconds": 15,
         "qbittorrent": {
             "online": True,
@@ -63,7 +65,7 @@ def bandwidth_app(db):
             "queue_size": 2,
             "paused": False,
         },
-        "recent_downloads": [
+        "download_history": [
             {
                 "client": "sabnzbd",
                 "id": "SABnzbd_nzo_1",
@@ -99,6 +101,7 @@ def bandwidth_app(db):
     }
     ctx.bandwidth_status = AsyncMock(return_value=default_payload)
     ctx.bandwidth_update_settings = AsyncMock(return_value=default_payload)
+    ctx.bandwidth_update_client = AsyncMock(return_value=default_payload)
 
     app = FastAPI()
     app.state.ctx = ctx
@@ -114,7 +117,7 @@ async def test_get_status_returns_bandwidth_payload(bandwidth_app) -> None:
     body = response.json()
     assert body["enabled"] is True
     assert body["status"] == "No active torrents"
-    assert body["recent_downloads"][0]["name"] == "Finished.Show.S01E01"
+    assert body["download_history"][0]["name"] == "Finished.Show.S01E01"
     assert body["queue"]["qbittorrent"][0]["status"] == "queuedDL"
     assert "content_path" not in body["queue"]["qbittorrent"][0]
     ctx.bandwidth_status.assert_awaited_once()
@@ -175,3 +178,46 @@ async def test_put_settings_returns_503_when_not_ready(bandwidth_app) -> None:
     with TestClient(app) as client:
         response = client.put("/api/bandwidth/settings", json={"enabled": True})
     assert response.status_code == 503
+
+
+async def test_put_client_applies_manual_pause(bandwidth_app) -> None:
+    app, ctx = bandwidth_app
+    with TestClient(app) as client:
+        response = client.put(
+            "/api/bandwidth/clients/qbittorrent", json={"paused": True}
+        )
+
+    assert response.status_code == 200
+    ctx.bandwidth_update_client.assert_awaited_once_with(
+        client="qbittorrent", paused=True
+    )
+
+
+async def test_put_client_rejects_unknown_client(bandwidth_app) -> None:
+    app, ctx = bandwidth_app
+    with TestClient(app) as client:
+        response = client.put("/api/bandwidth/clients/unknown", json={"paused": True})
+
+    assert response.status_code == 422
+    ctx.bandwidth_update_client.assert_not_awaited()
+
+
+async def test_put_client_returns_503_when_not_ready(bandwidth_app) -> None:
+    app, ctx = bandwidth_app
+    ctx.bandwidth_update_client = None
+    with TestClient(app) as client:
+        response = client.put("/api/bandwidth/clients/sabnzbd", json={"paused": False})
+
+    assert response.status_code == 503
+
+
+async def test_put_client_maps_downstream_failure_to_502(bandwidth_app) -> None:
+    app, ctx = bandwidth_app
+    ctx.bandwidth_update_client = AsyncMock(
+        side_effect=BandwidthClientControlError("sabnzbd could not pause downloads")
+    )
+    with TestClient(app) as client:
+        response = client.put("/api/bandwidth/clients/sabnzbd", json={"paused": True})
+
+    assert response.status_code == 502
+    assert response.json()["detail"] == "sabnzbd could not pause downloads"

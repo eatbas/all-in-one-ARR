@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import httpx
+import pytest
 import respx
 
 from core.clients.qbittorrent import QbittorrentClient
@@ -11,6 +12,8 @@ _BASE = "http://qb:8080"
 _VERSION = f"{_BASE}/api/v2/app/version"
 _TRANSFER = f"{_BASE}/api/v2/transfer/info"
 _TORRENTS = f"{_BASE}/api/v2/torrents/info"
+_STOP = f"{_BASE}/api/v2/torrents/stop"
+_START = f"{_BASE}/api/v2/torrents/start"
 _KEY = "qbt_0123456789abcdefghijklmnop"
 
 
@@ -97,6 +100,45 @@ async def test_update_credentials_changes_target() -> None:
 
 async def test_aclose() -> None:
     await make_client().aclose()
+
+
+@pytest.mark.parametrize(
+    ("method_name", "endpoint"),
+    [("pause", _STOP), ("resume", _START)],
+)
+@respx.mock
+async def test_all_torrent_command_success(method_name: str, endpoint: str) -> None:
+    route = respx.post(endpoint).mock(return_value=httpx.Response(200))
+
+    result = await getattr(make_client(), method_name)()
+
+    assert result is True
+    request = route.calls.last.request
+    assert request.headers["Authorization"] == f"Bearer {_KEY}"
+    assert request.headers["Referer"] == _BASE
+    assert request.content == b"hashes=all"
+
+
+@respx.mock
+async def test_all_torrent_command_blank_key_skips_request() -> None:
+    route = respx.post(_STOP).mock(return_value=httpx.Response(200))
+
+    assert await make_client(api_key=" ").pause() is False
+    assert not route.called
+
+
+@respx.mock
+async def test_all_torrent_command_non_success_returns_false() -> None:
+    respx.post(_START).mock(return_value=httpx.Response(403))
+
+    assert await make_client().resume() is False
+
+
+@respx.mock
+async def test_all_torrent_command_network_error_returns_false() -> None:
+    respx.post(_STOP).mock(side_effect=httpx.ConnectError("down"))
+
+    assert await make_client().pause() is False
 
 
 @respx.mock
@@ -256,7 +298,9 @@ async def test_get_status_snapshot_reuses_single_torrent_response() -> None:
         "queue_size": 0,
     }
     assert [item["name"] for item in result["activity"]["queue"]] == ["Active.Movie"]
-    assert [item["name"] for item in result["activity"]["recent"]] == ["Finished.Movie"]
+    assert [item["name"] for item in result["activity"]["history"]] == [
+        "Finished.Movie"
+    ]
 
 
 _OFFLINE_SNAPSHOT = {
@@ -266,7 +310,7 @@ _OFFLINE_SNAPSHOT = {
         "active_downloads": 0,
         "queue_size": 0,
     },
-    "activity": {"queue": [], "recent": []},
+    "activity": {"queue": [], "history": []},
 }
 
 
@@ -290,7 +334,7 @@ async def test_get_status_snapshot_offline_payload_returns_offline() -> None:
 
 
 @respx.mock
-async def test_get_download_activity_parses_queue_and_recent_items() -> None:
+async def test_get_download_activity_parses_queue_and_history_items() -> None:
     route = respx.get(_TORRENTS).mock(
         return_value=httpx.Response(
             200,
@@ -358,13 +402,13 @@ async def test_get_download_activity_parses_queue_and_recent_items() -> None:
             "completed_at": None,
         }
     ]
-    assert [item["name"] for item in result["recent"]] == [
+    assert [item["name"] for item in result["history"]] == [
         "Finished.New",
         "Finished.Old",
     ]
-    assert result["recent"][0]["completed_at"] == "2024-01-01T00:13:20Z"
+    assert result["history"][0]["completed_at"] == "2024-01-01T00:13:20Z"
     assert "content_path" not in result["queue"][0]
-    assert "save_path" not in result["recent"][0]
+    assert "save_path" not in result["history"][0]
 
 
 @respx.mock
@@ -397,17 +441,17 @@ async def test_get_download_activity_applies_limits_and_queue_order() -> None:
         )
     )
 
-    result = await make_client().get_download_activity(recent_limit=1, queue_limit=2)
+    result = await make_client().get_download_activity(history_limit=1, queue_limit=2)
 
     assert [item["name"] for item in result["queue"]] == ["Active", "Queued"]
-    assert [item["name"] for item in result["recent"]] == ["Queued"]
+    assert [item["name"] for item in result["history"]] == ["Queued"]
 
 
 @respx.mock
 async def test_get_download_activity_blank_key_returns_empty_without_request() -> None:
     route = respx.get(_TORRENTS).mock(return_value=httpx.Response(200, json=[]))
     result = await make_client(api_key=" ").get_download_activity()
-    assert result == {"queue": [], "recent": []}
+    assert result == {"queue": [], "history": []}
     assert not route.called
 
 
@@ -415,25 +459,25 @@ async def test_get_download_activity_blank_key_returns_empty_without_request() -
 async def test_get_download_activity_invalid_payload_returns_empty() -> None:
     respx.get(_TORRENTS).mock(return_value=httpx.Response(200, json={"bad": True}))
     result = await make_client().get_download_activity()
-    assert result == {"queue": [], "recent": []}
+    assert result == {"queue": [], "history": []}
 
 
 @respx.mock
 async def test_get_download_activity_network_error_returns_empty() -> None:
     respx.get(_TORRENTS).mock(side_effect=httpx.ConnectError("down"))
     result = await make_client().get_download_activity()
-    assert result == {"queue": [], "recent": []}
+    assert result == {"queue": [], "history": []}
 
 
 @respx.mock
 async def test_get_download_activity_non_200_returns_empty() -> None:
     respx.get(_TORRENTS).mock(return_value=httpx.Response(500))
     result = await make_client().get_download_activity()
-    assert result == {"queue": [], "recent": []}
+    assert result == {"queue": [], "history": []}
 
 
 @respx.mock
 async def test_get_download_activity_invalid_json_returns_empty() -> None:
     respx.get(_TORRENTS).mock(return_value=httpx.Response(200, text="not json"))
     result = await make_client().get_download_activity()
-    assert result == {"queue": [], "recent": []}
+    assert result == {"queue": [], "history": []}

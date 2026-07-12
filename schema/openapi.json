@@ -68,6 +68,20 @@
         "title": "AddListRequest",
         "type": "object"
       },
+      "BandwidthClientRequest": {
+        "description": "Desired manual pause state for one download client.",
+        "properties": {
+          "paused": {
+            "title": "Paused",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "paused"
+        ],
+        "title": "BandwidthClientRequest",
+        "type": "object"
+      },
       "BandwidthClientStatsResponse": {
         "description": "Aggregate statistics for one download client.",
         "properties": {
@@ -112,7 +126,7 @@
         "type": "object"
       },
       "BandwidthDownloadItem": {
-        "description": "Display-safe queue or recent-download item.",
+        "description": "Display-safe queue or download-history item.",
         "properties": {
           "added_at": {
             "anyOf": [
@@ -284,6 +298,13 @@
             "title": "Check Interval Seconds",
             "type": "integer"
           },
+          "download_history": {
+            "items": {
+              "$ref": "#/components/schemas/BandwidthDownloadItem"
+            },
+            "title": "Download History",
+            "type": "array"
+          },
           "enabled": {
             "title": "Enabled",
             "type": "boolean"
@@ -299,18 +320,22 @@
             ],
             "title": "Last Run At"
           },
+          "manual_paused_clients": {
+            "items": {
+              "enum": [
+                "qbittorrent",
+                "sabnzbd"
+              ],
+              "type": "string"
+            },
+            "title": "Manual Paused Clients",
+            "type": "array"
+          },
           "qbittorrent": {
             "$ref": "#/components/schemas/BandwidthClientStatsResponse"
           },
           "queue": {
             "$ref": "#/components/schemas/BandwidthQueueResponse"
-          },
-          "recent_downloads": {
-            "items": {
-              "$ref": "#/components/schemas/BandwidthDownloadItem"
-            },
-            "title": "Recent Downloads",
-            "type": "array"
           },
           "sabnzbd": {
             "$ref": "#/components/schemas/BandwidthClientStatsResponse"
@@ -318,12 +343,18 @@
           "status": {
             "title": "Status",
             "type": "string"
+          },
+          "tracking_suspended": {
+            "title": "Tracking Suspended",
+            "type": "boolean"
           }
         },
         "required": [
           "enabled",
           "status",
           "last_run_at",
+          "tracking_suspended",
+          "manual_paused_clients",
           "check_interval_seconds",
           "qbittorrent",
           "sabnzbd"
@@ -2435,6 +2466,65 @@
           }
         },
         "summary": "Get Activity"
+      }
+    },
+    "/api/bandwidth/clients/{client}": {
+      "put": {
+        "operationId": "put_client_api_bandwidth_clients__client__put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "client",
+            "required": true,
+            "schema": {
+              "enum": [
+                "qbittorrent",
+                "sabnzbd"
+              ],
+              "title": "Client",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BandwidthClientRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BandwidthStatusResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "502": {
+            "description": "Download client rejected the command"
+          },
+          "503": {
+            "description": "Bandwidth-Controllarr is not ready"
+          }
+        },
+        "summary": "Put Client"
       }
     },
     "/api/bandwidth/settings": {

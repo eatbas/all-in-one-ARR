@@ -17,7 +17,6 @@ import tempfile
 from pathlib import Path
 from typing import Any
 
-
 ROOT = Path(__file__).resolve().parents[1]
 BACKEND = ROOT / "backend"
 
@@ -25,10 +24,7 @@ BACKEND = ROOT / "backend"
 def _normalise_schema(value: Any) -> Any:
     """Return ``value`` with dictionaries sorted recursively for stable output."""
     if isinstance(value, dict):
-        return {
-            key: _normalise_schema(value[key])
-            for key in sorted(value)
-        }
+        return {key: _normalise_schema(value[key]) for key in sorted(value)}
     if isinstance(value, list):
         return [_normalise_schema(item) for item in value]
     return value
@@ -61,12 +57,15 @@ def export_schema(output: Path) -> None:
         }
         previous = {key: os.environ.get(key) for key in env_overrides}
         os.environ.update(env_overrides)
+        app = None
         try:
             from core.app import create_app
 
             app = create_app()
             schema = _normalise_schema(app.openapi())
         finally:
+            if app is not None:
+                app.state.ctx.db.close()
             for key, value in previous.items():
                 if value is None:
                     os.environ.pop(key, None)

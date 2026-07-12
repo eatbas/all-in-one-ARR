@@ -45,6 +45,18 @@ export type AddListRequest = {
 };
 
 /**
+ * BandwidthClientRequest
+ *
+ * Desired manual pause state for one download client.
+ */
+export type BandwidthClientRequest = {
+    /**
+     * Paused
+     */
+    paused: boolean;
+};
+
+/**
  * BandwidthClientStatsResponse
  *
  * Aggregate statistics for one download client.
@@ -75,7 +87,7 @@ export type BandwidthClientStatsResponse = {
 /**
  * BandwidthDownloadItem
  *
- * Display-safe queue or recent-download item.
+ * Display-safe queue or download-history item.
  */
 export type BandwidthDownloadItem = {
     /**
@@ -169,6 +181,10 @@ export type BandwidthStatusResponse = {
      */
     check_interval_seconds: number;
     /**
+     * Download History
+     */
+    download_history?: Array<BandwidthDownloadItem>;
+    /**
      * Enabled
      */
     enabled: boolean;
@@ -176,17 +192,21 @@ export type BandwidthStatusResponse = {
      * Last Run At
      */
     last_run_at: string | null;
+    /**
+     * Manual Paused Clients
+     */
+    manual_paused_clients: Array<'qbittorrent' | 'sabnzbd'>;
     qbittorrent: BandwidthClientStatsResponse;
     queue?: BandwidthQueueResponse;
-    /**
-     * Recent Downloads
-     */
-    recent_downloads?: Array<BandwidthDownloadItem>;
     sabnzbd: BandwidthClientStatsResponse;
     /**
      * Status
      */
     status: string;
+    /**
+     * Tracking Suspended
+     */
+    tracking_suspended: boolean;
 };
 
 /**
@@ -1416,6 +1436,44 @@ export type GetActivityApiActivityGetResponses = {
 };
 
 export type GetActivityApiActivityGetResponse = GetActivityApiActivityGetResponses[keyof GetActivityApiActivityGetResponses];
+
+export type PutClientApiBandwidthClientsClientPutData = {
+    body: BandwidthClientRequest;
+    path: {
+        /**
+         * Client
+         */
+        client: 'qbittorrent' | 'sabnzbd';
+    };
+    query?: never;
+    url: '/api/bandwidth/clients/{client}';
+};
+
+export type PutClientApiBandwidthClientsClientPutErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+    /**
+     * Download client rejected the command
+     */
+    502: unknown;
+    /**
+     * Bandwidth-Controllarr is not ready
+     */
+    503: unknown;
+};
+
+export type PutClientApiBandwidthClientsClientPutError = PutClientApiBandwidthClientsClientPutErrors[keyof PutClientApiBandwidthClientsClientPutErrors];
+
+export type PutClientApiBandwidthClientsClientPutResponses = {
+    /**
+     * Successful Response
+     */
+    200: BandwidthStatusResponse;
+};
+
+export type PutClientApiBandwidthClientsClientPutResponse = PutClientApiBandwidthClientsClientPutResponses[keyof PutClientApiBandwidthClientsClientPutResponses];
 
 export type PutSettingsApiBandwidthSettingsPutData = {
     body: BandwidthSettingsRequest;

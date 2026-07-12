@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from unittest.mock import AsyncMock
 
 import pytest
@@ -18,8 +19,13 @@ from core.bandwidth_metrics import (
     bw_sab_speed_mbps,
     update_bandwidth_metrics,
 )
+from core.context import BandwidthClientControlError
 from modules.bandwidth_controllarr import _STATE, control_job, setup
-from modules.bandwidth_controllarr.control import apply_control, gather_status
+from modules.bandwidth_controllarr.control import (
+    apply_control,
+    gather_status,
+    set_client_paused,
+)
 from tests.conftest import StubService, make_ctx
 
 
@@ -31,17 +37,27 @@ def _reset_state():
         _STATE.status,
         _STATE.last_run_at,
         _STATE.sab_paused,
+        _STATE.manual_paused_clients.copy(),
+        _STATE._control_lock,
     )
     previous_context = bandwidth_module._CONTEXT
     _STATE.enabled = False
     _STATE.status = "Monitoring only"
     _STATE.last_run_at = None
     _STATE.sab_paused = False
+    _STATE.manual_paused_clients.clear()
+    _STATE._control_lock = None
     bandwidth_module._CONTEXT = None
     yield
-    _STATE.enabled, _STATE.status, _STATE.last_run_at, _STATE.sab_paused = (
-        previous_state
-    )
+    (
+        _STATE.enabled,
+        _STATE.status,
+        _STATE.last_run_at,
+        _STATE.sab_paused,
+        previous_manual_clients,
+        _STATE._control_lock,
+    ) = previous_state
+    _STATE.manual_paused_clients = previous_manual_clients
     bandwidth_module._CONTEXT = previous_context
 
 
@@ -90,10 +106,12 @@ async def test_gather_status_merges_state_and_stats(db) -> None:
     assert result["enabled"] is True
     assert result["status"] == "Active torrents — SABnzbd paused"
     assert result["last_run_at"] == "2024-01-01T00:00:00Z"
+    assert result["tracking_suspended"] is False
+    assert result["manual_paused_clients"] == []
     assert result["check_interval_seconds"] == 15
     assert result["qbittorrent"]["active_downloads"] == 2
     assert result["sabnzbd"]["paused"] is True
-    assert result["recent_downloads"] == []
+    assert result["download_history"] == []
     assert result["queue"] == {"qbittorrent": [], "sabnzbd": []}
 
 
@@ -104,7 +122,7 @@ async def test_gather_status_includes_download_activity_sorted_by_completion(
     qbit.get_download_activity = AsyncMock(
         return_value={
             "queue": [{"client": "qbittorrent", "name": "Queued torrent"}],
-            "recent": [
+            "history": [
                 {
                     "client": "qbittorrent",
                     "name": "Older torrent",
@@ -126,7 +144,7 @@ async def test_gather_status_includes_download_activity_sorted_by_completion(
     sab.get_download_activity = AsyncMock(
         return_value={
             "queue": [{"client": "sabnzbd", "name": "Queued NZB"}],
-            "recent": [
+            "history": [
                 {
                     "client": "sabnzbd",
                     "name": "Newer NZB",
@@ -139,7 +157,7 @@ async def test_gather_status_includes_download_activity_sorted_by_completion(
 
     result = await gather_status(ctx)
 
-    assert [item["name"] for item in result["recent_downloads"]] == [
+    assert [item["name"] for item in result["download_history"]] == [
         "Newer NZB",
         "Older torrent",
         "Added-only torrent",
@@ -149,6 +167,31 @@ async def test_gather_status_includes_download_activity_sorted_by_completion(
         "qbittorrent": [{"client": "qbittorrent", "name": "Queued torrent"}],
         "sabnzbd": [{"client": "sabnzbd", "name": "Queued NZB"}],
     }
+
+
+async def test_gather_status_limits_download_history_after_sorting(db) -> None:
+    qbit = _make_qbit_stub()
+    qbit.get_download_activity = AsyncMock(
+        return_value={
+            "queue": [],
+            "history": [
+                {
+                    "client": "qbittorrent",
+                    "name": f"Download {index}",
+                    "completed_at": f"2024-01-01T00:{index:02d}:00Z",
+                }
+                for index in range(12)
+            ],
+        }
+    )
+    sab = _make_sab_stub()
+    sab.get_download_activity = AsyncMock(return_value={"queue": [], "history": []})
+
+    result = await gather_status(make_ctx(db=db, qbittorrent=qbit, sabnzbd=sab))
+
+    assert [item["name"] for item in result["download_history"]] == [
+        f"Download {index}" for index in range(11, 1, -1)
+    ]
 
 
 async def test_gather_status_uses_combined_snapshots_when_available(db) -> None:
@@ -163,7 +206,7 @@ async def test_gather_status_uses_combined_snapshots_when_available(db) -> None:
             },
             "activity": {
                 "queue": [{"client": "qbittorrent", "name": "Queued torrent"}],
-                "recent": [],
+                "history": [],
             },
         }
     )
@@ -180,7 +223,7 @@ async def test_gather_status_uses_combined_snapshots_when_available(db) -> None:
             },
             "activity": {
                 "queue": [{"client": "sabnzbd", "name": "Queued NZB"}],
-                "recent": [],
+                "history": [],
             },
         }
     )
@@ -363,6 +406,141 @@ async def test_apply_control_offline_sab_does_not_issue_commands(db) -> None:
     assert _STATE.status == "Active torrents — SABnzbd paused"
 
 
+async def test_apply_control_suspended_updates_state_without_commands(db) -> None:
+    qbit = _make_qbit_stub(active_downloads=3)
+    sab = _make_sab_stub(paused=False)
+    ctx = make_ctx(db=db, qbittorrent=qbit, sabnzbd=sab)
+    ctx.settings_store.update_bandwidth_control_enabled(True)
+    _STATE.manual_paused_clients.add("qbittorrent")
+
+    await apply_control(ctx)
+
+    sab.pause.assert_not_awaited()
+    sab.resume.assert_not_awaited()
+    assert _STATE.enabled is True
+    assert _STATE.status == "Manual pause — automatic control suspended"
+    assert _STATE.last_run_at is not None
+
+
+async def test_manual_pause_is_idempotent_and_suspends_tracking(db) -> None:
+    qbit = _make_qbit_stub(active_downloads=0)
+    sab = _make_sab_stub(paused=False)
+    ctx = make_ctx(db=db, qbittorrent=qbit, sabnzbd=sab)
+    ctx.settings_store.update_bandwidth_control_enabled(True)
+
+    first = await set_client_paused(ctx, client="qbittorrent", paused=True)
+    second = await set_client_paused(ctx, client="qbittorrent", paused=True)
+
+    qbit.pause.assert_awaited_once()
+    assert first["tracking_suspended"] is True
+    assert second["manual_paused_clients"] == ["qbittorrent"]
+    assert _STATE.manual_paused_clients == {"qbittorrent"}
+    assert ctx.settings_store.bandwidth_control_enabled() is True
+    assert ctx.db.recent_activity(limit=1)[0]["action"] == (
+        "qBittorrent paused manually"
+    )
+
+
+async def test_manual_pause_failure_rolls_back_state(db) -> None:
+    qbit = _make_qbit_stub()
+    qbit.pause = AsyncMock(return_value=False)
+    ctx = make_ctx(db=db, qbittorrent=qbit, sabnzbd=_make_sab_stub())
+
+    with pytest.raises(
+        BandwidthClientControlError,
+        match="qbittorrent could not pause downloads",
+    ):
+        await set_client_paused(ctx, client="qbittorrent", paused=True)
+
+    assert _STATE.manual_paused_clients == set()
+    assert ctx.db.recent_activity(limit=1) == []
+
+
+async def test_manual_overrides_are_cleared_independently(db) -> None:
+    qbit = _make_qbit_stub()
+    sab = _make_sab_stub(paused=False)
+    ctx = make_ctx(db=db, qbittorrent=qbit, sabnzbd=sab)
+    ctx.settings_store.update_bandwidth_control_enabled(True)
+
+    await set_client_paused(ctx, client="qbittorrent", paused=True)
+    await set_client_paused(ctx, client="sabnzbd", paused=True)
+    partial = await set_client_paused(ctx, client="qbittorrent", paused=False)
+    final = await set_client_paused(ctx, client="sabnzbd", paused=False)
+
+    assert partial["tracking_suspended"] is True
+    assert partial["manual_paused_clients"] == ["sabnzbd"]
+    assert final["tracking_suspended"] is False
+    assert final["manual_paused_clients"] == []
+    assert final["status"] == "No active torrents"
+    qbit.pause.assert_awaited_once()
+    qbit.resume.assert_awaited_once()
+    sab.pause.assert_awaited_once()
+    sab.resume.assert_awaited_once()
+
+
+async def test_final_manual_resume_reapplies_active_control(db) -> None:
+    qbit = _make_qbit_stub(active_downloads=2)
+    sab = _make_sab_stub(paused=False)
+    ctx = make_ctx(db=db, qbittorrent=qbit, sabnzbd=sab)
+    ctx.settings_store.update_bandwidth_control_enabled(True)
+    _STATE.manual_paused_clients.add("sabnzbd")
+
+    result = await set_client_paused(ctx, client="sabnzbd", paused=False)
+
+    sab.resume.assert_awaited_once()
+    sab.pause.assert_awaited_once()
+    assert result["tracking_suspended"] is False
+    assert result["status"] == "Active torrents — SABnzbd paused"
+
+
+async def test_final_manual_resume_respects_disabled_setting(db) -> None:
+    qbit = _make_qbit_stub(active_downloads=2)
+    sab = _make_sab_stub(paused=False)
+    ctx = make_ctx(db=db, qbittorrent=qbit, sabnzbd=sab)
+    _STATE.manual_paused_clients.add("sabnzbd")
+
+    result = await set_client_paused(ctx, client="sabnzbd", paused=False)
+
+    sab.resume.assert_awaited_once()
+    sab.pause.assert_not_awaited()
+    assert result["enabled"] is False
+    assert result["status"] == "Monitoring only"
+
+
+async def test_manual_action_waits_for_control_tick(db) -> None:
+    entered = asyncio.Event()
+    release = asyncio.Event()
+    calls = 0
+    qbit = _make_qbit_stub()
+    normal_stats = await qbit.get_stats()
+
+    async def blocking_stats():
+        nonlocal calls
+        calls += 1
+        if calls == 1:
+            entered.set()
+            await release.wait()
+        return normal_stats
+
+    qbit.get_stats = AsyncMock(side_effect=blocking_stats)
+    sab = _make_sab_stub(paused=False)
+    ctx = make_ctx(db=db, qbittorrent=qbit, sabnzbd=sab)
+
+    control_task = asyncio.create_task(apply_control(ctx))
+    await entered.wait()
+    manual_task = asyncio.create_task(
+        set_client_paused(ctx, client="qbittorrent", paused=True)
+    )
+    await asyncio.sleep(0)
+    qbit.pause.assert_not_awaited()
+
+    release.set()
+    await control_task
+    await manual_task
+
+    qbit.pause.assert_awaited_once()
+
+
 async def test_apply_control_sets_metrics_check_ok(db, monkeypatch) -> None:
     qbit = _make_qbit_stub(active_downloads=0)
     sab = _make_sab_stub(paused=False)
@@ -519,6 +697,7 @@ async def test_setup_wires_callables_and_schedules_job(db) -> None:
     assert status["check_interval_seconds"] == 30
 
     assert ctx.bandwidth_update_settings is not None
+    assert ctx.bandwidth_update_client is not None
 
 
 async def test_update_settings_disable_resumes_sab_immediately(db) -> None:

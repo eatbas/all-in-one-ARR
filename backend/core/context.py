@@ -35,6 +35,10 @@ class SyncAlreadyRunning(Exception):
     """Raised when a sync is requested while another sync is already running."""
 
 
+class BandwidthClientControlError(RuntimeError):
+    """Raised when a download client rejects a manual pause/resume command."""
+
+
 class SyncGate:
     """Coordinates manual and scheduled sync runs so they never overlap.
 
@@ -127,6 +131,7 @@ class AppContext:
     bandwidth_update_settings: Callable[..., Awaitable[dict]] | None = field(
         default=None
     )
+    bandwidth_update_client: Callable[..., Awaitable[dict]] | None = field(default=None)
     # Findarr callables, set by the module during setup(); the core router uses
     # these so API routes are registered before the SPA catch-all while the
     # scheduler-specific implementation remains module-owned.

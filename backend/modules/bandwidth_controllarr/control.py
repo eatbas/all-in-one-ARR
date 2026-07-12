@@ -12,6 +12,8 @@ from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
 from core.bandwidth_metrics import update_bandwidth_metrics
+from core.bandwidth_types import DOWNLOAD_HISTORY_LIMIT, BandwidthClientName
+from core.context import BandwidthClientControlError
 from core.logging import get_logger
 
 if TYPE_CHECKING:  # pragma: no cover
@@ -22,6 +24,7 @@ _log = get_logger("bandwidth_controllarr")
 _STATUS_DISABLED = "Monitoring only"
 _STATUS_ACTIVE = "Active torrents — SABnzbd paused"
 _STATUS_IDLE = "No active torrents"
+_STATUS_MANUAL = "Manual pause — automatic control suspended"
 
 
 async def gather_status(ctx: AppContext) -> dict:
@@ -33,19 +36,21 @@ async def gather_status(ctx: AppContext) -> dict:
 
     qb_stats, qb_activity = await _status_snapshot(ctx.qbittorrent)
     sab_stats, sab_activity = await _status_snapshot(ctx.sabnzbd)
-    recent_downloads = sorted(
-        qb_activity["recent"] + sab_activity["recent"],
-        key=_recent_sort_key,
+    download_history = sorted(
+        qb_activity["history"] + sab_activity["history"],
+        key=_history_sort_key,
         reverse=True,
-    )
+    )[:DOWNLOAD_HISTORY_LIMIT]
     return {
         "enabled": _STATE.enabled,
         "status": _STATE.status,
         "last_run_at": _STATE.last_run_at,
+        "tracking_suspended": bool(_STATE.manual_paused_clients),
+        "manual_paused_clients": sorted(_STATE.manual_paused_clients),
         "check_interval_seconds": ctx.settings_store.bandwidth_check_interval_seconds(),
         "qbittorrent": qb_stats,
         "sabnzbd": sab_stats,
-        "recent_downloads": recent_downloads,
+        "download_history": download_history,
         "queue": {
             "qbittorrent": qb_activity["queue"],
             "sabnzbd": sab_activity["queue"],
@@ -55,6 +60,14 @@ async def gather_status(ctx: AppContext) -> dict:
 
 async def apply_control(ctx: AppContext) -> None:
     """Run one control tick: gather stats, decide, and issue pause/resume."""
+    from modules.bandwidth_controllarr import _STATE
+
+    async with _STATE.control_lock():
+        await _apply_control_locked(ctx)
+
+
+async def _apply_control_locked(ctx: AppContext) -> None:
+    """Run one control decision while the caller holds the module lock."""
     from modules.bandwidth_controllarr import _STATE
 
     try:
@@ -67,7 +80,9 @@ async def apply_control(ctx: AppContext) -> None:
             bool(sab_stats.get("paused", False)) if sab_stats["online"] else False
         )
 
-        if not enabled:
+        if _STATE.manual_paused_clients:
+            status = _STATUS_MANUAL
+        elif not enabled:
             status = _STATUS_DISABLED
             if sab_paused and sab_stats["online"]:
                 ok = await ctx.sabnzbd.resume()
@@ -110,11 +125,51 @@ async def apply_control(ctx: AppContext) -> None:
         raise
 
 
+async def set_client_paused(
+    ctx: AppContext, *, client: BandwidthClientName, paused: bool
+) -> dict:
+    """Apply an idempotent manual client command and return live status."""
+    from modules.bandwidth_controllarr import _STATE
+
+    async with _STATE.control_lock():
+        already_paused = client in _STATE.manual_paused_clients
+        if already_paused == paused:
+            return await gather_status(ctx)
+
+        download_client = ctx.qbittorrent if client == "qbittorrent" else ctx.sabnzbd
+        command = download_client.pause if paused else download_client.resume
+        if not await command():
+            action = "pause" if paused else "resume"
+            raise BandwidthClientControlError(f"{client} could not {action} downloads")
+
+        if paused:
+            _STATE.manual_paused_clients.add(client)
+        else:
+            _STATE.manual_paused_clients.remove(client)
+
+        action = "paused" if paused else "resumed"
+        tracking = (
+            "automatic control suspended"
+            if _STATE.manual_paused_clients
+            else "automatic control resumed"
+        )
+        ctx.db.add_activity(
+            f"{_client_label(client)} {action} manually",
+            f"{_client_label(client)} downloads {action}; {tracking}",
+        )
+        await _apply_control_locked(ctx)
+        return await gather_status(ctx)
+
+
+def _client_label(client: BandwidthClientName) -> str:
+    return "qBittorrent" if client == "qbittorrent" else "SABnzbd"
+
+
 async def _download_activity(client: Any) -> dict[str, list[dict[str, Any]]]:
     """Return optional downloader activity for clients that expose it."""
     get_download_activity = getattr(client, "get_download_activity", None)
     if get_download_activity is None:
-        return {"queue": [], "recent": []}
+        return {"queue": [], "history": []}
     return await get_download_activity()
 
 
@@ -129,8 +184,8 @@ async def _status_snapshot(
     return await client.get_stats(), await _download_activity(client)
 
 
-def _recent_sort_key(item: dict[str, Any]) -> str:
-    """Sort recent downloads by completion time, then by add time."""
+def _history_sort_key(item: dict[str, Any]) -> str:
+    """Sort download history by completion time, then by add time."""
     completed_at = item.get("completed_at")
     if isinstance(completed_at, str):
         return completed_at

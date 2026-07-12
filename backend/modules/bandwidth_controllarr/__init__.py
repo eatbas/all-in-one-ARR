@@ -12,15 +12,21 @@ single module-level reference set in ``setup()``.
 
 from __future__ import annotations
 
+import asyncio
 from collections.abc import Awaitable, Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
 from fastapi import FastAPI
 
 from core.app_metrics import observe_scheduler_job
+from core.bandwidth_types import BandwidthClientName
 from core.logging import get_logger
-from modules.bandwidth_controllarr.control import apply_control, gather_status
+from modules.bandwidth_controllarr.control import (
+    apply_control,
+    gather_status,
+    set_client_paused,
+)
 
 if TYPE_CHECKING:  # pragma: no cover
     from core.context import AppContext
@@ -41,6 +47,14 @@ class _ControlState:
     status: str = "Monitoring only"
     last_run_at: str | None = None
     sab_paused: bool = False
+    manual_paused_clients: set[BandwidthClientName] = field(default_factory=set)
+    _control_lock: asyncio.Lock | None = field(default=None, repr=False)
+
+    def control_lock(self) -> asyncio.Lock:
+        """Return the control lock, creating it inside the active event loop."""
+        if self._control_lock is None:
+            self._control_lock = asyncio.Lock()
+        return self._control_lock
 
 
 _STATE = _ControlState()
@@ -69,6 +83,8 @@ async def setup(scheduler: SchedulerService, app: FastAPI, ctx: AppContext) -> N
     register_context(ctx)
 
     _STATE.enabled = ctx.settings_store.bandwidth_control_enabled()
+    _STATE.manual_paused_clients.clear()
+    _STATE._control_lock = None
 
     await scheduler.add_interval(
         control_job,
@@ -78,6 +94,7 @@ async def setup(scheduler: SchedulerService, app: FastAPI, ctx: AppContext) -> N
 
     ctx.bandwidth_status = lambda: gather_status(ctx)
     ctx.bandwidth_update_settings = _make_update_settings(scheduler, ctx)
+    ctx.bandwidth_update_client = lambda **kwargs: set_client_paused(ctx, **kwargs)
 
     _log.info("bandwidth_controllarr module ready")
 

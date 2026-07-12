@@ -15,9 +15,9 @@ from typing import Any
 
 import httpx
 
+from core.bandwidth_types import DOWNLOAD_HISTORY_LIMIT
 from core.logging import get_logger
 
-_RECENT_DOWNLOAD_LIMIT = 8
 _QUEUE_ITEM_LIMIT = 12
 
 _ACTIVE_STATES = {
@@ -133,7 +133,7 @@ class QbittorrentClient:
     async def get_status_snapshot(
         self,
         *,
-        recent_limit: int = _RECENT_DOWNLOAD_LIMIT,
+        history_limit: int = DOWNLOAD_HISTORY_LIMIT,
         queue_limit: int = _QUEUE_ITEM_LIMIT,
     ) -> dict[str, Any]:
         """Return aggregate stats and activity from a single torrent payload."""
@@ -148,7 +148,7 @@ class QbittorrentClient:
             "stats": _stats_from_payload(transfer_data, torrent_data),
             "activity": _activity_from_torrents(
                 torrent_data,
-                recent_limit=recent_limit,
+                history_limit=history_limit,
                 queue_limit=queue_limit,
             ),
         }
@@ -156,10 +156,10 @@ class QbittorrentClient:
     async def get_download_activity(
         self,
         *,
-        recent_limit: int = _RECENT_DOWNLOAD_LIMIT,
+        history_limit: int = DOWNLOAD_HISTORY_LIMIT,
         queue_limit: int = _QUEUE_ITEM_LIMIT,
     ) -> dict[str, list[dict[str, Any]]]:
-        """Return display-safe queue and recent-completion entries."""
+        """Return display-safe queue and completed-download history."""
         api_key = self._api_key.strip()
         if not api_key:
             return _empty_activity()
@@ -168,9 +168,32 @@ class QbittorrentClient:
             return _empty_activity()
         return _activity_from_torrents(
             torrent_data,
-            recent_limit=recent_limit,
+            history_limit=history_limit,
             queue_limit=queue_limit,
         )
+
+    async def pause(self) -> bool:
+        """Stop all torrents; return whether qBittorrent accepted the command."""
+        return await self._send_torrent_command("stop")
+
+    async def resume(self) -> bool:
+        """Start all torrents; return whether qBittorrent accepted the command."""
+        return await self._send_torrent_command("start")
+
+    async def _send_torrent_command(self, command: str) -> bool:
+        """Send an authenticated all-torrents command without raising."""
+        api_key = self._api_key.strip()
+        if not api_key:
+            return False
+        try:
+            response = await self._client.post(
+                f"{self._base_url}/api/v2/torrents/{command}",
+                headers=self._headers(api_key),
+                data={"hashes": "all"},
+            )
+        except httpx.HTTPError:
+            return False
+        return response.status_code == 200
 
     async def _fetch_status_payload(
         self, api_key: str
@@ -246,8 +269,8 @@ def _offline_stats() -> dict[str, Any]:
 
 
 def _empty_activity() -> dict[str, list[dict[str, Any]]]:
-    """Return an empty queue/recent payload for offline or invalid responses."""
-    return {"queue": [], "recent": []}
+    """Return an empty queue/history payload for offline or invalid responses."""
+    return {"queue": [], "history": []}
 
 
 def _offline_snapshot() -> dict[str, Any]:
@@ -284,7 +307,7 @@ def _stats_from_payload(
 def _activity_from_torrents(
     torrent_data: list[dict[str, Any]],
     *,
-    recent_limit: int,
+    history_limit: int,
     queue_limit: int,
 ) -> dict[str, list[dict[str, Any]]]:
     """Derive display-safe activity rows from a validated torrent list."""
@@ -299,7 +322,7 @@ def _activity_from_torrents(
             key=_torrent_queue_sort_key,
         )
     ][: max(queue_limit, 0)]
-    recent_items = [
+    history_items = [
         _torrent_item(torrent, include_completed=True)
         for torrent in sorted(
             (
@@ -310,8 +333,8 @@ def _activity_from_torrents(
             key=lambda torrent: _number_value(torrent.get("completion_on")),
             reverse=True,
         )
-    ][: max(recent_limit, 0)]
-    return {"queue": queue_items, "recent": recent_items}
+    ][: max(history_limit, 0)]
+    return {"queue": queue_items, "history": history_items}
 
 
 def _torrent_queue_sort_key(torrent: dict[str, Any]) -> tuple[int, float, str]:

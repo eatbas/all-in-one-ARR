@@ -13,9 +13,9 @@ from typing import Any
 
 import httpx
 
+from core.bandwidth_types import DOWNLOAD_HISTORY_LIMIT
 from core.logging import get_logger
 
-_RECENT_DOWNLOAD_LIMIT = 8
 _QUEUE_ITEM_LIMIT = 12
 _BYTES_PER_MB = 1024 * 1024
 
@@ -94,18 +94,18 @@ class SabnzbdClient:
     async def get_status_snapshot(
         self,
         *,
-        recent_limit: int = _RECENT_DOWNLOAD_LIMIT,
+        history_limit: int = DOWNLOAD_HISTORY_LIMIT,
         queue_limit: int = _QUEUE_ITEM_LIMIT,
     ) -> dict[str, Any]:
         """Return aggregate stats and activity from one queue request."""
         queue = await self._queue_payload(limit=0)
-        history_slots = await self._history_slots(limit=max(recent_limit, 0))
+        history_slots = await self._history_slots(limit=max(history_limit, 0))
         if queue is None:
             return {
                 "stats": _offline_stats(),
                 "activity": {
                     "queue": [],
-                    "recent": [_history_item(slot) for slot in history_slots],
+                    "history": [_history_item(slot) for slot in history_slots],
                 },
             }
         return {
@@ -117,27 +117,27 @@ class SabnzbdClient:
                         queue, limit=max(queue_limit, 0)
                     )
                 ],
-                "recent": [_history_item(slot) for slot in history_slots],
+                "history": [_history_item(slot) for slot in history_slots],
             },
         }
 
     async def get_download_activity(
         self,
         *,
-        recent_limit: int = _RECENT_DOWNLOAD_LIMIT,
+        history_limit: int = DOWNLOAD_HISTORY_LIMIT,
         queue_limit: int = _QUEUE_ITEM_LIMIT,
     ) -> dict[str, list[dict[str, Any]]]:
-        """Return display-safe queue and recent history entries."""
+        """Return display-safe queue and completed-download history."""
         queue = await self._queue_payload(limit=max(queue_limit, 0))
         queue_slots = (
             []
             if queue is None
             else _queue_slots_from_payload(queue, limit=max(queue_limit, 0))
         )
-        history_slots = await self._history_slots(limit=max(recent_limit, 0))
+        history_slots = await self._history_slots(limit=max(history_limit, 0))
         return {
             "queue": [_queue_item(slot) for slot in queue_slots],
-            "recent": [_history_item(slot) for slot in history_slots],
+            "history": [_history_item(slot) for slot in history_slots],
         }
 
     async def _queue_slots(self, *, limit: int) -> list[dict[str, Any]]:
@@ -190,6 +190,7 @@ class SabnzbdClient:
                     "output": "json",
                     "start": "0",
                     "limit": str(limit),
+                    "archive": "1",
                     "apikey": self._api_key,
                 },
             )

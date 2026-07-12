@@ -230,6 +230,7 @@ async def test_get_status_snapshot_reuses_single_queue_response() -> None:
     assert route.calls[0].request.url.params["mode"] == "queue"
     assert route.calls[0].request.url.params["limit"] == "0"
     assert route.calls[1].request.url.params["mode"] == "history"
+    assert route.calls[1].request.url.params["archive"] == "1"
     assert result["stats"] == {
         "online": True,
         "speed_mbps": 2.0,
@@ -238,13 +239,13 @@ async def test_get_status_snapshot_reuses_single_queue_response() -> None:
         "paused": False,
     }
     assert [item["name"] for item in result["activity"]["queue"]] == ["Active.Show"]
-    assert [item["name"] for item in result["activity"]["recent"]] == ["Finished.Show"]
+    assert [item["name"] for item in result["activity"]["history"]] == ["Finished.Show"]
 
 
 @respx.mock
 async def test_get_status_snapshot_offline_queue_still_returns_history() -> None:
     # A failed queue request yields offline stats and an empty queue, but the
-    # history request is independent and its recent completions still surface.
+    # The history request is independent and its completions still surface.
     respx.get(_API).mock(
         side_effect=[
             httpx.Response(500),
@@ -271,7 +272,7 @@ async def test_get_status_snapshot_offline_queue_still_returns_history() -> None
     assert result["stats"]["online"] is False
     assert result["stats"]["paused"] is False
     assert result["activity"]["queue"] == []
-    assert [item["name"] for item in result["activity"]["recent"]] == ["Finished.Show"]
+    assert [item["name"] for item in result["activity"]["history"]] == ["Finished.Show"]
 
 
 @respx.mock
@@ -483,7 +484,8 @@ async def test_get_download_activity_parses_queue_and_history() -> None:
     assert route.calls[0].request.url.params["mode"] == "queue"
     assert route.calls[0].request.url.params["limit"] == "12"
     assert route.calls[1].request.url.params["mode"] == "history"
-    assert route.calls[1].request.url.params["limit"] == "8"
+    assert route.calls[1].request.url.params["limit"] == "10"
+    assert route.calls[1].request.url.params["archive"] == "1"
     assert result["queue"] == [
         {
             "client": "sabnzbd",
@@ -499,7 +501,7 @@ async def test_get_download_activity_parses_queue_and_history() -> None:
             "completed_at": None,
         }
     ]
-    assert result["recent"] == [
+    assert result["history"] == [
         {
             "client": "sabnzbd",
             "id": "SABnzbd_nzo_done",
@@ -515,8 +517,8 @@ async def test_get_download_activity_parses_queue_and_history() -> None:
         }
     ]
     assert "path" not in result["queue"][0]
-    assert "storage" not in result["recent"][0]
-    assert "url" not in result["recent"][0]
+    assert "storage" not in result["history"][0]
+    assert "url" not in result["history"][0]
 
 
 @respx.mock
@@ -549,13 +551,13 @@ async def test_get_download_activity_applies_limits() -> None:
     )
 
     result = await SabnzbdClient(base_url=_BASE, api_key="x").get_download_activity(
-        recent_limit=1, queue_limit=1
+        history_limit=1, queue_limit=1
     )
 
     assert route.calls[0].request.url.params["limit"] == "1"
     assert route.calls[1].request.url.params["limit"] == "1"
     assert [item["name"] for item in result["queue"]] == ["First"]
-    assert [item["name"] for item in result["recent"]] == ["Done 1"]
+    assert [item["name"] for item in result["history"]] == ["Done 1"]
 
 
 @respx.mock
@@ -573,11 +575,11 @@ async def test_get_download_activity_invalid_queue_still_returns_history() -> No
     result = await SabnzbdClient(base_url=_BASE, api_key="x").get_download_activity()
 
     assert result["queue"] == []
-    assert [item["name"] for item in result["recent"]] == ["Done"]
+    assert [item["name"] for item in result["history"]] == ["Done"]
 
 
 @respx.mock
-async def test_get_download_activity_invalid_history_returns_empty_recent() -> None:
+async def test_get_download_activity_invalid_history_returns_empty_history() -> None:
     respx.get(_API).mock(
         side_effect=[
             httpx.Response(
@@ -591,7 +593,7 @@ async def test_get_download_activity_invalid_history_returns_empty_recent() -> N
     result = await SabnzbdClient(base_url=_BASE, api_key="x").get_download_activity()
 
     assert [item["name"] for item in result["queue"]] == ["Queued"]
-    assert result["recent"] == []
+    assert result["history"] == []
 
 
 @respx.mock

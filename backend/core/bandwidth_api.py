@@ -7,11 +7,13 @@ state live in ``modules/bandwidth_controllarr``.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Literal
+from typing import TYPE_CHECKING
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
+from core.bandwidth_types import BandwidthClientName
+from core.context import BandwidthClientControlError
 from core.settings_normalisers import VALID_BANDWIDTH_INTERVALS
 
 if TYPE_CHECKING:  # pragma: no cover
@@ -28,6 +30,12 @@ class BandwidthSettingsRequest(BaseModel):
     check_interval_seconds: int | None = Field(default=None, ge=1)
 
 
+class BandwidthClientRequest(BaseModel):
+    """Desired manual pause state for one download client."""
+
+    paused: bool
+
+
 class BandwidthClientStatsResponse(BaseModel):
     """Aggregate statistics for one download client."""
 
@@ -39,9 +47,9 @@ class BandwidthClientStatsResponse(BaseModel):
 
 
 class BandwidthDownloadItem(BaseModel):
-    """Display-safe queue or recent-download item."""
+    """Display-safe queue or download-history item."""
 
-    client: Literal["qbittorrent", "sabnzbd"]
+    client: BandwidthClientName
     id: str
     name: str
     status: str
@@ -67,10 +75,12 @@ class BandwidthStatusResponse(BaseModel):
     enabled: bool
     status: str
     last_run_at: str | None
+    tracking_suspended: bool
+    manual_paused_clients: list[BandwidthClientName]
     check_interval_seconds: int
     qbittorrent: BandwidthClientStatsResponse
     sabnzbd: BandwidthClientStatsResponse
-    recent_downloads: list[BandwidthDownloadItem] = Field(default_factory=list)
+    download_history: list[BandwidthDownloadItem] = Field(default_factory=list)
     queue: BandwidthQueueResponse = Field(default_factory=BandwidthQueueResponse)
 
 
@@ -105,5 +115,25 @@ def create_bandwidth_router(ctx: AppContext) -> APIRouter:
             enabled=body.enabled,
             check_interval_seconds=body.check_interval_seconds,
         )
+
+    @router.put(
+        "/clients/{client}",
+        response_model=BandwidthStatusResponse,
+        responses={
+            502: {"description": "Download client rejected the command"},
+            503: {"description": "Bandwidth-Controllarr is not ready"},
+        },
+    )
+    async def put_client(
+        client: BandwidthClientName, body: BandwidthClientRequest
+    ) -> dict:
+        if ctx.bandwidth_update_client is None:
+            raise HTTPException(
+                status_code=503, detail="Bandwidth-Controllarr not ready"
+            )
+        try:
+            return await ctx.bandwidth_update_client(client=client, paused=body.paused)
+        except BandwidthClientControlError as exc:
+            raise HTTPException(status_code=502, detail=str(exc)) from exc
 
     return router
