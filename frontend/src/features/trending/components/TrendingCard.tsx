@@ -7,13 +7,13 @@ import { cn } from "@/shared/lib/utils"
 import { displayTitle, formatYear } from "@/shared/lib/format"
 import { AddToListControl } from "@/features/trending/components/AddToListControl"
 import { ImdbRatingBadge } from "@/features/trending/components/ImdbRatingBadge"
-import { PillLabel } from "@/features/trending/components/poster-pill"
+import { PillLabel } from "@/shared/components/poster-pill/poster-pill"
 import {
   pillIcon,
   pillIconSlot,
   pillShell,
   type PillDensity,
-} from "@/features/trending/components/poster-pill-variants"
+} from "@/shared/components/poster-pill/poster-pill-variants"
 import { TrendingStatusIndicator } from "@/features/trending/components/TrendingStatusIndicator"
 import {
   isAvailable,

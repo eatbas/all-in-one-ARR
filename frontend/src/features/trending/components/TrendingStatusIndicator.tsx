@@ -1,18 +1,12 @@
 import { CheckIcon, ClockIcon } from "lucide-react"
 
 import type { TrendingItem } from "@/shared/lib/api"
-import { cn } from "@/shared/lib/utils"
 import {
   isAvailable,
   isPending,
 } from "@/features/trending/trending-item-status"
-import { PillLabel } from "@/features/trending/components/poster-pill"
-import {
-  pillIcon,
-  pillIconSlot,
-  pillShell,
-  type PillDensity,
-} from "@/features/trending/components/poster-pill-variants"
+import { StatusPill } from "@/shared/components/poster-pill/status-pill"
+import type { PillDensity } from "@/shared/components/poster-pill/poster-pill-variants"
 
 /** Labels for the Seer library statuses worth surfacing on a card. */
 const SEER_STATUS_LABELS: Record<number, string> = {
@@ -44,67 +38,6 @@ function statusLabel(
   density: PillDensity,
 ): string {
   return density >= ABBREVIATE_AT_DENSITY ? text.short : text.full
-}
-
-type StatusIcon = typeof CheckIcon
-
-type StatusPillTone = "available" | "pending"
-
-const STATUS_TONE_CLASSES: Record<StatusPillTone, string> = {
-  available:
-    "bg-background/85 text-emerald-600 ring-2 ring-inset ring-emerald-500 backdrop-blur-sm dark:text-emerald-500",
-  pending:
-    "bg-background/85 text-amber-600 ring-2 ring-inset ring-amber-500 backdrop-blur-sm dark:text-amber-500",
-}
-
-/**
- * Optical centring of each glyph inside the circular pill. Lucide's check stroke
- * spans y 6–17 of the 24-unit viewBox, so it sits high; a small downward shift
- * drops its visual mass onto the pill's centre line. The clock's outline is a
- * circle already concentric with the pill, so it takes no shift — nudging it
- * would push that inner circle off-centre from the surrounding ring.
- */
-const STATUS_ICON_CLASSES: Record<StatusPillTone, string> = {
-  available: "block translate-y-[4%]",
-  pending: "block",
-}
-
-function StatusPill({
-  detail,
-  label,
-  density,
-  tone,
-  Icon,
-}: {
-  detail: string
-  label: string
-  density: PillDensity
-  tone: StatusPillTone
-  Icon: StatusIcon
-}) {
-  return (
-    <span
-      role="img"
-      aria-label={detail}
-      title={detail}
-      className={cn(
-        pillShell(density),
-        "group/status hover:z-10",
-        STATUS_TONE_CLASSES[tone],
-      )}
-    >
-      <span
-        aria-hidden="true"
-        className={pillIconSlot(density)}
-        data-pill-icon-slot
-      >
-        <Icon className={cn(pillIcon(density), STATUS_ICON_CLASSES[tone])} />
-      </span>
-      <PillLabel group="status" side="right" density={density}>
-        {label}
-      </PillLabel>
-    </span>
-  )
 }
 
 /**

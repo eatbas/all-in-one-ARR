@@ -3,7 +3,7 @@ import { StarIcon } from "lucide-react"
 import { useTrendingRating } from "@/shared/lib/queries"
 import type { TrendingItem } from "@/shared/lib/api"
 import { cn } from "@/shared/lib/utils"
-import type { PillDensity } from "@/features/trending/components/poster-pill-variants"
+import type { PillDensity } from "@/shared/components/poster-pill/poster-pill-variants"
 
 /** Star and rating sizes per posters-per-row density. */
 const RATING_SIZE: Record<PillDensity, { star: string; rating: string }> = {

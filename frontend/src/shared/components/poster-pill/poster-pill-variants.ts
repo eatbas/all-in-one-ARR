@@ -1,6 +1,6 @@
 import { cn } from "@/shared/lib/utils"
 
-export type PillGroup = "link" | "status" | "add"
+export type PillGroup = "link" | "status" | "add" | "delete"
 export type PillDensity = 5 | 6 | 7 | 8 | 9 | 10 | 11
 export type PillLabelSide = "left" | "right"
 
@@ -119,12 +119,19 @@ const REVEAL_WIDTH: Record<PillGroup, Record<PillDensity, string>> = {
     6: "group-hover/add:max-w-9 group-focus-visible/add:max-w-9",
     7: "group-hover/add:max-w-8 group-focus-visible/add:max-w-8",
   }),
+  delete: withDenseFallback({
+    5: "group-hover/delete:max-w-20 group-focus-visible/delete:max-w-20",
+    6: "group-hover/delete:max-w-16 group-focus-visible/delete:max-w-16",
+    7: "group-hover/delete:max-w-14 group-focus-visible/delete:max-w-14",
+  }),
 }
 
 const REVEAL_OPACITY: Record<PillGroup, string> = {
   link: "group-hover/link:opacity-100 group-focus-visible/link:opacity-100",
   status: "group-hover/status:opacity-100",
   add: "group-hover/add:opacity-100 group-focus-visible/add:opacity-100",
+  delete:
+    "group-hover/delete:opacity-100 group-focus-visible/delete:opacity-100",
 }
 
 /**
@@ -175,6 +182,20 @@ const REVEAL_PADDING: Record<
     7: {
       left: "group-hover/add:pl-1.5 group-focus-visible/add:pl-1.5",
       right: "group-hover/add:pr-1.5 group-focus-visible/add:pr-1.5",
+    },
+  }),
+  delete: withDenseFallback({
+    5: {
+      left: "group-hover/delete:pl-2 group-focus-visible/delete:pl-2",
+      right: "group-hover/delete:pr-2 group-focus-visible/delete:pr-2",
+    },
+    6: {
+      left: "group-hover/delete:pl-1.5 group-focus-visible/delete:pl-1.5",
+      right: "group-hover/delete:pr-1.5 group-focus-visible/delete:pr-1.5",
+    },
+    7: {
+      left: "group-hover/delete:pl-1.5 group-focus-visible/delete:pl-1.5",
+      right: "group-hover/delete:pr-1.5 group-focus-visible/delete:pr-1.5",
     },
   }),
 }

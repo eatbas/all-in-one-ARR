@@ -5,7 +5,7 @@ import {
   type PillLabelSide,
   pillLabelReveal,
   pillLabelText,
-} from "@/features/trending/components/poster-pill-variants"
+} from "@/shared/components/poster-pill/poster-pill-variants"
 
 /**
  * Collapsed label span that expands on its pill's hover/focus. The outer-edge
@@ -30,7 +30,11 @@ export function PillLabel({
   return (
     <span
       className={cn(
-        "max-w-0 min-w-0 overflow-hidden text-ellipsis whitespace-nowrap opacity-0 transition-all duration-200 motion-reduce:transition-none",
+        // The ascent-heavy metrics of the system fonts leave the glyph ink
+        // sitting ~0.05em below the pill's centre line once the flex-centred
+        // line box is rendered (worst for descender words like "Pending");
+        // the small upward translate optically centres the revealed word.
+        "max-w-0 min-w-0 -translate-y-[0.05em] overflow-hidden text-ellipsis whitespace-nowrap opacity-0 transition-all duration-200 motion-reduce:transition-none",
         pillLabelText(density),
         pillLabelReveal(group, density, side),
       )}

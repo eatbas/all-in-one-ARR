@@ -6,7 +6,7 @@ import {
   pillLabelReveal,
   pillShell,
   type PillDensity,
-} from "@/features/trending/components/poster-pill-variants"
+} from "@/shared/components/poster-pill/poster-pill-variants"
 
 const DENSITIES: PillDensity[] = [5, 6, 7, 8, 9, 10, 11]
 // The shell fixes only the height; the icon slot keeps the square size that
@@ -38,6 +38,9 @@ describe("poster-pill-variants", () => {
       expect(pillShell(density)).toMatch(/\bh-/)
       expect(pillIcon(density)).toMatch(/\bsize-/)
       expect(pillLabelReveal("link", density, "left")).not.toBe("")
+      expect(pillLabelReveal("delete", density, "right")).toContain(
+        "group-hover/delete:",
+      )
     }
   })
 

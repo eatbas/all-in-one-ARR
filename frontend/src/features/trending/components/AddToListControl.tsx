@@ -1,13 +1,13 @@
 import { PlusIcon } from "lucide-react"
 
 import { Button } from "@/shared/components/ui/button"
-import { PillLabel } from "@/features/trending/components/poster-pill"
+import { PillLabel } from "@/shared/components/poster-pill/poster-pill"
 import {
   pillIcon,
   pillIconSlot,
   pillShell,
   type PillDensity,
-} from "@/features/trending/components/poster-pill-variants"
+} from "@/shared/components/poster-pill/poster-pill-variants"
 import { cn } from "@/shared/lib/utils"
 import {
   DropdownMenu,
