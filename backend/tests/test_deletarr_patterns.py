@@ -183,9 +183,73 @@ def test_scene_tag_patterns_match_case_insensitively() -> None:
     # These uppercase scene tags were previously dead (re.match on a lower-cased
     # name with no IGNORECASE never matched them).
     assert _reason("RARBG.txt") == "Junk pattern: RARBG"
-    assert _reason("www.YTS.MX.jpg") == "Junk pattern: YTS"
-    assert _reason("YIFY.data") == "Junk pattern: YIFY"
     assert _reason("Proxies.dat") == "Junk pattern: Proxies"
+
+
+def test_yts_yify_provenance_is_not_junk_by_itself() -> None:
+    """Release-group/source tokens must not make a matching companion disposable."""
+    folder_name = "GameStop (2026) {tmdb-12345}"
+    video_basename = (
+        "GameStop (2026) {tmdb-12345} - [WEBDL-1080p][AAC 2.0][x264]-YTS.MX"
+    )
+
+    # Exact-basename metadata sidecars containing YTS/YIFY provenance are kept.
+    for ext in (".xml", ".jpg"):
+        assert (
+            _is_junk(
+                f"{video_basename}{ext}",
+                video_basenames=[video_basename],
+                folder_name=folder_name,
+            )
+            is False
+        ), f"{video_basename}{ext}"
+
+    # Folder-matching metadata and artwork suffixes remain kept.
+    assert (
+        _is_junk(
+            f"{folder_name}.jpg",
+            video_basenames=[video_basename],
+            folder_name=folder_name,
+        )
+        is False
+    )
+    assert (
+        _is_junk(
+            f"{folder_name}-poster.jpg",
+            video_basenames=[video_basename],
+            folder_name=folder_name,
+        )
+        is False
+    )
+
+    # Unrelated metadata containing YTS/YIFY tokens is still reviewable.
+    for token in ("YTS", "YTS.MX", "YTS.LT", "YIFY"):
+        assert (
+            _is_junk(
+                f"unrelated-{token}.xml",
+                video_basenames=[video_basename],
+                folder_name=folder_name,
+            )
+            is True
+        )
+        assert (
+            _reason(
+                f"unrelated-{token}.xml",
+                video_basenames=[video_basename],
+                folder_name=folder_name,
+            )
+            == "Metadata file not matching video or folder"
+        )
+
+    # Promotional www.* artwork remains junk through the existing www. pattern.
+    assert _is_junk("www.YTS.MX.jpg") is True
+    assert "www" in _reason("www.YTS.MX.jpg")
+
+    # Concrete junk extensions remain junk.
+    assert _reason("YTS.txt") == "Junk file extension"
+
+    # Arbitrary unknown files are preserved rather than risk deleting a companion.
+    assert _is_junk("YIFY.data") is False
 
 
 def test_recognised_artwork_is_kept() -> None:

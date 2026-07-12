@@ -122,6 +122,32 @@ def test_scan_arr_keeps_manager_companion_metadata(tmp_path) -> None:
     assert items["unrelated.xml"].reason == "Metadata file not matching video or folder"
 
 
+def test_scan_arr_keeps_yts_yify_matching_metadata(tmp_path) -> None:
+    root = tmp_path / "movies"
+    folder_name = "GameStop (2026) {tmdb-12345}"
+    video_basename = (
+        "GameStop (2026) {tmdb-12345} - [WEBDL-1080p][AAC 2.0][x264]-YTS.MX"
+    )
+    movie = root / folder_name
+    video = _write(movie / f"{video_basename}.mkv", b"video" * 10)
+    _write(movie / f"{video_basename}.xml")  # matching tracked sidecar
+    _write(movie / "unrelated-YTS.xml")  # unrelated metadata with YTS token
+
+    manifest = _manifest("movies", root, {str(movie): [str(video)]})
+    scanner = MediaScanner([str(root)])
+    scanner.scan_arr(manifest)
+    items = {item.name: item for item in scanner.get_sorted_results()}
+
+    assert set(items) == {"unrelated-YTS.xml"}
+    assert (
+        items["unrelated-YTS.xml"].reason
+        == "Metadata file not matching video or folder"
+    )
+    assert (
+        items["unrelated-YTS.xml"].videos_in_folder[0].name == f"{video_basename}.mkv"
+    )
+
+
 def test_scan_arr_descends_into_category_folders(tmp_path) -> None:
     root = tmp_path / "movies"
     # Movies nested under category containers, mirroring a multi-root Radarr where

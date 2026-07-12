@@ -52,14 +52,17 @@ class JunkPatterns:
         ".DS_Store",
     }
 
+    # Concrete junk/name-spam patterns. Release-group/source provenance tokens such
+    # as YTS or YIFY are deliberately excluded: they describe where a release came
+    # from, not whether a companion file is disposable. Matching metadata identity
+    # is evaluated before these patterns, so a legitimate video/folder sidecar is
+    # preserved even if its name contains one of those tokens.
     JUNK_PATTERNS = [
         r".*sample.*",
         r".*proof.*",
         r".*trailer.*",
         r"RARBG.*",
         r".*readme.*",
-        r".*YTS.*",
-        r".*YIFY.*",
         r".*www\..*",
         r".*Proxies.*",
     ]
@@ -107,9 +110,23 @@ class JunkPatterns:
         if filename_lower in cls.WHITELIST:
             return {"is_junk": False, "reason": None}
 
+        # Recognised metadata extensions (images, XML sidecars) are evaluated before
+        # generic junk patterns. A file whose basename matches the protected video or
+        # folder is a tracked companion and must not be discarded merely because its
+        # name also contains a release provenance token.
+        file_ext = next(
+            (ext for ext in cls.METADATA_EXTENSIONS if filename_lower.endswith(ext)),
+            None,
+        )
+        metadata_basename: str | None = None
+        if file_ext is not None:
+            metadata_basename = filename[: -len(file_ext)]
+            if cls._is_kept_metadata(metadata_basename, video_basenames, folder_name):
+                return {"is_junk": False, "reason": None}
+
         for pattern in cls.JUNK_PATTERNS:
-            # ``re.IGNORECASE`` so the uppercase scene tags (RARBG/YTS/YIFY/Proxies)
-            # still match after ``filename`` has been lower-cased.
+            # ``re.IGNORECASE`` so uppercase scene tags (RARBG/Proxies) still match
+            # after ``filename`` has been lower-cased.
             if re.match(pattern, filename_lower, re.IGNORECASE):
                 return {
                     "is_junk": True,
@@ -119,14 +136,7 @@ class JunkPatterns:
         if any(filename_lower.endswith(ext) for ext in cls.JUNK_EXTENSIONS):
             return {"is_junk": True, "reason": "Junk file extension"}
 
-        file_ext = next(
-            (ext for ext in cls.METADATA_EXTENSIONS if filename_lower.endswith(ext)),
-            None,
-        )
-        if file_ext is not None:
-            file_basename = filename[: -len(file_ext)]
-            if cls._is_kept_metadata(file_basename, video_basenames, folder_name):
-                return {"is_junk": False, "reason": None}
+        if metadata_basename is not None:
             return {
                 "is_junk": True,
                 "reason": "Metadata file not matching video or folder",
@@ -186,8 +196,11 @@ class JunkPatterns:
         video basename or the folder name, is a recognised metadata identity for
         either, is a well-known artwork name (e.g. ``fanart``), a season-poster style
         name, or follows the ``<title>-<suffix>`` artwork convention (e.g.
-        ``Movie-poster``). This is intentionally not a blanket image/XML exemption:
-        unrelated metadata remains reviewable.
+        ``Movie-poster``). Identity matching takes precedence over generic junk
+        patterns, so a Radarr-generated XML sidecar whose basename equals the
+        protected video is kept even when the name contains release provenance such
+        as ``YTS`` or ``YIFY``. This is intentionally not a blanket image/XML
+        exemption: unrelated metadata remains reviewable.
         """
         base_keys = cls._metadata_identity_keys(file_basename)
         videos = {

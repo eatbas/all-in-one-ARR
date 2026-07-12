@@ -75,6 +75,30 @@ def test_movie_scan_keeps_manager_companion_metadata(tmp_path) -> None:
     assert reasons == {"unrelated.xml": "Metadata file not matching video or folder"}
 
 
+def test_movie_scan_keeps_yts_yify_matching_metadata(tmp_path) -> None:
+    folder_name = "GameStop (2026) {tmdb-12345}"
+    video_basename = (
+        "GameStop (2026) {tmdb-12345} - [WEBDL-1080p][AAC 2.0][x264]-YTS.MX"
+    )
+    movie = tmp_path / folder_name
+    _write(movie / f"{video_basename}.mkv", b"video" * 10)
+    _write(movie / f"{video_basename}.xml")  # matching Radarr metadata sidecar
+    _write(movie / f"{folder_name}.jpg")  # matching folder artwork
+    _write(movie / "unrelated-YTS.xml")  # unrelated metadata with YTS token
+
+    scanner = MediaScanner([str(tmp_path)])
+    scanner.scan("movies")
+    results = scanner.get_sorted_results()
+    reasons = {item.name: item.reason for item in results}
+
+    assert f"{video_basename}.xml" not in reasons
+    assert f"{folder_name}.jpg" not in reasons
+    assert reasons == {
+        "unrelated-YTS.xml": "Metadata file not matching video or folder"
+    }
+    assert scanner.get_stats().total_files == 1
+
+
 def test_tv_scan_flags_non_episode_files_and_unexpected_folders(tmp_path) -> None:
     season = tmp_path / "Example Show" / "Season 01"
     _write(season / "Example Show S01E01.mkv", b"episode")
