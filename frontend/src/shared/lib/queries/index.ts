@@ -466,6 +466,33 @@ export function useUpdateTrendingInterval(): UseMutationResult<
   })
 }
 
+export function useUpdateAnimeIdsRefresh(): UseMutationResult<
+  GeneralSettings,
+  Error,
+  number
+> {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: (days) =>
+      updateGeneralSettings({ anime_ids_refresh_days: days }),
+    onSuccess: (result) => {
+      toast.success("Anime mapping refresh updated", {
+        description: `Refreshing the anime id mapping every ${result.anime_ids_refresh_days} day(s)`,
+      })
+      void queryClient.invalidateQueries({
+        queryKey: queryKeys.generalSettings,
+      })
+      void queryClient.invalidateQueries({ queryKey: queryKeys.activity })
+    },
+    onError: (error) => {
+      toast.error("Could not update anime mapping refresh", {
+        description: error.message,
+      })
+    },
+  })
+}
+
 export function useUpdateAutoRemoveWhenAvailable(): UseMutationResult<
   GeneralSettings,
   Error,

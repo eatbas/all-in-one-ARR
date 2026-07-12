@@ -27,6 +27,8 @@ function item(over: Partial<TrendingItem>): TrendingItem {
     slug: null,
     title: "Dune",
     year: 2021,
+    anilist: null,
+    poster_url: null,
     seer_status: null,
     already_tracked: false,
     in_library: false,
@@ -78,6 +80,39 @@ describe("TrendingCard", () => {
     expect(
       screen.getByRole("img", { name: "No poster for Untitled" }),
     ).toBeInTheDocument()
+  })
+
+  it("renders the direct cover URL when there is no TMDB id but a poster_url", () => {
+    // An unmapped AniList title: no TMDB id for the cached-poster pipeline,
+    // but the source supplies its own cover art.
+    render(
+      <ul>
+        <TrendingCard
+          item={item({
+            tmdb: null,
+            poster_url: "https://img.anili.st/cover.jpg",
+          })}
+        />
+      </ul>,
+    )
+    expect(screen.getByRole("img", { name: "Dune" })).toHaveAttribute(
+      "src",
+      "https://img.anili.st/cover.jpg",
+    )
+  })
+
+  it("prefers the cached poster over poster_url when a TMDB id exists", () => {
+    render(
+      <ul>
+        <TrendingCard
+          item={item({ poster_url: "https://img.anili.st/cover.jpg" })}
+        />
+      </ul>,
+    )
+    expect(screen.getByRole("img", { name: "Dune" })).toHaveAttribute(
+      "src",
+      "/api/posters/movie/100",
+    )
   })
 
   it("falls back to a placeholder when the poster fails to load", () => {

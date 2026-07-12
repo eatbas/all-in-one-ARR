@@ -109,6 +109,7 @@ class GeneralSettingsRequest(BaseModel):
     interval_seconds: int | None = None
     sync_interval_minutes: int | None = None
     trending_sync_interval_minutes: int | None = None
+    anime_ids_refresh_days: int | None = None
     auto_remove_when_available: bool | None = None
 
 
@@ -116,6 +117,7 @@ class GeneralSettingsResponse(BaseModel):
     interval_seconds: int
     sync_interval_minutes: int
     trending_sync_interval_minutes: int
+    anime_ids_refresh_days: int
     auto_remove_when_available: bool
 
 
@@ -137,6 +139,86 @@ def _services_status_response(snapshot: StatusResult) -> ServicesStatusResponse:
             for name, s in snapshot.services.items()
         },
     )
+
+
+# ---- general-settings field appliers ----
+#
+# One helper per PUT /settings/general field: persist the value (the store
+# normalises invalid input), record an activity entry only when the stored
+# value actually changed, then apply the field's runtime side-effect. The
+# endpoint body stays a flat presence check per field.
+
+
+def _apply_status_interval(ctx: AppContext, seconds: int) -> None:
+    """Persist a status-check interval change and record it when it changed."""
+    previous = ctx.settings_store.status_check_interval_seconds()
+    updated = ctx.settings_store.update_status_check_interval(seconds)
+    if updated != previous:
+        ctx.db.add_activity(
+            "Status interval updated",
+            f"Status interval updated to {updated} seconds",
+        )
+
+
+async def _apply_sync_interval(ctx: AppContext, minutes: int) -> None:
+    """Persist a Trakt sync-interval change, log it and re-point the job."""
+    previous = ctx.settings_store.sync_interval_minutes()
+    updated = ctx.settings_store.update_sync_interval(minutes)
+    if updated != previous:
+        ctx.db.add_activity(
+            "Sync interval updated",
+            f"Sync interval updated to {updated} minutes",
+        )
+    if ctx.reschedule_sync is not None:
+        await ctx.reschedule_sync(updated)
+
+
+async def _apply_trending_interval(ctx: AppContext, minutes: int) -> None:
+    """Persist a trending-interval change, log it and re-point the job."""
+    previous = ctx.settings_store.trending_sync_interval_minutes()
+    updated = ctx.settings_store.update_trending_sync_interval(minutes)
+    if updated != previous:
+        ctx.db.add_activity(
+            "Trending sync interval updated",
+            f"Trending sync interval updated to {updated} minutes",
+        )
+    if ctx.reschedule_trending is not None:
+        await ctx.reschedule_trending(updated)
+
+
+def _apply_anime_ids_refresh(ctx: AppContext, days: int) -> None:
+    """Persist an anime-mapping cadence change, log it and re-point the map.
+
+    Re-pointing is synchronous and needs no restart; the download itself
+    happens at the map's next staleness check.
+    """
+    previous = ctx.settings_store.anime_ids_refresh_days()
+    updated = ctx.settings_store.update_anime_ids_refresh_days(days)
+    if updated != previous:
+        ctx.db.add_activity(
+            "Anime mapping refresh updated",
+            f"Anime id mapping now refreshes every {updated} day(s)",
+        )
+    if ctx.anime_ids is not None:
+        ctx.anime_ids.update_refresh_days(updated)
+
+
+def _apply_auto_remove(ctx: AppContext, enabled: bool) -> None:
+    """Persist the auto-remove toggle and record the direction of the change."""
+    previous = ctx.settings_store.auto_remove_when_available()
+    updated = ctx.settings_store.update_auto_remove_when_available(enabled)
+    if updated == previous:
+        return
+    if updated:
+        ctx.db.add_activity(
+            "Auto-remove when available enabled",
+            "Items will be removed from Trakt once available in Seer",
+        )
+    else:
+        ctx.db.add_activity(
+            "Auto-remove when available disabled",
+            "Available items stay on their Trakt list until manually removed",
+        )
 
 
 def create_api_router(ctx: AppContext) -> APIRouter:
@@ -241,6 +323,7 @@ def create_api_router(ctx: AppContext) -> APIRouter:
             trending_sync_interval_minutes=(
                 ctx.settings_store.trending_sync_interval_minutes()
             ),
+            anime_ids_refresh_days=ctx.settings_store.anime_ids_refresh_days(),
             auto_remove_when_available=ctx.settings_store.auto_remove_when_available(),
         )
 
@@ -308,56 +391,19 @@ def create_api_router(ctx: AppContext) -> APIRouter:
     async def put_general_settings(
         body: GeneralSettingsRequest,
     ) -> GeneralSettingsResponse:
+        # A present field is persisted, logged when it actually changed, and
+        # its runtime side-effect applied — see the module-level _apply_*
+        # helpers, one per field.
         if body.interval_seconds is not None:
-            previous = ctx.settings_store.status_check_interval_seconds()
-            seconds = ctx.settings_store.update_status_check_interval(
-                body.interval_seconds
-            )
-            if seconds != previous:
-                ctx.db.add_activity(
-                    "Status interval updated",
-                    f"Status interval updated to {seconds} seconds",
-                )
+            _apply_status_interval(ctx, body.interval_seconds)
         if body.sync_interval_minutes is not None:
-            previous = ctx.settings_store.sync_interval_minutes()
-            minutes = ctx.settings_store.update_sync_interval(
-                body.sync_interval_minutes
-            )
-            if minutes != previous:
-                ctx.db.add_activity(
-                    "Sync interval updated",
-                    f"Sync interval updated to {minutes} minutes",
-                )
-            if ctx.reschedule_sync is not None:
-                await ctx.reschedule_sync(minutes)
+            await _apply_sync_interval(ctx, body.sync_interval_minutes)
         if body.trending_sync_interval_minutes is not None:
-            previous = ctx.settings_store.trending_sync_interval_minutes()
-            minutes = ctx.settings_store.update_trending_sync_interval(
-                body.trending_sync_interval_minutes
-            )
-            if minutes != previous:
-                ctx.db.add_activity(
-                    "Trending sync interval updated",
-                    f"Trending sync interval updated to {minutes} minutes",
-                )
-            if ctx.reschedule_trending is not None:
-                await ctx.reschedule_trending(minutes)
+            await _apply_trending_interval(ctx, body.trending_sync_interval_minutes)
+        if body.anime_ids_refresh_days is not None:
+            _apply_anime_ids_refresh(ctx, body.anime_ids_refresh_days)
         if body.auto_remove_when_available is not None:
-            previous = ctx.settings_store.auto_remove_when_available()
-            enabled = ctx.settings_store.update_auto_remove_when_available(
-                body.auto_remove_when_available
-            )
-            if enabled != previous:
-                if enabled:
-                    ctx.db.add_activity(
-                        "Auto-remove when available enabled",
-                        "Items will be removed from Trakt once available in Seer",
-                    )
-                else:
-                    ctx.db.add_activity(
-                        "Auto-remove when available disabled",
-                        "Available items stay on their Trakt list until manually removed",
-                    )
+            _apply_auto_remove(ctx, body.auto_remove_when_available)
         return _general_settings()
 
     @router.post(

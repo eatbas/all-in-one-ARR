@@ -20,9 +20,11 @@ from fastapi.staticfiles import StaticFiles
 from prometheus_client import make_asgi_app
 
 from core import registry
+from core.anime_ids import AnimeIdMap
 from core.api import create_api_router
 from core.app_metrics import observe_scheduler_job
 from core.bandwidth_api import create_bandwidth_router
+from core.clients.anilist import AnilistClient
 from core.clients.arr_client import ArrClient
 from core.clients.omdb import OmdbClient
 from core.clients.qbittorrent import QbittorrentClient
@@ -75,6 +77,7 @@ def build_context(settings: Settings) -> AppContext:
         bandwidth_control_enabled=settings.BANDWIDTH_CONTROL_ENABLED,
         bandwidth_check_interval_seconds=settings.BANDWIDTH_CHECK_INTERVAL_SEC,
         trending_sync_interval_minutes=settings.TRENDING_SYNC_INTERVAL_MIN,
+        anime_ids_refresh_days=settings.ANIME_IDS_REFRESH_DAYS,
         deletarr_movies_path=settings.DELETARR_MOVIES_PATH,
         deletarr_tv_path=settings.DELETARR_TV_PATH,
         deletarr_use_arr_source=settings.DELETARR_USE_ARR_SOURCE,
@@ -97,6 +100,7 @@ def build_context(settings: Settings) -> AppContext:
 
     tmdb = TmdbClient(api_key=settings_store.service_fields("tmdb")["api_key"])
     omdb = OmdbClient(api_key=settings_store.service_fields("omdb")["api_key"])
+    anilist = AnilistClient()
     sab_fields = settings_store.service_fields("sabnzbd")
     sabnzbd = SabnzbdClient(base_url=sab_fields["url"], api_key=sab_fields["api_key"])
     qbit_fields = settings_store.service_fields("qbittorrent")
@@ -113,6 +117,7 @@ def build_context(settings: Settings) -> AppContext:
         radarr=radarr,
         tmdb=tmdb,
         omdb=omdb,
+        anilist=anilist,
         sabnzbd=sabnzbd,
         qbittorrent=qbittorrent,
         scheduler=SchedulerService(),
@@ -122,6 +127,10 @@ def build_context(settings: Settings) -> AppContext:
     ctx.status_checker = StatusChecker(ctx)
     ctx.poster_cache = PosterCache(
         cache_dir=settings.POSTER_CACHE_PATH, tmdb=tmdb, omdb=omdb
+    )
+    ctx.anime_ids = AnimeIdMap(
+        path=settings.ANIME_IDS_PATH,
+        refresh_days=settings_store.anime_ids_refresh_days(),
     )
     return ctx
 
@@ -271,6 +280,9 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         await ctx.radarr.aclose()
         await ctx.tmdb.aclose()
         await ctx.omdb.aclose()
+        await ctx.anilist.aclose()
+        if ctx.anime_ids is not None:
+            await ctx.anime_ids.aclose()
         await ctx.sabnzbd.aclose()
         await ctx.qbittorrent.aclose()
         ctx.db.close()

@@ -1422,6 +1422,17 @@
       },
       "GeneralSettingsRequest": {
         "properties": {
+          "anime_ids_refresh_days": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Anime Ids Refresh Days"
+          },
           "auto_remove_when_available": {
             "anyOf": [
               {
@@ -1472,6 +1483,10 @@
       },
       "GeneralSettingsResponse": {
         "properties": {
+          "anime_ids_refresh_days": {
+            "title": "Anime Ids Refresh Days",
+            "type": "integer"
+          },
           "auto_remove_when_available": {
             "title": "Auto Remove When Available",
             "type": "boolean"
@@ -1493,6 +1508,7 @@
           "interval_seconds",
           "sync_interval_minutes",
           "trending_sync_interval_minutes",
+          "anime_ids_refresh_days",
           "auto_remove_when_available"
         ],
         "title": "GeneralSettingsResponse",
@@ -2132,6 +2148,17 @@
             "title": "Already Tracked",
             "type": "boolean"
           },
+          "anilist": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Anilist"
+          },
           "imdb": {
             "anyOf": [
               {
@@ -2154,6 +2181,17 @@
           "media_type": {
             "title": "Media Type",
             "type": "string"
+          },
+          "poster_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Poster Url"
           },
           "seer_status": {
             "anyOf": [
@@ -2247,6 +2285,8 @@
           "slug",
           "title",
           "year",
+          "anilist",
+          "poster_url",
           "seer_status",
           "already_tracked",
           "in_library",
@@ -3725,7 +3765,10 @@
               "enum": [
                 "trakt",
                 "tmdb",
-                "seer"
+                "seer",
+                "trakt-anime",
+                "tmdb-anime",
+                "anilist"
               ],
               "title": "Source",
               "type": "string"

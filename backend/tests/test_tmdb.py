@@ -229,6 +229,86 @@ async def test_get_trending_stops_on_empty_page() -> None:
     assert [row["tmdb"] for row in rows] == [1]
 
 
+_DISCOVER_MOVIE = "https://api.themoviedb.org/3/discover/movie"
+_DISCOVER_TV = "https://api.themoviedb.org/3/discover/tv"
+
+
+@respx.mock
+async def test_get_anime_trending_show_uses_discover_with_anime_filters() -> None:
+    route = respx.get(_DISCOVER_TV).mock(
+        return_value=httpx.Response(
+            200,
+            json={
+                "results": [
+                    {"id": 240411, "name": "Dan Da Dan", "first_air_date": "2024-10-04"}
+                ]
+            },
+        )
+    )
+    rows = await TmdbClient(api_key="v3key").get_anime_trending(
+        media_type="show", limit=5
+    )
+    assert rows == [
+        {"media_type": "show", "tmdb": 240411, "title": "Dan Da Dan", "year": 2024}
+    ]
+    params = route.calls.last.request.url.params
+    assert params["with_genres"] == "16"
+    assert params["with_origin_country"] == "JP"
+    assert params["sort_by"] == "popularity.desc"
+
+
+@respx.mock
+async def test_get_anime_popular_movie_sorts_by_vote_count() -> None:
+    route = respx.get(_DISCOVER_MOVIE).mock(
+        return_value=httpx.Response(
+            200,
+            json={
+                "results": [
+                    {"id": 129, "title": "Spirited Away", "release_date": "2001-07-20"}
+                ]
+            },
+        )
+    )
+    rows = await TmdbClient(api_key="v3key").get_anime_popular(
+        media_type="movie", limit=5
+    )
+    assert rows == [
+        {"media_type": "movie", "tmdb": 129, "title": "Spirited Away", "year": 2001}
+    ]
+    params = route.calls.last.request.url.params
+    assert params["with_genres"] == "16"
+    assert params["with_origin_country"] == "JP"
+    assert params["sort_by"] == "vote_count.desc"
+
+
+@respx.mock
+async def test_get_anime_trending_pages_and_caps_like_discover() -> None:
+    respx.get(_DISCOVER_MOVIE).mock(
+        side_effect=[
+            httpx.Response(
+                200,
+                json={
+                    "results": [{"id": 1, "title": "A", "release_date": "2020-01-01"}]
+                },
+            ),
+            httpx.Response(
+                200,
+                json={
+                    "results": [
+                        {"id": 2, "title": "B", "release_date": "2021-01-01"},
+                        {"id": 3, "title": "C", "release_date": "2022-01-01"},
+                    ]
+                },
+            ),
+        ]
+    )
+    rows = await TmdbClient(api_key="v3key").get_anime_trending(
+        media_type="movie", limit=2, pages=2
+    )
+    # Pages concatenate before the limit cap, like every other discovery feed.
+    assert [row["tmdb"] for row in rows] == [1, 2]
+
+
 @respx.mock
 async def test_fetch_external_ids_returns_imdb_id() -> None:
     respx.get(_EXTERNAL_IDS_MOVIE).mock(

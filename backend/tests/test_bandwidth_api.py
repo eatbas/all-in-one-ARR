@@ -38,6 +38,7 @@ def bandwidth_app(db):
         radarr=StubService(),
         tmdb=StubService(),
         omdb=StubService(),
+        anilist=StubService(),
         sabnzbd=sab,
         qbittorrent=qbit,
         scheduler=AsyncMock(),

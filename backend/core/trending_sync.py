@@ -37,8 +37,10 @@ _PREWARM_TIMEOUT_SECONDS = 20
 _PREWARM_TASKS: set[asyncio.Task] = set()
 
 # The feed matrix refreshed each cycle. TMDB trending uses the weekly window — the
-# only window the dashboard ever requests — so it is the only one kept warm.
-_SOURCES = ("trakt", "tmdb", "seer")
+# only window the dashboard ever requests — so it is the only one kept warm. The
+# anime variants and AniList are full members of the matrix so the Anime tab is
+# served from the same warmed snapshot.
+_SOURCES = ("trakt", "tmdb", "seer", "trakt-anime", "tmdb-anime", "anilist")
 _MEDIA = ("movie", "show")
 _CATEGORIES = ("trending", "popular")
 SYNC_WINDOW = "week"

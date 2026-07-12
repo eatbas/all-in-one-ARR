@@ -1,4 +1,11 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react"
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react"
 
 import { Button } from "@/shared/components/ui/button"
 import {
@@ -57,6 +64,7 @@ import {
   useTestTrakt,
   useTraktAuthStatus,
   useTraktSettings,
+  useUpdateAnimeIdsRefresh,
   useUpdateServiceSettings,
   useUpdateStatusInterval,
   useUpdateTraktSettings,
@@ -535,6 +543,63 @@ function DatabaseCard() {
   )
 }
 
+/**
+ * One labelled setting row with a bounded Select: name + help tooltip and a
+ * muted one-line description on the left, the control on the right. Shared by
+ * the General and App scheduler cards so every cadence row stays identical.
+ */
+function SettingsSelectRow({
+  id,
+  label,
+  help,
+  description,
+  options,
+  value,
+  disabled,
+  placeholder = "Select interval",
+  onChange,
+}: {
+  id: string
+  label: string
+  help: ReactNode
+  description: string
+  options: ReadonlyArray<{ value: number; label: string }>
+  value: number
+  disabled: boolean
+  placeholder?: string
+  onChange: (value: number) => void
+}) {
+  return (
+    <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+      <div>
+        <div className="flex items-center gap-1.5">
+          <label htmlFor={id} className="text-sm font-medium">
+            {label}
+          </label>
+          <SettingsHelp label={label}>{help}</SettingsHelp>
+        </div>
+        <p className="text-sm text-muted-foreground">{description}</p>
+      </div>
+      <Select
+        value={String(value)}
+        onValueChange={(next) => onChange(Number(next))}
+        disabled={disabled}
+      >
+        <SelectTrigger id={id} className="w-full sm:w-40">
+          <SelectValue placeholder={placeholder} />
+        </SelectTrigger>
+        <SelectContent>
+          {options.map((option) => (
+            <SelectItem key={option.value} value={String(option.value)}>
+              {option.label}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+    </div>
+  )
+}
+
 /** App-wide settings: status-check interval and appearance. */
 function GeneralCard() {
   const { theme, setTheme } = useTheme()
@@ -552,40 +617,21 @@ function GeneralCard() {
         </CardDescription>
       </CardHeader>
       <CardContent className="flex flex-col gap-6">
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <div className="flex items-center gap-1.5">
-              <label htmlFor="status-interval" className="text-sm font-medium">
-                Status check interval
-              </label>
-              <SettingsHelp label="Status check interval">
-                How often the dashboard refreshes connection status for
-                configured integrations.
-              </SettingsHelp>
-            </div>
-            <p className="text-sm text-muted-foreground">
-              How often the dashboard pings each integration.
-            </p>
-          </div>
-          <Select
-            value={String(interval)}
-            onValueChange={(value) =>
-              updateInterval.mutate({ interval_seconds: Number(value) })
-            }
-            disabled={updateInterval.isPending}
-          >
-            <SelectTrigger id="status-interval" className="w-full sm:w-40">
-              <SelectValue placeholder="Select interval" />
-            </SelectTrigger>
-            <SelectContent>
-              {STATUS_INTERVAL_OPTIONS.map((seconds) => (
-                <SelectItem key={seconds} value={String(seconds)}>
-                  {seconds} seconds
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
+        <SettingsSelectRow
+          id="status-interval"
+          label="Status check interval"
+          help="How often the dashboard refreshes connection status for configured integrations."
+          description="How often the dashboard pings each integration."
+          options={STATUS_INTERVAL_OPTIONS.map((seconds) => ({
+            value: seconds,
+            label: `${seconds} seconds`,
+          }))}
+          value={interval}
+          disabled={updateInterval.isPending}
+          onChange={(seconds) =>
+            updateInterval.mutate({ interval_seconds: seconds })
+          }
+        />
 
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-center gap-1.5">
@@ -619,60 +665,53 @@ const TRENDING_INTERVAL_OPTIONS = [
   { value: 120, label: "2 hours" },
 ] as const
 
-/** App scheduler: how often the Trending page's feeds are refreshed in the background. */
+const ANIME_IDS_REFRESH_OPTIONS = [
+  { value: 1, label: "1 day" },
+  { value: 3, label: "3 days" },
+  { value: 5, label: "5 days" },
+] as const
+
+/** App scheduler: background refresh cadences for the Trending page's data. */
 function AppSchedulerCard() {
   const { data: general } = useGeneralSettings()
   const updateTrendingInterval = useUpdateTrendingInterval()
+  const updateAnimeIdsRefresh = useUpdateAnimeIdsRefresh()
 
   const interval = general?.trending_sync_interval_minutes ?? 60
+  const animeIdsRefreshDays = general?.anime_ids_refresh_days ?? 3
 
   return (
     <Card>
       <CardHeader>
         <CardTitle>App scheduler</CardTitle>
         <CardDescription>
-          Background refresh of the Trending page's feeds, so opening it does
-          not call Trakt, TMDB and Seer on every click.
+          Background refresh of the Trending page's feeds and the anime id
+          mapping, so opening it does not call Trakt, TMDB and Seer on every
+          click.
         </CardDescription>
       </CardHeader>
-      <CardContent>
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <div className="flex items-center gap-1.5">
-              <label
-                htmlFor="trending-interval"
-                className="text-sm font-medium"
-              >
-                Trending sync interval
-              </label>
-              <SettingsHelp label="Trending sync interval">
-                How often the background job refreshes the trending and popular
-                feeds from Trakt, TMDB and Seer.
-              </SettingsHelp>
-            </div>
-            <p className="text-sm text-muted-foreground">
-              How often trending and popular feeds are refreshed.
-            </p>
-          </div>
-          <Select
-            value={String(interval)}
-            onValueChange={(value) =>
-              updateTrendingInterval.mutate(Number(value))
-            }
-            disabled={updateTrendingInterval.isPending}
-          >
-            <SelectTrigger id="trending-interval" className="w-full sm:w-40">
-              <SelectValue placeholder="Select interval" />
-            </SelectTrigger>
-            <SelectContent>
-              {TRENDING_INTERVAL_OPTIONS.map((option) => (
-                <SelectItem key={option.value} value={String(option.value)}>
-                  {option.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
+      <CardContent className="flex flex-col gap-6">
+        <SettingsSelectRow
+          id="trending-interval"
+          label="Trending sync interval"
+          help="How often the background job refreshes the trending and popular feeds from Trakt, TMDB and Seer."
+          description="How often trending and popular feeds are refreshed."
+          options={TRENDING_INTERVAL_OPTIONS}
+          value={interval}
+          disabled={updateTrendingInterval.isPending}
+          onChange={(minutes) => updateTrendingInterval.mutate(minutes)}
+        />
+        <SettingsSelectRow
+          id="anime-ids-refresh"
+          label="Anime mapping refresh"
+          help="How often the cached AniList/MAL → TMDB/TVDB id mapping (Fribb's anime-lists) is refreshed. The check runs with the trending refresh, so a shorter trending interval means the new cadence applies sooner."
+          description="How often the anime id mapping is refreshed."
+          options={ANIME_IDS_REFRESH_OPTIONS}
+          value={animeIdsRefreshDays}
+          disabled={updateAnimeIdsRefresh.isPending}
+          placeholder="Select cadence"
+          onChange={(days) => updateAnimeIdsRefresh.mutate(days)}
+        />
       </CardContent>
     </Card>
   )

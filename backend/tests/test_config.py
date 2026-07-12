@@ -16,6 +16,8 @@ def test_valid_settings_defaults() -> None:
     settings = Settings(_env_file=None, **_VALID)
     assert settings.SYNC_INTERVAL_MIN == 15
     assert settings.POSTER_CACHE_PATH == "data/posters"
+    assert settings.ANIME_IDS_PATH == "data/anime_ids.json"
+    assert settings.ANIME_IDS_REFRESH_DAYS == 3
     assert settings.BANDWIDTH_CONTROL_ENABLED is False
     assert settings.BANDWIDTH_CHECK_INTERVAL_SEC == 15
     # Poster-cache churn defaults: TTL comfortably exceeds the 7-day browser cache.

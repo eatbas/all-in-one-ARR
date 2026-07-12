@@ -79,14 +79,25 @@ export function AddToListControl({
     (list) => list.owner_user === "me" && list.slug !== "watchlist",
   )
   const buttonClasses = addButtonClasses(density)
+  // Trakt resolves adds by id only; an item carrying none (an AniList title
+  // Fribb's mapping does not cover yet) cannot be added.
+  const hasUsableId =
+    item.tmdb !== null ||
+    item.imdb !== null ||
+    item.tvdb !== null ||
+    item.trakt !== null
 
-  if (ownedLists.length === 0) {
+  if (ownedLists.length === 0 || !hasUsableId) {
     return (
       <Button
         size="sm"
         disabled
         aria-label="Add to a list"
-        title="Add a personal Trakt list in Settings to enable adding"
+        title={
+          hasUsableId
+            ? "Add a personal Trakt list in Settings to enable adding"
+            : "This title has no known Trakt/TMDB/TVDB/IMDb id yet, so it cannot be added"
+        }
         className={buttonClasses}
       >
         <AddButtonBody density={density} />

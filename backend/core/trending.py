@@ -172,6 +172,8 @@ def to_trending_items(
                 "slug": row.get("slug"),
                 "title": row.get("title"),
                 "year": row.get("year"),
+                "anilist": row.get("anilist"),
+                "poster_url": row.get("poster_url"),
                 "seer_status": row.get("seer_status"),
                 "already_tracked": tmdb is not None and tmdb in tracked_tmdbs,
                 "in_library": library.contains(

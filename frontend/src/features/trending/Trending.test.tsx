@@ -1,4 +1,4 @@
-import { act, render, screen } from "@testing-library/react"
+import { act, render, screen, within } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
@@ -21,6 +21,7 @@ import {
 } from "@/shared/lib/queries"
 import { Trending } from "@/features/trending/Trending"
 import {
+  TRENDING_ANIME_SOURCE_STORAGE_KEY,
   TRENDING_PER_ROW_STORAGE_KEY,
   TRENDING_TAB_STORAGE_KEY,
 } from "@/features/trending/trending-tab"
@@ -41,6 +42,8 @@ const ITEM: TrendingItem = {
   slug: null,
   title: "Dune",
   year: 2021,
+  anilist: null,
+  poster_url: null,
   seer_status: null,
   already_tracked: false,
   in_library: false,
@@ -204,6 +207,65 @@ describe("Trending", () => {
     expect(useTrending).toHaveBeenLastCalledWith(
       expect.objectContaining({ source: "seer" }),
     )
+  })
+
+  it("opens the Anime tab on AniList shows by default and persists the tab", async () => {
+    const user = userEvent.setup()
+    render(<Trending />)
+    await user.click(screen.getByRole("tab", { name: "Anime" }))
+    expect(localStorage.getItem(TRENDING_TAB_STORAGE_KEY)).toBe("anime")
+    // AniList leads the sub-source toggle, and anime defaults to shows.
+    expect(useTrending).toHaveBeenLastCalledWith({
+      source: "anilist",
+      media: "show",
+      category: "trending",
+    })
+  })
+
+  it("switches and persists the anime sub-source", async () => {
+    const user = userEvent.setup()
+    render(<Trending />)
+    await user.click(screen.getByRole("tab", { name: "Anime" }))
+    const sourceToggle = screen.getByRole("group", { name: "Anime source" })
+    await user.click(
+      within(sourceToggle).getByRole("button", { name: "Trakt" }),
+    )
+    expect(localStorage.getItem(TRENDING_ANIME_SOURCE_STORAGE_KEY)).toBe(
+      "trakt-anime",
+    )
+    expect(useTrending).toHaveBeenLastCalledWith(
+      expect.objectContaining({ source: "trakt-anime", media: "show" }),
+    )
+    await user.click(within(sourceToggle).getByRole("button", { name: "TMDB" }))
+    expect(useTrending).toHaveBeenLastCalledWith(
+      expect.objectContaining({ source: "tmdb-anime" }),
+    )
+  })
+
+  it("restores a stored anime sub-source and ignores a bad one", () => {
+    localStorage.setItem(TRENDING_TAB_STORAGE_KEY, "anime")
+    localStorage.setItem(TRENDING_ANIME_SOURCE_STORAGE_KEY, "tmdb-anime")
+    const first = render(<Trending />)
+    expect(useTrending).toHaveBeenLastCalledWith(
+      expect.objectContaining({ source: "tmdb-anime" }),
+    )
+    first.unmount()
+
+    localStorage.setItem(TRENDING_ANIME_SOURCE_STORAGE_KEY, "bad")
+    render(<Trending />)
+    expect(useTrending).toHaveBeenLastCalledWith(
+      expect.objectContaining({ source: "anilist" }),
+    )
+  })
+
+  it("shows the AniList-specific empty state without a Settings hint", () => {
+    vi.mocked(useTrending).mockReturnValue(queryResult<TrendingItem[]>([]))
+    localStorage.setItem(TRENDING_TAB_STORAGE_KEY, "anime")
+    render(<Trending />)
+    expect(
+      screen.getByText(/AniList may be temporarily unavailable/),
+    ).toBeInTheDocument()
+    expect(screen.queryByText(/connection in Settings/)).not.toBeInTheDocument()
   })
 
   it("shows a loading state", () => {

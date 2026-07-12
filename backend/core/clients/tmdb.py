@@ -22,6 +22,10 @@ _BASE_URL = "https://api.themoviedb.org"
 # TMDB's image CDN base and the poster size used for thumbnails.
 _IMAGE_BASE = "https://image.tmdb.org/t/p"
 _POSTER_SIZE = "w342"
+# Discover filter for anime: the Animation genre (16) limited to Japanese
+# productions. TMDB's /trending endpoints cannot be genre-filtered, so the
+# anime feeds are built from /discover with an explicit sort instead.
+_ANIME_DISCOVER_PARAMS = {"with_genres": "16", "with_origin_country": "JP"}
 
 
 def _is_v4_token(api_key: str) -> bool:
@@ -87,19 +91,26 @@ class TmdbClient:
         }
 
     async def _discover(
-        self, url: str, *, media_type: str, limit: int, pages: int = 1
+        self,
+        url: str,
+        *,
+        media_type: str,
+        limit: int,
+        pages: int = 1,
+        extra_params: dict[str, str] | None = None,
     ) -> list[dict[str, Any]]:
         """Fetch and normalise a TMDB discovery endpoint's ``results`` array.
 
         ``pages`` consecutive pages (1-indexed) are fetched and concatenated before
         the ``limit`` cap, so the scheduled refresh can build a deeper grid than a
         single page; an empty page short-circuits the rest. ``pages=1`` preserves
-        the original single-page behaviour for live calls.
+        the original single-page behaviour for live calls. ``extra_params`` are
+        merged into every page request (used for the /discover filters).
         """
         results: list[dict[str, Any]] = []
         for page in range(1, pages + 1):
             kwargs = self._auth_kwargs()
-            params = {**kwargs.get("params", {}), "page": page}
+            params = {**kwargs.get("params", {}), **(extra_params or {}), "page": page}
             response = await self._client.get(url, **{**kwargs, "params": params})
             response.raise_for_status()
             page_results = response.json().get("results") or []
@@ -133,6 +144,45 @@ class TmdbClient:
         url = f"{_BASE_URL}/3/{endpoint}/popular"
         return await self._discover(
             url, media_type=media_type, limit=limit, pages=pages
+        )
+
+    async def get_anime_trending(
+        self, *, media_type: str, limit: int = 20, pages: int = 1
+    ) -> list[dict[str, Any]]:
+        """Return currently-buzzing TMDB anime as uniform discovery rows.
+
+        Built from ``/discover`` with the anime filters sorted by
+        ``popularity.desc`` — TMDB's recency-weighted popularity is the closest
+        genre-filterable proxy for its trending feed (see
+        :data:`_ANIME_DISCOVER_PARAMS`).
+        """
+        endpoint = "movie" if media_type == "movie" else "tv"
+        url = f"{_BASE_URL}/3/discover/{endpoint}"
+        return await self._discover(
+            url,
+            media_type=media_type,
+            limit=limit,
+            pages=pages,
+            extra_params={**_ANIME_DISCOVER_PARAMS, "sort_by": "popularity.desc"},
+        )
+
+    async def get_anime_popular(
+        self, *, media_type: str, limit: int = 20, pages: int = 1
+    ) -> list[dict[str, Any]]:
+        """Return all-time popular TMDB anime as uniform discovery rows.
+
+        Built from ``/discover`` with the anime filters sorted by
+        ``vote_count.desc`` — a long-term popularity proxy, distinct from the
+        recency-weighted sort used by :meth:`get_anime_trending`.
+        """
+        endpoint = "movie" if media_type == "movie" else "tv"
+        url = f"{_BASE_URL}/3/discover/{endpoint}"
+        return await self._discover(
+            url,
+            media_type=media_type,
+            limit=limit,
+            pages=pages,
+            extra_params={**_ANIME_DISCOVER_PARAMS, "sort_by": "vote_count.desc"},
         )
 
     async def fetch_external_ids(self, *, media_type: str, tmdb_id: int) -> str | None:

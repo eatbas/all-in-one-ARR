@@ -39,6 +39,8 @@ def test_to_trending_items_tags_source_and_tracked() -> None:
         "slug": "dune-2021",
         "title": "Dune",
         "year": 2021,
+        "anilist": None,
+        "poster_url": None,
         "seer_status": None,
         "already_tracked": True,
         "in_library": False,
@@ -49,6 +51,25 @@ def test_to_trending_items_tags_source_and_tracked() -> None:
     assert items[1]["imdb"] is None
     assert items[1]["in_library"] is False
     assert items[1]["in_library_available"] is False
+
+
+def test_to_trending_items_passes_anilist_fields_through() -> None:
+    # AniList rows carry an anilist id and cover-art URL; both must survive the
+    # mapping so unmapped rows can still render and deep-link.
+    rows = [
+        {
+            "media_type": "show",
+            "anilist": 195600,
+            "poster_url": "https://img.example/cover.jpg",
+            "title": "Yomi no Tsugai",
+            "year": 2026,
+        }
+    ]
+    items = to_trending_items(rows, source="anilist", tracked_tmdbs=set())
+    assert items[0]["anilist"] == 195600
+    assert items[0]["poster_url"] == "https://img.example/cover.jpg"
+    assert items[0]["tmdb"] is None
+    assert items[0]["already_tracked"] is False
 
 
 def test_to_trending_items_untracked_tmdb() -> None:

@@ -86,6 +86,7 @@ beforeEach(() => {
       interval_seconds: 60,
       sync_interval_minutes: 15,
       trending_sync_interval_minutes: 60,
+      anime_ids_refresh_days: 3,
       auto_remove_when_available: false,
     }),
   )

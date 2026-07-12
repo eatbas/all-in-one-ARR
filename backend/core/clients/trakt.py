@@ -270,6 +270,18 @@ class TraktClient:
     # ---- discovery (trending / popular) ----
 
     @staticmethod
+    def _discovery_params(limit: int, genres: str | None) -> dict[str, Any]:
+        """Query parameters shared by the trending and popular endpoints.
+
+        ``genres`` is Trakt's comma-separated genre-slug filter (e.g. ``anime``),
+        omitted from the request when not set.
+        """
+        params: dict[str, Any] = {"limit": limit}
+        if genres:
+            params["genres"] = genres
+        return params
+
+    @staticmethod
     def _discovery_row(obj: dict[str, Any], media_type: str) -> dict[str, Any]:
         """Normalise a Trakt movie/show object into a uniform discovery row.
 
@@ -291,19 +303,20 @@ class TraktClient:
         }
 
     async def get_trending(
-        self, *, media_type: str, limit: int = 20
+        self, *, media_type: str, limit: int = 20, genres: str | None = None
     ) -> list[dict[str, Any]]:
         """Return Trakt trending movies or shows as uniform discovery rows.
 
         ``media_type`` is ``movie`` or ``show``. Trakt wraps each trending entry in
         a ``{"watchers": N, "<media>": {...}}`` object; the inner media object is
-        unwrapped and normalised. Uses the public (API-key-only) headers.
+        unwrapped and normalised. Uses the public (API-key-only) headers. See
+        :meth:`_discovery_params` for the ``genres`` filter.
         """
         segment = _MEDIA_SEGMENT[media_type]
         response = await self._client.get(
             f"/{segment}/trending",
             headers=self._public_headers(),
-            params={"limit": limit},
+            params=self._discovery_params(limit, genres),
         )
         response.raise_for_status()
         return [
@@ -313,18 +326,19 @@ class TraktClient:
         ]
 
     async def get_popular(
-        self, *, media_type: str, limit: int = 20
+        self, *, media_type: str, limit: int = 20, genres: str | None = None
     ) -> list[dict[str, Any]]:
         """Return Trakt popular movies or shows as uniform discovery rows.
 
         ``media_type`` is ``movie`` or ``show``. Unlike trending, the popular
-        endpoint returns flat media objects (no ``watchers`` wrapper).
+        endpoint returns flat media objects (no ``watchers`` wrapper). See
+        :meth:`_discovery_params` for the ``genres`` filter.
         """
         segment = _MEDIA_SEGMENT[media_type]
         response = await self._client.get(
             f"/{segment}/popular",
             headers=self._public_headers(),
-            params={"limit": limit},
+            params=self._discovery_params(limit, genres),
         )
         response.raise_for_status()
         return [

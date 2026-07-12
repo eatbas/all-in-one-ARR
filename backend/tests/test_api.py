@@ -268,16 +268,27 @@ def test_services_check_endpoint_triggers_check(db) -> None:
     )
 
 
+def _general_settings_body(**overrides) -> dict:
+    """The default /api/settings/general response body, with overrides.
+
+    Defaults mirror StubSettingsStore's seeds, so each test states only the
+    field it changed.
+    """
+    return {
+        "interval_seconds": 60,
+        "sync_interval_minutes": 15,
+        "trending_sync_interval_minutes": 60,
+        "anime_ids_refresh_days": 3,
+        "auto_remove_when_available": True,
+        **overrides,
+    }
+
+
 def test_put_general_settings_updates_status_interval(db) -> None:
     ctx = make_ctx(db=db)
     resp = build_client(ctx).put("/api/settings/general", json={"interval_seconds": 30})
     assert resp.status_code == 200
-    assert resp.json() == {
-        "interval_seconds": 30,
-        "sync_interval_minutes": 15,
-        "trending_sync_interval_minutes": 60,
-        "auto_remove_when_available": True,
-    }
+    assert resp.json() == _general_settings_body(interval_seconds=30)
     assert ctx.settings_store.status_check_interval_seconds() == 30
     assert any(a["action"] == "Status interval updated" for a in db.recent_activity())
 
@@ -286,12 +297,7 @@ def test_put_general_settings_rejects_invalid_status_interval(db) -> None:
     ctx = make_ctx(db=db)
     resp = build_client(ctx).put("/api/settings/general", json={"interval_seconds": 99})
     assert resp.status_code == 200
-    assert resp.json() == {
-        "interval_seconds": 60,
-        "sync_interval_minutes": 15,
-        "trending_sync_interval_minutes": 60,
-        "auto_remove_when_available": True,
-    }
+    assert resp.json() == _general_settings_body()
 
 
 def test_put_general_settings_updates_sync_interval_and_reschedules(db) -> None:
@@ -301,12 +307,7 @@ def test_put_general_settings_updates_sync_interval_and_reschedules(db) -> None:
         "/api/settings/general", json={"sync_interval_minutes": 30}
     )
     assert resp.status_code == 200
-    assert resp.json() == {
-        "interval_seconds": 60,
-        "sync_interval_minutes": 30,
-        "trending_sync_interval_minutes": 60,
-        "auto_remove_when_available": True,
-    }
+    assert resp.json() == _general_settings_body(sync_interval_minutes=30)
     assert ctx.settings_store.sync_interval_minutes() == 30
     ctx.reschedule_sync.assert_awaited_once_with(30)
     assert any(a["action"] == "Sync interval updated" for a in db.recent_activity())
@@ -320,12 +321,7 @@ def test_put_general_settings_rejects_invalid_sync_interval(db) -> None:
         "/api/settings/general", json={"sync_interval_minutes": 7}
     )
     assert resp.status_code == 200
-    assert resp.json() == {
-        "interval_seconds": 60,
-        "sync_interval_minutes": 15,
-        "trending_sync_interval_minutes": 60,
-        "auto_remove_when_available": True,
-    }
+    assert resp.json() == _general_settings_body()
 
 
 def test_get_general_settings_returns_both_intervals(db) -> None:
@@ -333,12 +329,7 @@ def test_get_general_settings_returns_both_intervals(db) -> None:
     ctx.settings_store.update_status_check_interval(45)
     ctx.settings_store.update_sync_interval(60)
     body = build_client(ctx).get("/api/settings/general").json()
-    assert body == {
-        "interval_seconds": 45,
-        "sync_interval_minutes": 60,
-        "trending_sync_interval_minutes": 60,
-        "auto_remove_when_available": True,
-    }
+    assert body == _general_settings_body(interval_seconds=45, sync_interval_minutes=60)
 
 
 def test_put_general_settings_updates_trending_interval_and_reschedules(db) -> None:
@@ -368,18 +359,68 @@ def test_put_general_settings_rejects_invalid_trending_interval(db) -> None:
     assert ctx.settings_store.trending_sync_interval_minutes() == 60
 
 
+def test_put_general_settings_updates_anime_ids_refresh_and_repoints_map(db) -> None:
+    ctx = make_ctx(db=db)
+    resp = build_client(ctx).put(
+        "/api/settings/general", json={"anime_ids_refresh_days": 1}
+    )
+    assert resp.status_code == 200
+    assert resp.json()["anime_ids_refresh_days"] == 1
+    assert ctx.settings_store.anime_ids_refresh_days() == 1
+    # The live map is re-pointed so the cadence applies without a restart.
+    ctx.anime_ids.update_refresh_days.assert_called_once_with(1)
+    assert any(
+        a["action"] == "Anime mapping refresh updated" for a in db.recent_activity()
+    )
+
+
+def test_put_general_settings_normalises_invalid_anime_ids_refresh(db) -> None:
+    # 2 is outside the dashboard's 1/3/5 set: it falls back to 3 and the live
+    # map still receives the normalised value. No activity entry is recorded
+    # because the stored value did not change from the default.
+    ctx = make_ctx(db=db)
+    resp = build_client(ctx).put(
+        "/api/settings/general", json={"anime_ids_refresh_days": 2}
+    )
+    assert resp.status_code == 200
+    assert resp.json()["anime_ids_refresh_days"] == 3
+    assert ctx.settings_store.anime_ids_refresh_days() == 3
+    ctx.anime_ids.update_refresh_days.assert_called_once_with(3)
+    assert not any(
+        a["action"] == "Anime mapping refresh updated" for a in db.recent_activity()
+    )
+
+
+def test_put_general_settings_anime_ids_refresh_without_map(db) -> None:
+    # No AnimeIdMap configured: the setting still persists and the handler
+    # tolerates the missing runtime object.
+    ctx = make_ctx(db=db)
+    ctx.anime_ids = None
+    resp = build_client(ctx).put(
+        "/api/settings/general", json={"anime_ids_refresh_days": 5}
+    )
+    assert resp.status_code == 200
+    assert resp.json()["anime_ids_refresh_days"] == 5
+    assert ctx.settings_store.anime_ids_refresh_days() == 5
+
+
+def test_put_general_settings_omitted_anime_ids_refresh_is_unchanged(db) -> None:
+    ctx = make_ctx(db=db)
+    resp = build_client(ctx).put(
+        "/api/settings/general", json={"sync_interval_minutes": 30}
+    )
+    assert resp.status_code == 200
+    assert resp.json()["anime_ids_refresh_days"] == 3
+    ctx.anime_ids.update_refresh_days.assert_not_called()
+
+
 def test_put_general_settings_toggles_auto_remove_when_available(db) -> None:
     ctx = make_ctx(db=db)  # StubSettingsStore defaults auto-remove to True
     resp = build_client(ctx).put(
         "/api/settings/general", json={"auto_remove_when_available": False}
     )
     assert resp.status_code == 200
-    assert resp.json() == {
-        "interval_seconds": 60,
-        "sync_interval_minutes": 15,
-        "trending_sync_interval_minutes": 60,
-        "auto_remove_when_available": False,
-    }
+    assert resp.json() == _general_settings_body(auto_remove_when_available=False)
     assert ctx.settings_store.auto_remove_when_available() is False
     assert any(
         a["action"] == "Auto-remove when available disabled"

@@ -27,6 +27,8 @@ const ITEM: TrendingItem = {
   slug: null,
   title: "Dune",
   year: 2021,
+  anilist: null,
+  poster_url: null,
   seer_status: null,
   already_tracked: false,
   in_library: false,
@@ -71,6 +73,22 @@ describe("AddToListControl", () => {
     vi.mocked(useLists).mockReturnValue(queryResult<ListSummary[]>(undefined))
     render(<AddToListControl item={ITEM} />)
     expect(screen.getByRole("button", { name: /add/i })).toBeDisabled()
+  })
+
+  it("disables the control when the item carries no usable id", () => {
+    // An unmapped AniList title: owned lists exist, but Trakt could not
+    // resolve an add without a Trakt/TMDB/TVDB/IMDb id.
+    vi.mocked(useLists).mockReturnValue(
+      queryResult([listSummary({ slug: "movies", name: "Movies" })]),
+    )
+    render(
+      <AddToListControl
+        item={{ ...ITEM, tmdb: null, imdb: null, tvdb: null, trakt: null }}
+      />,
+    )
+    const button = screen.getByRole("button", { name: /add/i })
+    expect(button).toBeDisabled()
+    expect(button).toHaveAttribute("title", expect.stringMatching(/no known/i))
   })
 
   it("adds the item to a chosen owned list", async () => {

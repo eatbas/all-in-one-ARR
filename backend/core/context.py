@@ -11,6 +11,8 @@ from collections.abc import Awaitable, Callable, Coroutine
 from dataclasses import dataclass, field
 from typing import Any, TypeVar
 
+from core.anime_ids import AnimeIdMap
+from core.clients.anilist import AnilistClient
 from core.clients.arr_client import ArrClient
 from core.clients.omdb import OmdbClient
 from core.clients.qbittorrent import QbittorrentClient
@@ -99,6 +101,7 @@ class AppContext:
     radarr: ArrClient
     tmdb: TmdbClient
     omdb: OmdbClient
+    anilist: AnilistClient
     sabnzbd: SabnzbdClient
     qbittorrent: QbittorrentClient
     scheduler: SchedulerService
@@ -106,6 +109,10 @@ class AppContext:
     settings_store: SettingsStore
     status_checker: StatusChecker = field(default_factory=lambda: None)  # type: ignore[assignment]
     poster_cache: PosterCache | None = field(default=None)
+    # AniList/MAL -> TMDB/TVDB/IMDb id mapping for the anilist trending source;
+    # set by build_context (mirrors poster_cache). When None, anilist rows are
+    # served unenriched.
+    anime_ids: AnimeIdMap | None = field(default=None)
     # In-process snapshot of the trending/popular feeds, kept warm by the scheduled
     # refresh so the Trending page is served without per-request provider calls.
     trending_store: TrendingStore = field(default_factory=TrendingStore)

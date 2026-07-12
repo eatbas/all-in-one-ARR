@@ -1,10 +1,11 @@
 """Trending discovery JSON API.
 
-Backs the dashboard's Trending page: per-source (Trakt / TMDB / Seer) trending and
-popular feeds, a lazily-cached IMDb rating overlay (via OMDb), and an "add to an
-owned Trakt list, then sync" action. The add never creates a Seer request directly
-— it adds to Trakt and triggers the existing List-Syncarr sync, which requests the
-item through the normal pipeline.
+Backs the dashboard's Trending page: per-source trending and popular feeds
+(Trakt / TMDB / Seer, plus the anime variants ``trakt-anime`` / ``tmdb-anime``
+and the AniList source backing the Anime tab), a lazily-cached IMDb rating
+overlay (via OMDb), and an "add to an owned Trakt list, then sync" action. The
+add never creates a Seer request directly — it adds to Trakt and triggers the
+existing List-Syncarr sync, which requests the item through the normal pipeline.
 """
 
 from __future__ import annotations
@@ -36,6 +37,14 @@ if TYPE_CHECKING:  # pragma: no cover
     from core.settings_store import TrackedList
 
 
+# The discovery sources one Trending feed can come from. ``trakt-anime`` and
+# ``tmdb-anime`` are the genre-filtered variants of their base sources;
+# ``anilist`` is anime-only by nature.
+TrendingSourceName = Literal[
+    "trakt", "tmdb", "seer", "trakt-anime", "tmdb-anime", "anilist"
+]
+
+
 class TrendingItem(BaseModel):
     source: str
     media_type: str
@@ -46,6 +55,11 @@ class TrendingItem(BaseModel):
     slug: str | None
     title: str | None
     year: int | None
+    # AniList media id (anilist source only), for the anilist.co deep link.
+    anilist: int | None
+    # Direct poster URL (AniList cover art), the render fallback for rows
+    # without a TMDB id — only the anilist source sets it.
+    poster_url: str | None
     seer_status: int | None
     already_tracked: bool
     in_library: bool
@@ -97,12 +111,38 @@ async def fetch_feed(
         if category == "trending":
             return await ctx.trakt.get_trending(media_type=media, limit=limit)
         return await ctx.trakt.get_popular(media_type=media, limit=limit)
+    if source == "trakt-anime":
+        if category == "trending":
+            return await ctx.trakt.get_trending(
+                media_type=media, limit=limit, genres="anime"
+            )
+        return await ctx.trakt.get_popular(
+            media_type=media, limit=limit, genres="anime"
+        )
     if source == "tmdb":
         if category == "trending":
             return await ctx.tmdb.get_trending(
                 media_type=media, window=window, limit=limit, pages=pages
             )
         return await ctx.tmdb.get_popular(media_type=media, limit=limit, pages=pages)
+    if source == "tmdb-anime":
+        if category == "trending":
+            return await ctx.tmdb.get_anime_trending(
+                media_type=media, limit=limit, pages=pages
+            )
+        return await ctx.tmdb.get_anime_popular(
+            media_type=media, limit=limit, pages=pages
+        )
+    if source == "anilist":
+        if category == "trending":
+            rows = await ctx.anilist.get_trending(media_type=media, limit=limit)
+        else:
+            rows = await ctx.anilist.get_popular(media_type=media, limit=limit)
+        # AniList rows carry only AniList/MAL ids; the cached Fribb mapping
+        # fills in TMDB/TVDB/IMDb so the overlays and the Trakt add work.
+        if ctx.anime_ids is not None:
+            rows = await ctx.anime_ids.enrich(rows)
+        return rows
     # source == "seer"
     if category == "trending":
         buckets = await fetch_seer_trending_buckets(ctx, limit=limit, pages=pages)
@@ -263,7 +303,7 @@ def create_trending_router(ctx: AppContext) -> APIRouter:
 
     @router.get("", response_model=list[TrendingItem])
     async def get_trending(
-        source: Literal["trakt", "tmdb", "seer"],
+        source: TrendingSourceName,
         media: Literal["movie", "show"] = "movie",
         category: Literal["trending", "popular"] = "trending",
         window: Literal["day", "week"] = "week",

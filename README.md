@@ -478,6 +478,14 @@ Trakt list without leaving the app. It is organised as **per-source tabs**:
   trending/popular feed. A **Movies | Shows** toggle and a **Trending | Popular**
   toggle apply per tab. A **Hide available** switch filters out titles you already
   have — anything in Radarr/Sonarr (the green ones) or reported *Available* in Seer.
+- **Anime** — a dedicated tab with its own source toggle: **AniList** (the
+  community's trending/popular feeds — no API key needed), plus anime-filtered
+  **Trakt** and **TMDB** variants reusing those existing connections. AniList
+  titles are matched to TMDB/TVDB/IMDb ids through a locally cached copy of
+  Fribb's `anime-lists` mapping (refreshed weekly under the `data/` volume), so
+  library rings and the add-to-list flow work as on every other tab; a title too
+  new to be mapped still renders with its AniList cover art, with adding
+  disabled until the mapping catches up.
 - **Open on the source** — each poster's **top-right** corner has a link to the
   title's dedicated page on its source: the Trakt page (by slug), the TMDB page,
   or — for Seer items — your configured Overseerr/Seer instance's media page.

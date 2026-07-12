@@ -25,11 +25,15 @@ import type {
 import { TrendingCard } from "@/features/trending/components/TrendingCard"
 import { isAvailable } from "@/features/trending/trending-item-status"
 import {
+  ANIME_SOURCES,
   SOURCE_LABELS,
+  TAB_LABELS,
+  TRENDING_ANIME_SOURCE_STORAGE_KEY,
   TRENDING_PER_ROW_STORAGE_KEY,
   TRENDING_TAB_STORAGE_KEY,
   VALID_PER_ROW_VALUES,
   VALID_TRENDING_TABS,
+  type AnimeSource,
   type PerRow,
   type TrendingTab,
 } from "@/features/trending/trending-tab"
@@ -101,8 +105,15 @@ function Toggle<T extends string>({
  * {@link ROWS_PER_BATCH} rows at a time via an infinite-scroll sentinel rather
  * than paged.
  */
-function SourcePanel({ source }: { source: TrendingSource }) {
-  const [media, setMedia] = useState<ItemType>("movie")
+function SourcePanel({
+  source,
+  defaultMedia = "movie",
+}: {
+  source: TrendingSource
+  /** Initial media toggle state; the Anime tab starts on shows. */
+  defaultMedia?: ItemType
+}) {
+  const [media, setMedia] = useState<ItemType>(defaultMedia)
   const [category, setCategory] = useState<TrendingCategory>("trending")
   const [hideAvailable, setHideAvailable] = useState(false)
   const [perRow, setPerRow] = useState<PerRow>(readStoredPerRow)
@@ -245,8 +256,10 @@ function SourcePanel({ source }: { source: TrendingSource }) {
         <p className="text-sm text-muted-foreground">Loading trending…</p>
       ) : items.length === 0 ? (
         <p className="text-sm text-muted-foreground">
-          Nothing to show. Check the {SOURCE_LABELS[source]} connection in
-          Settings.
+          {/* AniList needs no credentials, so there is no connection to check. */}
+          {source === "anilist"
+            ? "Nothing to show. AniList may be temporarily unavailable."
+            : `Nothing to show. Check the ${SOURCE_LABELS[source]} connection in Settings.`}
         </p>
       ) : visible.length === 0 ? (
         <p className="text-sm text-muted-foreground">
@@ -280,7 +293,47 @@ function SourcePanel({ source }: { source: TrendingSource }) {
   )
 }
 
-/** Trending page: per-source (Trakt / TMDB / Seer) discovery with an add action. */
+/** Read the persisted anime sub-source, falling back to the first (AniList). */
+function readStoredAnimeSource(): AnimeSource {
+  if (typeof localStorage === "undefined") return ANIME_SOURCES[0]
+  const stored = localStorage.getItem(TRENDING_ANIME_SOURCE_STORAGE_KEY)
+  return stored && (ANIME_SOURCES as readonly string[]).includes(stored)
+    ? (stored as AnimeSource)
+    : ANIME_SOURCES[0]
+}
+
+/**
+ * Anime tab: a source toggle (AniList / Trakt / TMDB) above the shared source
+ * panel. Anime is overwhelmingly episodic, so the panel defaults to shows.
+ */
+function AnimePanel() {
+  const [source, setSource] = useState<AnimeSource>(readStoredAnimeSource)
+
+  function changeSource(next: AnimeSource) {
+    setSource(next)
+    if (typeof localStorage !== "undefined") {
+      localStorage.setItem(TRENDING_ANIME_SOURCE_STORAGE_KEY, next)
+    }
+  }
+
+  return (
+    <div className="flex flex-col gap-4">
+      <Toggle
+        ariaLabel="Anime source"
+        value={source}
+        onChange={changeSource}
+        options={ANIME_SOURCES.map((value) => ({
+          value,
+          label: SOURCE_LABELS[value],
+        }))}
+      />
+      {/* Keyed by source so switching also resets media/category state. */}
+      <SourcePanel key={source} source={source} defaultMedia="show" />
+    </div>
+  )
+}
+
+/** Trending page: per-source (Trakt / TMDB / Seer / Anime) discovery with an add action. */
 export function Trending() {
   const [activeTab, setActiveTab] = useState<string>(() => {
     if (typeof localStorage === "undefined") return "trakt"
@@ -302,22 +355,23 @@ export function Trending() {
       <div>
         <h1 className="text-2xl font-semibold tracking-tight">Trending</h1>
         <p className="text-sm text-muted-foreground">
-          Trending and popular movies and shows from Trakt, TMDB and Seer. Add
-          any to one of your Trakt lists and it is synced and requested in Seer.
+          Trending and popular movies and shows from Trakt, TMDB and Seer, plus
+          anime from AniList. Add any to one of your Trakt lists and it is
+          synced and requested in Seer.
         </p>
       </div>
 
       <Tabs value={activeTab} onValueChange={handleTabChange}>
         <TabsList>
-          {VALID_TRENDING_TABS.map((source) => (
-            <TabsTrigger key={source} value={source}>
-              {SOURCE_LABELS[source]}
+          {VALID_TRENDING_TABS.map((tab) => (
+            <TabsTrigger key={tab} value={tab}>
+              {TAB_LABELS[tab]}
             </TabsTrigger>
           ))}
         </TabsList>
-        {VALID_TRENDING_TABS.map((source) => (
-          <TabsContent key={source} value={source}>
-            <SourcePanel source={source} />
+        {VALID_TRENDING_TABS.map((tab) => (
+          <TabsContent key={tab} value={tab}>
+            {tab === "anime" ? <AnimePanel /> : <SourcePanel source={tab} />}
           </TabsContent>
         ))}
       </Tabs>

@@ -577,6 +577,60 @@ def test_trending_sync_interval_in_masked(tmp_path) -> None:
     assert store.masked()["trending_sync_interval_minutes"] == 120
 
 
+def test_anime_ids_refresh_defaults_to_three_days(tmp_path) -> None:
+    store = SettingsStore(str(tmp_path / "settings.json"))
+    _seed(store)
+    assert store.anime_ids_refresh_days() == 3
+
+
+def test_anime_ids_refresh_seed_and_reload(tmp_path) -> None:
+    path = tmp_path / "settings.json"
+    store = SettingsStore(str(path))
+    store.load_or_seed(
+        client_id="cid",
+        client_secret="sec",
+        anime_ids_refresh_days=5,
+    )
+    assert store.anime_ids_refresh_days() == 5
+    assert json.loads(path.read_text())["anime_ids_refresh_days"] == 5
+
+    reopened = SettingsStore(str(path))
+    reopened.load_or_seed(client_id="x", client_secret="x")
+    assert reopened.anime_ids_refresh_days() == 5
+
+
+def test_anime_ids_refresh_invalid_value_falls_back(tmp_path) -> None:
+    store = SettingsStore(str(tmp_path / "settings.json"))
+    _seed(store)
+    assert store.update_anime_ids_refresh_days(1) == 1
+    # 0, 2, 7 and negatives are outside the dashboard's 1/3/5 set.
+    assert store.update_anime_ids_refresh_days(7) == 3
+    assert store.anime_ids_refresh_days() == 3
+    assert store.update_anime_ids_refresh_days(-1) == 3
+
+
+def test_anime_ids_refresh_in_masked(tmp_path) -> None:
+    store = SettingsStore(str(tmp_path / "settings.json"))
+    _seed(store)
+    store.update_anime_ids_refresh_days(5)
+    assert store.masked()["anime_ids_refresh_days"] == 5
+
+
+def test_legacy_store_without_anime_ids_key_defaults(tmp_path) -> None:
+    # A store created before the anime tab existed loads without the new key and
+    # falls back to the default, persisting it on the next save.
+    path = tmp_path / "settings.json"
+    SettingsStore(str(path)).load_or_seed(client_id="cid", client_secret="sec")
+    data = json.loads(path.read_text())
+    data.pop("anime_ids_refresh_days", None)
+    path.write_text(json.dumps(data), encoding="utf-8")
+
+    reopened = SettingsStore(str(path))
+    reopened.load_or_seed(client_id="x", client_secret="x")
+    assert reopened.anime_ids_refresh_days() == 3
+    assert json.loads(path.read_text())["anime_ids_refresh_days"] == 3
+
+
 def test_legacy_store_without_trending_key_defaults(tmp_path) -> None:
     # A store created before the App scheduler existed loads without the new key and
     # falls back to the default, persisting it on the next save.

@@ -65,6 +65,9 @@ async def test_build_context_real(tmp_path) -> None:
         assert ctx.qbittorrent is not None
         # The poster cache is wired from the TMDB/OMDb clients.
         assert ctx.poster_cache is not None
+        # The AniList client and the anime id map back the anilist source.
+        assert ctx.anilist is not None
+        assert ctx.anime_ids is not None
     finally:
         # Release every resource the real context opened (clients + DB).
         for client in (
@@ -74,6 +77,8 @@ async def test_build_context_real(tmp_path) -> None:
             ctx.radarr,
             ctx.tmdb,
             ctx.omdb,
+            ctx.anilist,
+            ctx.anime_ids,
             ctx.sabnzbd,
             ctx.qbittorrent,
         ):
@@ -115,6 +120,8 @@ def test_lifespan_authenticated_placeholder_frontend(
     ctx.seer.aclose.assert_awaited()
     ctx.tmdb.aclose.assert_awaited()
     ctx.omdb.aclose.assert_awaited()
+    ctx.anilist.aclose.assert_awaited()
+    ctx.anime_ids.aclose.assert_awaited()
     ctx.sabnzbd.aclose.assert_awaited()
     ctx.qbittorrent.aclose.assert_awaited()
 
@@ -156,6 +163,8 @@ def test_lifespan_serves_built_frontend(_env, monkeypatch, tmp_path) -> None:
     (dist / "index.html").write_text("<html>built spa</html>")
 
     ctx = _stub_ctx(authenticated=True)
+    # No id map configured: shutdown must skip its aclose without erroring.
+    ctx.anime_ids = None
     monkeypatch.setattr(app_mod, "build_context", lambda settings: ctx)
     monkeypatch.setattr(app_mod, "FRONTEND_DIST", dist)
 

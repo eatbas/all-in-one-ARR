@@ -165,6 +165,7 @@ export interface UpdateGeneralSettings {
   interval_seconds?: number
   sync_interval_minutes?: number
   trending_sync_interval_minutes?: number
+  anime_ids_refresh_days?: number
   auto_remove_when_available?: boolean
 }
 
@@ -587,8 +588,13 @@ export function clearFindarrHistory(): Promise<FindarrCountResult> {
   return postJson<FindarrCountResult>("/api/findarr/history/clear", {})
 }
 
-/** A discovery source backing one tab of the Trending page. */
-export type TrendingSource = "trakt" | "tmdb" | "seer"
+/**
+ * A discovery source backing one feed of the Trending page. `trakt-anime` and
+ * `tmdb-anime` are the anime-genre-filtered variants of their base sources;
+ * `anilist` is anime-only by nature. The Anime tab toggles between the three.
+ */
+export type TrendingSource =
+  "trakt" | "tmdb" | "seer" | "trakt-anime" | "tmdb-anime" | "anilist"
 
 /** A discovery category exposed by the Trending page. */
 export type TrendingCategory = "trending" | "popular"
@@ -605,6 +611,13 @@ export interface TrendingItem {
   slug: string | null
   title: string | null
   year: number | null
+  /** AniList media id (anilist source only), for the anilist.co deep link. */
+  anilist: number | null
+  /**
+   * Direct poster URL (AniList cover art), the render fallback for rows
+   * without a TMDB id — only the anilist source sets it.
+   */
+  poster_url: string | null
   /** Seer `mediaInfo.status` (Seer tab only), else null. */
   seer_status: number | null
   /** Whether this item's TMDB id is already mirrored in a tracked list. */
@@ -702,15 +715,20 @@ export function trendingSourceUrl(
   item: TrendingItem,
   seerBaseUrl?: string,
 ): string | null {
-  if (item.source === "tmdb") {
+  if (item.source === "tmdb" || item.source === "tmdb-anime") {
     if (item.tmdb === null) return null
     const path = item.media_type === "movie" ? "movie" : "tv"
     return `https://www.themoviedb.org/${path}/${item.tmdb}`
   }
-  if (item.source === "trakt") {
+  if (item.source === "trakt" || item.source === "trakt-anime") {
     if (!item.slug) return null
     const path = item.media_type === "movie" ? "movies" : "shows"
     return `https://trakt.tv/${path}/${item.slug}`
+  }
+  if (item.source === "anilist") {
+    // AniList uses one /anime/ route for both movies and shows.
+    if (item.anilist === null) return null
+    return `https://anilist.co/anime/${item.anilist}`
   }
   // source === "seer"
   if (!seerBaseUrl || item.tmdb === null) return null

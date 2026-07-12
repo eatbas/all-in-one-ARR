@@ -43,6 +43,13 @@ export function TrendingCard({
   const label = displayTitle(item.title)
   const sourceUrl = trendingSourceUrl(item, seerUrl)
   const sourceLabel = SOURCE_LABELS[item.source]
+  // The cached-poster pipeline is keyed by TMDB id; rows without one (unmapped
+  // AniList titles) fall back to the direct cover-art URL when the source
+  // provides it, and only then to the film-icon placeholder.
+  const posterSrc =
+    item.tmdb !== null
+      ? posterUrl(item.media_type, item.tmdb, item.imdb)
+      : (item.poster_url ?? null)
   // Green = available to watch now (downloaded or Seer-Available); amber = on its way
   // (library record without the file yet, or requested/processing/partial).
   const available = isAvailable(item)
@@ -59,7 +66,9 @@ export function TrendingCard({
           !available && pending && "ring-[3px] ring-amber-500",
         )}
       >
-        {item.tmdb === null || posterFailed ? (
+        {/* Falsy check (not === null) so an empty-string URL never renders
+            <img src="">, which some browsers treat as a self-request. */}
+        {!posterSrc || posterFailed ? (
           <div
             role="img"
             aria-label={`No poster for ${label}`}
@@ -69,7 +78,7 @@ export function TrendingCard({
           </div>
         ) : (
           <img
-            src={posterUrl(item.media_type, item.tmdb, item.imdb)}
+            src={posterSrc}
             alt={label}
             loading="lazy"
             onError={() => setPosterFailed(true)}

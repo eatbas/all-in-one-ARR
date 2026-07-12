@@ -29,9 +29,11 @@ from core.service_registry import (
     masked_entry,
 )
 from core.settings_normalisers import (
+    DEFAULT_ANIME_IDS_REFRESH_DAYS,
     DEFAULT_DELETARR_SETTINGS,
     DEFAULT_FINDARR_SETTINGS,
     DEFAULT_TRENDING_SYNC_INTERVAL,
+    normalise_anime_ids_refresh_days,
     normalise_bandwidth_interval,
     normalise_deletarr_settings,
     normalise_findarr_settings,
@@ -85,6 +87,7 @@ class SettingsStore:
         self._bandwidth_control_enabled = False
         self._bandwidth_check_interval_seconds = 15
         self._trending_sync_interval_minutes = DEFAULT_TRENDING_SYNC_INTERVAL
+        self._anime_ids_refresh_days = DEFAULT_ANIME_IDS_REFRESH_DAYS
         self._findarr_settings = copy.deepcopy(DEFAULT_FINDARR_SETTINGS)
         self._deletarr_settings = copy.deepcopy(DEFAULT_DELETARR_SETTINGS)
         self._services: dict[str, dict[str, str]] = {
@@ -105,6 +108,7 @@ class SettingsStore:
         bandwidth_control_enabled: bool = False,
         bandwidth_check_interval_seconds: int = 15,
         trending_sync_interval_minutes: int = DEFAULT_TRENDING_SYNC_INTERVAL,
+        anime_ids_refresh_days: int = DEFAULT_ANIME_IDS_REFRESH_DAYS,
         deletarr_movies_path: str = DEFAULT_DELETARR_SETTINGS["movies_path"],
         deletarr_tv_path: str = DEFAULT_DELETARR_SETTINGS["tv_path"],
         deletarr_use_arr_source: bool = DEFAULT_DELETARR_SETTINGS["use_arr_source"],
@@ -144,6 +148,9 @@ class SettingsStore:
                 )
                 self._trending_sync_interval_minutes = normalise_trending_sync_interval(
                     trending_sync_interval_minutes
+                )
+                self._anime_ids_refresh_days = normalise_anime_ids_refresh_days(
+                    anime_ids_refresh_days
                 )
                 self._findarr_settings = normalise_findarr_settings()
                 self._deletarr_settings = normalise_deletarr_settings(
@@ -188,6 +195,10 @@ class SettingsStore:
         migrated_trending = "trending_sync_interval_minutes" not in data
         self._trending_sync_interval_minutes = normalise_trending_sync_interval(
             data.get("trending_sync_interval_minutes", DEFAULT_TRENDING_SYNC_INTERVAL)
+        )
+        migrated_anime_ids = "anime_ids_refresh_days" not in data
+        self._anime_ids_refresh_days = normalise_anime_ids_refresh_days(
+            data.get("anime_ids_refresh_days", DEFAULT_ANIME_IDS_REFRESH_DAYS)
         )
         migrated_findarr = "findarr" not in data
         self._findarr_settings = normalise_findarr_settings(data.get("findarr"))
@@ -246,6 +257,7 @@ class SettingsStore:
             or migrated_auto_remove
             or migrated_bandwidth
             or migrated_trending
+            or migrated_anime_ids
             or migrated_findarr
             or migrated_deletarr
         ):
@@ -253,12 +265,13 @@ class SettingsStore:
             self._log.info(
                 "persisted store migration (services_backfilled=%s "
                 "auto_remove_key_migrated=%s bandwidth_keys_migrated=%s "
-                "trending_key_migrated=%s findarr_keys_migrated=%s "
-                "deletarr_keys_migrated=%s)",
+                "trending_key_migrated=%s anime_ids_key_migrated=%s "
+                "findarr_keys_migrated=%s deletarr_keys_migrated=%s)",
                 backfilled,
                 migrated_auto_remove,
                 migrated_bandwidth,
                 migrated_trending,
+                migrated_anime_ids,
                 migrated_findarr,
                 migrated_deletarr,
             )
@@ -275,6 +288,7 @@ class SettingsStore:
             "bandwidth_control_enabled": self._bandwidth_control_enabled,
             "bandwidth_check_interval_seconds": self._bandwidth_check_interval_seconds,
             "trending_sync_interval_minutes": self._trending_sync_interval_minutes,
+            "anime_ids_refresh_days": self._anime_ids_refresh_days,
             "findarr": self._findarr_settings,
             "deletarr": self._deletarr_settings,
             "lists": [item.to_dict() for item in self._lists],
@@ -408,6 +422,22 @@ class SettingsStore:
             self._save_locked()
             self._log.info("updated trending sync interval to %s minutes", minutes)
             return minutes
+
+    # ---- anime id-mapping refresh ----
+
+    def anime_ids_refresh_days(self) -> int:
+        """Return the configured anime id-mapping refresh cadence in days."""
+        with self._lock:
+            return self._anime_ids_refresh_days
+
+    def update_anime_ids_refresh_days(self, days: int) -> int:
+        """Update the anime id-mapping cadence; invalid values fall back to 3 days."""
+        days = normalise_anime_ids_refresh_days(days)
+        with self._lock:
+            self._anime_ids_refresh_days = days
+            self._save_locked()
+            self._log.info("updated anime id-mapping refresh to %s days", days)
+            return days
 
     # ---- Findarr ----
 
@@ -592,6 +622,7 @@ class SettingsStore:
                 "bandwidth_control_enabled": self._bandwidth_control_enabled,
                 "bandwidth_check_interval_seconds": self._bandwidth_check_interval_seconds,
                 "trending_sync_interval_minutes": self._trending_sync_interval_minutes,
+                "anime_ids_refresh_days": self._anime_ids_refresh_days,
                 "findarr": copy.deepcopy(self._findarr_settings),
                 "deletarr": dict(self._deletarr_settings),
                 "lists": [item.to_dict() for item in self._lists],

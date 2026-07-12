@@ -37,6 +37,7 @@ import {
   useUpdateStatusInterval,
   useUpdateSyncInterval,
   useUpdateTraktSettings,
+  useUpdateAnimeIdsRefresh,
   useUpdateTrendingInterval,
 } from "@/shared/lib/queries"
 import { setup } from "@/shared/test/query-provider"
@@ -75,6 +76,7 @@ beforeEach(() => {
     interval_seconds: 60,
     sync_interval_minutes: 15,
     trending_sync_interval_minutes: 60,
+    anime_ids_refresh_days: 3,
     auto_remove_when_available: false,
   })
 })
@@ -389,6 +391,7 @@ describe("general settings hooks", () => {
       interval_seconds: 30,
       sync_interval_minutes: 15,
       trending_sync_interval_minutes: 60,
+      anime_ids_refresh_days: 3,
       auto_remove_when_available: false,
     })
     const { queryClient, wrapper } = setup()
@@ -429,6 +432,7 @@ describe("general settings hooks", () => {
       interval_seconds: 60,
       sync_interval_minutes: 30,
       trending_sync_interval_minutes: 60,
+      anime_ids_refresh_days: 3,
       auto_remove_when_available: false,
     })
     const { queryClient, wrapper } = setup()
@@ -466,6 +470,7 @@ describe("general settings hooks", () => {
       interval_seconds: 60,
       sync_interval_minutes: 15,
       trending_sync_interval_minutes: 120,
+      anime_ids_refresh_days: 3,
       auto_remove_when_available: false,
     })
     const { queryClient, wrapper } = setup()
@@ -511,11 +516,60 @@ describe("general settings hooks", () => {
     )
   })
 
+  it("useUpdateAnimeIdsRefresh saves the cadence and invalidates queries", async () => {
+    vi.mocked(api.updateGeneralSettings).mockResolvedValue({
+      interval_seconds: 60,
+      sync_interval_minutes: 15,
+      trending_sync_interval_minutes: 60,
+      anime_ids_refresh_days: 1,
+      auto_remove_when_available: false,
+    })
+    const { queryClient, wrapper } = setup()
+    const invalidate = vi.spyOn(queryClient, "invalidateQueries")
+    const { result } = renderHook(() => useUpdateAnimeIdsRefresh(), {
+      wrapper,
+    })
+
+    act(() => result.current.mutate(1))
+
+    await waitFor(() => expect(result.current.isSuccess).toBe(true))
+    expect(api.updateGeneralSettings).toHaveBeenCalledWith({
+      anime_ids_refresh_days: 1,
+    })
+    expect(toast.success).toHaveBeenCalledWith(
+      "Anime mapping refresh updated",
+      expect.objectContaining({ description: expect.any(String) }),
+    )
+    expect(invalidate).toHaveBeenCalledWith({
+      queryKey: queryKeys.generalSettings,
+    })
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: queryKeys.activity })
+  })
+
+  it("useUpdateAnimeIdsRefresh toasts on error", async () => {
+    vi.mocked(api.updateGeneralSettings).mockRejectedValue(new Error("boom"))
+    const { wrapper } = setup()
+    const { result } = renderHook(() => useUpdateAnimeIdsRefresh(), {
+      wrapper,
+    })
+
+    act(() => result.current.mutate(5))
+
+    await waitFor(() => expect(result.current.isError).toBe(true))
+    expect(toast.error).toHaveBeenCalledWith(
+      "Could not update anime mapping refresh",
+      {
+        description: "boom",
+      },
+    )
+  })
+
   it("useUpdateAutoRemoveWhenAvailable announces enabled and invalidates general settings", async () => {
     vi.mocked(api.updateGeneralSettings).mockResolvedValue({
       interval_seconds: 60,
       sync_interval_minutes: 15,
       trending_sync_interval_minutes: 60,
+      anime_ids_refresh_days: 3,
       auto_remove_when_available: true,
     })
     const { queryClient, wrapper } = setup()
@@ -545,6 +599,7 @@ describe("general settings hooks", () => {
       interval_seconds: 60,
       sync_interval_minutes: 15,
       trending_sync_interval_minutes: 60,
+      anime_ids_refresh_days: 3,
       auto_remove_when_available: false,
     })
     const { wrapper } = setup()

@@ -81,6 +81,7 @@ class StubSettingsStore:
         bandwidth_control_enabled: bool = False,
         bandwidth_check_interval_seconds: int = 15,
         trending_sync_interval_minutes: int = 60,
+        anime_ids_refresh_days: int = 3,
         deletarr_movies_path: str = "/media/movies",
         deletarr_tv_path: str = "/media/tv",
         deletarr_use_arr_source: bool = False,
@@ -92,6 +93,7 @@ class StubSettingsStore:
         self._bandwidth_control_enabled = bandwidth_control_enabled
         self._bandwidth_check_interval_seconds = bandwidth_check_interval_seconds
         self._trending_sync_interval_minutes = trending_sync_interval_minutes
+        self._anime_ids_refresh_days = anime_ids_refresh_days
         self._deletarr_settings = {
             "movies_path": deletarr_movies_path,
             "tv_path": deletarr_tv_path,
@@ -222,6 +224,15 @@ class StubSettingsStore:
             minutes = 60
         self._trending_sync_interval_minutes = minutes
         return minutes
+
+    def anime_ids_refresh_days(self) -> int:
+        return self._anime_ids_refresh_days
+
+    def update_anime_ids_refresh_days(self, days: int) -> int:
+        if days not in {1, 3, 5}:
+            days = 3
+        self._anime_ids_refresh_days = days
+        return days
 
     def findarr_settings(self) -> dict[str, Any]:
         return {
@@ -396,8 +407,11 @@ class StubService:
         )
         # TMDB trending/discovery + external-id resolution (Trending feature); OMDb
         # rating overlay. Harmless extra attributes on the other simple-service stubs.
+        # get_trending/get_popular also cover the AniList client's contract.
         self.get_trending = AsyncMock(return_value=[])
         self.get_popular = AsyncMock(return_value=[])
+        self.get_anime_trending = AsyncMock(return_value=[])
+        self.get_anime_popular = AsyncMock(return_value=[])
         self.fetch_external_ids = AsyncMock(return_value=None)
         self.fetch_rating = AsyncMock(
             return_value={"imdb_rating": None, "imdb_votes": None}
@@ -415,6 +429,22 @@ class StubService:
         self.aclose = AsyncMock()
 
 
+class StubAnimeIds:
+    """Pass-through stand-in for :class:`core.anime_ids.AnimeIdMap`.
+
+    ``enrich`` returns the rows untouched, so trending tests exercise the
+    dispatch wiring without any mapping file or download.
+    """
+
+    def __init__(self) -> None:
+        async def _passthrough(rows: list[dict]) -> list[dict]:
+            return rows
+
+        self.enrich = AsyncMock(side_effect=_passthrough)
+        self.update_refresh_days = MagicMock()
+        self.aclose = AsyncMock()
+
+
 def make_ctx(
     *,
     db: Database,
@@ -424,6 +454,8 @@ def make_ctx(
     radarr: Any | None = None,
     tmdb: Any | None = None,
     omdb: Any | None = None,
+    anilist: Any | None = None,
+    anime_ids: Any | None = None,
     sabnzbd: Any | None = None,
     qbittorrent: Any | None = None,
     settings: Any | None = None,
@@ -440,6 +472,7 @@ def make_ctx(
         radarr=radarr or StubArr(),
         tmdb=tmdb or StubService(),
         omdb=omdb or StubService(),
+        anilist=anilist or StubService(),
         sabnzbd=sabnzbd or StubService(),
         qbittorrent=qbittorrent or StubService(),
         scheduler=scheduler,
@@ -447,6 +480,7 @@ def make_ctx(
         settings_store=settings_store or StubSettingsStore(),
     )
     ctx.status_checker = StatusChecker(ctx)
+    ctx.anime_ids = anime_ids or StubAnimeIds()
     return ctx
 
 

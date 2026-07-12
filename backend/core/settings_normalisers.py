@@ -20,6 +20,11 @@ VALID_BANDWIDTH_INTERVALS: frozenset[int] = frozenset({10, 15, 30, 60})
 VALID_TRENDING_SYNC_INTERVALS: frozenset[int] = frozenset({30, 60, 120})
 DEFAULT_TRENDING_SYNC_INTERVAL = 60
 
+# Allowed anime id-mapping refresh cadences in days offered by the dashboard's
+# App scheduler (the cached Fribb anime-lists file used by the anilist source).
+VALID_ANIME_IDS_REFRESH_DAYS: frozenset[int] = frozenset({1, 3, 5})
+DEFAULT_ANIME_IDS_REFRESH_DAYS = 3
+
 # Allowed Findarr scheduler intervals in minutes offered by the dashboard.
 VALID_FINDARR_INTERVALS: frozenset[int] = frozenset({15, 30, 45, 60})
 
@@ -99,6 +104,15 @@ def normalise_trending_sync_interval(value: int) -> int:
         value
         if value in VALID_TRENDING_SYNC_INTERVALS
         else DEFAULT_TRENDING_SYNC_INTERVAL
+    )
+
+
+def normalise_anime_ids_refresh_days(value: int) -> int:
+    """Return a valid anime id-mapping refresh cadence in days, defaulting to 3."""
+    return (
+        value
+        if value in VALID_ANIME_IDS_REFRESH_DAYS
+        else DEFAULT_ANIME_IDS_REFRESH_DAYS
     )
 
 

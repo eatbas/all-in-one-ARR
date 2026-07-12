@@ -126,6 +126,98 @@ def test_seer_popular(db) -> None:
     assert result[0]["tmdb"] == 400
 
 
+def test_trakt_anime_forwards_genre_filter(db) -> None:
+    ctx = make_ctx(db=db)
+    ctx.trakt.get_trending.return_value = [_row(media_type="show", tmdb=500)]
+    ctx.trakt.get_popular.return_value = [_row(media_type="show", tmdb=501)]
+    client = build_client(ctx)
+
+    trending = client.get(
+        "/api/trending",
+        params={"source": "trakt-anime", "media": "show", "category": "trending"},
+    ).json()
+    assert trending[0]["source"] == "trakt-anime"
+    assert trending[0]["tmdb"] == 500
+    assert ctx.trakt.get_trending.await_args.kwargs["genres"] == "anime"
+
+    popular = client.get(
+        "/api/trending",
+        params={"source": "trakt-anime", "media": "show", "category": "popular"},
+    ).json()
+    assert popular[0]["tmdb"] == 501
+    assert ctx.trakt.get_popular.await_args.kwargs["genres"] == "anime"
+
+
+def test_tmdb_anime_dispatches_to_discover_methods(db) -> None:
+    ctx = make_ctx(db=db)
+    ctx.tmdb.get_anime_trending.return_value = [_row(media_type="show", tmdb=600)]
+    ctx.tmdb.get_anime_popular.return_value = [_row(media_type="show", tmdb=601)]
+    client = build_client(ctx)
+
+    trending = client.get(
+        "/api/trending",
+        params={"source": "tmdb-anime", "media": "show", "category": "trending"},
+    ).json()
+    assert trending[0]["tmdb"] == 600
+    ctx.tmdb.get_anime_trending.assert_awaited_once()
+
+    popular = client.get(
+        "/api/trending",
+        params={"source": "tmdb-anime", "media": "show", "category": "popular"},
+    ).json()
+    assert popular[0]["tmdb"] == 601
+    ctx.tmdb.get_anime_popular.assert_awaited_once()
+
+
+def test_anilist_rows_are_enriched_and_carry_anime_fields(db) -> None:
+    ctx = make_ctx(db=db)
+    ctx.anilist.get_trending.return_value = [
+        {
+            "media_type": "show",
+            "anilist": 195600,
+            "mal": 62001,
+            "title": "Daemons of the Shadow Realm",
+            "year": 2026,
+            "poster_url": "https://img.anili.st/cover.jpg",
+        }
+    ]
+
+    async def _fill(rows):
+        for row in rows:
+            row["tmdb"] = 42
+            row["tvdb"] = 4242
+        return rows
+
+    ctx.anime_ids.enrich.side_effect = _fill
+    client = build_client(ctx)
+
+    result = client.get(
+        "/api/trending",
+        params={"source": "anilist", "media": "show", "category": "trending"},
+    ).json()
+    assert result[0]["source"] == "anilist"
+    assert result[0]["anilist"] == 195600
+    assert result[0]["poster_url"] == "https://img.anili.st/cover.jpg"
+    assert result[0]["tmdb"] == 42
+    assert result[0]["tvdb"] == 4242
+    ctx.anime_ids.enrich.assert_awaited_once()
+
+
+def test_anilist_without_id_map_serves_unenriched_rows(db) -> None:
+    ctx = make_ctx(db=db)
+    ctx.anime_ids = None
+    ctx.anilist.get_popular.return_value = [
+        {"media_type": "show", "anilist": 1, "title": "X", "year": 2026}
+    ]
+    client = build_client(ctx)
+    result = client.get(
+        "/api/trending",
+        params={"source": "anilist", "media": "show", "category": "popular"},
+    ).json()
+    assert result[0]["anilist"] == 1
+    assert result[0]["tmdb"] is None
+
+
 def test_already_tracked_reflects_db(db) -> None:
     # One item with a TMDB id and one without, to exercise both filter branches.
     db.upsert_item(

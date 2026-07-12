@@ -30,6 +30,7 @@ vi.mock("@/shared/lib/queries", () => ({
   useGeneralSettings: vi.fn(),
   useUpdateStatusInterval: vi.fn(),
   useUpdateTrendingInterval: vi.fn(),
+  useUpdateAnimeIdsRefresh: vi.fn(),
   useDatabaseStats: vi.fn(),
   useClearActivity: vi.fn(),
   useClearItems: vi.fn(),
@@ -58,6 +59,7 @@ import {
   useTestTrakt,
   useTraktAuthStatus,
   useTraktSettings,
+  useUpdateAnimeIdsRefresh,
   useUpdateServiceSettings,
   useUpdateStatusInterval,
   useUpdateTraktSettings,
@@ -151,6 +153,7 @@ let serviceUpdateMutate: ReturnType<typeof vi.fn>
 let serviceTestMutate: ReturnType<typeof vi.fn>
 let updateStatusIntervalMutate: ReturnType<typeof vi.fn>
 let updateTrendingIntervalMutate: ReturnType<typeof vi.fn>
+let updateAnimeIdsRefreshMutate: ReturnType<typeof vi.fn>
 let clearActivityMutate: ReturnType<typeof vi.fn>
 let clearItemsMutate: ReturnType<typeof vi.fn>
 let clearPostersMutate: ReturnType<typeof vi.fn>
@@ -173,6 +176,7 @@ beforeEach(() => {
   serviceTestMutate = vi.fn()
   updateStatusIntervalMutate = vi.fn()
   updateTrendingIntervalMutate = vi.fn()
+  updateAnimeIdsRefreshMutate = vi.fn()
   clearActivityMutate = vi.fn()
   clearItemsMutate = vi.fn()
   clearPostersMutate = vi.fn()
@@ -199,6 +203,7 @@ beforeEach(() => {
       interval_seconds: 60,
       sync_interval_minutes: 15,
       trending_sync_interval_minutes: 60,
+      anime_ids_refresh_days: 3,
       auto_remove_when_available: false,
     }),
   )
@@ -207,6 +212,9 @@ beforeEach(() => {
   )
   vi.mocked(useUpdateTrendingInterval).mockReturnValue(
     mutation(updateTrendingIntervalMutate),
+  )
+  vi.mocked(useUpdateAnimeIdsRefresh).mockReturnValue(
+    mutation(updateAnimeIdsRefreshMutate),
   )
   vi.mocked(useDatabaseStats).mockReturnValue(queryResult(DATABASE_STATS))
   vi.mocked(useClearActivity).mockReturnValue(mutation(clearActivityMutate))
@@ -633,6 +641,7 @@ describe("Settings — general", () => {
         interval_seconds: 45,
         sync_interval_minutes: 15,
         trending_sync_interval_minutes: 60,
+        anime_ids_refresh_days: 3,
         auto_remove_when_available: false,
       }),
     )
@@ -695,6 +704,7 @@ describe("Settings — general", () => {
         interval_seconds: 60,
         sync_interval_minutes: 15,
         trending_sync_interval_minutes: 120,
+        anime_ids_refresh_days: 3,
         auto_remove_when_available: false,
       }),
     )
@@ -723,6 +733,42 @@ describe("Settings — general", () => {
     )
     await user.click(screen.getByRole("option", { name: "2 hours" }))
     expect(updateTrendingIntervalMutate).toHaveBeenCalledWith(120)
+  })
+
+  it("shows the configured anime mapping refresh cadence", () => {
+    vi.mocked(useGeneralSettings).mockReturnValue(
+      queryResult({
+        interval_seconds: 60,
+        sync_interval_minutes: 15,
+        trending_sync_interval_minutes: 60,
+        anime_ids_refresh_days: 5,
+        auto_remove_when_available: false,
+      }),
+    )
+    render(<Settings />)
+    expect(
+      screen.getByRole("combobox", { name: "Anime mapping refresh" }),
+    ).toHaveTextContent("5 days")
+  })
+
+  it("falls back to the default anime mapping cadence when settings are unset", () => {
+    vi.mocked(useGeneralSettings).mockReturnValue(
+      queryResult<GeneralSettings>(undefined),
+    )
+    render(<Settings />)
+    expect(
+      screen.getByRole("combobox", { name: "Anime mapping refresh" }),
+    ).toHaveTextContent("3 days")
+  })
+
+  it("updates the anime mapping refresh cadence", async () => {
+    const user = userEvent.setup()
+    render(<Settings />)
+    await user.click(
+      screen.getByRole("combobox", { name: "Anime mapping refresh" }),
+    )
+    await user.click(screen.getByRole("option", { name: "1 day" }))
+    expect(updateAnimeIdsRefreshMutate).toHaveBeenCalledWith(1)
   })
 })
 

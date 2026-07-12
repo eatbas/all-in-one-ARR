@@ -40,6 +40,8 @@ const ITEM: TrendingItem = {
   slug: null,
   title: "Dune",
   year: 2021,
+  anilist: null,
+  poster_url: null,
   seer_status: null,
   already_tracked: false,
   in_library: false,

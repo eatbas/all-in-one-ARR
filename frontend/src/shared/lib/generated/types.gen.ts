@@ -855,6 +855,10 @@ export type FindarrStatusResponse = {
  */
 export type GeneralSettingsRequest = {
     /**
+     * Anime Ids Refresh Days
+     */
+    anime_ids_refresh_days?: number | null;
+    /**
      * Auto Remove When Available
      */
     auto_remove_when_available?: boolean | null;
@@ -876,6 +880,10 @@ export type GeneralSettingsRequest = {
  * GeneralSettingsResponse
  */
 export type GeneralSettingsResponse = {
+    /**
+     * Anime Ids Refresh Days
+     */
+    anime_ids_refresh_days: number;
     /**
      * Auto Remove When Available
      */
@@ -1266,6 +1274,10 @@ export type TrendingItem = {
      */
     already_tracked: boolean;
     /**
+     * Anilist
+     */
+    anilist: number | null;
+    /**
      * Imdb
      */
     imdb: string | null;
@@ -1281,6 +1293,10 @@ export type TrendingItem = {
      * Media Type
      */
     media_type: string;
+    /**
+     * Poster Url
+     */
+    poster_url: string | null;
     /**
      * Seer Status
      */
@@ -2338,7 +2354,7 @@ export type GetTrendingApiTrendingGetData = {
         /**
          * Source
          */
-        source: 'trakt' | 'tmdb' | 'seer';
+        source: 'trakt' | 'tmdb' | 'seer' | 'trakt-anime' | 'tmdb-anime' | 'anilist';
         /**
          * Media
          */

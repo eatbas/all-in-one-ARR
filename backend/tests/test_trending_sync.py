@@ -79,6 +79,35 @@ async def test_refresh_fills_every_feed_and_stamps_sync(db) -> None:
     )
 
 
+async def test_refresh_covers_anime_sources(db) -> None:
+    # The anime variants and AniList are full members of the scheduled matrix,
+    # so the Anime tab is served from the same warmed snapshot.
+    ctx = make_ctx(db=db)
+    ctx.anilist.get_trending.return_value = [
+        {"media_type": "show", "anilist": 1, "title": "A", "year": 2026}
+    ]
+
+    await refresh_trending_store(ctx)
+
+    store = ctx.trending_store
+    for source in ("trakt-anime", "tmdb-anime", "anilist"):
+        for media in ("movie", "show"):
+            for category in ("trending", "popular"):
+                assert (
+                    store.get(
+                        source=source, media=media, category=category, window="week"
+                    )
+                    is not None
+                ), (source, media, category)
+    assert store.get(
+        source="anilist", media="show", category="trending", window="week"
+    ) == [{"media_type": "show", "anilist": 1, "title": "A", "year": 2026}]
+    # The trakt-anime feeds go through the same client with the genre filter.
+    assert ctx.trakt.get_trending.await_args.kwargs.get("genres") == "anime"
+    ctx.tmdb.get_anime_trending.assert_awaited()
+    ctx.tmdb.get_anime_popular.assert_awaited()
+
+
 async def test_refresh_keeps_previous_snapshot_when_a_feed_fails(db) -> None:
     ctx = make_ctx(db=db)
     ctx.trending_store.set(

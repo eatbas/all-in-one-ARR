@@ -65,6 +65,8 @@ function trendingItem(over: Partial<TrendingItem>): TrendingItem {
     slug: null,
     title: "X",
     year: 2000,
+    anilist: null,
+    poster_url: null,
     seer_status: null,
     already_tracked: false,
     in_library: false,
@@ -706,6 +708,55 @@ describe("trendingSourceUrl", () => {
   it("returns null for a Trakt item without a slug", () => {
     expect(
       trendingSourceUrl(trendingItem({ source: "trakt", slug: null })),
+    ).toBeNull()
+  })
+
+  it("links the anime variants like their base sources", () => {
+    expect(
+      trendingSourceUrl(
+        trendingItem({
+          source: "tmdb-anime",
+          media_type: "show",
+          tmdb: 240411,
+        }),
+      ),
+    ).toBe("https://www.themoviedb.org/tv/240411")
+    expect(
+      trendingSourceUrl(
+        trendingItem({
+          source: "trakt-anime",
+          media_type: "show",
+          slug: "dan-da-dan",
+        }),
+      ),
+    ).toBe("https://trakt.tv/shows/dan-da-dan")
+  })
+
+  it("links AniList items by AniList id for both media types", () => {
+    expect(
+      trendingSourceUrl(
+        trendingItem({
+          source: "anilist",
+          media_type: "show",
+          anilist: 195600,
+        }),
+      ),
+    ).toBe("https://anilist.co/anime/195600")
+    // AniList uses one /anime/ route for movies too.
+    expect(
+      trendingSourceUrl(
+        trendingItem({
+          source: "anilist",
+          media_type: "movie",
+          anilist: 21519,
+        }),
+      ),
+    ).toBe("https://anilist.co/anime/21519")
+  })
+
+  it("returns null for an AniList item with no AniList id", () => {
+    expect(
+      trendingSourceUrl(trendingItem({ source: "anilist", anilist: null })),
     ).toBeNull()
   })
 

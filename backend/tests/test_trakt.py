@@ -315,6 +315,28 @@ async def test_get_popular_shows_uses_flat_objects(tmp_path) -> None:
 
 
 @respx.mock
+async def test_discovery_genre_filter_forwarded_only_when_set(tmp_path) -> None:
+    trending = respx.get(f"{TRAKT_BASE_URL}/shows/trending").mock(
+        return_value=httpx.Response(200, json=[])
+    )
+    popular = respx.get(f"{TRAKT_BASE_URL}/movies/popular").mock(
+        return_value=httpx.Response(200, json=[])
+    )
+    client = make_client(tmp_path)
+
+    await client.get_trending(media_type="show", limit=5, genres="anime")
+    await client.get_popular(media_type="movie", limit=5, genres="anime")
+    assert trending.calls.last.request.url.params["genres"] == "anime"
+    assert popular.calls.last.request.url.params["genres"] == "anime"
+
+    # Without the filter the parameter is omitted entirely (not sent empty).
+    await client.get_trending(media_type="show", limit=5)
+    await client.get_popular(media_type="movie", limit=5)
+    assert "genres" not in trending.calls.last.request.url.params
+    assert "genres" not in popular.calls.last.request.url.params
+
+
+@respx.mock
 async def test_lookup_ids_by_tmdb_returns_ids(tmp_path) -> None:
     route = respx.get(f"{TRAKT_BASE_URL}/search/tmdb/100").mock(
         return_value=httpx.Response(

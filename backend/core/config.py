@@ -79,6 +79,9 @@ class Settings(BaseSettings):
     # The background App scheduler refreshes the trending/popular feeds on this
     # interval (minutes); seeds the store on first run, then UI-managed.
     TRENDING_SYNC_INTERVAL_MIN: int = 60
+    # How often (days) the cached Fribb anime id mapping is re-downloaded; seeds
+    # the store on first run, then UI-managed (Settings -> General: 1/3/5).
+    ANIME_IDS_REFRESH_DAYS: int = 3
 
     # ---- Deletarr ----
     # Seed the media-library roots on first run; thereafter they are managed from
@@ -114,6 +117,10 @@ class Settings(BaseSettings):
     # Disk cache for fetched poster thumbnails; lives inside the gitignored
     # data/ volume so each poster is downloaded from TMDB/OMDb at most once.
     POSTER_CACHE_PATH: str = "data/posters"
+    # Cached copy of Fribb's anime-list-mini id mapping (AniList/MAL ->
+    # TMDB/TVDB/IMDb), inside the gitignored data/ volume; refreshed on a TTL
+    # by core.anime_ids so the Trending anime tab never fetches it per request.
+    ANIME_IDS_PATH: str = "data/anime_ids.json"
     # Poster-cache churn: a scheduled job evicts posters not served within the TTL
     # (by file mtime, bumped on each cache hit) and caps the total cache size,
     # evicting oldest-first. The TTL must exceed the 7-day browser cache
