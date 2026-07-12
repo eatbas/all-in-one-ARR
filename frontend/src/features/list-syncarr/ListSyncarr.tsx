@@ -7,6 +7,7 @@ import {
   TabsList,
   TabsTrigger,
 } from "@/shared/components/ui/tabs"
+import { readStoredItem, writeStoredItem } from "@/shared/lib/storage"
 import { Lists } from "@/features/list-syncarr/tabs/Lists"
 import { ListSettings } from "@/features/list-syncarr/tabs/ListSettings"
 import {
@@ -21,17 +22,15 @@ import {
  * localStorage, mirroring the Settings page.
  */
 export function ListSyncarr() {
-  const [activeTab, setActiveTab] = useState(() => {
-    if (typeof localStorage === "undefined") return "lists"
-    const stored = localStorage.getItem(LIST_SYNCARR_TAB_STORAGE_KEY)
-    return stored && VALID_LIST_SYNCARR_TABS.includes(stored) ? stored : "lists"
-  })
+  const [activeTab, setActiveTab] = useState(() =>
+    readStoredItem(LIST_SYNCARR_TAB_STORAGE_KEY, "lists", (raw) =>
+      VALID_LIST_SYNCARR_TABS.includes(raw) ? raw : undefined,
+    ),
+  )
 
   function handleTabChange(next: string) {
     setActiveTab(next)
-    if (typeof localStorage !== "undefined") {
-      localStorage.setItem(LIST_SYNCARR_TAB_STORAGE_KEY, next)
-    }
+    writeStoredItem(LIST_SYNCARR_TAB_STORAGE_KEY, next)
   }
 
   return (

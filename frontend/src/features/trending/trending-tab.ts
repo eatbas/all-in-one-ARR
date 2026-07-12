@@ -1,4 +1,9 @@
 import type { TrendingSource } from "@/shared/lib/api"
+import {
+  DEFAULT_TRENDING_DENSITY,
+  VALID_POSTER_DENSITIES,
+  type PosterDensity,
+} from "@/shared/components/poster-grid/poster-grid-density"
 
 /** localStorage key remembering the active Trending tab. */
 export const TRENDING_TAB_STORAGE_KEY = "aio-arr.trending.active-tab"
@@ -12,11 +17,16 @@ export const TRENDING_PER_ROW_STORAGE_KEY = "aio-arr.trending.per-row"
 /**
  * Selectable posters-per-row densities (large screens); the first is the
  * default and the last is the slider's maximum. Contiguous with step 1, so the
- * range doubles as the density slider's `min`/`max`.
+ * range doubles as the density slider's `min`/`max`. Re-exported from the shared
+ * poster-grid contract so both pages use the same allow-list and Tailwind grid
+ * recipes.
  */
-export const VALID_PER_ROW_VALUES = [5, 6, 7, 8, 9, 10, 11] as const
+export const VALID_PER_ROW_VALUES = VALID_POSTER_DENSITIES
 
-export type PerRow = (typeof VALID_PER_ROW_VALUES)[number]
+export type PerRow = PosterDensity
+
+/** Trending's default density when no valid preference is stored. */
+export const DEFAULT_PER_ROW = DEFAULT_TRENDING_DENSITY
 
 /**
  * The selectable page tabs, in display order. The first three map 1:1 onto a

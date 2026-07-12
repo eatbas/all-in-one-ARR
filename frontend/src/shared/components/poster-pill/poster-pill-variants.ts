@@ -1,7 +1,8 @@
 import { cn } from "@/shared/lib/utils"
+import type { PosterDensity } from "@/shared/components/poster-grid/poster-grid-density"
 
 export type PillGroup = "link" | "status" | "add" | "delete"
-export type PillDensity = 5 | 6 | 7 | 8 | 9 | 10 | 11
+export type PillDensity = PosterDensity
 export type PillLabelSide = "left" | "right"
 
 const SIZE: Record<

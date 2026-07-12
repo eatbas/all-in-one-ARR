@@ -4,7 +4,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
 vi.mock("@/shared/lib/queries", () => ({
   useTrending: vi.fn(),
-  useTrendingRating: vi.fn(),
   useTrendingStatus: vi.fn(),
   useLists: vi.fn(),
   useAddTrending: vi.fn(),
@@ -16,7 +15,6 @@ import {
   useLists,
   useServiceSettings,
   useTrending,
-  useTrendingRating,
   useTrendingStatus,
 } from "@/shared/lib/queries"
 import { Trending } from "@/features/trending/Trending"
@@ -26,11 +24,7 @@ import {
   TRENDING_TAB_STORAGE_KEY,
 } from "@/features/trending/trending-tab"
 import { mutationResult, queryResult } from "@/shared/test/mock-query"
-import type {
-  ServicesSettings,
-  TrendingItem,
-  TrendingRating,
-} from "@/shared/lib/api"
+import type { ServicesSettings, TrendingItem } from "@/shared/lib/api"
 
 const ITEM: TrendingItem = {
   source: "trakt",
@@ -45,6 +39,7 @@ const ITEM: TrendingItem = {
   anilist: null,
   poster_url: null,
   seer_status: null,
+  imdb_rating: null,
   already_tracked: false,
   in_library: false,
   in_library_available: false,
@@ -113,13 +108,10 @@ async function stepDensity(
 beforeEach(() => {
   localStorage.clear()
   vi.mocked(useTrending).mockReturnValue(queryResult([ITEM]))
-  vi.mocked(useTrendingRating).mockReturnValue(
-    queryResult<TrendingRating>(undefined),
-  )
   vi.mocked(useTrendingStatus).mockReturnValue(
     queryResult({
       last_synced_at: null,
-      interval_minutes: 60,
+      interval_minutes: 1440,
       next_sync_at: null,
     }),
   )
@@ -381,6 +373,66 @@ describe("Trending", () => {
     expect(thumb).toHaveAttribute("aria-valuenow", "6")
   })
 
+  it("survives missing localStorage on the anime tab", async () => {
+    vi.stubGlobal("localStorage", undefined)
+    const user = userEvent.setup()
+    render(<Trending />)
+    // Mounting the anime panel reads the stored source; switching the source
+    // writes it back — neither may throw when localStorage is unavailable.
+    await user.click(screen.getByRole("tab", { name: "Anime" }))
+    await user.click(screen.getByRole("button", { name: "Trakt" }))
+    expect(useTrending).toHaveBeenLastCalledWith(
+      expect.objectContaining({ source: "trakt-anime" }),
+    )
+  })
+
+  it("survives throwing localStorage access and methods", async () => {
+    const original = Object.getOwnPropertyDescriptor(window, "localStorage")
+    Object.defineProperty(window, "localStorage", {
+      configurable: true,
+      get: () => {
+        throw new DOMException("Storage disabled", "SecurityError")
+      },
+    })
+    const user = userEvent.setup()
+    try {
+      render(<Trending />)
+      // The default tab and density load without throwing.
+      expect(screen.getByRole("tab", { name: "Trakt" })).toHaveAttribute(
+        "aria-selected",
+        "true",
+      )
+      await user.click(screen.getByRole("tab", { name: "Seer" }))
+      expect(useTrending).toHaveBeenLastCalledWith(
+        expect.objectContaining({ source: "seer" }),
+      )
+      const thumb = await stepDensity(user)
+      expect(thumb).toHaveAttribute("aria-valuenow", "6")
+    } finally {
+      if (original) Object.defineProperty(window, "localStorage", original)
+    }
+  })
+
+  it("survives throwing getItem and setItem", async () => {
+    vi.stubGlobal("localStorage", {
+      getItem: () => {
+        throw new DOMException("Storage denied", "SecurityError")
+      },
+      setItem: () => {
+        throw new DOMException("Quota exceeded", "QuotaExceededError")
+      },
+    })
+    const user = userEvent.setup()
+    render(<Trending />)
+    await user.click(screen.getByRole("tab", { name: "Anime" }))
+    await user.click(screen.getByRole("button", { name: "Trakt" }))
+    expect(useTrending).toHaveBeenLastCalledWith(
+      expect.objectContaining({ source: "trakt-anime" }),
+    )
+    const thumb = await stepDensity(user)
+    expect(thumb).toHaveAttribute("aria-valuenow", "6")
+  })
+
   it("reveals the first three rows then loads three more on scroll", async () => {
     vi.mocked(useTrending).mockReturnValue(queryResult(items(16)))
     const scroll = installIntersectionObserver()
@@ -426,6 +478,15 @@ describe("Trending", () => {
     // 7 × 3 = 21, so the whole list is in the first batch — no scroll needed.
     expect(screen.getByTitle("Item 1")).toBeInTheDocument()
     expect(screen.getByTitle("Item 21")).toBeInTheDocument()
+  })
+
+  it("ignores an invalid stored per-row density and falls back to the default", () => {
+    localStorage.setItem(TRENDING_PER_ROW_STORAGE_KEY, "99")
+    vi.mocked(useTrending).mockReturnValue(queryResult(items(16)))
+    render(<Trending />)
+    // Default 5 × 3 = 15, so the 16th item is outside the first batch.
+    expect(screen.getByTitle("Item 15")).toBeInTheDocument()
+    expect(screen.queryByTitle("Item 16")).not.toBeInTheDocument()
   })
 
   it("exposes the density control as a labelled slider, not a pager", () => {

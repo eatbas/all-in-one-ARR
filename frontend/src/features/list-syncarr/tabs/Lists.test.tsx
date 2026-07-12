@@ -23,6 +23,10 @@ import {
 } from "@/shared/lib/queries"
 
 import { Lists } from "@/features/list-syncarr/tabs/Lists"
+import {
+  DEFAULT_LIST_SYNCARR_PER_ROW,
+  LIST_SYNCARR_PER_ROW_STORAGE_KEY,
+} from "@/features/list-syncarr/list-syncarr-tab"
 import type {
   Item,
   ListSummary,
@@ -111,6 +115,7 @@ describe("Lists page", () => {
     removeItemMutate = vi.fn()
     removeAvailableMutate = vi.fn()
     syncNowMutate = vi.fn()
+    localStorage.clear()
     vi.mocked(useStatus).mockReturnValue(queryResult<Status>(undefined, false))
     vi.mocked(useLists).mockReturnValue(queryResult(lists))
     vi.mocked(useListItems).mockReturnValue(queryResult(items))
@@ -120,6 +125,10 @@ describe("Lists page", () => {
       mutation(removeAvailableMutate),
     )
     vi.mocked(useSyncNow).mockReturnValue(mutation(syncNowMutate))
+  })
+
+  afterEach(() => {
+    vi.unstubAllGlobals()
   })
 
   it("renders the sync-engine stat cards between the Lists heading and the synced lists card", () => {
@@ -451,5 +460,169 @@ describe("Lists page", () => {
     expect(
       screen.queryByRole("button", { name: 'Remove "Gone" from the list' }),
     ).not.toBeInTheDocument()
+  })
+
+  it("exposes the density control as a labelled slider", () => {
+    render(<Lists />)
+    expect(
+      screen.getByRole("slider", { name: "Posters per row" }),
+    ).toBeInTheDocument()
+  })
+
+  it("defaults to the ListSyncarr density of 8", async () => {
+    const user = userEvent.setup()
+    render(<Lists />)
+    await user.click(screen.getByRole("button", { name: /Movies/ }))
+
+    const grid = screen.getByTestId("list-syncarr-grid")
+    expect(grid).toHaveClass("lg:grid-cols-8")
+    // Density 8 uses a 22px pill shell.
+    expect(
+      screen.getByRole("button", { name: 'Remove "Dune" from the list' }),
+    ).toHaveClass("h-[22px]")
+  })
+
+  it("updates the grid and every overlay density when the slider changes", async () => {
+    const user = userEvent.setup()
+    render(<Lists />)
+    await user.click(screen.getByRole("button", { name: /Movies/ }))
+
+    const thumb = screen.getByRole("slider", { name: "Posters per row" })
+    thumb.focus()
+    // Step from the default 8 down to 5.
+    await user.keyboard("{ArrowLeft}".repeat(3))
+
+    expect(thumb).toHaveAttribute("aria-valuenow", "5")
+    const grid = screen.getByTestId("list-syncarr-grid")
+    expect(grid).toHaveClass("lg:grid-cols-5")
+    expect(grid).not.toHaveClass("lg:grid-cols-8")
+    // Density 5 uses the largest pill shell.
+    expect(
+      screen.getByRole("button", { name: 'Remove "Dune" from the list' }),
+    ).toHaveClass("h-8")
+    expect(screen.getByLabelText("Available")).toHaveClass("h-8")
+    // The Seer link overlay also scales with density.
+    expect(
+      screen.getByRole("link", { name: 'Request "Dune" in Seer' }),
+    ).toHaveClass("h-8")
+  })
+
+  it("persists the chosen density to localStorage", async () => {
+    const user = userEvent.setup()
+    render(<Lists />)
+    const thumb = screen.getByRole("slider", { name: "Posters per row" })
+    thumb.focus()
+    await user.keyboard("{ArrowRight}")
+    expect(localStorage.getItem(LIST_SYNCARR_PER_ROW_STORAGE_KEY)).toBe("9")
+  })
+
+  it("restores a valid stored density on mount", async () => {
+    localStorage.setItem(LIST_SYNCARR_PER_ROW_STORAGE_KEY, "6")
+    const user = userEvent.setup()
+    render(<Lists />)
+    await user.click(screen.getByRole("button", { name: /Movies/ }))
+
+    const grid = screen.getByTestId("list-syncarr-grid")
+    expect(grid).toHaveClass("lg:grid-cols-6")
+    expect(
+      screen.getByRole("button", { name: 'Remove "Dune" from the list' }),
+    ).toHaveClass("h-7")
+  })
+
+  it("restores density, grid, and all overlay classes after unmount/remount", async () => {
+    const user = userEvent.setup()
+    const { unmount } = render(<Lists />)
+    await user.click(screen.getByRole("button", { name: /Movies/ }))
+
+    const thumb = screen.getByRole("slider", { name: "Posters per row" })
+    thumb.focus()
+    // Step from the default 8 down to 5.
+    await user.keyboard("{ArrowLeft}".repeat(3))
+    expect(thumb).toHaveAttribute("aria-valuenow", "5")
+    unmount()
+
+    render(<Lists />)
+    await user.click(screen.getByRole("button", { name: /Movies/ }))
+
+    const restoredThumb = screen.getByRole("slider", {
+      name: "Posters per row",
+    })
+    expect(restoredThumb).toHaveAttribute("aria-valuenow", "5")
+    const grid = screen.getByTestId("list-syncarr-grid")
+    expect(grid).toHaveClass("lg:grid-cols-5")
+    expect(
+      screen.getByRole("button", { name: 'Remove "Dune" from the list' }),
+    ).toHaveClass("h-8")
+    expect(screen.getByLabelText("Available")).toHaveClass("h-8")
+    expect(
+      screen.getByRole("link", { name: 'Request "Dune" in Seer' }),
+    ).toHaveClass("h-8")
+  })
+
+  it("falls back to the default for an invalid stored density", async () => {
+    localStorage.setItem(LIST_SYNCARR_PER_ROW_STORAGE_KEY, "99")
+    const user = userEvent.setup()
+    render(<Lists />)
+    await user.click(screen.getByRole("button", { name: /Movies/ }))
+
+    const grid = screen.getByTestId("list-syncarr-grid")
+    expect(grid).toHaveClass(`lg:grid-cols-${DEFAULT_LIST_SYNCARR_PER_ROW}`)
+  })
+
+  it("falls back to the default when localStorage is unavailable", async () => {
+    vi.stubGlobal("localStorage", undefined)
+    const user = userEvent.setup()
+    render(<Lists />)
+    await user.click(screen.getByRole("button", { name: /Movies/ }))
+
+    const grid = screen.getByTestId("list-syncarr-grid")
+    expect(grid).toHaveClass(`lg:grid-cols-${DEFAULT_LIST_SYNCARR_PER_ROW}`)
+    // Interacting with the slider must not throw without storage.
+    const thumb = screen.getByRole("slider", { name: "Posters per row" })
+    thumb.focus()
+    await expect(user.keyboard("{ArrowRight}")).resolves.toBeUndefined()
+  })
+
+  it("survives throwing localStorage access and methods", async () => {
+    const original = Object.getOwnPropertyDescriptor(window, "localStorage")
+    Object.defineProperty(window, "localStorage", {
+      configurable: true,
+      get: () => {
+        throw new DOMException("Storage disabled", "SecurityError")
+      },
+    })
+    const user = userEvent.setup()
+    try {
+      render(<Lists />)
+      await user.click(screen.getByRole("button", { name: /Movies/ }))
+
+      const grid = screen.getByTestId("list-syncarr-grid")
+      expect(grid).toHaveClass(`lg:grid-cols-${DEFAULT_LIST_SYNCARR_PER_ROW}`)
+      const thumb = screen.getByRole("slider", { name: "Posters per row" })
+      thumb.focus()
+      await expect(user.keyboard("{ArrowRight}")).resolves.toBeUndefined()
+    } finally {
+      if (original) Object.defineProperty(window, "localStorage", original)
+    }
+  })
+
+  it("survives throwing getItem and setItem", async () => {
+    vi.stubGlobal("localStorage", {
+      getItem: () => {
+        throw new DOMException("Storage denied", "SecurityError")
+      },
+      setItem: () => {
+        throw new DOMException("Quota exceeded", "QuotaExceededError")
+      },
+    })
+    const user = userEvent.setup()
+    render(<Lists />)
+    await user.click(screen.getByRole("button", { name: /Movies/ }))
+
+    const grid = screen.getByTestId("list-syncarr-grid")
+    expect(grid).toHaveClass(`lg:grid-cols-${DEFAULT_LIST_SYNCARR_PER_ROW}`)
+    const thumb = screen.getByRole("slider", { name: "Posters per row" })
+    thumb.focus()
+    await expect(user.keyboard("{ArrowRight}")).resolves.toBeUndefined()
   })
 })
