@@ -29,32 +29,13 @@ describe("global cursor base style", () => {
   })
 })
 
-describe("scrollbar gutter base style", () => {
-  // Same presence-tripwire rationale as above: jsdom applies no stylesheets, so
-  // the reserved gutter cannot be measured here. The guard ensures a future edit
-  // cannot silently drop the rule that stops the layout shifting horizontally as
-  // the document scrollbar appears and disappears between routes.
-  it("reserves a stable scrollbar gutter in index.css", () => {
-    expect(activeCss).toMatch(/html\s*\{[^}]*scrollbar-gutter:\s*stable/)
-  })
-})
-
-describe("overlay scroll-lock counter-rule", () => {
-  // Same presence-tripwire rationale as above: jsdom applies no stylesheets, so
-  // the pinned layout cannot be observed here. While a Radix overlay (Select,
-  // AlertDialog, DropdownMenu) is open, react-remove-scroll stamps
-  // `data-scroll-locked` on <body> and injects `margin-right` scrollbar
-  // compensation (a horizontal layout jump we already absorb with the reserved
-  // gutter) plus `overflow: hidden` (which turns <body> into a scroll container
-  // and detaches the sticky Topbar/Sidebar when the page is scrolled down). The
-  // unlayered `html body[data-scroll-locked]` rule cancels both; this guard
-  // ensures neither declaration is silently dropped.
-  it("keeps both counter-declarations for locked overlays in index.css", () => {
-    expect(activeCss).toMatch(
-      /html\s+body\[data-scroll-locked\]\s*\{[^}]*margin-right:\s*0\s*!important/,
-    )
-    expect(activeCss).toMatch(
-      /html\s+body\[data-scroll-locked\]\s*\{[^}]*overflow:\s*visible\s*!important/,
-    )
+describe("app-shell scroll model base style", () => {
+  // Same presence-tripwire rationale as above: jsdom applies no stylesheets,
+  // so the frozen document cannot be observed here. The document must never
+  // scroll — the AppShell owns the viewport and <main> is the only scroll
+  // container — or overlay scroll locks on <body> would re-anchor the chrome
+  // again. `clip` also forbids programmatic scrolling.
+  it("keeps the document unscrollable in index.css", () => {
+    expect(activeCss).toMatch(/html,\s*body\s*\{[^}]*overflow:\s*clip/)
   })
 })

@@ -1,6 +1,6 @@
-import { useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import { PanelLeftCloseIcon, PanelLeftOpenIcon } from "lucide-react"
-import { NavLink, Outlet } from "react-router-dom"
+import { NavLink, Outlet, useLocation } from "react-router-dom"
 
 import { BrandLogo } from "@/shared/components/brand-logo"
 import { Button } from "@/shared/components/ui/button"
@@ -22,17 +22,17 @@ interface SidebarProps {
  * {@link SidebarProps.collapsed} is set the labels collapse to an icon-only
  * rail; labels stay in the accessibility tree (via `sr-only`) so links keep
  * their accessible names, and the native `title` tooltip surfaces each label on
- * hover. The sidebar is pinned to the viewport (`sticky`, full height) so its
- * `mt-auto` version footer stays visible however tall the routed page grows —
- * `<html>` remains the document scroller (see `index.css`), so only the right
- * pane scrolls past it.
+ * hover. The sidebar is a static, full-height child of the fixed-height app
+ * shell — the document never scrolls (see `index.css`), so the rail and its
+ * `mt-auto` version footer physically cannot leave the viewport however tall
+ * the routed page grows; only `<main>` scrolls past it.
  */
 function Sidebar({ collapsed, onToggle }: SidebarProps) {
   return (
     <aside
       id="primary-sidebar"
       className={cn(
-        "sticky top-0 z-30 hidden h-screen shrink-0 flex-col self-start border-r bg-sidebar transition-[width] duration-200 md:flex",
+        "hidden h-full shrink-0 flex-col border-r bg-sidebar transition-[width] duration-200 md:flex",
         collapsed ? "w-16" : "w-56",
       )}
     >
@@ -105,12 +105,31 @@ function Sidebar({ collapsed, onToggle }: SidebarProps) {
   )
 }
 
-/** Application layout: persistent sidebar + topbar wrapping routed pages. */
+/**
+ * Application layout: persistent sidebar + topbar wrapping routed pages.
+ *
+ * App-shell scroll model: the shell is a fixed viewport-height frame
+ * (`h-dvh overflow-hidden`) and `<main>` is the only scroll container. The
+ * document itself never scrolls, so overlay scroll locks that target `<body>`
+ * (react-remove-scroll under every modal Radix primitive) are no-ops by
+ * construction and can never re-anchor or hide the chrome.
+ */
 export function AppShell() {
   const [collapsed, setCollapsed] = useState(() => {
     if (typeof localStorage === "undefined") return false
     return localStorage.getItem(SIDEBAR_COLLAPSED_STORAGE_KEY) === "true"
   })
+  const mainRef = useRef<HTMLElement | null>(null)
+  const { pathname } = useLocation()
+
+  // Focus the scroll pane on load and on every navigation: the document no
+  // longer scrolls, so with focus resting on <body> the scrolling keys
+  // (PageDown, Space, arrows) would target the clipped document scroller and
+  // do nothing until a click landed inside the pane. `preventScroll` keeps
+  // the focus move itself from jumping the pane.
+  useEffect(() => {
+    mainRef.current?.focus({ preventScroll: true })
+  }, [pathname])
 
   function toggleSidebar() {
     setCollapsed((prev) => {
@@ -123,11 +142,18 @@ export function AppShell() {
   }
 
   return (
-    <div className="flex min-h-screen w-full">
+    <div className="flex h-dvh w-full overflow-hidden">
       <Sidebar collapsed={collapsed} onToggle={toggleSidebar} />
       <div className="flex min-w-0 flex-1 flex-col">
         <Topbar />
-        <main className="flex-1 p-4 md:p-6">
+        {/* tabIndex={-1}: programmatically focusable (see the route-change
+            effect above) without entering the Tab order; the pane is a
+            landmark, not a control, so no focus outline. */}
+        <main
+          ref={mainRef}
+          tabIndex={-1}
+          className="flex-1 overflow-y-auto scrollbar-gutter-stable p-4 outline-none md:p-6"
+        >
           <Outlet />
         </main>
       </div>

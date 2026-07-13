@@ -107,11 +107,10 @@ export function AddToListControl({
 
   return (
     // Non-modal: the add menu needs neither scroll-lock nor focus-trap, so opt
-    // out of react-remove-scroll entirely and keep the page scrollable while
-    // the menu is open. (The sticky Topbar/Sidebar detachment a modal menu used
-    // to cause is now neutralised globally by the `html
-    // body[data-scroll-locked]` counter-rule in index.css, so this opt-out is
-    // purely about interaction behaviour.)
+    // out of react-remove-scroll entirely and keep the grid scrollable while
+    // the menu is open. This is purely about interaction behaviour — the app
+    // shell freezes the document (only <main> scrolls; see AppShell/index.css),
+    // so a modal menu could not move the chrome anyway.
     <DropdownMenu modal={false}>
       <DropdownMenuTrigger asChild>
         <Button

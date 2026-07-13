@@ -53,14 +53,38 @@ describe("AppShell", () => {
     expect(screen.getByText(`v${APP_VERSION}`)).toBeInTheDocument()
   })
 
-  it("pins the sidebar to the viewport so its footer never scrolls away", () => {
+  it("keeps the chrome static inside a fixed-height shell with <main> as the only scroller", () => {
     const { container } = renderAt("/")
 
-    // The sidebar is sticky and a full viewport tall, so a tall routed page
-    // scrolls past it instead of pushing the version footer below the fold.
+    // App-shell scroll model: the shell owns the viewport and only <main>
+    // scrolls, so no overlay scroll lock can ever move the sidebar or topbar.
+    // jsdom applies no layout, so this asserts the class contract instead.
+    const shell = container.firstElementChild
+    expect(shell).toHaveClass("h-dvh", "overflow-hidden")
     const sidebar = container.querySelector("#primary-sidebar")
     expect(sidebar).not.toBeNull()
-    expect(sidebar).toHaveClass("sticky", "top-0", "h-screen")
+    expect(sidebar).toHaveClass("h-full")
+    expect(sidebar).not.toHaveClass("sticky")
+    const main = container.querySelector("main")
+    expect(main).toHaveClass("overflow-y-auto")
+  })
+
+  it("focuses the scroll pane on load and navigation so keyboard scrolling works", async () => {
+    const user = userEvent.setup()
+    const { container } = renderAt("/")
+
+    // The document never scrolls, so PageDown/Space/arrows only work while
+    // focus sits inside <main>. The shell focuses the pane programmatically
+    // on load and on every route change; tabIndex=-1 keeps it out of the Tab
+    // order.
+    const main = container.querySelector("main")
+    expect(main).toHaveAttribute("tabindex", "-1")
+    expect(main).toHaveFocus()
+
+    await user.click(screen.getByRole("link", { name: /list-syncarr/i }))
+
+    expect(screen.getByText("list-syncarr-page")).toBeInTheDocument()
+    expect(main).toHaveFocus()
   })
 
   it("marks the List-Syncarr link active on its route", () => {
