@@ -254,6 +254,31 @@ class SeerClient:
             )
         return [row for row in rows if row is not None][:limit]
 
+    async def search(
+        self, *, media_type: str, query: str, limit: int = 20, pages: int = 1
+    ) -> list[dict[str, Any]]:
+        """Return Seer title-search results for one media type as rows.
+
+        Seer's ``/search`` endpoint mixes movies, shows and people in one feed:
+        people are dropped by the normaliser and the other media type is
+        filtered out, so fewer than ``limit`` rows can come back even when more
+        matches exist. ``pages`` consecutive pages are fetched and concatenated
+        before the ``limit`` cap (an empty page short-circuits the rest).
+        """
+        wanted = "movie" if media_type == "movie" else "show"
+        rows: list[dict[str, Any] | None] = []
+        for page in range(1, pages + 1):
+            results = await self._discover(
+                "search", params={"query": query, "page": page}
+            )
+            if not results:
+                break
+            rows.extend(self._normalise_discover(result) for result in results)
+        matching = [
+            row for row in rows if row is not None and row["media_type"] == wanted
+        ]
+        return matching[:limit]
+
     async def create_request(self, *, media_type: str, tmdb_id: int) -> int | None:
         """Create a Seer request.
 

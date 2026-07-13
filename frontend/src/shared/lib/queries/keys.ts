@@ -1,4 +1,8 @@
-import type { DeletarrLibraryType, TrendingQuery } from "@/shared/lib/api"
+import type {
+  DeletarrLibraryType,
+  TrendingQuery,
+  TrendingSearchQuery,
+} from "@/shared/lib/api"
 
 /** Stable query keys so mutations can target invalidations precisely. */
 export const queryKeys = {
@@ -23,5 +27,7 @@ export const queryKeys = {
   findarrHistory: ["findarr", "history"] as const,
   trending: (query: TrendingQuery) =>
     ["trending", query.source, query.media, query.category] as const,
+  trendingSearch: (query: TrendingSearchQuery) =>
+    ["trending", "search", query.source, query.media, query.query] as const,
   trendingStatus: ["trending", "status"] as const,
 }

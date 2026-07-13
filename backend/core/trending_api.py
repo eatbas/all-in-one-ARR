@@ -2,11 +2,12 @@
 
 Backs the dashboard's Trending page: per-source trending and popular feeds
 (Trakt / TMDB / Seer, plus the anime variants ``trakt-anime`` / ``tmdb-anime``
-and the AniList source backing the Anime tab), an IMDb rating overlay served
-from the persistent store the budgeted backfill fills (``core.trending_sync``),
-and an "add to an owned Trakt list, then sync" action. The add never creates a
-Seer request directly — it adds to Trakt and triggers the existing List-Syncarr
-sync, which requests the item through the normal pipeline.
+and the AniList source backing the Anime tab), a live per-source title search,
+an IMDb rating overlay served from the persistent store the budgeted backfill
+fills (``core.trending_sync``), and an "add to an owned Trakt list, then sync"
+action. The add never creates a Seer request directly — it adds to Trakt and
+triggers the existing List-Syncarr sync, which requests the item through the
+normal pipeline.
 """
 
 from __future__ import annotations
@@ -14,7 +15,7 @@ from __future__ import annotations
 import asyncio
 from typing import TYPE_CHECKING, Any, Literal
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Query
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
@@ -26,6 +27,8 @@ from core.timefmt import next_sync_at
 from core.trending import (
     SEER_TRENDING_SYNC_PAGES,
     TRENDING_ITEM_LIMIT,
+    TRENDING_SEARCH_LIMIT,
+    TRENDING_SEARCH_PAGES,
     TRENDING_SYNC_PAGES,
     LibraryCache,
     LibraryIndex,
@@ -158,6 +161,47 @@ async def fetch_feed(
         buckets = await fetch_seer_trending_buckets(ctx, limit=limit, pages=pages)
         return buckets[media]
     return await ctx.seer.discover_popular(media_type=media, limit=limit, pages=pages)
+
+
+async def fetch_search(
+    ctx: AppContext,
+    *,
+    source: str,
+    media: str,
+    query: str,
+    limit: int,
+) -> list[dict]:
+    """Fetch and normalise one source's live title-search results.
+
+    The search-box counterpart of :func:`fetch_feed`: each source is queried
+    through its own search endpoint and emits uniform discovery rows. AniList
+    rows get the same id enrichment and show-season dedupe as the browse feeds.
+    """
+    if source == "trakt":
+        return await ctx.trakt.search(media_type=media, query=query, limit=limit)
+    if source == "trakt-anime":
+        return await ctx.trakt.search(
+            media_type=media, query=query, limit=limit, genres="anime"
+        )
+    if source == "tmdb":
+        return await ctx.tmdb.search(
+            media_type=media, query=query, limit=limit, pages=TRENDING_SEARCH_PAGES
+        )
+    if source == "tmdb-anime":
+        return await ctx.tmdb.search_anime(
+            media_type=media, query=query, limit=limit, pages=TRENDING_SEARCH_PAGES
+        )
+    if source == "anilist":
+        rows = await ctx.anilist.search(media_type=media, query=query, limit=limit)
+        if ctx.anime_ids is not None:
+            rows = await ctx.anime_ids.enrich(rows)
+        if media == "show":
+            rows = dedupe_anilist_show_seasons(rows)
+        return rows
+    # source == "seer"
+    return await ctx.seer.search(
+        media_type=media, query=query, limit=limit, pages=TRENDING_SEARCH_PAGES
+    )
 
 
 class TrendingAddRequest(BaseModel):
@@ -310,6 +354,43 @@ def create_trending_router(ctx: AppContext) -> APIRouter:
             return stale
         return await _refresh_library_index()
 
+    async def _overlay_items(rows: list[dict], *, source: str) -> list[TrendingItem]:
+        """Apply the local overlays to discovery rows and build ``TrendingItem``s.
+
+        Overlay flags depend on fast-changing local state (tracked lists, the
+        Arr libraries, the rating store), so they are recomputed on every read
+        rather than cached alongside the rows. Ratings are one local SQLite
+        lookup across all row keys. Shared by the feed and search endpoints.
+        """
+        tracked = _tracked_tmdbs(ctx.db)
+        library = await _library_index()
+        keys = [
+            key
+            for key in (
+                trending_rating_key(
+                    imdb=row.get("imdb"),
+                    media_type=row.get("media_type"),
+                    tmdb=row.get("tmdb"),
+                )
+                for row in rows
+            )
+            if key is not None
+        ]
+        ratings = {
+            key: entry["imdb_rating"]
+            for key, entry in ctx.db.trending_ratings_get_many(keys).items()
+        }
+        return [
+            TrendingItem(**item)
+            for item in to_trending_items(
+                rows,
+                source=source,
+                tracked_tmdbs=tracked,
+                library=library,
+                ratings=ratings,
+            )
+        ]
+
     @router.get("", response_model=list[TrendingItem])
     async def get_trending(
         source: TrendingSourceName,
@@ -350,37 +431,35 @@ def create_trending_router(ctx: AppContext) -> APIRouter:
             # Covers snapshots persisted before the season dedup existed;
             # idempotent on feeds already deduped at fetch time.
             rows = dedupe_anilist_show_seasons(rows)
-        # Overlay flags depend on fast-changing local state, so they are recomputed on
-        # every read rather than cached alongside the rows. Ratings are one local
-        # SQLite lookup across all row keys.
-        tracked = _tracked_tmdbs(ctx.db)
-        library = await _library_index()
-        keys = [
-            key
-            for key in (
-                trending_rating_key(
-                    imdb=row.get("imdb"),
-                    media_type=row.get("media_type"),
-                    tmdb=row.get("tmdb"),
-                )
-                for row in rows
-            )
-            if key is not None
-        ]
-        ratings = {
-            key: entry["imdb_rating"]
-            for key, entry in ctx.db.trending_ratings_get_many(keys).items()
-        }
-        return [
-            TrendingItem(**item)
-            for item in to_trending_items(
-                rows,
+        return await _overlay_items(rows, source=source)
+
+    @router.get("/search", response_model=list[TrendingItem])
+    async def get_trending_search(
+        source: TrendingSourceName,
+        query: str = Query(min_length=2),
+        media: Literal["movie", "show"] = "movie",
+    ) -> list[TrendingItem]:
+        """Live title search on one discovery source, with the usual overlays.
+
+        Always fetched from the upstream source — the scheduler snapshot holds
+        only the trending/popular feeds, and long-tail search results would
+        bloat it — and cached client-side by the dashboard. A dead source
+        degrades to an empty result list.
+        """
+        try:
+            rows = await fetch_search(
+                ctx,
                 source=source,
-                tracked_tmdbs=tracked,
-                library=library,
-                ratings=ratings,
+                media=media,
+                query=query,
+                limit=TRENDING_SEARCH_LIMIT,
             )
-        ]
+        except Exception as exc:  # noqa: BLE001 - a dead source must not break the page
+            log.warning(
+                "trending search failed (source=%s media=%s): %s", source, media, exc
+            )
+            return []
+        return await _overlay_items(rows, source=source)
 
     @router.get("/status", response_model=TrendingStatus)
     async def get_trending_status() -> TrendingStatus:

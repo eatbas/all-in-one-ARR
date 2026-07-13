@@ -32,11 +32,31 @@ _FORMATS = {
     "show": ["TV", "TV_SHORT", "ONA", "OVA", "SPECIAL"],
 }
 
-# One query serves both feeds; the sort and format filter arrive as variables.
+# One query serves both browse feeds; the sort and format filter arrive as
+# variables.
 _MEDIA_QUERY = """
 query ($page: Int, $perPage: Int, $sort: [MediaSort], $formats: [MediaFormat]) {
   Page(page: $page, perPage: $perPage) {
     media(type: ANIME, sort: $sort, format_in: $formats) {
+      id
+      idMal
+      title { romaji english }
+      format
+      seasonYear
+      startDate { year }
+      coverImage { large }
+    }
+  }
+}
+"""
+
+# The title-search variant, relevance-ordered by SEARCH_MATCH. Kept separate
+# from _MEDIA_QUERY because AniList treats an explicit ``search: null``
+# argument as a filter, unlike an absent one.
+_SEARCH_QUERY = """
+query ($page: Int, $perPage: Int, $search: String, $formats: [MediaFormat]) {
+  Page(page: $page, perPage: $perPage) {
+    media(type: ANIME, search: $search, sort: [SEARCH_MATCH], format_in: $formats) {
       id
       idMal
       title { romaji english }
@@ -80,26 +100,42 @@ class AnilistClient:
         }
 
     async def _discover(
-        self, *, media_type: str, sort: str, limit: int
+        self,
+        *,
+        media_type: str,
+        limit: int,
+        sort: str | None = None,
+        search: str | None = None,
     ) -> list[dict[str, Any]]:
-        """Fetch and normalise pages of one sorted AniList feed.
+        """Fetch and normalise pages of one AniList feed.
 
-        Pages of :data:`_PER_PAGE` are fetched and concatenated until ``limit``
-        rows are collected; an empty page short-circuits the rest (mirrors the
-        TMDB client's paging).
+        With ``sort`` set the browse query is used; with ``search`` set the
+        title-search query (relevance-ordered by ``SEARCH_MATCH``) is used
+        instead — exactly one of the two must be given. Pages of
+        :data:`_PER_PAGE` are fetched and concatenated until ``limit`` rows are
+        collected; an empty page short-circuits the rest (mirrors the TMDB
+        client's paging).
         """
+        if (sort is None) == (search is None):
+            raise ValueError("exactly one of sort or search must be set")
+        variables: dict[str, Any] = {"formats": _FORMATS[media_type]}
+        if search is None:
+            document = _MEDIA_QUERY
+            variables["sort"] = [sort]
+        else:
+            document = _SEARCH_QUERY
+            variables["search"] = search
         results: list[dict[str, Any]] = []
         page = 1
         while len(results) < limit:
             response = await self._client.post(
                 _BASE_URL,
                 json={
-                    "query": _MEDIA_QUERY,
+                    "query": document,
                     "variables": {
+                        **variables,
                         "page": page,
                         "perPage": _PER_PAGE,
-                        "sort": [sort],
-                        "formats": _FORMATS[media_type],
                     },
                 },
             )
@@ -133,6 +169,16 @@ class AnilistClient:
         return await self._discover(
             media_type=media_type, sort="POPULARITY_DESC", limit=limit
         )
+
+    async def search(
+        self, *, media_type: str, query: str, limit: int = 20
+    ) -> list[dict[str, Any]]:
+        """Return AniList title-search results as uniform discovery rows.
+
+        Results follow AniList's ``SEARCH_MATCH`` relevance order; ``media_type``
+        maps onto the same format filters as the browse feeds.
+        """
+        return await self._discover(media_type=media_type, search=query, limit=limit)
 
     async def aclose(self) -> None:
         """Close the underlying HTTP client."""

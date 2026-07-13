@@ -1,4 +1,5 @@
 import {
+  keepPreviousData,
   useMutation,
   useQuery,
   useQueryClient,
@@ -11,10 +12,12 @@ import {
   addTrending,
   getTrending,
   getTrendingStatus,
+  searchTrending,
   type AddTrendingPayload,
   type TrendingAddResult,
   type TrendingItem,
   type TrendingQuery,
+  type TrendingSearchQuery,
   type TrendingStatus,
 } from "@/shared/lib/api"
 import { queryKeys } from "@/shared/lib/queries/keys"
@@ -32,6 +35,25 @@ export function useTrending(
     queryFn: () => getTrending(query),
     staleTime: TRENDING_STALE_TIME,
     gcTime: TRENDING_GC_TIME,
+  })
+}
+
+/**
+ * Live title search on one source, gated by `enabled` (the caller decides when
+ * the query is long enough). The previous results stay in place as placeholder
+ * data while a new query fetches, so the grid never flashes empty mid-typing.
+ */
+export function useTrendingSearch(
+  query: TrendingSearchQuery,
+  enabled: boolean,
+): UseQueryResult<TrendingItem[]> {
+  return useQuery({
+    queryKey: queryKeys.trendingSearch(query),
+    queryFn: () => searchTrending(query),
+    enabled,
+    staleTime: TRENDING_STALE_TIME,
+    gcTime: TRENDING_GC_TIME,
+    placeholderData: keepPreviousData,
   })
 }
 

@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 
 import httpx
+import pytest
 import respx
 
 from core.clients.anilist import AnilistClient
@@ -100,6 +101,45 @@ async def test_paging_stops_on_empty_page() -> None:
     rows = await AnilistClient().get_trending(media_type="show", limit=60)
     assert [row["anilist"] for row in rows] == [1]
     assert route.call_count == 2
+
+
+@respx.mock
+async def test_search_sends_query_and_relevance_document() -> None:
+    route = respx.post(_URL).mock(
+        side_effect=[_page([_media(5, mal_id=50)]), _page([])]
+    )
+    rows = await AnilistClient().search(media_type="show", query="frieren", limit=5)
+    assert [row["anilist"] for row in rows] == [5]
+    payload = json.loads(route.calls[0].request.content)
+    # The search document is relevance-ordered and takes no sort variable.
+    assert "SEARCH_MATCH" in payload["query"]
+    assert payload["variables"]["search"] == "frieren"
+    assert "sort" not in payload["variables"]
+    assert payload["variables"]["formats"] == [
+        "TV",
+        "TV_SHORT",
+        "ONA",
+        "OVA",
+        "SPECIAL",
+    ]
+
+
+@respx.mock
+async def test_search_movie_uses_movie_formats() -> None:
+    route = respx.post(_URL).mock(side_effect=[_page([_media(6)]), _page([])])
+    rows = await AnilistClient().search(media_type="movie", query="ghibli", limit=5)
+    assert rows[0]["media_type"] == "movie"
+    assert _variables(route)["formats"] == ["MOVIE"]
+
+
+async def test_discover_requires_exactly_one_of_sort_and_search() -> None:
+    client = AnilistClient()
+    with pytest.raises(ValueError, match="exactly one of sort or search"):
+        await client._discover(media_type="show", limit=5)
+    with pytest.raises(ValueError, match="exactly one of sort or search"):
+        await client._discover(
+            media_type="show", limit=5, sort="TRENDING_DESC", search="frieren"
+        )
 
 
 async def test_aclose_closes_the_http_client() -> None:

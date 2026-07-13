@@ -5,6 +5,7 @@ vi.mock("@/shared/lib/api", () => ({
   getTrending: vi.fn(),
   getTrendingStatus: vi.fn(),
   addTrending: vi.fn(),
+  searchTrending: vi.fn(),
 }))
 
 vi.mock("sonner", () => ({
@@ -17,9 +18,14 @@ import {
   queryKeys,
   useAddTrending,
   useTrending,
+  useTrendingSearch,
   useTrendingStatus,
 } from "@/shared/lib/queries"
-import type { TrendingItem, TrendingQuery } from "@/shared/lib/api"
+import type {
+  TrendingItem,
+  TrendingQuery,
+  TrendingSearchQuery,
+} from "@/shared/lib/api"
 import { setup } from "@/shared/test/query-provider"
 
 const QUERY: TrendingQuery = {
@@ -59,6 +65,52 @@ describe("useTrending", () => {
     await waitFor(() => expect(hook.result.current.isSuccess).toBe(true))
     expect(api.getTrending).toHaveBeenCalledWith(QUERY)
     expect(hook.result.current.data).toEqual([ITEM])
+  })
+})
+
+describe("useTrendingSearch", () => {
+  const SEARCH: TrendingSearchQuery = {
+    source: "trakt",
+    media: "movie",
+    query: "dune",
+  }
+
+  it("fetches search results when enabled", async () => {
+    vi.mocked(api.searchTrending).mockResolvedValue([ITEM])
+    const { wrapper } = setup()
+    const hook = renderHook(() => useTrendingSearch(SEARCH, true), { wrapper })
+    await waitFor(() => expect(hook.result.current.isSuccess).toBe(true))
+    expect(api.searchTrending).toHaveBeenCalledWith(SEARCH)
+    expect(hook.result.current.data).toEqual([ITEM])
+  })
+
+  it("does not fetch while disabled", () => {
+    const { wrapper } = setup()
+    renderHook(() => useTrendingSearch(SEARCH, false), { wrapper })
+    expect(api.searchTrending).not.toHaveBeenCalled()
+  })
+
+  it("keeps the previous results as placeholder data while a new query fetches", async () => {
+    vi.mocked(api.searchTrending).mockResolvedValue([ITEM])
+    const { wrapper } = setup()
+    const hook = renderHook(
+      ({ query }: { query: TrendingSearchQuery }) =>
+        useTrendingSearch(query, true),
+      { wrapper, initialProps: { query: SEARCH } },
+    )
+    await waitFor(() => expect(hook.result.current.isSuccess).toBe(true))
+
+    hook.rerender({ query: { ...SEARCH, query: "dune part" } })
+    // The old results remain visible (flagged as placeholder) mid-fetch.
+    expect(hook.result.current.data).toEqual([ITEM])
+    expect(hook.result.current.isPlaceholderData).toBe(true)
+    await waitFor(() =>
+      expect(hook.result.current.isPlaceholderData).toBe(false),
+    )
+    expect(api.searchTrending).toHaveBeenLastCalledWith({
+      ...SEARCH,
+      query: "dune part",
+    })
   })
 })
 

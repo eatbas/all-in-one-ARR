@@ -29,6 +29,7 @@ import {
   getTraktSettings,
   getTrending,
   getTrendingStatus,
+  searchTrending,
   trendingSourceUrl,
   seerMediaUrl,
   normaliseServiceUrl,
@@ -637,6 +638,22 @@ describe("getTrending", () => {
     expect(url).toContain("category=trending")
     // The time window was removed, so no `window` param is ever sent.
     expect(url).not.toContain("window=")
+  })
+})
+
+describe("searchTrending", () => {
+  it("builds the query string from the source/media/query", async () => {
+    const fetchSpy = mockFetch(jsonResponse([]))
+
+    await expect(
+      searchTrending({ source: "tmdb", media: "show", query: "dan da dan" }),
+    ).resolves.toEqual([])
+    const url = fetchSpy.mock.calls[0][0] as string
+    expect(url).toContain("/api/trending/search?")
+    expect(url).toContain("source=tmdb")
+    expect(url).toContain("media=show")
+    // URLSearchParams encodes spaces as `+`.
+    expect(url).toContain("query=dan+da+dan")
   })
 })
 

@@ -1,9 +1,10 @@
-import { act, render, screen, within } from "@testing-library/react"
+import { act, fireEvent, render, screen, within } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
 vi.mock("@/shared/lib/queries", () => ({
   useTrending: vi.fn(),
+  useTrendingSearch: vi.fn(),
   useTrendingStatus: vi.fn(),
   useLists: vi.fn(),
   useAddTrending: vi.fn(),
@@ -15,6 +16,7 @@ import {
   useLists,
   useServiceSettings,
   useTrending,
+  useTrendingSearch,
   useTrendingStatus,
 } from "@/shared/lib/queries"
 import { Trending } from "@/features/trending/Trending"
@@ -108,6 +110,9 @@ async function stepDensity(
 beforeEach(() => {
   localStorage.clear()
   vi.mocked(useTrending).mockReturnValue(queryResult([ITEM]))
+  vi.mocked(useTrendingSearch).mockReturnValue(
+    queryResult<TrendingItem[]>(undefined),
+  )
   vi.mocked(useTrendingStatus).mockReturnValue(
     queryResult({
       last_synced_at: null,
@@ -536,5 +541,128 @@ describe("Trending", () => {
     )
     expect(screen.queryByTitle("Item 16")).not.toBeInTheDocument()
     expect(screen.getByTitle("Item 15")).toBeInTheDocument()
+  })
+})
+
+describe("Trending search", () => {
+  const SEARCH_ITEM: TrendingItem = {
+    ...ITEM,
+    tmdb: 900,
+    title: "Dune Messiah",
+  }
+
+  /** Type into the search box and let the debounce settle under fake timers. */
+  function typeSearch(value: string) {
+    act(() => {
+      fireEvent.change(
+        screen.getByRole("searchbox", { name: "Search titles" }),
+        { target: { value } },
+      )
+    })
+    act(() => vi.advanceTimersByTime(300))
+  }
+
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  it("swaps the grid to live search results once the query settles", () => {
+    vi.mocked(useTrendingSearch).mockReturnValue(queryResult([SEARCH_ITEM]))
+    vi.useFakeTimers()
+    render(<Trending />)
+
+    // Below two characters the search stays disabled and the feed renders.
+    typeSearch("d")
+    expect(useTrendingSearch).toHaveBeenLastCalledWith(
+      expect.objectContaining({ query: "d" }),
+      false,
+    )
+    expect(screen.getByTitle("Dune")).toBeInTheDocument()
+
+    typeSearch("dune")
+    expect(useTrendingSearch).toHaveBeenLastCalledWith(
+      { source: "trakt", media: "movie", query: "dune" },
+      true,
+    )
+    expect(screen.getByTitle("Dune Messiah")).toBeInTheDocument()
+    expect(screen.queryByTitle("Dune")).not.toBeInTheDocument()
+  })
+
+  it("trims surrounding whitespace before the query is sent", () => {
+    vi.mocked(useTrendingSearch).mockReturnValue(queryResult([SEARCH_ITEM]))
+    vi.useFakeTimers()
+    render(<Trending />)
+    typeSearch("  dune  ")
+    expect(useTrendingSearch).toHaveBeenLastCalledWith(
+      expect.objectContaining({ query: "dune" }),
+      true,
+    )
+  })
+
+  it("shows a searching state while the first search fetch loads", () => {
+    vi.mocked(useTrendingSearch).mockReturnValue(
+      queryResult<TrendingItem[]>(undefined, true),
+    )
+    vi.useFakeTimers()
+    render(<Trending />)
+    typeSearch("dune")
+    expect(screen.getByText("Searching…")).toBeInTheDocument()
+    expect(screen.queryByText("Loading trending…")).not.toBeInTheDocument()
+  })
+
+  it("shows a no-results message naming the settled query", () => {
+    vi.mocked(useTrendingSearch).mockReturnValue(
+      queryResult<TrendingItem[]>([]),
+    )
+    vi.useFakeTimers()
+    render(<Trending />)
+    typeSearch("zz plural z alpha")
+    expect(
+      screen.getByText("No results for “zz plural z alpha”."),
+    ).toBeInTheDocument()
+  })
+
+  it("greys out the category toggle while searching and restores the feed on clear", () => {
+    vi.mocked(useTrendingSearch).mockReturnValue(queryResult([SEARCH_ITEM]))
+    vi.useFakeTimers()
+    render(<Trending />)
+    const popular = screen.getByRole("button", { name: "Popular" })
+    expect(popular).toBeEnabled()
+
+    typeSearch("dune")
+    expect(popular).toBeDisabled()
+    expect(screen.getByRole("button", { name: "Trending" })).toBeDisabled()
+    // The media toggle still applies to search, so it stays live.
+    expect(screen.getByRole("button", { name: "Shows" })).toBeEnabled()
+
+    typeSearch("")
+    expect(popular).toBeEnabled()
+    expect(screen.getByTitle("Dune")).toBeInTheDocument()
+    expect(screen.queryByTitle("Dune Messiah")).not.toBeInTheDocument()
+  })
+
+  it("applies the hide-available filter to search results", () => {
+    vi.mocked(useTrendingSearch).mockReturnValue(
+      queryResult([
+        SEARCH_ITEM,
+        {
+          ...SEARCH_ITEM,
+          tmdb: 901,
+          title: "Dune Downloaded",
+          in_library: true,
+          in_library_available: true,
+        },
+      ]),
+    )
+    vi.useFakeTimers()
+    render(<Trending />)
+    typeSearch("dune")
+    act(() => {
+      fireEvent.click(
+        screen.getByRole("switch", { name: "Hide available items" }),
+      )
+    })
+    expect(screen.getByTitle("Dune Messiah")).toBeInTheDocument()
+    expect(screen.queryByTitle("Dune Downloaded")).not.toBeInTheDocument()
   })
 })

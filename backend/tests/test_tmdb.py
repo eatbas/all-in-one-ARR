@@ -309,6 +309,131 @@ async def test_get_anime_trending_pages_and_caps_like_discover() -> None:
     assert [row["tmdb"] for row in rows] == [1, 2]
 
 
+_SEARCH_MOVIE = "https://api.themoviedb.org/3/search/movie"
+_SEARCH_TV = "https://api.themoviedb.org/3/search/tv"
+
+
+@respx.mock
+async def test_search_movie_sends_query_and_normalises() -> None:
+    route = respx.get(_SEARCH_MOVIE).mock(
+        return_value=httpx.Response(
+            200,
+            json={
+                "results": [
+                    {"id": 603, "title": "The Matrix", "release_date": "1999-03-31"}
+                ]
+            },
+        )
+    )
+    rows = await TmdbClient(api_key="v3key").search(
+        media_type="movie", query="matrix", limit=5
+    )
+    assert rows == [
+        {"media_type": "movie", "tmdb": 603, "title": "The Matrix", "year": 1999}
+    ]
+    params = route.calls.last.request.url.params
+    assert params["query"] == "matrix"
+    assert params["include_adult"] == "false"
+
+
+@respx.mock
+async def test_search_tv_uses_search_endpoint() -> None:
+    respx.get(_SEARCH_TV).mock(
+        return_value=httpx.Response(
+            200,
+            json={
+                "results": [
+                    {"id": 1399, "name": "Game of Thrones", "first_air_date": "2011"}
+                ]
+            },
+        )
+    )
+    rows = await TmdbClient(api_key="v3key").search(
+        media_type="show", query="thrones", limit=5
+    )
+    assert [row["tmdb"] for row in rows] == [1399]
+
+
+@respx.mock
+async def test_search_anime_keeps_only_japanese_animation() -> None:
+    route = respx.get(_SEARCH_TV).mock(
+        return_value=httpx.Response(
+            200,
+            json={
+                "results": [
+                    {
+                        "id": 240411,
+                        "name": "Dan Da Dan",
+                        "first_air_date": "2024-10-04",
+                        "genre_ids": [16, 35],
+                        "original_language": "ja",
+                    },
+                    {
+                        # Animation but not Japanese: dropped.
+                        "id": 1,
+                        "name": "Western Cartoon",
+                        "genre_ids": [16],
+                        "original_language": "en",
+                    },
+                    {
+                        # Japanese but not Animation: dropped.
+                        "id": 2,
+                        "name": "Live Action Drama",
+                        "genre_ids": [18],
+                        "original_language": "ja",
+                    },
+                    {
+                        # No genre metadata at all: dropped.
+                        "id": 3,
+                        "name": "Bare Result",
+                    },
+                ]
+            },
+        )
+    )
+    rows = await TmdbClient(api_key="v3key").search_anime(
+        media_type="show", query="dan da dan", limit=5
+    )
+    assert [row["tmdb"] for row in rows] == [240411]
+    assert route.calls.last.request.url.params["query"] == "dan da dan"
+
+
+@respx.mock
+async def test_search_anime_pages_past_an_all_filtered_page() -> None:
+    respx.get(_SEARCH_MOVIE).mock(
+        side_effect=[
+            # Every result filtered out, but the response page itself is
+            # non-empty, so paging continues to the next page.
+            httpx.Response(
+                200,
+                json={
+                    "results": [
+                        {"id": 1, "title": "A", "genre_ids": [28]},
+                    ]
+                },
+            ),
+            httpx.Response(
+                200,
+                json={
+                    "results": [
+                        {
+                            "id": 129,
+                            "title": "Spirited Away",
+                            "release_date": "2001-07-20",
+                            "genre_ids": [16],
+                            "original_language": "ja",
+                        }
+                    ]
+                },
+            ),
+        ]
+    )
+    rows = await TmdbClient(api_key="v3key").search_anime(
+        media_type="movie", query="spirited", limit=5, pages=2
+    )
+    assert [row["tmdb"] for row in rows] == [129]
+
+
 @respx.mock
 async def test_fetch_external_ids_returns_imdb_id() -> None:
     respx.get(_EXTERNAL_IDS_MOVIE).mock(

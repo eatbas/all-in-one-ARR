@@ -32,6 +32,14 @@ TRENDING_SYNC_PAGES = 5
 # BOTH media buckets to reach TRENDING_ITEM_LIMIT before the feed is exhausted
 # (the bucket fetch stops once both are full or Seer runs out of pages).
 SEER_TRENDING_SYNC_PAGES = 15
+# Item cap for the live per-source title search behind the Trending page's
+# search box. Search is uncached and long-tail, so it stays well below the
+# snapshot feeds' TRENDING_ITEM_LIMIT.
+TRENDING_SEARCH_LIMIT = 40
+# Pages for the paged search endpoints (TMDB, Seer):
+# ceil(TRENDING_SEARCH_LIMIT / ~20 rows per page). Trakt takes the limit in one
+# request and AniList pages internally, so both ignore this.
+TRENDING_SEARCH_PAGES = 2
 # The combined Radarr/Sonarr library is re-listed at most this often.
 _LIBRARY_TTL_SECONDS = 60
 

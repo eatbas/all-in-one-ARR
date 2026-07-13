@@ -337,6 +337,109 @@ async def test_discovery_genre_filter_forwarded_only_when_set(tmp_path) -> None:
 
 
 @respx.mock
+async def test_search_movies_unwraps_and_skips_non_dict(tmp_path) -> None:
+    route = respx.get(f"{TRAKT_BASE_URL}/search/movie").mock(
+        return_value=httpx.Response(
+            200,
+            json=[
+                {
+                    "type": "movie",
+                    "score": 120.5,
+                    "movie": {
+                        "title": "Dune",
+                        "year": 2021,
+                        "ids": {
+                            "trakt": 1,
+                            "slug": "dune-2021",
+                            "imdb": "tt1",
+                            "tmdb": 100,
+                            "tvdb": None,
+                        },
+                    },
+                },
+                {"type": "movie", "score": 1.0, "movie": "broken"},  # inner not a dict
+            ],
+        )
+    )
+    client = make_client(tmp_path)
+    rows = await client.search(media_type="movie", query="dune", limit=5)
+    assert rows == [
+        {
+            "media_type": "movie",
+            "tmdb": 100,
+            "imdb": "tt1",
+            "tvdb": None,
+            "trakt": 1,
+            "slug": "dune-2021",
+            "title": "Dune",
+            "year": 2021,
+        }
+    ]
+    assert route.calls.last.request.url.params["query"] == "dune"
+    assert route.calls.last.request.url.params["limit"] == "5"
+    # A plain search needs no extended payload (no genre filter to apply).
+    assert "extended" not in route.calls.last.request.url.params
+    # Search is a public endpoint: API key only, no OAuth bearer token.
+    assert "Authorization" not in route.calls.last.request.headers
+    assert route.calls.last.request.headers["trakt-api-key"] == "cid"
+
+
+@respx.mock
+async def test_search_genre_filter_is_applied_client_side(tmp_path) -> None:
+    # Trakt's search endpoint supports no server-side filters (unlike the
+    # discovery feeds), so the genre slug is matched against the extended
+    # payload's genres instead.
+    route = respx.get(f"{TRAKT_BASE_URL}/search/show").mock(
+        return_value=httpx.Response(
+            200,
+            json=[
+                {
+                    "type": "show",
+                    "score": 100.0,
+                    "show": {
+                        "title": "Frieren: Beyond Journey's End",
+                        "year": 2023,
+                        "ids": {"trakt": 3, "tmdb": 209867},
+                        "genres": ["anime", "fantasy"],
+                    },
+                },
+                {
+                    # Matching title but not anime: dropped by the filter.
+                    "type": "show",
+                    "score": 50.0,
+                    "show": {
+                        "title": "Frieren Documentary",
+                        "year": 2024,
+                        "ids": {"trakt": 4, "tmdb": 999},
+                        "genres": ["documentary"],
+                    },
+                },
+                {
+                    # No genres in the payload at all: dropped by the filter.
+                    "type": "show",
+                    "score": 10.0,
+                    "show": {
+                        "title": "Bare Result",
+                        "year": 2020,
+                        "ids": {"trakt": 5},
+                    },
+                },
+            ],
+        )
+    )
+    client = make_client(tmp_path)
+    rows = await client.search(
+        media_type="show", query="frieren", limit=5, genres="anime"
+    )
+    assert [row["tmdb"] for row in rows] == [209867]
+    params = route.calls.last.request.url.params
+    # The filter needs the genre slugs, so the extended payload is requested;
+    # no unsupported `genres` parameter is sent to the endpoint.
+    assert params["extended"] == "full"
+    assert "genres" not in params
+
+
+@respx.mock
 async def test_lookup_ids_by_tmdb_returns_ids(tmp_path) -> None:
     route = respx.get(f"{TRAKT_BASE_URL}/search/tmdb/100").mock(
         return_value=httpx.Response(

@@ -14,6 +14,7 @@ import { readStoredItem, writeStoredItem } from "@/shared/lib/storage"
 import {
   useServiceSettings,
   useTrending,
+  useTrendingSearch,
   useTrendingStatus,
 } from "@/shared/lib/queries"
 import type {
@@ -23,6 +24,7 @@ import type {
   TrendingSource,
 } from "@/shared/lib/api"
 import { isAvailable } from "@/features/trending/trending-item-status"
+import { useDebouncedValue } from "@/features/trending/useDebouncedValue"
 import { usePosterReveal } from "@/features/trending/usePosterReveal"
 import { SourceToolbar } from "@/features/trending/components/SourceToolbar"
 import { TrendingResultGrid } from "@/features/trending/components/TrendingResultGrid"
@@ -34,6 +36,8 @@ import {
   TAB_LABELS,
   TRENDING_ANIME_SOURCE_STORAGE_KEY,
   TRENDING_PER_ROW_STORAGE_KEY,
+  TRENDING_SEARCH_DEBOUNCE_MS,
+  TRENDING_SEARCH_MIN_LENGTH,
   TRENDING_TAB_STORAGE_KEY,
   VALID_TRENDING_TABS,
   type AnimeSource,
@@ -42,9 +46,46 @@ import {
 } from "@/features/trending/trending-tab"
 
 /**
- * Data toggles (media / category) on the left, display options (per-row
- * density / hide-available) on the right, then the grid. Results are revealed
- * three rows at a time via an infinite-scroll sentinel rather than paged.
+ * Status copy shown in place of the grid: the initial load, an empty result
+ * set (search or feed), or a grid the hide-available filter emptied.
+ */
+function PanelStatusMessage({
+  isInitialLoading,
+  hasItems,
+  isSearching,
+  searchQuery,
+  source,
+}: {
+  isInitialLoading: boolean
+  /** Whether the active query returned any items (before the availability filter). */
+  hasItems: boolean
+  isSearching: boolean
+  searchQuery: string
+  source: TrendingSource
+}) {
+  let message: string
+  if (isInitialLoading) {
+    message = isSearching ? "Searching…" : "Loading trending…"
+  } else if (!hasItems) {
+    // AniList needs no credentials, so there is no connection to check.
+    message = isSearching
+      ? `No results for “${searchQuery}”.`
+      : source === "anilist"
+        ? "Nothing to show. AniList may be temporarily unavailable."
+        : `Nothing to show. Check the ${SOURCE_LABELS[source]} connection in Settings.`
+  } else {
+    message =
+      "Every result is already available. Turn off “Hide available” to see them."
+  }
+  return <p className="text-sm text-muted-foreground">{message}</p>
+}
+
+/**
+ * Data toggles (media / category) and the search box on the left, display
+ * options (per-row density / hide-available) on the right, then the grid. A
+ * settled search query swaps the grid from the scheduled feed to live search
+ * results from the same source. Results are revealed three rows at a time via
+ * an infinite-scroll sentinel rather than paged.
  */
 function SourcePanel({
   source,
@@ -56,17 +97,30 @@ function SourcePanel({
 }) {
   const [media, setMedia] = useState<ItemType>(defaultMedia)
   const [category, setCategory] = useState<TrendingCategory>("trending")
+  const [search, setSearch] = useState("")
   const [hideAvailable, setHideAvailable] = useState(false)
   const [perRow, setPerRow] = useState<PerRow>(() =>
     readStoredDensity(TRENDING_PER_ROW_STORAGE_KEY, DEFAULT_PER_ROW),
   )
+  const searchQuery = useDebouncedValue(
+    search,
+    TRENDING_SEARCH_DEBOUNCE_MS,
+  ).trim()
+  const isSearching = searchQuery.length >= TRENDING_SEARCH_MIN_LENGTH
   const query: TrendingQuery = { source, media, category }
-  const { data, isFetching, isLoading } = useTrending(query)
+  const feed = useTrending(query)
+  const searchState = useTrendingSearch(
+    { source, media, query: searchQuery },
+    isSearching,
+  )
+  // The grid renders whichever query is active; the feed stays cached in the
+  // background so clearing the search restores it without a refetch flash.
+  const active = isSearching ? searchState : feed
   const { data: services } = useServiceSettings()
   const { data: status } = useTrendingStatus()
   const seerUrl = services?.seer.url
-  const items = data ?? []
-  const isInitialLoading = isLoading && data === undefined
+  const items = active.data ?? []
+  const isInitialLoading = active.isLoading && active.data === undefined
 
   // "Hide available" drops only titles the user can watch now (downloaded in
   // Radarr/Sonarr, or Available in Seer); requested/processing/missing items stay.
@@ -89,6 +143,12 @@ function SourcePanel({
     setCategory(next)
     resetReveal()
   }
+  function changeSearch(next: string) {
+    setSearch(next)
+    // Reset on the keystroke, not the settled query: the outgoing grid is
+    // about to be replaced, so collapsing it early is invisible in practice.
+    resetReveal()
+  }
   function changeHideAvailable(next: boolean) {
     setHideAvailable(next)
     resetReveal()
@@ -106,31 +166,27 @@ function SourcePanel({
       <SourceToolbar
         media={media}
         category={category}
+        search={search}
         hideAvailable={hideAvailable}
         perRow={perRow}
-        isFetching={isFetching}
+        isFetching={active.isFetching}
         isInitialLoading={isInitialLoading}
         lastSyncedAt={status?.last_synced_at}
         onChangeMedia={changeMedia}
         onChangeCategory={changeCategory}
+        onChangeSearch={changeSearch}
         onChangeHideAvailable={changeHideAvailable}
         onChangePerRow={changePerRow}
       />
 
-      {isInitialLoading ? (
-        <p className="text-sm text-muted-foreground">Loading trending…</p>
-      ) : items.length === 0 ? (
-        <p className="text-sm text-muted-foreground">
-          {/* AniList needs no credentials, so there is no connection to check. */}
-          {source === "anilist"
-            ? "Nothing to show. AniList may be temporarily unavailable."
-            : `Nothing to show. Check the ${SOURCE_LABELS[source]} connection in Settings.`}
-        </p>
-      ) : visible.length === 0 ? (
-        <p className="text-sm text-muted-foreground">
-          Every result is already available. Turn off “Hide available” to see
-          them.
-        </p>
+      {isInitialLoading || visible.length === 0 ? (
+        <PanelStatusMessage
+          isInitialLoading={isInitialLoading}
+          hasItems={items.length > 0}
+          isSearching={isSearching}
+          searchQuery={searchQuery}
+          source={source}
+        />
       ) : (
         <TrendingResultGrid
           perRow={perRow}

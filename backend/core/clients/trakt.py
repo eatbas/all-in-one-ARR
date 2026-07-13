@@ -348,6 +348,46 @@ class TraktClient:
             if isinstance(entry, dict)
         ]
 
+    async def search(
+        self,
+        *,
+        media_type: str,
+        query: str,
+        limit: int = 20,
+        genres: str | None = None,
+    ) -> list[dict[str, Any]]:
+        """Return Trakt title-search results as uniform discovery rows.
+
+        ``media_type`` is ``movie`` or ``show`` (also Trakt's singular search
+        path segment). Trakt wraps each result in a ``{"type": ..., "score":
+        ..., "<media>": {...}}`` object ordered by relevance; the inner media
+        object is unwrapped and normalised. Uses the public (API-key-only)
+        headers.
+
+        Unlike the discovery feeds, Trakt's search endpoint supports no
+        server-side filters, so a ``genres`` slug is applied here instead: the
+        results are requested with ``extended=full`` (which carries each
+        title's genre slugs) and filtered client-side.
+        """
+        params = self._discovery_params(limit, None)
+        params["query"] = query
+        if genres is not None:
+            params["extended"] = "full"
+        response = await self._client.get(
+            f"/search/{media_type}",
+            headers=self._public_headers(),
+            params=params,
+        )
+        response.raise_for_status()
+        objects = [
+            entry[media_type]
+            for entry in response.json()
+            if isinstance(entry.get(media_type), dict)
+        ]
+        if genres is not None:
+            objects = [obj for obj in objects if genres in (obj.get("genres") or [])]
+        return [self._discovery_row(obj, media_type) for obj in objects]
+
     async def lookup_ids(
         self,
         *,

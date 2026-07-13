@@ -8,7 +8,11 @@ from fastapi.testclient import TestClient
 from core import trending as trending_mod
 from core.context import SyncAlreadyRunning
 from core.settings_store import TrackedList
-from core.trending import SEER_TRENDING_SYNC_PAGES
+from core.trending import (
+    SEER_TRENDING_SYNC_PAGES,
+    TRENDING_SEARCH_LIMIT,
+    TRENDING_SEARCH_PAGES,
+)
 from core.trending_api import create_trending_router, fetch_feed
 from tests.conftest import make_ctx
 
@@ -570,6 +574,201 @@ def test_get_trending_embeds_stored_ratings(db) -> None:
     assert [item["imdb_rating"] for item in result] == [8.6, 7.2, None]
     # The overlay is a local read; no upstream rating traffic on the request path.
     ctx.omdb.fetch_rating.assert_not_awaited()
+
+
+# ---- GET /api/trending/search ----
+
+
+def test_search_trakt_dispatch_applies_overlays(db) -> None:
+    db.trending_ratings_upsert(key="tt1", imdb_rating=8.6, imdb_votes=100)
+    ctx = make_ctx(db=db)
+    ctx.trakt.search.return_value = [_row(tmdb=100, imdb="tt1")]
+    result = (
+        build_client(ctx)
+        .get(
+            "/api/trending/search",
+            params={"source": "trakt", "media": "movie", "query": "dune"},
+        )
+        .json()
+    )
+    assert result[0]["source"] == "trakt"
+    assert result[0]["tmdb"] == 100
+    assert result[0]["imdb_rating"] == 8.6
+    assert result[0]["already_tracked"] is False
+    kwargs = ctx.trakt.search.await_args.kwargs
+    assert kwargs["media_type"] == "movie"
+    assert kwargs["query"] == "dune"
+    assert kwargs["limit"] == TRENDING_SEARCH_LIMIT
+    assert "genres" not in kwargs
+
+
+def test_search_trakt_anime_forwards_genre_filter(db) -> None:
+    ctx = make_ctx(db=db)
+    ctx.trakt.search.return_value = [_row(media_type="show", tmdb=500)]
+    result = (
+        build_client(ctx)
+        .get(
+            "/api/trending/search",
+            params={"source": "trakt-anime", "media": "show", "query": "frieren"},
+        )
+        .json()
+    )
+    assert result[0]["source"] == "trakt-anime"
+    assert ctx.trakt.search.await_args.kwargs["genres"] == "anime"
+
+
+def test_search_tmdb_dispatch_uses_search_pages(db) -> None:
+    ctx = make_ctx(db=db)
+    ctx.tmdb.search.return_value = [_row(tmdb=200)]
+    result = (
+        build_client(ctx)
+        .get(
+            "/api/trending/search",
+            params={"source": "tmdb", "media": "movie", "query": "matrix"},
+        )
+        .json()
+    )
+    assert result[0]["tmdb"] == 200
+    kwargs = ctx.tmdb.search.await_args.kwargs
+    assert kwargs["query"] == "matrix"
+    assert kwargs["pages"] == TRENDING_SEARCH_PAGES
+
+
+def test_search_tmdb_anime_dispatches_to_search_anime(db) -> None:
+    ctx = make_ctx(db=db)
+    ctx.tmdb.search_anime.return_value = [_row(media_type="show", tmdb=600)]
+    result = (
+        build_client(ctx)
+        .get(
+            "/api/trending/search",
+            params={"source": "tmdb-anime", "media": "show", "query": "dan da dan"},
+        )
+        .json()
+    )
+    assert result[0]["tmdb"] == 600
+    ctx.tmdb.search_anime.assert_awaited_once()
+    ctx.tmdb.search.assert_not_awaited()
+
+
+def test_search_seer_dispatch(db) -> None:
+    ctx = make_ctx(db=db)
+    ctx.seer.search.return_value = [_row(media_type="show", tmdb=400, seer_status=5)]
+    result = (
+        build_client(ctx)
+        .get(
+            "/api/trending/search",
+            params={"source": "seer", "media": "show", "query": "thrones"},
+        )
+        .json()
+    )
+    assert result[0]["tmdb"] == 400
+    assert result[0]["seer_status"] == 5
+    kwargs = ctx.seer.search.await_args.kwargs
+    assert kwargs["pages"] == TRENDING_SEARCH_PAGES
+
+
+def test_search_anilist_enriches_and_collapses_show_seasons(db) -> None:
+    ctx = make_ctx(db=db)
+    ctx.anilist.search.return_value = [
+        {
+            "media_type": "show",
+            "anilist": 146065,
+            "title": "Mushoku Tensei: Jobless Reincarnation Season 2",
+            "year": 2023,
+        },
+        {
+            "media_type": "show",
+            "anilist": 108465,
+            "title": "Mushoku Tensei: Jobless Reincarnation",
+            "year": 2021,
+        },
+    ]
+
+    async def _fill(rows):
+        for row in rows:
+            row["tvdb"] = 371310
+            row["tmdb"] = 94664
+        return rows
+
+    ctx.anime_ids.enrich.side_effect = _fill
+    result = (
+        build_client(ctx)
+        .get(
+            "/api/trending/search",
+            params={"source": "anilist", "media": "show", "query": "mushoku"},
+        )
+        .json()
+    )
+    assert [item["title"] for item in result] == [
+        "Mushoku Tensei: Jobless Reincarnation"
+    ]
+    assert result[0]["tvdb"] == 371310
+    ctx.anime_ids.enrich.assert_awaited_once()
+
+
+def test_search_anilist_movies_are_not_season_deduped(db) -> None:
+    # Franchise films can share a series-level id, so movie search results are
+    # never collapsed (mirrors the browse feeds).
+    ctx = make_ctx(db=db)
+    ctx.anilist.search.return_value = [
+        {"media_type": "movie", "anilist": 21519, "title": "Your Name.", "tmdb": 1},
+        {"media_type": "movie", "anilist": 99750, "title": "Your Name. 2", "tmdb": 1},
+    ]
+    result = (
+        build_client(ctx)
+        .get(
+            "/api/trending/search",
+            params={"source": "anilist", "media": "movie", "query": "your name"},
+        )
+        .json()
+    )
+    assert [item["anilist"] for item in result] == [21519, 99750]
+
+
+def test_search_anilist_without_id_map_serves_unenriched_rows(db) -> None:
+    ctx = make_ctx(db=db)
+    ctx.anime_ids = None
+    ctx.anilist.search.return_value = [
+        {"media_type": "show", "anilist": 1, "title": "X", "year": 2026}
+    ]
+    result = (
+        build_client(ctx)
+        .get(
+            "/api/trending/search",
+            params={"source": "anilist", "media": "show", "query": "xx"},
+        )
+        .json()
+    )
+    assert result[0]["anilist"] == 1
+    assert result[0]["tmdb"] is None
+
+
+def test_search_short_query_is_422(db) -> None:
+    response = build_client(make_ctx(db=db)).get(
+        "/api/trending/search", params={"source": "trakt", "query": "a"}
+    )
+    assert response.status_code == 422
+
+
+def test_search_error_degrades_to_empty_list(db) -> None:
+    ctx = make_ctx(db=db)
+    ctx.trakt.search.side_effect = RuntimeError("trakt down")
+    response = build_client(ctx).get(
+        "/api/trending/search", params={"source": "trakt", "query": "dune"}
+    )
+    assert response.status_code == 200
+    assert response.json() == []
+
+
+def test_search_is_never_served_from_the_snapshot_store(db) -> None:
+    # Search is live on every call: unlike the feed, a repeat query hits the
+    # source again instead of a store entry.
+    ctx = make_ctx(db=db)
+    ctx.trakt.search.return_value = [_row(tmdb=100)]
+    client = build_client(ctx)
+    client.get("/api/trending/search", params={"source": "trakt", "query": "dune"})
+    client.get("/api/trending/search", params={"source": "trakt", "query": "dune"})
+    assert ctx.trakt.search.await_count == 2
 
 
 # ---- GET /api/trending/rating (compat shim, served from the DB store) ----

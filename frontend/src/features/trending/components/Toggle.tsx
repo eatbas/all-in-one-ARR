@@ -6,11 +6,14 @@ export function Toggle<T extends string>({
   value,
   options,
   onChange,
+  disabled = false,
 }: {
   ariaLabel: string
   value: T
   options: ReadonlyArray<{ value: T; label: string }>
   onChange: (value: T) => void
+  /** Grey out the whole group while another control overrides the choice. */
+  disabled?: boolean
 }) {
   return (
     <div
@@ -25,6 +28,7 @@ export function Toggle<T extends string>({
           size="sm"
           variant={value === option.value ? "default" : "ghost"}
           aria-pressed={value === option.value}
+          disabled={disabled}
           onClick={() => onChange(option.value)}
         >
           {option.label}

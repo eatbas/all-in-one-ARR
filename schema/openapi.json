@@ -3969,7 +3969,7 @@
     },
     "/api/trending/rating": {
       "get": {
-        "description": "Compat single-item lookup served from the persistent rating store.\n\nPre-deploy frontend bundles still call this once per card; the current\ndashboard reads ``imdb_rating`` off the feed instead. Served entirely\nfrom the store the backfill fills â€” no OMDb or TMDB call â€” and kept only\nuntil cached bundles have cycled out.",
+        "description": "Compat single-item lookup served from the persistent rating store.\n\nPre-deploy frontend bundles still call this once per card; the current\ndashboard reads ``imdb_rating`` off the feed instead. Served entirely\nfrom the store the backfill fills — no OMDb or TMDB call — and kept only\nuntil cached bundles have cycled out.",
         "operationId": "get_rating_api_trending_rating_get",
         "parameters": [
           {
@@ -4048,6 +4048,85 @@
           }
         },
         "summary": "Get Rating",
+        "tags": [
+          "trending"
+        ]
+      }
+    },
+    "/api/trending/search": {
+      "get": {
+        "description": "Live title search on one discovery source, with the usual overlays.\n\nAlways fetched from the upstream source — the scheduler snapshot holds\nonly the trending/popular feeds, and long-tail search results would\nbloat it — and cached client-side by the dashboard. A dead source\ndegrades to an empty result list.",
+        "operationId": "get_trending_search_api_trending_search_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "source",
+            "required": true,
+            "schema": {
+              "enum": [
+                "trakt",
+                "tmdb",
+                "seer",
+                "trakt-anime",
+                "tmdb-anime",
+                "anilist"
+              ],
+              "title": "Source",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "query",
+            "required": true,
+            "schema": {
+              "minLength": 2,
+              "title": "Query",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "media",
+            "required": false,
+            "schema": {
+              "default": "movie",
+              "enum": [
+                "movie",
+                "show"
+              ],
+              "title": "Media",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/TrendingItem"
+                  },
+                  "title": "Response Get Trending Search Api Trending Search Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Trending Search",
         "tags": [
           "trending"
         ]

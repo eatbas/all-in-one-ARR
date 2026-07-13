@@ -2486,6 +2486,46 @@ export type GetRatingApiTrendingRatingGetResponses = {
 
 export type GetRatingApiTrendingRatingGetResponse = GetRatingApiTrendingRatingGetResponses[keyof GetRatingApiTrendingRatingGetResponses];
 
+export type GetTrendingSearchApiTrendingSearchGetData = {
+    body?: never;
+    path?: never;
+    query: {
+        /**
+         * Source
+         */
+        source: 'trakt' | 'tmdb' | 'seer' | 'trakt-anime' | 'tmdb-anime' | 'anilist';
+        /**
+         * Query
+         */
+        query: string;
+        /**
+         * Media
+         */
+        media?: 'movie' | 'show';
+    };
+    url: '/api/trending/search';
+};
+
+export type GetTrendingSearchApiTrendingSearchGetErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type GetTrendingSearchApiTrendingSearchGetError = GetTrendingSearchApiTrendingSearchGetErrors[keyof GetTrendingSearchApiTrendingSearchGetErrors];
+
+export type GetTrendingSearchApiTrendingSearchGetResponses = {
+    /**
+     * Response Get Trending Search Api Trending Search Get
+     *
+     * Successful Response
+     */
+    200: Array<TrendingItem>;
+};
+
+export type GetTrendingSearchApiTrendingSearchGetResponse = GetTrendingSearchApiTrendingSearchGetResponses[keyof GetTrendingSearchApiTrendingSearchGetResponses];
+
 export type GetTrendingStatusApiTrendingStatusGetData = {
     body?: never;
     path?: never;

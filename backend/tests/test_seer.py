@@ -295,6 +295,72 @@ async def test_discover_trending_filters_people_and_maps_status() -> None:
 
 
 @respx.mock
+async def test_search_filters_media_type_and_drops_people() -> None:
+    route = respx.get(f"{_BASE}/api/v1/search").mock(
+        return_value=httpx.Response(
+            200,
+            json={
+                "results": [
+                    {
+                        "id": 603,
+                        "mediaType": "movie",
+                        "title": "The Matrix",
+                        "releaseDate": "1999-03-31",
+                        "mediaInfo": {"status": 5},
+                    },
+                    {
+                        # A show: filtered out of a movie search.
+                        "id": 1399,
+                        "mediaType": "tv",
+                        "name": "Game of Thrones",
+                        "firstAirDate": "2011-04-17",
+                    },
+                    {
+                        # A person entry: dropped by the normaliser.
+                        "id": 6384,
+                        "mediaType": "person",
+                        "name": "Keanu Reeves",
+                    },
+                ]
+            },
+        )
+    )
+    rows = await make_client().search(media_type="movie", query="matrix", limit=10)
+    assert rows == [
+        {
+            "media_type": "movie",
+            "tmdb": 603,
+            "title": "The Matrix",
+            "year": 1999,
+            "seer_status": 5,
+        }
+    ]
+    assert route.calls.last.request.url.params["query"] == "matrix"
+    assert route.calls.last.request.url.params["page"] == "1"
+
+
+@respx.mock
+async def test_search_shows_concatenates_pages_stops_when_empty_and_caps() -> None:
+    respx.get(f"{_BASE}/api/v1/search").mock(
+        side_effect=[
+            httpx.Response(
+                200,
+                json={
+                    "results": [
+                        {"id": 1, "mediaType": "tv", "name": "A"},
+                        {"id": 2, "mediaType": "tv", "name": "B"},
+                    ]
+                },
+            ),
+            httpx.Response(200, json={"results": []}),
+        ]
+    )
+    rows = await make_client().search(media_type="show", query="a", limit=1, pages=3)
+    # The empty second page short-circuits the third; the cap trims to one row.
+    assert [row["tmdb"] for row in rows] == [1]
+
+
+@respx.mock
 async def test_discover_popular_movies_uses_default_media_type() -> None:
     route = respx.get(f"{_BASE}/api/v1/discover/movies").mock(
         return_value=httpx.Response(

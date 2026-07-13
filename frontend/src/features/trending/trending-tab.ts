@@ -29,6 +29,15 @@ export type PerRow = PosterDensity
 export const DEFAULT_PER_ROW = DEFAULT_TRENDING_DENSITY
 
 /**
+ * Minimum settled query length before the live search fires; mirrors the API's
+ * `min_length` so a shorter query is never sent (it would be rejected as 422).
+ */
+export const TRENDING_SEARCH_MIN_LENGTH = 2
+
+/** How long the search box must sit unchanged before the query fires (ms). */
+export const TRENDING_SEARCH_DEBOUNCE_MS = 300
+
+/**
  * The selectable page tabs, in display order. The first three map 1:1 onto a
  * backend source; the Anime tab toggles between the anime sources instead.
  */

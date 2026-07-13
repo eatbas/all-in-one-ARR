@@ -11,6 +11,7 @@ unlike :mod:`core.clients.arr_client` — only the API key is held and updatable
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from typing import Any
 
 import httpx
@@ -26,6 +27,21 @@ _POSTER_SIZE = "w342"
 # productions. TMDB's /trending endpoints cannot be genre-filtered, so the
 # anime feeds are built from /discover with an explicit sort instead.
 _ANIME_DISCOVER_PARAMS = {"with_genres": "16", "with_origin_country": "JP"}
+# TMDB's Animation genre id, used by the anime search post-filter.
+_ANIMATION_GENRE_ID = 16
+
+
+def _is_anime_result(item: dict[str, Any]) -> bool:
+    """Whether a raw TMDB search result looks like anime.
+
+    TMDB's text search accepts no genre or origin filters, so search results
+    are filtered client-side: the Animation genre plus a Japanese original
+    language — the closest text-searchable equivalent of
+    :data:`_ANIME_DISCOVER_PARAMS` (movie search results carry no origin
+    country to match on).
+    """
+    genre_ids = item.get("genre_ids") or []
+    return _ANIMATION_GENRE_ID in genre_ids and item.get("original_language") == "ja"
 
 
 def _is_v4_token(api_key: str) -> bool:
@@ -98,6 +114,7 @@ class TmdbClient:
         limit: int,
         pages: int = 1,
         extra_params: dict[str, str] | None = None,
+        result_filter: Callable[[dict[str, Any]], bool] | None = None,
     ) -> list[dict[str, Any]]:
         """Fetch and normalise a TMDB discovery endpoint's ``results`` array.
 
@@ -106,6 +123,9 @@ class TmdbClient:
         single page; an empty page short-circuits the rest. ``pages=1`` preserves
         the original single-page behaviour for live calls. ``extra_params`` are
         merged into every page request (used for the /discover filters).
+        ``result_filter`` drops raw results before normalisation (used where the
+        endpoint cannot filter server-side); paging stops on an empty *response*
+        page, not an all-filtered one.
         """
         results: list[dict[str, Any]] = []
         for page in range(1, pages + 1):
@@ -114,7 +134,10 @@ class TmdbClient:
             response = await self._client.get(url, **{**kwargs, "params": params})
             response.raise_for_status()
             page_results = response.json().get("results") or []
-            results.extend(page_results)
+            if result_filter is None:
+                results.extend(page_results)
+            else:
+                results.extend(item for item in page_results if result_filter(item))
             if not page_results:
                 break
         return [self._discovery_row(item, media_type) for item in results[:limit]]
@@ -183,6 +206,59 @@ class TmdbClient:
             limit=limit,
             pages=pages,
             extra_params={**_ANIME_DISCOVER_PARAMS, "sort_by": "vote_count.desc"},
+        )
+
+    async def _search(
+        self,
+        *,
+        media_type: str,
+        query: str,
+        limit: int,
+        pages: int,
+        result_filter: Callable[[dict[str, Any]], bool] | None = None,
+    ) -> list[dict[str, Any]]:
+        """Fetch one TMDB title-search feed (shared by both search variants).
+
+        Adult titles are excluded, matching the discovery feeds' defaults.
+        """
+        endpoint = "movie" if media_type == "movie" else "tv"
+        url = f"{_BASE_URL}/3/search/{endpoint}"
+        return await self._discover(
+            url,
+            media_type=media_type,
+            limit=limit,
+            pages=pages,
+            extra_params={"query": query, "include_adult": "false"},
+            result_filter=result_filter,
+        )
+
+    async def search(
+        self, *, media_type: str, query: str, limit: int = 20, pages: int = 1
+    ) -> list[dict[str, Any]]:
+        """Return TMDB title-search results as uniform discovery rows.
+
+        ``media_type`` is ``movie`` or ``show``; ``pages`` is the number of
+        result pages to fetch (see :meth:`_discover`).
+        """
+        return await self._search(
+            media_type=media_type, query=query, limit=limit, pages=pages
+        )
+
+    async def search_anime(
+        self, *, media_type: str, query: str, limit: int = 20, pages: int = 1
+    ) -> list[dict[str, Any]]:
+        """Return TMDB title-search results filtered to anime.
+
+        Same request as :meth:`search`, with the raw results post-filtered by
+        :func:`_is_anime_result` because the search endpoints accept none of
+        the ``/discover`` anime filters.
+        """
+        return await self._search(
+            media_type=media_type,
+            query=query,
+            limit=limit,
+            pages=pages,
+            result_filter=_is_anime_result,
         )
 
     async def fetch_external_ids(self, *, media_type: str, tmdb_id: int) -> str | None:

@@ -36,6 +36,7 @@ class StubTrakt:
         self.lookup_ids = AsyncMock(return_value={"trakt": 500, "tmdb": 100})
         self.get_trending = AsyncMock(return_value=[])
         self.get_popular = AsyncMock(return_value=[])
+        self.search = AsyncMock(return_value=[])
         self.update_credentials = MagicMock()
         self.request_device_code = AsyncMock(
             return_value={
@@ -339,6 +340,7 @@ class StubSeer:
             return_value={"movie": [], "show": []}
         )
         self.discover_popular = AsyncMock(return_value=[])
+        self.search = AsyncMock(return_value=[])
         self.update_credentials = MagicMock()
         self.test_connection = AsyncMock(
             return_value={"ok": True, "detail": "Connected"}
@@ -426,13 +428,16 @@ class StubService:
         self.test_connection = AsyncMock(
             return_value={"ok": True, "detail": "Connected"}
         )
-        # TMDB trending/discovery + external-id resolution (Trending feature); OMDb
-        # rating overlay. Harmless extra attributes on the other simple-service stubs.
-        # get_trending/get_popular also cover the AniList client's contract.
+        # TMDB trending/discovery/search + external-id resolution (Trending
+        # feature); OMDb rating overlay. Harmless extra attributes on the other
+        # simple-service stubs. get_trending/get_popular/search also cover the
+        # AniList client's contract.
         self.get_trending = AsyncMock(return_value=[])
         self.get_popular = AsyncMock(return_value=[])
         self.get_anime_trending = AsyncMock(return_value=[])
         self.get_anime_popular = AsyncMock(return_value=[])
+        self.search = AsyncMock(return_value=[])
+        self.search_anime = AsyncMock(return_value=[])
         self.fetch_external_ids = AsyncMock(return_value=None)
         self.fetch_rating = AsyncMock(
             return_value={"imdb_rating": None, "imdb_votes": None}

@@ -742,6 +742,25 @@ export function getTrending(query: TrendingQuery): Promise<TrendingItem[]> {
   return request<TrendingItem[]>(`/api/trending?${params.toString()}`)
 }
 
+/** Query parameters for `GET /api/trending/search`. */
+export interface TrendingSearchQuery {
+  source: TrendingSource
+  media: ItemType
+  /** The title text to search for (the API requires at least two characters). */
+  query: string
+}
+
+export function searchTrending(
+  query: TrendingSearchQuery,
+): Promise<TrendingItem[]> {
+  const params = new URLSearchParams({
+    source: query.source,
+    media: query.media,
+    query: query.query,
+  })
+  return request<TrendingItem[]>(`/api/trending/search?${params.toString()}`)
+}
+
 export function addTrending(
   payload: AddTrendingPayload,
 ): Promise<TrendingAddResult> {
