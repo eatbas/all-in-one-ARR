@@ -203,6 +203,116 @@ def test_anilist_rows_are_enriched_and_carry_anime_fields(db) -> None:
     ctx.anime_ids.enrich.assert_awaited_once()
 
 
+def test_anilist_show_feed_collapses_season_rows_at_fetch(db) -> None:
+    # Two AniList entries of one series: enrich fills the shared series-level
+    # tvdb/tmdb ids, so the fetch path serves a single card for the base entry.
+    ctx = make_ctx(db=db)
+    ctx.anilist.get_trending.return_value = [
+        {
+            "media_type": "show",
+            "anilist": 146065,
+            "title": "Mushoku Tensei: Jobless Reincarnation Season 2",
+            "year": 2023,
+            "poster_url": "https://img.anili.st/s2.jpg",
+        },
+        {
+            "media_type": "show",
+            "anilist": 108465,
+            "title": "Mushoku Tensei: Jobless Reincarnation",
+            "year": 2021,
+            "poster_url": "https://img.anili.st/base.jpg",
+        },
+    ]
+
+    async def _fill(rows):
+        for row in rows:
+            row["tvdb"] = 371310
+            row["tmdb"] = 94664
+        return rows
+
+    ctx.anime_ids.enrich.side_effect = _fill
+    client = build_client(ctx)
+
+    result = client.get(
+        "/api/trending",
+        params={"source": "anilist", "media": "show", "category": "trending"},
+    ).json()
+    assert [item["title"] for item in result] == [
+        "Mushoku Tensei: Jobless Reincarnation"
+    ]
+    assert result[0]["anilist"] == 108465
+    assert result[0]["tvdb"] == 371310
+
+
+def test_anilist_show_read_path_dedupes_a_prefix_snapshot(db) -> None:
+    # A snapshot persisted before the season dedup existed still serves clean:
+    # the read path applies the same filter without refetching.
+    ctx = make_ctx(db=db)
+    ctx.trending_store.set(
+        source="anilist",
+        media="show",
+        category="trending",
+        window="week",
+        rows=[
+            {
+                "media_type": "show",
+                "anilist": 16498,
+                "title": "Attack on Titan",
+                "year": 2013,
+                "tvdb": 267440,
+            },
+            {
+                "media_type": "show",
+                "anilist": 110277,
+                "title": "Attack on Titan Final Season",
+                "year": 2020,
+                "tvdb": 267440,
+            },
+        ],
+    )
+    result = (
+        build_client(ctx)
+        .get(
+            "/api/trending",
+            params={"source": "anilist", "media": "show", "category": "trending"},
+        )
+        .json()
+    )
+    assert [item["title"] for item in result] == ["Attack on Titan"]
+    ctx.anilist.get_trending.assert_not_awaited()
+
+
+def test_anilist_movie_feed_is_not_season_deduped(db) -> None:
+    # Distinct films of one franchise can share a series-level id in Fribb's
+    # mapping, so the movie feed must never be collapsed.
+    ctx = make_ctx(db=db)
+    ctx.anilist.get_trending.return_value = [
+        {
+            "media_type": "movie",
+            "anilist": 21519,
+            "title": "Your Name.",
+            "year": 2016,
+            "tmdb": 372058,
+        },
+        {
+            "media_type": "movie",
+            "anilist": 99750,
+            "title": "Your Name. Part 2",
+            "year": 2019,
+            "tmdb": 372058,
+        },
+    ]
+    result = (
+        build_client(ctx)
+        .get(
+            "/api/trending",
+            params={"source": "anilist", "media": "movie", "category": "trending"},
+        )
+        .json()
+    )
+    assert [item["anilist"] for item in result] == [21519, 99750]
+
+
 def test_anilist_without_id_map_serves_unenriched_rows(db) -> None:
     ctx = make_ctx(db=db)
     ctx.anime_ids = None

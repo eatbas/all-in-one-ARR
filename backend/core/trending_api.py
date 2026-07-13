@@ -18,6 +18,7 @@ from fastapi import APIRouter
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
+from core.anime_seasons import dedupe_anilist_show_seasons
 from core.context import SyncAlreadyRunning
 from core.db import Database
 from core.logging import get_logger
@@ -146,6 +147,11 @@ async def fetch_feed(
         # fills in TMDB/TVDB/IMDb so the overlays and the Trakt add work.
         if ctx.anime_ids is not None:
             rows = await ctx.anime_ids.enrich(rows)
+        if media == "show":
+            # AniList lists every season separately; collapse to one row per
+            # series so the persisted snapshot and the downstream poster and
+            # rating jobs stay free of season duplicates.
+            rows = dedupe_anilist_show_seasons(rows)
         return rows
     # source == "seer"
     if category == "trending":
@@ -340,6 +346,10 @@ def create_trending_router(ctx: AppContext) -> APIRouter:
             ctx.trending_store.set(
                 source=source, media=media, category=category, window=window, rows=rows
             )
+        if source == "anilist" and media == "show":
+            # Covers snapshots persisted before the season dedup existed;
+            # idempotent on feeds already deduped at fetch time.
+            rows = dedupe_anilist_show_seasons(rows)
         # Overlay flags depend on fast-changing local state, so they are recomputed on
         # every read rather than cached alongside the rows. Ratings are one local
         # SQLite lookup across all row keys.
