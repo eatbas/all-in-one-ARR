@@ -590,7 +590,8 @@ pip install -e "./backend[dev]"
 uvicorn main:app --app-dir backend --reload --port 3223
 ```
 
-Frontend (Vite dev server proxies `/api` and `/webhook` to port 3223):
+Frontend (Vite dev server proxies `/api` and `/webhook` to port 3223; needs
+Node 24 or newer — the Docker image builds the same lockfile with Node 26):
 
 ```bash
 cd frontend

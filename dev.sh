@@ -106,15 +106,22 @@ fi
 # manifest is newer than the last install (npm records `node_modules/.package-
 # lock.json`); otherwise a dependency bump leaves config-time imports such as
 # `vitest/config` (used by vite.config.ts) unresolved and the dev server fails.
+# A manifest (package.json) change needs re-resolution, so it runs
+# `npm install`; a lockfile-only change (e.g. pulled from git) installs with
+# `npm ci` — the exact reproduction the Docker build uses — so every
+# environment runs the same resolved tree and a manifest/lockfile mismatch
+# fails loudly instead of silently re-resolving.
 FRONTEND_DIR="$ROOT_DIR/frontend"
 NODE_MODULES_MARKER="$FRONTEND_DIR/node_modules/.package-lock.json"
 if [[ ! -d "$FRONTEND_DIR/node_modules" ]]; then
   echo "Installing frontend dependencies (first run)…"
   (cd "$FRONTEND_DIR" && npm install)
-elif [[ "$FRONTEND_DIR/package.json" -nt "$NODE_MODULES_MARKER" \
-     || "$FRONTEND_DIR/package-lock.json" -nt "$NODE_MODULES_MARKER" ]]; then
-  echo "Frontend dependencies are out of date — running npm install…"
+elif [[ "$FRONTEND_DIR/package.json" -nt "$NODE_MODULES_MARKER" ]]; then
+  echo "Frontend manifest changed — running npm install…"
   (cd "$FRONTEND_DIR" && npm install)
+elif [[ "$FRONTEND_DIR/package-lock.json" -nt "$NODE_MODULES_MARKER" ]]; then
+  echo "Frontend lockfile changed — running npm ci…"
+  (cd "$FRONTEND_DIR" && npm ci)
 fi
 
 # The backend's Settings() fails fast (and the server exits) when the required
