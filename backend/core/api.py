@@ -177,7 +177,8 @@ def _apply_anime_ids_refresh(ctx: AppContext, days: int) -> None:
     """Persist an anime-mapping cadence change, log it and re-point the map.
 
     Re-pointing is synchronous and needs no restart; the download itself
-    happens at the map's next staleness check.
+    happens at the map's next staleness check (run at start-up and hourly by
+    ``core.anime_ids_sync``, plus lazily before enrichment).
     """
     previous = ctx.settings_store.anime_ids_refresh_days()
     updated = ctx.settings_store.update_anime_ids_refresh_days(days)

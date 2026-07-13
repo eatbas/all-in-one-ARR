@@ -132,6 +132,23 @@ async def test_stale_file_is_refreshed_from_upstream(mapping_path, monkeypatch) 
 
 
 @respx.mock
+async def test_ensure_fresh_downloads_a_missing_mapping(mapping_path) -> None:
+    # The public boot/scheduled entry point performs the same check-and-
+    # download as the lazy enrich() path, without needing any rows.
+    route = respx.get(_SOURCE_URL).mock(
+        return_value=httpx.Response(200, content=json.dumps(_ENTRIES).encode())
+    )
+    id_map = _make_map(mapping_path)
+    await id_map.ensure_fresh()
+    assert route.call_count == 1
+    assert mapping_path.exists()
+    # A fresh file makes the next check a stat-only no-op: no second download.
+    await id_map.ensure_fresh()
+    assert route.call_count == 1
+    await id_map.aclose()
+
+
+@respx.mock
 async def test_download_failure_falls_back_to_stale_file(
     mapping_path, monkeypatch
 ) -> None:

@@ -296,6 +296,16 @@ class AnimeIdMap:
                     self._retry_at = _now() + _RETRY_SECONDS
             await self._parse_file()
 
+    async def ensure_fresh(self) -> None:
+        """Refresh the mapping when stale and load it — the boot/scheduled entry.
+
+        Public alias of :meth:`_ensure_loaded` for the start-up hook and the
+        hourly ``anime_ids_refresh`` job, so the configured cadence is honoured
+        even when no AniList feed has been fetched since the server started.
+        A fresh file makes this a single ``stat()`` no-op.
+        """
+        await self._ensure_loaded()
+
     def _lookup(self, anilist_id: Any, mal_id: Any) -> MappedIds | None:
         """Resolve a row's mapping by AniList id, falling back to MAL id."""
         if isinstance(anilist_id, int):

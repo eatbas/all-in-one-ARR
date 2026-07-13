@@ -441,6 +441,7 @@ class StubAnimeIds:
             return rows
 
         self.enrich = AsyncMock(side_effect=_passthrough)
+        self.ensure_fresh = AsyncMock()
         self.update_refresh_days = MagicMock()
         self.aclose = AsyncMock()
 

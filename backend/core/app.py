@@ -21,6 +21,7 @@ from prometheus_client import make_asgi_app
 
 from core import registry
 from core.anime_ids import AnimeIdMap
+from core.anime_ids_sync import start_anime_ids_refresh
 from core.api import create_api_router
 from core.app_metrics import observe_scheduler_job
 from core.bandwidth_api import create_bandwidth_router
@@ -267,6 +268,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     await _start_poster_churn(ctx, app.state.settings)
 
     await start_trending_sync(ctx)
+
+    await start_anime_ids_refresh(ctx)
 
     try:
         yield

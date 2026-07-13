@@ -705,7 +705,7 @@ function AppSchedulerCard() {
         <SettingsSelectRow
           id="anime-ids-refresh"
           label="Anime mapping refresh"
-          help="How often the cached AniList/MAL → TMDB/TVDB id mapping (Fribb's anime-lists) is refreshed. The check runs with the trending refresh, so it applies on the first trending refresh after the cadence elapses."
+          help="How often the cached AniList/MAL → TMDB/TVDB id mapping (Fribb's anime-lists) is refreshed. Checked at start-up and hourly; the download happens on the first check after the cadence elapses."
           description="How often the anime id mapping is refreshed."
           options={ANIME_IDS_REFRESH_OPTIONS}
           value={animeIdsRefreshDays}
