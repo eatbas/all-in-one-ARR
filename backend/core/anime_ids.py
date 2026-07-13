@@ -13,6 +13,12 @@ strings, and ``themoviedb_id`` is an **object** of ``{"tv": int|list}`` /
 ``{"movie": int|list}``. All of it is parsed defensively — an unknown shape
 degrades to ``None``, never raises — so an upstream format change cannot break
 the Trending page.
+
+Ambiguity rule: a field carrying **two or more valid ids** (franchise and
+compilation entries list several films under one AniList id) yields ``None``
+rather than an arbitrary first pick — a wrong id mis-rates the card and can
+add the wrong title to a Trakt list, whereas a dropped one falls back to the
+unambiguous ids (TMDB resolves the authoritative IMDb id downstream).
 """
 
 from __future__ import annotations
@@ -61,29 +67,57 @@ class MappedIds:
     imdb: str | None = None
 
 
-def _first_int(value: Any) -> int | None:
-    """Return the value as an int, unwrapping one-or-many lists; else ``None``.
+def _valid_ints(value: Any) -> list[int]:
+    """Collect the valid int ids in a scalar-or-list value (junk skipped).
 
     ``bool`` is excluded explicitly (it subclasses ``int`` but is never an id).
     """
-    if isinstance(value, int) and not isinstance(value, bool):
-        return value
-    if isinstance(value, list):
-        for candidate in value:
-            if isinstance(candidate, int) and not isinstance(candidate, bool):
-                return candidate
-    return None
+    candidates = value if isinstance(value, list) else [value]
+    return [
+        candidate
+        for candidate in candidates
+        if isinstance(candidate, int) and not isinstance(candidate, bool)
+    ]
 
 
-def _first_str(value: Any) -> str | None:
-    """Return the value as a non-empty string, unwrapping lists; else ``None``."""
-    if isinstance(value, str) and value:
-        return value
-    if isinstance(value, list):
-        for candidate in value:
-            if isinstance(candidate, str) and candidate:
-                return candidate
-    return None
+def _valid_strs(value: Any) -> list[str]:
+    """Collect the valid non-empty string ids in a scalar-or-list value."""
+    candidates = value if isinstance(value, list) else [value]
+    return [
+        candidate
+        for candidate in candidates
+        if isinstance(candidate, str) and candidate
+    ]
+
+
+def _single_int(value: Any) -> int | None:
+    """Return the sole valid int id, or ``None`` when absent or ambiguous.
+
+    Junk entries around one real id (``[None, 7]``) still resolve; two or
+    more valid ids are ambiguous per the module's ambiguity rule.
+    """
+    valid = _valid_ints(value)
+    return valid[0] if len(valid) == 1 else None
+
+
+def _single_str(value: Any) -> str | None:
+    """Return the sole valid string id, or ``None`` when absent or ambiguous."""
+    valid = _valid_strs(value)
+    return valid[0] if len(valid) == 1 else None
+
+
+def _ambiguous_field_count(entry: dict[str, Any]) -> int:
+    """Count this entry's id fields that carry more than one valid id."""
+    values: list[Any] = [entry.get("tvdb_id")]
+    tmdb = entry.get("themoviedb_id")
+    if isinstance(tmdb, dict):
+        values.extend((tmdb.get("movie"), tmdb.get("tv")))
+    else:
+        values.append(tmdb)
+    ambiguous = sum(1 for value in values if len(_valid_ints(value)) > 1)
+    if len(_valid_strs(entry.get("imdb_id"))) > 1:
+        ambiguous += 1
+    return ambiguous
 
 
 def _mapped_ids(entry: dict[str, Any]) -> MappedIds | None:
@@ -97,18 +131,18 @@ def _mapped_ids(entry: dict[str, Any]) -> MappedIds | None:
     tmdb_movie: int | None = None
     tmdb_tv: int | None = None
     if isinstance(tmdb, dict):
-        tmdb_movie = _first_int(tmdb.get("movie"))
-        tmdb_tv = _first_int(tmdb.get("tv"))
-    elif _first_int(tmdb) is not None:
+        tmdb_movie = _single_int(tmdb.get("movie"))
+        tmdb_tv = _single_int(tmdb.get("tv"))
+    elif _single_int(tmdb) is not None:
         if entry.get("type") == "MOVIE":
-            tmdb_movie = _first_int(tmdb)
+            tmdb_movie = _single_int(tmdb)
         else:
-            tmdb_tv = _first_int(tmdb)
+            tmdb_tv = _single_int(tmdb)
     mapped = MappedIds(
         tmdb_movie=tmdb_movie,
         tmdb_tv=tmdb_tv,
-        tvdb=_first_int(entry.get("tvdb_id")),
-        imdb=_first_str(entry.get("imdb_id")),
+        tvdb=_single_int(entry.get("tvdb_id")),
+        imdb=_single_str(entry.get("imdb_id")),
     )
     if mapped == MappedIds():
         return None
@@ -131,9 +165,11 @@ def _build_indexes(
         return {}, {}
     by_anilist: dict[int, MappedIds] = {}
     by_mal: dict[int, MappedIds] = {}
+    ambiguous_fields = 0
     for entry in entries:
         if not isinstance(entry, dict):
             continue
+        ambiguous_fields += _ambiguous_field_count(entry)
         mapped = _mapped_ids(entry)
         if mapped is None:
             continue
@@ -143,6 +179,13 @@ def _build_indexes(
         mal_id = entry.get("mal_id")
         if isinstance(mal_id, int) and mal_id not in by_mal:
             by_mal[mal_id] = mapped
+    if ambiguous_fields:
+        # Visibility for a future source-format shift: a sudden surge here
+        # means coverage is silently shrinking under the ambiguity rule.
+        get_logger("anime_ids").debug(
+            "anime id mapping: %d ambiguous multi-id fields ignored",
+            ambiguous_fields,
+        )
     return by_anilist, by_mal
 
 

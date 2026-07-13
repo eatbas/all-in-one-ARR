@@ -254,3 +254,70 @@ async def test_malformed_file_yields_empty_indexes(mapping_path) -> None:
     enriched = await id_map.enrich(rows)
     assert enriched[0].get("tmdb") is None
     await id_map.aclose()
+
+
+def test_mapped_ids_drops_ambiguous_multi_id_fields() -> None:
+    # Franchise entries list several films under one AniList id; an arbitrary
+    # first pick mis-rates the card or adds the wrong title, so two or more
+    # valid ids in one field yield None while the unambiguous fields survive.
+    mapped = _mapped_ids(
+        {
+            "type": "MOVIE",
+            "imdb_id": ["tt1920940", "tt0089206"],
+            "themoviedb_id": {"movie": 37585},
+        }
+    )
+    assert mapped == MappedIds(tmdb_movie=37585)
+
+    # A multi-valued tmdb list is equally ambiguous; a one-element list is not.
+    assert _mapped_ids({"themoviedb_id": {"movie": [1, 2]}}) is None
+    assert _mapped_ids({"themoviedb_id": {"movie": [9]}}) == MappedIds(tmdb_movie=9)
+
+    # An entry ambiguous in every field maps to nothing at all.
+    assert (
+        _mapped_ids(
+            {
+                "imdb_id": ["tt1", "tt2"],
+                "themoviedb_id": {"movie": [1, 2], "tv": [3, 4]},
+                "tvdb_id": [5, 6],
+            }
+        )
+        is None
+    )
+
+
+async def test_enrich_leaves_imdb_unset_for_ambiguous_mapping(
+    mapping_path,
+) -> None:
+    # End to end: the ambiguous imdb is dropped, the single tmdb survives, and
+    # the row leaves enrichment ready for the tmdb-based rating/add fallbacks.
+    _write_mapping(
+        mapping_path,
+        [
+            {
+                "type": "MOVIE",
+                "anilist_id": 1441,
+                "imdb_id": ["tt1920940", "tt0089206"],
+                "themoviedb_id": {"movie": 37585},
+            }
+        ],
+    )
+    rows = [{"media_type": "movie", "anilist": 1441}]
+    await _make_map(mapping_path).enrich(rows)
+    assert rows[0]["tmdb"] == 37585
+    assert rows[0].get("imdb") is None
+
+
+def test_build_indexes_logs_ambiguous_field_count(caplog) -> None:
+    import logging
+
+    with caplog.at_level(logging.DEBUG, logger="aio_arr.anime_ids"):
+        _build_indexes(
+            json.dumps(
+                [
+                    {"anilist_id": 1, "imdb_id": ["tt1", "tt2"], "tvdb_id": 9},
+                    {"anilist_id": 2, "themoviedb_id": {"tv": [3, 4]}, "tvdb_id": 8},
+                ]
+            )
+        )
+    assert "2 ambiguous multi-id fields ignored" in caplog.text
