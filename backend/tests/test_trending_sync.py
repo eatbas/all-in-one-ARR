@@ -135,7 +135,7 @@ async def test_refresh_keeps_previous_snapshot_when_a_feed_fails(db) -> None:
     ) == [_row(2)]
     # Partial cycles do not stamp the store or the persistent cycle timestamp.
     assert ctx.trending_store.last_synced_at() is None
-    assert db.trending_feeds_last_synced() is None
+    assert db.trending_cycle_last_synced() is None
 
 
 async def test_seer_trending_is_fetched_once_and_split_by_media(db) -> None:
@@ -234,7 +234,7 @@ async def test_refresh_keeps_seer_trending_snapshot_when_it_fails(db) -> None:
     ) == [_row(7)]
     # Partial cycles do not stamp the store or the persistent cycle timestamp.
     assert ctx.trending_store.last_synced_at() is None
-    assert db.trending_feeds_last_synced() is None
+    assert db.trending_cycle_last_synced() is None
 
 
 async def test_job_invokes_refresh_when_ctx_set(db, monkeypatch) -> None:
@@ -314,7 +314,7 @@ async def test_start_restores_fresh_snapshot_without_refetching(
     assert ctx.trending_store.get(
         source="trakt", media="movie", category="trending", window="week"
     ) == [_row(1)]
-    assert ctx.trending_store.last_synced_at() == db.trending_feeds_last_synced()
+    assert ctx.trending_store.last_synced_at() == db.trending_cycle_last_synced()
     ctx.trakt.get_trending.assert_not_awaited()
     ctx.tmdb.get_trending.assert_not_awaited()
 
@@ -689,7 +689,7 @@ async def test_refresh_persists_feeds_for_restart(db) -> None:
     }
     assert persisted[("trakt", "movie", "trending")] == [_row(1)]
     assert persisted[("seer", "show", "trending")] == [_row(6, media_type="show")]
-    assert db.trending_feeds_last_synced() is not None
+    assert db.trending_cycle_last_synced() is not None
 
 
 async def test_refresh_does_not_update_cycle_timestamp_on_partial_failure(
@@ -703,7 +703,7 @@ async def test_refresh_does_not_update_cycle_timestamp_on_partial_failure(
     # The failed feed's own row is still persisted, but the cycle timestamp
     # must stay absent so the next restart knows the snapshot is incomplete.
     assert db.trending_feeds_load()
-    assert db.trending_feeds_last_synced() is None
+    assert db.trending_cycle_last_synced() is None
 
 
 async def test_start_refreshes_after_partial_failure_restart(db, monkeypatch) -> None:
@@ -728,7 +728,7 @@ async def test_start_refreshes_after_partial_failure_restart(db, monkeypatch) ->
         source="trakt", media="movie", category="trending", window="week"
     ) == [_row(2)]
     # A successful full cycle now stamps the cycle timestamp.
-    assert db.trending_feeds_last_synced() is not None
+    assert db.trending_cycle_last_synced() is not None
 
 
 # ---- backfill concurrency guard and reschedule catch-up ----

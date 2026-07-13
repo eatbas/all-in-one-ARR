@@ -423,15 +423,15 @@ def test_trending_feeds_save_replaces_previous_rows(db: Database) -> None:
     assert loaded[0]["rows"] == [{"tmdb": 2}]
 
 
-def test_trending_feeds_last_synced_uses_cycle_timestamp(db: Database) -> None:
+def test_trending_cycle_last_synced_ignores_partial_feed_writes(db: Database) -> None:
     # The cycle timestamp is absent until a complete cycle is explicitly marked.
-    assert db.trending_feeds_last_synced() is None
+    assert db.trending_cycle_last_synced() is None
     db.trending_feeds_save(
         source="trakt", media="movie", category="trending", window="week", rows=[]
     )
-    assert db.trending_feeds_last_synced() is None
+    assert db.trending_cycle_last_synced() is None
     db.trending_cycle_mark_synced("2026-01-01T00:00:00+00:00")
-    assert db.trending_feeds_last_synced() == "2026-01-01T00:00:00+00:00"
+    assert db.trending_cycle_last_synced() == "2026-01-01T00:00:00+00:00"
 
 
 def test_trending_ratings_upsert_and_get_many(db: Database) -> None:

@@ -507,7 +507,7 @@ def _restore_trending_store(ctx: AppContext) -> str | None:
             window=feed["window"],
             rows=feed["rows"],
         )
-    last = ctx.db.trending_feeds_last_synced()
+    last = ctx.db.trending_cycle_last_synced()
     if last is not None:
         ctx.trending_store.mark_synced(last)
     return last
@@ -563,7 +563,7 @@ async def start_trending_sync(ctx: AppContext) -> None:
         await ctx.scheduler.reschedule_interval(
             _trending_sync_job, minutes=minutes, id=_JOB_ID, defer_first_run=True
         )
-        last_synced = ctx.db.trending_feeds_last_synced()
+        last_synced = ctx.db.trending_cycle_last_synced()
         if last_synced is not None and _is_fresh(last_synced, interval_minutes=minutes):
             return
         async with _REFRESH_LOCK:

@@ -575,10 +575,6 @@ class Database:
             )
             self._conn.commit()
 
-    def trending_feeds_last_synced(self) -> str | None:
-        """Return the timestamp of the last complete refresh cycle, or ``None``."""
-        return self.trending_cycle_last_synced()
-
     def trending_ratings_get_many(
         self, keys: Iterable[str]
     ) -> dict[str, dict[str, Any]]:
