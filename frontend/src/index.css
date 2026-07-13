@@ -3,6 +3,15 @@
 
 @custom-variant dark (&:where(.dark, .dark *));
 
+/* Tailwind v4 gates hover: variants behind `@media (hover: hover)`, which
+   hybrid touch devices (e.g. a Surface in touch-first states) fail even with
+   a mouse attached — hover-revealed UI (the Trending poster pills and the
+   poster title overlay) then silently degrades to native `title` tooltips or
+   to nothing. Restore the v3 behaviour: any pointer that fires `:hover` gets
+   hover styling. Compound variants (`group-hover:`, `peer-hover:`) are built
+   on this definition, so they follow. */
+@custom-variant hover (&:hover);
+
 :root {
   /* Tell the UA which palette native form controls (the `<select>` popup,
      `<option>` lists, scrollbars) should render with. Without this, a `.dark`

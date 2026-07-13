@@ -29,6 +29,18 @@ describe("global cursor base style", () => {
   })
 })
 
+describe("hover variant override", () => {
+  // Presence tripwire: Tailwind v4 wraps every hover:/group-hover: rule in
+  // `@media (hover: hover)`, which hybrid touch devices (Surface in
+  // touch-first states) fail even with a mouse attached — killing the poster
+  // pill reveals and the poster title overlay. The `@custom-variant hover`
+  // override restores classification-independent `:hover` styling; this guard
+  // ensures it cannot be silently dropped.
+  it("keeps the classification-independent hover variant in index.css", () => {
+    expect(activeCss).toMatch(/@custom-variant\s+hover\s+\(&:hover\);/)
+  })
+})
+
 describe("app-shell scroll model base style", () => {
   // Same presence-tripwire rationale as above: jsdom applies no stylesheets,
   // so the frozen document cannot be observed here. The document must never
