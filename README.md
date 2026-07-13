@@ -380,10 +380,18 @@ Beneath the cards sit two collapsible sections:
   downloading — idle rows show `—`.
   - **Download history** — the 10 most recent completed downloads across both
   clients. It carries no count badge, being a fixed window.
-- **Settings** — the master **Enable bandwidth control** switch and a **Check
-interval** selector (10, 15, 30, or 60 seconds). The switch is also available on
-the Status tab for convenience. A link to the Prometheus metrics endpoint
-(`/metrics`) is provided.
+- **Settings** — a **Check interval** selector (10, 15, 30, or 60 seconds) and
+the **SABnzbd download limiter**: a toggle plus a decimal **MB/s** input (e.g.
+`5` or `7.5`, accepted range 0.1–1024). While the limiter is on, SABnzbd's
+download speed is capped via its `speedlimit` config call (the MB/s value is
+sent as an absolute KB/s figure, so it does not depend on SABnzbd's configured
+line speed), and the control loop re-applies the cap if SABnzbd loses it — for
+example after a restart or a manual change in SABnzbd's own interface. Turning
+the limiter off resets SABnzbd to 100 % of its line speed; while it stays off,
+a limit set directly in SABnzbd is left alone. The value field commits on blur
+or Enter. The master **Enable bandwidth control** switch lives on the Status
+tab and is independent of the limiter. A link to the Prometheus metrics
+endpoint (`/metrics`) is provided.
 
 Connections are not configured on this page; configure **SABnzbd** and
 **qBittorrent** in **Settings** first.
@@ -751,15 +759,19 @@ after both check jobs have passed.
   thumbnail (list and Trending share one cache); returns refreshed stats. Stale
   posters are also evicted automatically by the scheduled churn job.
 - `GET /api/bandwidth/status` – live Bandwidth-Controllarr state: enabled flag,
-  control status, last-check timestamp, configured interval, and current
-  qBittorrent/SABnzbd stats. `download_history` holds the 10 most recent
+  control status, last-check timestamp, configured interval, the SABnzbd
+  limiter settings (`sab_limit_enabled`, `sab_limit_mbps`), and current
+  qBittorrent/SABnzbd stats (SABnzbd's stats include `speed_limit_mbps`, the
+  limit it currently reports). `download_history` holds the 10 most recent
   completions; `queue` holds one group per downloader as
   `{ items, total }`, where `items` is capped at 100 rows and `total` is the
   uncapped queue depth (so the dashboard can page through `items` while still
   reporting the true count).
-- `PUT /api/bandwidth/settings` – update `{ enabled?, check_interval_seconds? }`;
-  persists the change, reschedules the control loop on interval change, and
-  returns the updated state.
+- `PUT /api/bandwidth/settings` – update
+  `{ enabled?, check_interval_seconds?, sab_limit_enabled?, sab_limit_mbps? }`;
+  persists the change, reschedules the control loop on interval change, applies
+  or clears the SABnzbd speed limit on limiter change, and returns the updated
+  state. `sab_limit_mbps` accepts decimals within 0.1–1024 MB/s.
 - `GET /api/deletarr/settings` – current Deletarr movies/TV library roots and the
   `use_arr_source` flag.
 - `PUT /api/deletarr/settings` – update `{ movies_path?, tv_path?, use_arr_source? }`,
@@ -849,6 +861,8 @@ after both check jobs have passed.
   qBittorrent and SABnzbd every `BANDWIDTH_CHECK_INTERVAL_SEC` seconds; if
   qBittorrent has active torrents, SABnzbd is paused, and resumed once the
   torrents go idle. Disabling the switch resumes SABnzbd if it had been paused
-  by the loop. All control state is persisted in `SETTINGS_STORE_PATH`; the
-  Prometheus metrics at `/metrics` use the same gauge names as the standalone
-  source tool.
+  by the loop. The independent SABnzbd download limiter is likewise off by
+  default and is UI-owned (no environment variable); its enabled flag and MB/s
+  value persist in the settings store and the loop re-asserts the cap on drift.
+  All control state is persisted in `SETTINGS_STORE_PATH`; the Prometheus
+  metrics at `/metrics` use the same gauge names as the standalone source tool.
