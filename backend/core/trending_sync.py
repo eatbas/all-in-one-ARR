@@ -18,14 +18,14 @@ cron drains the backlog even on days the feed refresh does not fire.
 from __future__ import annotations
 
 import asyncio
-from collections.abc import Coroutine
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 from core.app_metrics import observe_scheduler_job
 from core.db import utcnow_iso
 from core.logging import get_logger
+from core.tasks import spawn_supervised, spawn_tracked
 from core.trending import (
     TRENDING_ITEM_LIMIT,
     TRENDING_SYNC_PAGES,
@@ -71,43 +71,6 @@ _REFRESH_TASKS: set[asyncio.Task] = set()
 # multiple provider sweeps concurrently.
 _REFRESH_LOCK = asyncio.Lock()
 _REFRESH_ACTIVE = False
-
-
-def _spawn_tracked(
-    tasks: set[asyncio.Task], coro: Coroutine[Any, Any, None]
-) -> asyncio.Task:
-    """Spawn ``coro`` detached, holding a strong reference until it completes.
-
-    Per the asyncio docs, fire-and-forget tasks must be referenced somewhere or
-    they can be garbage-collected mid-flight; the done-callback clears the slot.
-    """
-    task = asyncio.create_task(coro)
-    tasks.add(task)
-    task.add_done_callback(tasks.discard)
-    return task
-
-
-def _spawn_supervised(
-    tasks: set[asyncio.Task],
-    coro: Coroutine[Any, Any, None],
-    *,
-    log_msg: str = "detached task raised an exception",
-) -> asyncio.Task:
-    """Spawn ``coro`` detached, holding a strong reference and logging failures.
-
-    The done-callback clears the slot and consumes any exception so it is never
-    silently dropped by the asyncio runtime.
-    """
-    task = asyncio.create_task(coro)
-    tasks.add(task)
-
-    def _on_done(t: asyncio.Task) -> None:
-        tasks.discard(t)
-        if not t.cancelled() and (exc := t.exception()) is not None:
-            _log.exception("%s", log_msg, exc_info=exc)
-
-    task.add_done_callback(_on_done)
-    return task
 
 
 # The feed matrix refreshed each cycle. TMDB trending uses the weekly window — the
@@ -284,7 +247,7 @@ def _spawn_prewarm(ctx: AppContext) -> None:
     """
     if ctx.poster_cache is None:
         return
-    _spawn_tracked(_PREWARM_TASKS, prewarm_posters(ctx))
+    spawn_tracked(_PREWARM_TASKS, prewarm_posters(ctx))
 
 
 # ---- IMDb-rating backfill ----
@@ -458,7 +421,7 @@ def _spawn_rating_backfill(ctx: AppContext) -> asyncio.Task | None:
     if _BACKFILL_TASKS:
         _log.info("rating backfill already in flight; skipping duplicate trigger")
         return None
-    return _spawn_tracked(_BACKFILL_TASKS, backfill_ratings(ctx))
+    return spawn_tracked(_BACKFILL_TASKS, backfill_ratings(ctx))
 
 
 @dataclass
@@ -608,9 +571,10 @@ async def start_trending_sync(ctx: AppContext) -> None:
                 _log.info("refresh cycle already active; skipping duplicate catch-up")
                 return
             _REFRESH_ACTIVE = True
-        _spawn_supervised(
+        spawn_supervised(
             _REFRESH_TASKS,
             _run_refresh_cycle(ctx),
+            log=_log,
             log_msg="reschedule-triggered refresh cycle raised an exception",
         )
 

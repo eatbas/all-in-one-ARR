@@ -9,7 +9,7 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from core.api import _SYNC_TASKS, _remember_task, create_api_router
+from core.api import create_api_router
 from tests.conftest import StubSettingsStore, StubTrakt, make_ctx
 
 _ITEM = dict(
@@ -207,41 +207,6 @@ async def test_sync_endpoint_rejects_concurrent_manual_requests(db) -> None:
         first_resp = await asyncio.wait_for(first, timeout=2)
         assert first_resp.status_code == 200
         assert first_resp.json() == {"status": "completed"}
-
-
-async def test_remember_task_discards_on_success() -> None:
-    async def ok() -> None:
-        return None
-
-    task = asyncio.create_task(ok())
-    _remember_task(task)
-    assert task in _SYNC_TASKS
-    await task
-    await asyncio.sleep(0)  # let the done-callback run
-    assert task not in _SYNC_TASKS
-
-
-async def test_remember_task_logs_failure() -> None:
-    async def boom() -> None:
-        raise RuntimeError("sync exploded")
-
-    task = asyncio.create_task(boom())
-    _remember_task(task)
-    await asyncio.gather(task, return_exceptions=True)
-    await asyncio.sleep(0)
-    assert task not in _SYNC_TASKS
-
-
-async def test_remember_task_handles_cancellation() -> None:
-    async def forever() -> None:
-        await asyncio.sleep(10)
-
-    task = asyncio.create_task(forever())
-    _remember_task(task)
-    task.cancel()
-    await asyncio.gather(task, return_exceptions=True)
-    await asyncio.sleep(0)
-    assert task not in _SYNC_TASKS
 
 
 def test_services_status_endpoint_returns_snapshot(db) -> None:

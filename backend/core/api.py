@@ -17,28 +17,15 @@ from pydantic import BaseModel
 from core.app_metrics import record_sync_run
 from core.context import SyncAlreadyRunning
 from core.logging import get_logger
+from core.tasks import spawn_supervised
 from core.timefmt import next_sync_at
 
 if TYPE_CHECKING:  # pragma: no cover
     from core.context import AppContext
     from core.status_checker import StatusResult
 
-# Strong references to in-flight background sync tasks so they are not
-# garbage-collected before completion (per the asyncio docs).
+# Strong references to in-flight background sync tasks (see core.tasks).
 _SYNC_TASKS: set[asyncio.Task] = set()
-
-
-def _on_sync_done(task: asyncio.Task) -> None:
-    """Discard a finished sync task and log any failure."""
-    _SYNC_TASKS.discard(task)
-    if not task.cancelled() and task.exception() is not None:
-        get_logger("api").error("manual sync failed: %s", task.exception())
-
-
-def _remember_task(task: asyncio.Task) -> None:
-    """Retain a background task and attach the completion callback."""
-    _SYNC_TASKS.add(task)
-    task.add_done_callback(_on_sync_done)
 
 
 class Counts(BaseModel):
@@ -416,7 +403,12 @@ def create_api_router(ctx: AppContext) -> APIRouter:
                 "Remove available items triggered",
                 "Available items are being removed from their Trakt lists",
             )
-            _remember_task(asyncio.create_task(ctx.remove_available()))
+            spawn_supervised(
+                _SYNC_TASKS,
+                ctx.remove_available(),
+                log=log,
+                log_msg="manual sync failed",
+            )
             log.info("manual remove-available triggered")
         else:  # no module registered the removal callable
             log.warning("remove-available requested but no handler registered")
