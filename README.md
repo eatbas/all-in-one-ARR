@@ -100,6 +100,8 @@ cp .env.example .env
 | `RADARR_API_KEY` | – | Radarr API key (seeds the store; settable in the UI) |
 | `TMDB_API_KEY` | – | TMDB v3 API key or v4 read-access token (seeds the store; settable in the UI) |
 | `OMDB_API_KEY` | – | OMDb API key (seeds the store; settable in the UI) |
+| `OMDB_API_KEY_2`..`_4` | – | Optional extra OMDb keys; lookups rotate to the next key when one hits its daily request limit, and the rating backfill budget scales with the key count (seed the store; settable in the UI) |
+| `OMDB_DAILY_BUDGET_PER_KEY` | `800` | Daily OMDb request budget per key for the rating backfill, 100–1000 (seeds the store; settable in the Settings → OMDb tab) |
 | `SABNZBD_URL` | – | Base URL of SABnzbd (seeds the store; settable in the UI) |
 | `SABNZBD_API_KEY` | – | SABnzbd API key (seeds the store; settable in the UI) |
 | `QBITTORRENT_URL` | – | Base URL of the qBittorrent WebUI (seeds the store; settable in the UI) |
@@ -486,10 +488,14 @@ Trakt list without leaving the app. It is organised as **per-source tabs**:
   community's trending/popular feeds — no API key needed), plus anime-filtered
   **Trakt** and **TMDB** variants reusing those existing connections. AniList
   titles are matched to TMDB/TVDB/IMDb ids through a locally cached copy of
-  Fribb's `anime-lists` mapping (refreshed weekly under the `data/` volume), so
-  library rings and the add-to-list flow work as on every other tab; a title too
-  new to be mapped still renders with its AniList cover art, with adding
-  disabled until the mapping catches up.
+  Fribb's `anime-lists` mapping (refresh cadence configurable in Settings →
+  General, under the `data/` volume; checked at start-up and hourly, with the
+  download happening on the first check after the cadence elapses), so library
+  rings and the add-to-list flow work as on every other tab. Ambiguous franchise mappings (one entry listing
+  several films) are never guessed at — the app falls back to TMDB-based
+  resolution for the rating and the Trakt add instead. A title too new to be
+  mapped still renders with its AniList cover art, with adding disabled until
+  the mapping catches up.
 - **Open on the source** — each poster's **top-right** corner has a link to the
   title's dedicated page on its source: the Trakt page (by slug), the TMDB page,
   or — for Seer items — your configured Overseerr/Seer instance's media page.
@@ -497,10 +503,17 @@ Trakt list without leaving the app. It is organised as **per-source tabs**:
   in the poster's top-left corner, carried on the feed payload itself (IMDb has
   no official trending API, so it is an enrichment overlay, not a source).
   Ratings are persisted in the database and filled by a **budgeted background
-  backfill** against **OMDb** — at most 800 requests per UTC day, so the
-  free-tier quota is never exhausted; whatever does not fit is fetched on the
-  following days. A card simply omits the rating until the backfill has covered
-  the title (or when none is available).
+  backfill** against **OMDb** — at most the configured per-key budget (default
+  800, editable in **Settings → OMDb**) per configured API key per UTC day
+  (lookups rotate to the next key when one hits its limit, see
+  `OMDB_API_KEY_2`..`_4`), so the free-tier quota is never exhausted. The
+  backfill runs at start-up and then hourly, so it resumes where it left off:
+  whatever does not fit in today's budget is fetched on the following days,
+  and a failed lookup is retried rather than remembered — only a definitive
+  OMDb answer (including a genuine "no rating") is stored. Stored ratings are re-fetched
+  on a configurable window (**Settings → General**: 5/7/10 days, default 7). A
+  card simply omits the rating until the backfill has covered the title (or
+  when none is available).
 - **Library status (Seer tab)** — cards also show the item's Seer library status
   (Requested / Processing / Partial / Available) read from `mediaInfo`, so you can
   see what is already in your library. Items already mirrored in a tracked list
