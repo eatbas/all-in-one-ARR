@@ -10,24 +10,21 @@ const sampleStatus = {
 }
 
 describe("IntegrationStatusCard", () => {
-  it("renders an online card for a healthy integration", () => {
-    render(
-      <IntegrationStatusCard
-        name="trakt"
-        label="Trakt"
-        status={sampleStatus}
-      />,
-    )
+  it("renders an online card with the detail as a tooltip, not visible text", () => {
+    render(<IntegrationStatusCard label="Trakt" status={sampleStatus} />)
 
     expect(screen.getByText("Trakt")).toBeInTheDocument()
     expect(screen.getByLabelText("Online")).toBeInTheDocument()
-    expect(screen.getByText("Connected as erena")).toBeInTheDocument()
+    expect(screen.getByTitle("Connected as erena")).toHaveAttribute(
+      "data-slot",
+      "card",
+    )
+    expect(screen.queryByText("Connected as erena")).not.toBeInTheDocument()
   })
 
-  it("renders an offline card for a failing integration", () => {
+  it("renders an offline card with the failure reason as a tooltip", () => {
     render(
       <IntegrationStatusCard
-        name="seer"
         label="Seer"
         status={{
           ok: false,
@@ -39,23 +36,26 @@ describe("IntegrationStatusCard", () => {
 
     expect(screen.getByText("Seer")).toBeInTheDocument()
     expect(screen.getByLabelText("Offline")).toBeInTheDocument()
-    expect(screen.getByText("Connection refused")).toBeInTheDocument()
+    expect(screen.getByTitle("Connection refused")).toHaveAttribute(
+      "data-slot",
+      "card",
+    )
   })
 
   it("renders a not-yet-checked state when status is missing", () => {
-    render(
-      <IntegrationStatusCard name="sonarr" label="Sonarr" status={undefined} />,
-    )
+    render(<IntegrationStatusCard label="Sonarr" status={undefined} />)
 
     expect(screen.getByText("Sonarr")).toBeInTheDocument()
     expect(screen.getByLabelText("Offline")).toBeInTheDocument()
-    expect(screen.getByText("Not checked yet")).toBeInTheDocument()
+    expect(screen.getByTitle("Not checked yet")).toHaveAttribute(
+      "data-slot",
+      "card",
+    )
   })
 
-  it("renders a link pill and a status light on the description line when a URL is provided", () => {
+  it("renders the status pill and link pill side by side on the title row", () => {
     render(
       <IntegrationStatusCard
-        name="seer"
         label="Seer"
         status={sampleStatus}
         url="http://seer.example.com:5055"
@@ -68,13 +68,13 @@ describe("IntegrationStatusCard", () => {
     expect(
       screen.getByText("Seer", { selector: "[data-slot='card-title']" }),
     ).toBeInTheDocument()
-    expect(screen.getByLabelText("Online")).toBeInTheDocument()
+    // Both pills share the same pill group next to the title.
+    const statusPill = screen.getByLabelText("Online")
+    expect(statusPill.parentElement).toBe(link.parentElement)
   })
 
-  it("does not render a link pill when no URL is provided", () => {
-    render(
-      <IntegrationStatusCard name="tmdb" label="TMDB" status={sampleStatus} />,
-    )
+  it("renders the status pill alone when no URL is provided", () => {
+    render(<IntegrationStatusCard label="TMDB" status={sampleStatus} />)
 
     expect(
       screen.queryByRole("link", { name: /Open TMDB/ }),

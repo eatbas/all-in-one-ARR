@@ -6,6 +6,11 @@ export interface ServiceTab {
   name: ServiceName
   label: string
   fields: readonly ServiceField[]
+  /**
+   * Public homepage for API-key-only services that have no self-hosted web
+   * UI; shown as the card link when no URL setting exists.
+   */
+  homepage?: string
 }
 
 /**
@@ -16,13 +21,19 @@ export const SERVICE_TABS: readonly ServiceTab[] = [
   { name: "seer", label: "Seer", fields: ["url", "apiKey"] },
   { name: "sonarr", label: "Sonarr", fields: ["url", "apiKey"] },
   { name: "radarr", label: "Radarr", fields: ["url", "apiKey"] },
-  { name: "tmdb", label: "TMDB", fields: ["apiKey"] },
+  {
+    name: "tmdb",
+    label: "TMDB",
+    fields: ["apiKey"],
+    homepage: "https://www.themoviedb.org/",
+  },
   {
     name: "omdb",
     label: "OMDb",
     // One primary key plus up to three optional rotation keys: lookups rotate
     // to the next key when one hits its daily request limit.
     fields: ["apiKey", "apiKey2", "apiKey3", "apiKey4"],
+    homepage: "https://www.omdbapi.com/",
   },
   { name: "sabnzbd", label: "SABnzbd", fields: ["url", "apiKey"] },
   { name: "qbittorrent", label: "qBittorrent", fields: ["url", "apiKey"] },

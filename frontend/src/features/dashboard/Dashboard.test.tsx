@@ -364,18 +364,20 @@ describe("Dashboard", () => {
     )
   })
 
-  it("links Trakt to trakt.tv and omits links for API-key-only services", () => {
+  it("links Trakt and API-key-only services to their public sites", () => {
     render(<Dashboard />)
     expect(screen.getByRole("link", { name: /Open Trakt/ })).toHaveAttribute(
       "href",
       "https://trakt.tv",
     )
-    expect(
-      screen.queryByRole("link", { name: /Open TMDB/ }),
-    ).not.toBeInTheDocument()
-    expect(
-      screen.queryByRole("link", { name: /Open OMDb/ }),
-    ).not.toBeInTheDocument()
+    expect(screen.getByRole("link", { name: /Open TMDB/ })).toHaveAttribute(
+      "href",
+      "https://www.themoviedb.org/",
+    )
+    expect(screen.getByRole("link", { name: /Open OMDb/ })).toHaveAttribute(
+      "href",
+      "https://www.omdbapi.com/",
+    )
   })
 
   it("triggers a fresh check when 'Check now' is clicked", async () => {

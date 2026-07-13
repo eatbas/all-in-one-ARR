@@ -111,24 +111,20 @@ export function Dashboard() {
 
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
           <IntegrationStatusCard
-            name="trakt"
             label="Trakt"
             status={services["trakt"]}
             url="https://trakt.tv"
-            compact
           />
           {SERVICE_TABS.map((tab) => (
             <IntegrationStatusCard
               key={tab.name}
-              name={tab.name}
               label={tab.label}
               status={services[tab.name]}
               url={
                 tab.fields.includes("url")
                   ? serviceSettings?.[tab.name]?.url
-                  : undefined
+                  : tab.homepage
               }
-              compact
             />
           ))}
         </div>
