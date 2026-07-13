@@ -38,3 +38,23 @@ describe("scrollbar gutter base style", () => {
     expect(activeCss).toMatch(/html\s*\{[^}]*scrollbar-gutter:\s*stable/)
   })
 })
+
+describe("overlay scroll-lock counter-rule", () => {
+  // Same presence-tripwire rationale as above: jsdom applies no stylesheets, so
+  // the pinned layout cannot be observed here. While a Radix overlay (Select,
+  // AlertDialog, DropdownMenu) is open, react-remove-scroll stamps
+  // `data-scroll-locked` on <body> and injects `margin-right` scrollbar
+  // compensation (a horizontal layout jump we already absorb with the reserved
+  // gutter) plus `overflow: hidden` (which turns <body> into a scroll container
+  // and detaches the sticky Topbar/Sidebar when the page is scrolled down). The
+  // unlayered `html body[data-scroll-locked]` rule cancels both; this guard
+  // ensures neither declaration is silently dropped.
+  it("keeps both counter-declarations for locked overlays in index.css", () => {
+    expect(activeCss).toMatch(
+      /html\s+body\[data-scroll-locked\]\s*\{[^}]*margin-right:\s*0\s*!important/,
+    )
+    expect(activeCss).toMatch(
+      /html\s+body\[data-scroll-locked\]\s*\{[^}]*overflow:\s*visible\s*!important/,
+    )
+  })
+})

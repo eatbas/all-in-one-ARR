@@ -106,12 +106,12 @@ export function AddToListControl({
   }
 
   return (
-    // Non-modal: a modal Radix menu wraps its content in react-remove-scroll,
-    // which sets `overflow: hidden` on <body>. That turns <body> into the scroll
-    // container and detaches the sticky Topbar/Sidebar (they snap to the document
-    // top and scroll out of view) whenever the menu is opened while the page is
-    // scrolled down. The add menu needs neither scroll-lock nor focus-trap, so
-    // opt out and keep the layout pinned.
+    // Non-modal: the add menu needs neither scroll-lock nor focus-trap, so opt
+    // out of react-remove-scroll entirely and keep the page scrollable while
+    // the menu is open. (The sticky Topbar/Sidebar detachment a modal menu used
+    // to cause is now neutralised globally by the `html
+    // body[data-scroll-locked]` counter-rule in index.css, so this opt-out is
+    // purely about interaction behaviour.)
     <DropdownMenu modal={false}>
       <DropdownMenuTrigger asChild>
         <Button
