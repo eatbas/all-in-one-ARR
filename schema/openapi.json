@@ -1455,6 +1455,28 @@
             ],
             "title": "Interval Seconds"
           },
+          "omdb_daily_budget_per_key": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Omdb Daily Budget Per Key"
+          },
+          "rating_ttl_days": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rating Ttl Days"
+          },
           "sync_interval_minutes": {
             "anyOf": [
               {
@@ -1495,6 +1517,14 @@
             "title": "Interval Seconds",
             "type": "integer"
           },
+          "omdb_daily_budget_per_key": {
+            "title": "Omdb Daily Budget Per Key",
+            "type": "integer"
+          },
+          "rating_ttl_days": {
+            "title": "Rating Ttl Days",
+            "type": "integer"
+          },
           "sync_interval_minutes": {
             "title": "Sync Interval Minutes",
             "type": "integer"
@@ -1509,6 +1539,8 @@
           "sync_interval_minutes",
           "trending_sync_interval_minutes",
           "anime_ids_refresh_days",
+          "rating_ttl_days",
+          "omdb_daily_budget_per_key",
           "auto_remove_when_available"
         ],
         "title": "GeneralSettingsResponse",
@@ -2388,6 +2420,39 @@
               }
             ],
             "title": "Api Key"
+          },
+          "api_key_2": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Api Key 2"
+          },
+          "api_key_3": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Api Key 3"
+          },
+          "api_key_4": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Api Key 4"
           },
           "url": {
             "anyOf": [

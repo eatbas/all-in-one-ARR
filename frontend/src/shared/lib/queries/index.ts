@@ -492,6 +492,59 @@ export function useUpdateAnimeIdsRefresh(): UseMutationResult<
   })
 }
 
+export function useUpdateRatingTtl(): UseMutationResult<
+  GeneralSettings,
+  Error,
+  number
+> {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: (days) => updateGeneralSettings({ rating_ttl_days: days }),
+    onSuccess: (result) => {
+      toast.success("Rating refresh window updated", {
+        description: `Refreshing stored IMDb ratings every ${result.rating_ttl_days} day(s)`,
+      })
+      void queryClient.invalidateQueries({
+        queryKey: queryKeys.generalSettings,
+      })
+      void queryClient.invalidateQueries({ queryKey: queryKeys.activity })
+    },
+    onError: (error) => {
+      toast.error("Could not update the rating refresh window", {
+        description: error.message,
+      })
+    },
+  })
+}
+
+export function useUpdateOmdbBudget(): UseMutationResult<
+  GeneralSettings,
+  Error,
+  number
+> {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: (budget) =>
+      updateGeneralSettings({ omdb_daily_budget_per_key: budget }),
+    onSuccess: (result) => {
+      toast.success("OMDb daily budget updated", {
+        description: `Rating backfill now spends up to ${result.omdb_daily_budget_per_key} requests per key per day`,
+      })
+      void queryClient.invalidateQueries({
+        queryKey: queryKeys.generalSettings,
+      })
+      void queryClient.invalidateQueries({ queryKey: queryKeys.activity })
+    },
+    onError: (error) => {
+      toast.error("Could not update the OMDb daily budget", {
+        description: error.message,
+      })
+    },
+  })
+}
+
 export function useUpdateAutoRemoveWhenAvailable(): UseMutationResult<
   GeneralSettings,
   Error,

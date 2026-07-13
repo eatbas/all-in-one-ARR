@@ -129,6 +129,9 @@ export type ServiceName =
 export interface ServiceConnection {
   url?: string
   api_key_set?: boolean
+  api_key_2_set?: boolean
+  api_key_3_set?: boolean
+  api_key_4_set?: boolean
 }
 
 /** Response of `GET`/`PUT /api/settings/services[/{name}]`. */
@@ -138,6 +141,9 @@ export type ServicesSettings = Record<ServiceName, ServiceConnection>
 export interface UpdateServicePayload {
   url?: string
   api_key?: string
+  api_key_2?: string
+  api_key_3?: string
+  api_key_4?: string
 }
 
 /** Response of `POST /api/services/{name}/test`. */
@@ -166,6 +172,8 @@ export interface UpdateGeneralSettings {
   sync_interval_minutes?: number
   trending_sync_interval_minutes?: number
   anime_ids_refresh_days?: number
+  rating_ttl_days?: number
+  omdb_daily_budget_per_key?: number
   auto_remove_when_available?: boolean
 }
 

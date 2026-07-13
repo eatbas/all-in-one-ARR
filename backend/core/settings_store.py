@@ -32,12 +32,16 @@ from core.settings_normalisers import (
     DEFAULT_ANIME_IDS_REFRESH_DAYS,
     DEFAULT_DELETARR_SETTINGS,
     DEFAULT_FINDARR_SETTINGS,
+    DEFAULT_OMDB_DAILY_BUDGET_PER_KEY,
+    DEFAULT_RATING_TTL_DAYS,
     DEFAULT_TRENDING_SYNC_INTERVAL,
     normalise_anime_ids_refresh_days,
     normalise_bandwidth_interval,
     normalise_deletarr_settings,
     normalise_findarr_settings,
     normalise_interval,
+    normalise_omdb_daily_budget_per_key,
+    normalise_rating_ttl_days,
     normalise_sync_interval,
     normalise_trending_sync_interval,
     service_seed,
@@ -88,6 +92,8 @@ class SettingsStore:
         self._bandwidth_check_interval_seconds = 15
         self._trending_sync_interval_minutes = DEFAULT_TRENDING_SYNC_INTERVAL
         self._anime_ids_refresh_days = DEFAULT_ANIME_IDS_REFRESH_DAYS
+        self._rating_ttl_days = DEFAULT_RATING_TTL_DAYS
+        self._omdb_daily_budget_per_key = DEFAULT_OMDB_DAILY_BUDGET_PER_KEY
         self._findarr_settings = copy.deepcopy(DEFAULT_FINDARR_SETTINGS)
         self._deletarr_settings = copy.deepcopy(DEFAULT_DELETARR_SETTINGS)
         self._services: dict[str, dict[str, str]] = {
@@ -109,6 +115,8 @@ class SettingsStore:
         bandwidth_check_interval_seconds: int = 15,
         trending_sync_interval_minutes: int = DEFAULT_TRENDING_SYNC_INTERVAL,
         anime_ids_refresh_days: int = DEFAULT_ANIME_IDS_REFRESH_DAYS,
+        rating_ttl_days: int = DEFAULT_RATING_TTL_DAYS,
+        omdb_daily_budget_per_key: int = DEFAULT_OMDB_DAILY_BUDGET_PER_KEY,
         deletarr_movies_path: str = DEFAULT_DELETARR_SETTINGS["movies_path"],
         deletarr_tv_path: str = DEFAULT_DELETARR_SETTINGS["tv_path"],
         deletarr_use_arr_source: bool = DEFAULT_DELETARR_SETTINGS["use_arr_source"],
@@ -151,6 +159,10 @@ class SettingsStore:
                 )
                 self._anime_ids_refresh_days = normalise_anime_ids_refresh_days(
                     anime_ids_refresh_days
+                )
+                self._rating_ttl_days = normalise_rating_ttl_days(rating_ttl_days)
+                self._omdb_daily_budget_per_key = normalise_omdb_daily_budget_per_key(
+                    omdb_daily_budget_per_key
                 )
                 self._findarr_settings = normalise_findarr_settings()
                 self._deletarr_settings = normalise_deletarr_settings(
@@ -200,6 +212,14 @@ class SettingsStore:
         self._anime_ids_refresh_days = normalise_anime_ids_refresh_days(
             data.get("anime_ids_refresh_days", DEFAULT_ANIME_IDS_REFRESH_DAYS)
         )
+        migrated_rating_ttl = "rating_ttl_days" not in data
+        self._rating_ttl_days = normalise_rating_ttl_days(
+            data.get("rating_ttl_days", DEFAULT_RATING_TTL_DAYS)
+        )
+        migrated_omdb_budget = "omdb_daily_budget_per_key" not in data
+        self._omdb_daily_budget_per_key = normalise_omdb_daily_budget_per_key(
+            data.get("omdb_daily_budget_per_key", DEFAULT_OMDB_DAILY_BUDGET_PER_KEY)
+        )
         migrated_findarr = "findarr" not in data
         self._findarr_settings = normalise_findarr_settings(data.get("findarr"))
         migrated_deletarr = "deletarr" not in data
@@ -237,41 +257,59 @@ class SettingsStore:
             for entry in data.get("lists", [])
             if entry.get("slug")
         ]
-        # Load stored services; one-time migration backfills services that a
-        # pre-existing (older) store file does not yet contain from the env seed.
+        # Load stored services; one-time migrations backfill from the env seed:
+        # whole services a pre-existing (older) store file does not yet contain,
+        # and individual fields added to a service after the store was written
+        # (e.g. the OMDb rotation keys). A field the user cleared is present but
+        # empty and is therefore never overwritten.
         stored_services = data.get("services") or {}
         seed = seed_services or {}
         backfilled = False
+        fields_backfilled = False
         for desc in SERVICES:
             name = desc.name
             if name in stored_services:
                 entry = stored_services[name]
-                self._services[name] = {
-                    field: entry.get(field, "") for field in desc.fields
-                }
+                seed_entry = seed.get(name) or {}
+                values: dict[str, str] = {}
+                for field in desc.fields:
+                    if field in entry:
+                        values[field] = entry.get(field) or ""
+                    else:
+                        values[field] = (seed_entry.get(field) or "").strip()
+                        fields_backfilled = True
+                self._services[name] = values
             else:
                 self._services[name] = service_seed(desc, seed.get(name))
                 backfilled = True
         if (
             backfilled
+            or fields_backfilled
             or migrated_auto_remove
             or migrated_bandwidth
             or migrated_trending
             or migrated_anime_ids
+            or migrated_rating_ttl
+            or migrated_omdb_budget
             or migrated_findarr
             or migrated_deletarr
         ):
             self._save_locked()
             self._log.info(
                 "persisted store migration (services_backfilled=%s "
-                "auto_remove_key_migrated=%s bandwidth_keys_migrated=%s "
-                "trending_key_migrated=%s anime_ids_key_migrated=%s "
-                "findarr_keys_migrated=%s deletarr_keys_migrated=%s)",
+                "service_fields_backfilled=%s auto_remove_key_migrated=%s "
+                "bandwidth_keys_migrated=%s trending_key_migrated=%s "
+                "anime_ids_key_migrated=%s rating_ttl_key_migrated=%s "
+                "omdb_budget_key_migrated=%s findarr_keys_migrated=%s "
+                "deletarr_keys_migrated=%s)",
                 backfilled,
+                fields_backfilled,
                 migrated_auto_remove,
                 migrated_bandwidth,
                 migrated_trending,
                 migrated_anime_ids,
+                migrated_rating_ttl,
+                migrated_omdb_budget,
                 migrated_findarr,
                 migrated_deletarr,
             )
@@ -289,6 +327,8 @@ class SettingsStore:
             "bandwidth_check_interval_seconds": self._bandwidth_check_interval_seconds,
             "trending_sync_interval_minutes": self._trending_sync_interval_minutes,
             "anime_ids_refresh_days": self._anime_ids_refresh_days,
+            "rating_ttl_days": self._rating_ttl_days,
+            "omdb_daily_budget_per_key": self._omdb_daily_budget_per_key,
             "findarr": self._findarr_settings,
             "deletarr": self._deletarr_settings,
             "lists": [item.to_dict() for item in self._lists],
@@ -438,6 +478,36 @@ class SettingsStore:
             self._save_locked()
             self._log.info("updated anime id-mapping refresh to %s days", days)
             return days
+
+    # ---- IMDb-rating refresh window ----
+
+    def rating_ttl_days(self) -> int:
+        """Return the configured IMDb-rating refresh window in days."""
+        with self._lock:
+            return self._rating_ttl_days
+
+    def update_rating_ttl_days(self, days: int) -> int:
+        """Update the rating refresh window; invalid values fall back to 7 days."""
+        days = normalise_rating_ttl_days(days)
+        with self._lock:
+            self._rating_ttl_days = days
+            self._save_locked()
+            self._log.info("updated rating refresh window to %s days", days)
+            return days
+
+    def omdb_daily_budget_per_key(self) -> int:
+        """Return the per-key daily OMDb request budget for the backfill."""
+        with self._lock:
+            return self._omdb_daily_budget_per_key
+
+    def update_omdb_daily_budget_per_key(self, budget: int) -> int:
+        """Update the per-key OMDb budget; values clamp to the 100-1000 bounds."""
+        budget = normalise_omdb_daily_budget_per_key(budget)
+        with self._lock:
+            self._omdb_daily_budget_per_key = budget
+            self._save_locked()
+            self._log.info("updated OMDb daily budget to %s per key", budget)
+            return budget
 
     # ---- Findarr ----
 
@@ -623,6 +693,8 @@ class SettingsStore:
                 "bandwidth_check_interval_seconds": self._bandwidth_check_interval_seconds,
                 "trending_sync_interval_minutes": self._trending_sync_interval_minutes,
                 "anime_ids_refresh_days": self._anime_ids_refresh_days,
+                "rating_ttl_days": self._rating_ttl_days,
+                "omdb_daily_budget_per_key": self._omdb_daily_budget_per_key,
                 "findarr": copy.deepcopy(self._findarr_settings),
                 "deletarr": dict(self._deletarr_settings),
                 "lists": [item.to_dict() for item in self._lists],

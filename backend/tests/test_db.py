@@ -492,3 +492,33 @@ def test_omdb_usage_add_prunes_old_days(db: Database) -> None:
     # The write-side pruning drops tallies past the retention window.
     assert db.omdb_usage_count("2020-01-01") == 0
     assert db.omdb_usage_count(today) == 1
+
+
+def test_app_state_round_trip(db: Database) -> None:
+    assert db.app_state_get("some_flag") is None
+    db.app_state_set("some_flag", "2026-07-12")
+    assert db.app_state_get("some_flag") == "2026-07-12"
+    db.app_state_set("some_flag", "updated")
+    assert db.app_state_get("some_flag") == "updated"
+
+
+def test_init_db_purges_failure_nulls_exactly_once(db: Database) -> None:
+    # Null ratings written before failed lookups became retryable are purged on
+    # the first init after upgrade; nulls stored afterwards (genuine OMDb
+    # "N/A" answers) survive later inits.
+    with db._lock:
+        db._conn.execute("DELETE FROM app_state WHERE key='null_ratings_purged_v1'")
+        db._conn.commit()
+    db.trending_ratings_upsert(key="tt-poisoned", imdb_rating=None, imdb_votes=None)
+    db.trending_ratings_upsert(key="tt-rated", imdb_rating=7.0, imdb_votes=10)
+
+    db.init_db()
+
+    assert db.trending_ratings_get_many(["tt-poisoned"]) == {}
+    assert db.trending_ratings_get_many(["tt-rated"])["tt-rated"]["imdb_rating"] == 7.0
+    assert db.app_state_get("null_ratings_purged_v1") is not None
+
+    # A genuine post-fix null survives the next init.
+    db.trending_ratings_upsert(key="tt-na", imdb_rating=None, imdb_votes=None)
+    db.init_db()
+    assert "tt-na" in db.trending_ratings_get_many(["tt-na"])

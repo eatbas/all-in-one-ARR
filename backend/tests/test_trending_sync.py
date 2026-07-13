@@ -262,17 +262,26 @@ async def test_start_schedules_job_primes_store_and_reschedules(
     await asyncio.gather(*list(trending_sync._BACKFILL_TASKS))
 
     # The interval job is registered under the trending id at the configured interval.
-    ctx.scheduler.add_interval.assert_awaited_once()
-    add_call = ctx.scheduler.add_interval.await_args
+    add_call = next(
+        call
+        for call in ctx.scheduler.add_interval.await_args_list
+        if call.kwargs["id"] == "trending_sync"
+    )
     assert add_call.kwargs["id"] == "trending_sync"
     assert add_call.kwargs["minutes"] == 1440
     # The immediate APScheduler-4 first fire is deferred: the boot path below
     # already primes or restores the store.
     assert add_call.kwargs["defer_first_run"] is True
     # The daily rating-backfill cron is registered alongside the interval job.
-    ctx.scheduler.add_cron.assert_awaited_once()
-    cron_call = ctx.scheduler.add_cron.await_args
-    assert cron_call.kwargs["id"] == "trending_rating_backfill"
+    # The hourly backfill interval is registered alongside, first run deferred
+    # (the boot path already spawns one).
+    backfill_call = next(
+        call
+        for call in ctx.scheduler.add_interval.await_args_list
+        if call.kwargs["id"] == "trending_rating_backfill"
+    )
+    assert backfill_call.kwargs["minutes"] == 60
+    assert backfill_call.kwargs["defer_first_run"] is True
     # Nothing persisted yet: the store is primed live so a cold boot is not empty.
     assert ctx.trending_store.last_synced_at() is not None
     assert ctx.trending_store.get(
@@ -587,11 +596,15 @@ async def test_backfill_skips_fresh_and_refetches_stale_entries(db) -> None:
     assert db.trending_ratings_get_many(["tt-fresh"])["tt-fresh"]["imdb_rating"] == 8.0
 
 
-async def test_backfill_respects_remaining_daily_budget(db, monkeypatch) -> None:
+async def test_backfill_respects_remaining_daily_budget(db) -> None:
     # Two pending titles but budget for one: the second waits for the next run.
-    ctx = make_ctx(db=db)
+    from tests.conftest import StubSettingsStore
+
+    ctx = make_ctx(
+        db=db, settings_store=StubSettingsStore(omdb_daily_budget_per_key=100)
+    )
+    db.omdb_usage_add(utcnow_iso()[:10], 99)  # one request left today
     ctx.omdb.fetch_rating.return_value = {"imdb_rating": 6.0, "imdb_votes": 2}
-    monkeypatch.setattr(trending_sync, "_OMDB_DAILY_BUDGET", 1)
     _feed(
         ctx,
         [
@@ -603,7 +616,7 @@ async def test_backfill_respects_remaining_daily_budget(db, monkeypatch) -> None
     await trending_sync.backfill_ratings(ctx)
 
     assert ctx.omdb.fetch_rating.await_count == 1
-    assert db.omdb_usage_count(utcnow_iso()[:10]) == 1
+    assert db.omdb_usage_count(utcnow_iso()[:10]) == 100
     # The next day (usage reset) picks the leftover up.
     with db._lock:
         db._conn.execute("DELETE FROM omdb_usage")
@@ -615,7 +628,7 @@ async def test_backfill_respects_remaining_daily_budget(db, monkeypatch) -> None
 
 async def test_backfill_noop_when_budget_already_spent(db) -> None:
     ctx = make_ctx(db=db)
-    db.omdb_usage_add(utcnow_iso()[:10], trending_sync._OMDB_DAILY_BUDGET)
+    db.omdb_usage_add(utcnow_iso()[:10], 800)  # the stub store's default budget
     _feed(ctx, [{"media_type": "movie", "tmdb": 1, "imdb": "tt1"}])
 
     await trending_sync.backfill_ratings(ctx)
@@ -989,3 +1002,158 @@ async def test_backfill_refetches_when_resolved_alias_rating_is_stale(db) -> Non
         db.trending_ratings_get_many(["movie:603"])["movie:603"]["imdb_rating"] == 8.1
     )
     assert db.trending_ratings_get_many(["tt2"])["tt2"]["imdb_rating"] == 8.1
+
+
+async def test_backfill_honours_configured_rating_window(db) -> None:
+    # A rating fetched six days ago is stale under a 5-day window but fresh
+    # under the default 7 days.
+    from tests.conftest import StubSettingsStore
+
+    six_days_ago = (datetime.now(UTC) - timedelta(days=6)).isoformat()
+
+    short_ctx = make_ctx(db=db, settings_store=StubSettingsStore(rating_ttl_days=5))
+    short_ctx.omdb.fetch_rating.return_value = {"imdb_rating": 8.0, "imdb_votes": 1}
+    db.trending_ratings_upsert(
+        key="tt1", imdb_rating=5.0, imdb_votes=1, fetched_at=six_days_ago
+    )
+    _feed(short_ctx, [{"media_type": "movie", "tmdb": 1, "imdb": "tt1"}])
+    await trending_sync.backfill_ratings(short_ctx)
+    short_ctx.omdb.fetch_rating.assert_awaited_once_with(imdb_id="tt1")
+
+    default_ctx = make_ctx(db=db)  # stub store defaults to 7 days
+    db.trending_ratings_upsert(
+        key="tt2", imdb_rating=6.0, imdb_votes=1, fetched_at=six_days_ago
+    )
+    _feed(default_ctx, [{"media_type": "movie", "tmdb": 2, "imdb": "tt2"}])
+    await trending_sync.backfill_ratings(default_ctx)
+    default_ctx.omdb.fetch_rating.assert_not_awaited()
+
+
+async def test_backfill_budget_scales_with_omdb_key_count(db) -> None:
+    # Two configured keys double the per-key budget: with per-key 1, a
+    # three-title backlog fetches exactly two and leaves one for later.
+    from tests.conftest import StubSettingsStore
+
+    ctx = make_ctx(
+        db=db, settings_store=StubSettingsStore(omdb_daily_budget_per_key=100)
+    )
+    db.omdb_usage_add(utcnow_iso()[:10], 198)  # 2x100 budget, two requests left
+    ctx.omdb.key_count.return_value = 2
+    ctx.omdb.fetch_rating.return_value = {"imdb_rating": 6.0, "imdb_votes": 2}
+    _feed(
+        ctx,
+        [
+            {"media_type": "movie", "tmdb": 1, "imdb": "tt1"},
+            {"media_type": "movie", "tmdb": 2, "imdb": "tt2"},
+            {"media_type": "movie", "tmdb": 3, "imdb": "tt3"},
+        ],
+    )
+
+    await trending_sync.backfill_ratings(ctx)
+
+    assert ctx.omdb.fetch_rating.await_count == 2
+    assert db.omdb_usage_count(utcnow_iso()[:10]) == 200
+
+
+async def test_backfill_skips_cleanly_without_any_omdb_key(db) -> None:
+    # No configured key means no budget: the run logs a clear skip instead of
+    # a misleading "budget exhausted" and never touches the usage counter.
+    ctx = make_ctx(db=db)
+    ctx.omdb.key_count.return_value = 0
+    _feed(ctx, [{"media_type": "movie", "tmdb": 1, "imdb": "tt1"}])
+
+    await trending_sync.backfill_ratings(ctx)
+
+    ctx.omdb.fetch_rating.assert_not_awaited()
+    assert db.omdb_usage_count(utcnow_iso()[:10]) == 0
+
+
+async def test_backfill_retries_failed_lookups_instead_of_caching_nulls(db) -> None:
+    # A failed lookup (all keys rejected, network down) stores nothing and
+    # charges nothing, so the next run picks the title up again — unlike a
+    # definitive OMDb "N/A", which is stored and not re-fetched.
+    ctx = make_ctx(db=db)
+    ctx.omdb.fetch_rating.return_value = None
+    _feed(ctx, [{"media_type": "movie", "tmdb": 1, "imdb": "tt1"}])
+
+    await trending_sync.backfill_ratings(ctx)
+
+    assert db.trending_ratings_get_many(["tt1"]) == {}
+    assert db.omdb_usage_count(utcnow_iso()[:10]) == 0
+
+    # The next run retries and a definitive answer lands normally.
+    ctx.omdb.fetch_rating.return_value = {"imdb_rating": 8.2, "imdb_votes": 42}
+    await trending_sync.backfill_ratings(ctx)
+    assert ctx.omdb.fetch_rating.await_count == 2
+    assert db.trending_ratings_get_many(["tt1"])["tt1"]["imdb_rating"] == 8.2
+    assert db.omdb_usage_count(utcnow_iso()[:10]) == 1
+
+
+async def test_backfill_circuit_breaks_after_consecutive_failures(db) -> None:
+    # With OMDb unavailable for every attempt (all keys dead), the run stops
+    # probing after the breaker threshold instead of walking the whole backlog
+    # on every hourly run; the deferred titles stay pending for later.
+    ctx = make_ctx(db=db)
+    ctx.omdb.fetch_rating.return_value = None
+    _feed(
+        ctx,
+        [
+            {"media_type": "movie", "tmdb": index, "imdb": f"tt{index}"}
+            for index in range(1, 41)
+        ],
+    )
+
+    await trending_sync.backfill_ratings(ctx)
+
+    breaker = trending_sync._BACKFILL_FAILURE_BREAKER
+    concurrency = trending_sync._BACKFILL_CONCURRENCY
+    assert ctx.omdb.fetch_rating.await_count >= breaker
+    # In-flight tasks may overshoot by up to the concurrency window, but the
+    # remaining ~30 titles are deferred without a single probe.
+    assert ctx.omdb.fetch_rating.await_count <= breaker + concurrency
+    assert db.trending_ratings_get_many([f"tt{i}" for i in range(1, 41)]) == {}
+    assert db.omdb_usage_count(utcnow_iso()[:10]) == 0
+
+
+async def test_backfill_failure_streak_resets_on_success(db) -> None:
+    # Scattered failures below the threshold never trip the breaker: a
+    # definitive answer resets the streak and the whole batch is attempted.
+    ctx = make_ctx(db=db)
+    answers = []
+    for index in range(20):
+        if index % 3 == 2:
+            answers.append({"imdb_rating": 7.0, "imdb_votes": 1})
+        else:
+            answers.append(None)
+    ctx.omdb.fetch_rating.side_effect = answers
+    _feed(
+        ctx,
+        [
+            {"media_type": "movie", "tmdb": index, "imdb": f"tt{index}"}
+            for index in range(1, 21)
+        ],
+    )
+
+    await trending_sync.backfill_ratings(ctx)
+
+    assert ctx.omdb.fetch_rating.await_count == 20
+
+
+async def test_ambiguous_anime_mapping_resolves_rating_via_tmdb(db) -> None:
+    # An anime show whose Fribb imdb mapping was ambiguous arrives from
+    # enrichment with only its tv-space tmdb id. The backfill resolves the
+    # authoritative IMDb id via TMDB and stores the rating under both key
+    # forms, so the feed row's alias key surfaces the correct rating.
+    ctx = make_ctx(db=db)
+    ctx.tmdb.fetch_external_ids.return_value = "tt-right"
+    ctx.omdb.fetch_rating.return_value = {"imdb_rating": 8.4, "imdb_votes": 900}
+    _feed(ctx, [{"media_type": "show", "tmdb": 42828, "anilist": 1719}])
+
+    await trending_sync.backfill_ratings(ctx)
+
+    ctx.tmdb.fetch_external_ids.assert_awaited_once_with(
+        media_type="show", tmdb_id=42828
+    )
+    stored = db.trending_ratings_get_many(["show:42828", "tt-right"])
+    assert stored["show:42828"]["imdb_rating"] == 8.4
+    assert stored["tt-right"]["imdb_rating"] == 8.4

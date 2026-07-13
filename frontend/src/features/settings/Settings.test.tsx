@@ -31,6 +31,8 @@ vi.mock("@/shared/lib/queries", () => ({
   useUpdateStatusInterval: vi.fn(),
   useUpdateTrendingInterval: vi.fn(),
   useUpdateAnimeIdsRefresh: vi.fn(),
+  useUpdateRatingTtl: vi.fn(),
+  useUpdateOmdbBudget: vi.fn(),
   useDatabaseStats: vi.fn(),
   useClearActivity: vi.fn(),
   useClearItems: vi.fn(),
@@ -60,6 +62,8 @@ import {
   useTraktAuthStatus,
   useTraktSettings,
   useUpdateAnimeIdsRefresh,
+  useUpdateOmdbBudget,
+  useUpdateRatingTtl,
   useUpdateServiceSettings,
   useUpdateStatusInterval,
   useUpdateTraktSettings,
@@ -154,6 +158,8 @@ let serviceTestMutate: ReturnType<typeof vi.fn>
 let updateStatusIntervalMutate: ReturnType<typeof vi.fn>
 let updateTrendingIntervalMutate: ReturnType<typeof vi.fn>
 let updateAnimeIdsRefreshMutate: ReturnType<typeof vi.fn>
+let updateRatingTtlMutate: ReturnType<typeof vi.fn>
+let updateOmdbBudgetMutate: ReturnType<typeof vi.fn>
 let clearActivityMutate: ReturnType<typeof vi.fn>
 let clearItemsMutate: ReturnType<typeof vi.fn>
 let clearPostersMutate: ReturnType<typeof vi.fn>
@@ -177,6 +183,8 @@ beforeEach(() => {
   updateStatusIntervalMutate = vi.fn()
   updateTrendingIntervalMutate = vi.fn()
   updateAnimeIdsRefreshMutate = vi.fn()
+  updateRatingTtlMutate = vi.fn()
+  updateOmdbBudgetMutate = vi.fn()
   clearActivityMutate = vi.fn()
   clearItemsMutate = vi.fn()
   clearPostersMutate = vi.fn()
@@ -204,6 +212,8 @@ beforeEach(() => {
       sync_interval_minutes: 15,
       trending_sync_interval_minutes: 1440,
       anime_ids_refresh_days: 3,
+      rating_ttl_days: 7,
+      omdb_daily_budget_per_key: 800,
       auto_remove_when_available: false,
     }),
   )
@@ -215,6 +225,10 @@ beforeEach(() => {
   )
   vi.mocked(useUpdateAnimeIdsRefresh).mockReturnValue(
     mutation(updateAnimeIdsRefreshMutate),
+  )
+  vi.mocked(useUpdateRatingTtl).mockReturnValue(mutation(updateRatingTtlMutate))
+  vi.mocked(useUpdateOmdbBudget).mockReturnValue(
+    mutation(updateOmdbBudgetMutate),
   )
   vi.mocked(useDatabaseStats).mockReturnValue(queryResult(DATABASE_STATS))
   vi.mocked(useClearActivity).mockReturnValue(mutation(clearActivityMutate))
@@ -642,6 +656,8 @@ describe("Settings — general", () => {
         sync_interval_minutes: 15,
         trending_sync_interval_minutes: 1440,
         anime_ids_refresh_days: 3,
+        rating_ttl_days: 7,
+        omdb_daily_budget_per_key: 800,
         auto_remove_when_available: false,
       }),
     )
@@ -705,6 +721,8 @@ describe("Settings — general", () => {
         sync_interval_minutes: 15,
         trending_sync_interval_minutes: 2880,
         anime_ids_refresh_days: 3,
+        rating_ttl_days: 7,
+        omdb_daily_budget_per_key: 800,
         auto_remove_when_available: false,
       }),
     )
@@ -742,6 +760,8 @@ describe("Settings — general", () => {
         sync_interval_minutes: 15,
         trending_sync_interval_minutes: 1440,
         anime_ids_refresh_days: 5,
+        rating_ttl_days: 7,
+        omdb_daily_budget_per_key: 800,
         auto_remove_when_available: false,
       }),
     )
@@ -769,6 +789,44 @@ describe("Settings — general", () => {
     )
     await user.click(screen.getByRole("option", { name: "1 day" }))
     expect(updateAnimeIdsRefreshMutate).toHaveBeenCalledWith(1)
+  })
+
+  it("shows the configured rating refresh window", () => {
+    vi.mocked(useGeneralSettings).mockReturnValue(
+      queryResult({
+        interval_seconds: 60,
+        sync_interval_minutes: 15,
+        trending_sync_interval_minutes: 1440,
+        anime_ids_refresh_days: 3,
+        rating_ttl_days: 10,
+        omdb_daily_budget_per_key: 800,
+        auto_remove_when_available: false,
+      }),
+    )
+    render(<Settings />)
+    expect(
+      screen.getByRole("combobox", { name: "Rating refresh window" }),
+    ).toHaveTextContent("10 days")
+  })
+
+  it("falls back to the default rating refresh window when settings are unset", () => {
+    vi.mocked(useGeneralSettings).mockReturnValue(
+      queryResult<GeneralSettings>(undefined),
+    )
+    render(<Settings />)
+    expect(
+      screen.getByRole("combobox", { name: "Rating refresh window" }),
+    ).toHaveTextContent("7 days")
+  })
+
+  it("updates the rating refresh window", async () => {
+    const user = userEvent.setup()
+    render(<Settings />)
+    await user.click(
+      screen.getByRole("combobox", { name: "Rating refresh window" }),
+    )
+    await user.click(screen.getByRole("option", { name: "5 days" }))
+    expect(updateRatingTtlMutate).toHaveBeenCalledWith(5)
   })
 })
 
@@ -1258,6 +1316,7 @@ describe("Settings — service tabs", () => {
     const badge = screen.getByText("Set key")
     expect(badge).toHaveClass("border-amber-500/40")
   })
+
 })
 
 describe("Settings — tab persistence", () => {
@@ -1370,5 +1429,187 @@ describe("Settings — database", () => {
   it("persists the Database tab to localStorage", async () => {
     await renderDatabase()
     expect(localStorage.getItem(SETTINGS_TAB_STORAGE_KEY)).toBe("database")
+  })
+})
+
+describe("Settings — OMDb keys and budget", () => {
+  const GENERAL = {
+    interval_seconds: 60,
+    sync_interval_minutes: 15,
+    trending_sync_interval_minutes: 1440,
+    anime_ids_refresh_days: 3,
+    rating_ttl_days: 7,
+    omdb_daily_budget_per_key: 800,
+    auto_remove_when_available: false,
+  }
+
+  it("renders four key fields and the budget input on the OMDb tab only", async () => {
+    const user = userEvent.setup()
+    render(<Settings />)
+    await user.click(screen.getByRole("tab", { name: "OMDb" }))
+    expect(screen.getByLabelText("API key")).toBeInTheDocument()
+    expect(screen.getByLabelText("API key 2 (optional)")).toBeInTheDocument()
+    expect(screen.getByLabelText("API key 3 (optional)")).toBeInTheDocument()
+    expect(screen.getByLabelText("API key 4 (optional)")).toBeInTheDocument()
+    expect(
+      screen.getByLabelText("Daily request budget per key"),
+    ).toBeInTheDocument()
+
+    // Single-key services keep their exact previous shape.
+    await user.click(screen.getByRole("tab", { name: "TMDB" }))
+    expect(
+      screen.queryByLabelText("API key 2 (optional)"),
+    ).not.toBeInTheDocument()
+    expect(
+      screen.queryByLabelText("Daily request budget per key"),
+    ).not.toBeInTheDocument()
+  })
+
+  it("autosaves an extra OMDb key under its own payload field", async () => {
+    const user = userEvent.setup()
+    render(<Settings />)
+    await user.click(screen.getByRole("tab", { name: "OMDb" }))
+    vi.useFakeTimers()
+
+    act(() =>
+      fireEvent.change(screen.getByLabelText("API key 2 (optional)"), {
+        target: { value: "k2" },
+      }),
+    )
+    act(() => vi.advanceTimersByTime(800))
+    expect(serviceUpdateMutate).toHaveBeenCalledWith({
+      name: "omdb",
+      body: { api_key_2: "k2" },
+    })
+
+    vi.useRealTimers()
+  })
+
+  it("removes a saved extra key with an explicit empty save", async () => {
+    vi.mocked(useServiceSettings).mockReturnValue(
+      queryResult({
+        ...SERVICES,
+        omdb: {
+          api_key_set: true,
+          api_key_2_set: true,
+          api_key_3_set: false,
+          api_key_4_set: false,
+        },
+      }),
+    )
+    const user = userEvent.setup()
+    render(<Settings />)
+    await user.click(screen.getByRole("tab", { name: "OMDb" }))
+    await user.click(screen.getByRole("button", { name: "Remove this key" }))
+    expect(serviceUpdateMutate).toHaveBeenCalledWith({
+      name: "omdb",
+      body: { api_key_2: "" },
+    })
+  })
+
+  it("commits the budget on blur, clamped to OMDb's bounds", async () => {
+    const user = userEvent.setup()
+    render(<Settings />)
+    await user.click(screen.getByRole("tab", { name: "OMDb" }))
+    const input = screen.getByLabelText("Daily request budget per key")
+    fireEvent.change(input, { target: { value: "2000" } })
+    fireEvent.blur(input)
+    expect(updateOmdbBudgetMutate).toHaveBeenCalledWith(1000)
+  })
+
+  it("ignores unchanged, emptied or unparseable budget input", async () => {
+    const user = userEvent.setup()
+    render(<Settings />)
+    await user.click(screen.getByRole("tab", { name: "OMDb" }))
+    const input = screen.getByLabelText("Daily request budget per key")
+    fireEvent.blur(input) // no draft at all
+    // Rounds back to the saved 800, so nothing is saved (a literal "800"
+    // would not even fire onChange under React's value tracking).
+    fireEvent.change(input, { target: { value: "800.4" } })
+    fireEvent.blur(input)
+    fireEvent.change(input, { target: { value: "" } }) // emptied
+    fireEvent.blur(input)
+    fireEvent.change(input, { target: { value: "Infinity" } }) // unparseable
+    fireEvent.blur(input)
+    expect(updateOmdbBudgetMutate).not.toHaveBeenCalled()
+  })
+
+  it("shows the effective daily total across the configured keys", async () => {
+    vi.mocked(useGeneralSettings).mockReturnValue(
+      queryResult({ ...GENERAL, omdb_daily_budget_per_key: 900 }),
+    )
+    vi.mocked(useServiceSettings).mockReturnValue(
+      queryResult({
+        ...SERVICES,
+        omdb: {
+          api_key_set: true,
+          api_key_2_set: true,
+          api_key_3_set: true,
+          api_key_4_set: false,
+        },
+      }),
+    )
+    const user = userEvent.setup()
+    render(<Settings />)
+    await user.click(screen.getByRole("tab", { name: "OMDb" }))
+    expect(
+      screen.getByText("900 × 3 keys = 2700 rating lookups/day"),
+    ).toBeInTheDocument()
+  })
+
+  it("falls back to the default budget when settings are unset", async () => {
+    vi.mocked(useGeneralSettings).mockReturnValue(
+      queryResult<GeneralSettings>(undefined),
+    )
+    vi.mocked(useServiceSettings).mockReturnValue(
+      queryResult({
+        ...SERVICES,
+        omdb: {
+          api_key_set: true,
+          api_key_2_set: false,
+          api_key_3_set: false,
+          api_key_4_set: false,
+        },
+      }),
+    )
+    const user = userEvent.setup()
+    render(<Settings />)
+    await user.click(screen.getByRole("tab", { name: "OMDb" }))
+    expect(screen.getByLabelText("Daily request budget per key")).toHaveValue(
+      800,
+    )
+    // A single key also exercises the singular effective-total wording.
+    expect(
+      screen.getByText("800 × 1 key = 800 rating lookups/day"),
+    ).toBeInTheDocument()
+  })
+
+  it("ignores input the number field sanitises away", async () => {
+    // jsdom (like browsers) coerces invalid number-input values to "", which
+    // the emptied-input path ignores.
+    const user = userEvent.setup()
+    render(<Settings />)
+    await user.click(screen.getByRole("tab", { name: "OMDb" }))
+    const input = screen.getByLabelText("Daily request budget per key")
+    fireEvent.change(input, { target: { value: "1e400" } })
+    fireEvent.blur(input)
+    expect(updateOmdbBudgetMutate).not.toHaveBeenCalled()
+  })
+
+  it("shows the saving hint while the budget mutation is pending", async () => {
+    vi.mocked(useUpdateOmdbBudget).mockReturnValue(
+      mutation(updateOmdbBudgetMutate, true),
+    )
+    const user = userEvent.setup()
+    render(<Settings />)
+    await user.click(screen.getByRole("tab", { name: "OMDb" }))
+    expect(screen.getByText("Saving…")).toBeInTheDocument()
+  })
+
+  it("explains that the backfill is skipped without any key", async () => {
+    const user = userEvent.setup()
+    render(<Settings />)
+    await user.click(screen.getByRole("tab", { name: "OMDb" }))
+    expect(screen.getByText(/rating backfill is skipped/)).toBeInTheDocument()
   })
 })

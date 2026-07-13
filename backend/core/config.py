@@ -22,6 +22,9 @@ _SECRET_FIELDS = frozenset(
         "RADARR_API_KEY",
         "TMDB_API_KEY",
         "OMDB_API_KEY",
+        "OMDB_API_KEY_2",
+        "OMDB_API_KEY_3",
+        "OMDB_API_KEY_4",
         "SABNZBD_API_KEY",
         "QBITTORRENT_API_KEY",
     }
@@ -58,6 +61,13 @@ class Settings(BaseSettings):
     # ---- TMDB / OMDb (API key only; fixed public endpoints) ----
     TMDB_API_KEY: str = ""
     OMDB_API_KEY: str = ""
+    # Optional extra OMDb keys: the client rotates to the next one when the
+    # active key hits its daily request limit, pooling free-tier quotas. Seed
+    # the store on first run (and backfill newly-added fields once on upgrade),
+    # then UI-managed; the daily backfill budget scales with the key count.
+    OMDB_API_KEY_2: str = ""
+    OMDB_API_KEY_3: str = ""
+    OMDB_API_KEY_4: str = ""
 
     # ---- SABnzbd (URL + API key) ----
     SABNZBD_URL: str = ""
@@ -83,6 +93,14 @@ class Settings(BaseSettings):
     # How often (days) the cached Fribb anime id mapping is re-downloaded; seeds
     # the store on first run, then UI-managed (Settings -> General: 1/3/5).
     ANIME_IDS_REFRESH_DAYS: int = 3
+    # How long (days) a stored IMDb rating stays fresh before the OMDb backfill
+    # re-fetches it; seeds the store on first run, then UI-managed
+    # (Settings -> General: 5/7/10).
+    RATING_TTL_DAYS: int = 7
+    # Per-key daily OMDb request budget for the rating backfill (OMDb's free
+    # tier is 1000/key/day); seeds the store on first run, then UI-managed
+    # (Settings -> OMDb tab, bounds 100-1000).
+    OMDB_DAILY_BUDGET_PER_KEY: int = 800
 
     # ---- Deletarr ----
     # Seed the media-library roots on first run; thereafter they are managed from
@@ -145,7 +163,12 @@ class Settings(BaseSettings):
             "sonarr": {"url": self.SONARR_URL, "api_key": self.SONARR_API_KEY},
             "radarr": {"url": self.RADARR_URL, "api_key": self.RADARR_API_KEY},
             "tmdb": {"api_key": self.TMDB_API_KEY},
-            "omdb": {"api_key": self.OMDB_API_KEY},
+            "omdb": {
+                "api_key": self.OMDB_API_KEY,
+                "api_key_2": self.OMDB_API_KEY_2,
+                "api_key_3": self.OMDB_API_KEY_3,
+                "api_key_4": self.OMDB_API_KEY_4,
+            },
             "sabnzbd": {"url": self.SABNZBD_URL, "api_key": self.SABNZBD_API_KEY},
             "qbittorrent": {
                 "url": self.QBITTORRENT_URL,

@@ -79,6 +79,8 @@ def build_context(settings: Settings) -> AppContext:
         bandwidth_check_interval_seconds=settings.BANDWIDTH_CHECK_INTERVAL_SEC,
         trending_sync_interval_minutes=settings.TRENDING_SYNC_INTERVAL_MIN,
         anime_ids_refresh_days=settings.ANIME_IDS_REFRESH_DAYS,
+        rating_ttl_days=settings.RATING_TTL_DAYS,
+        omdb_daily_budget_per_key=settings.OMDB_DAILY_BUDGET_PER_KEY,
         deletarr_movies_path=settings.DELETARR_MOVIES_PATH,
         deletarr_tv_path=settings.DELETARR_TV_PATH,
         deletarr_use_arr_source=settings.DELETARR_USE_ARR_SOURCE,
@@ -100,7 +102,13 @@ def build_context(settings: Settings) -> AppContext:
     radarr = ArrClient(name="radarr", base_url=radarr_url, api_key=radarr_key)
 
     tmdb = TmdbClient(api_key=settings_store.service_fields("tmdb")["api_key"])
-    omdb = OmdbClient(api_key=settings_store.service_fields("omdb")["api_key"])
+    omdb_fields = settings_store.service_fields("omdb")
+    omdb = OmdbClient(
+        api_key=omdb_fields["api_key"],
+        api_key_2=omdb_fields["api_key_2"],
+        api_key_3=omdb_fields["api_key_3"],
+        api_key_4=omdb_fields["api_key_4"],
+    )
     anilist = AnilistClient()
     sab_fields = settings_store.service_fields("sabnzbd")
     sabnzbd = SabnzbdClient(base_url=sab_fields["url"], api_key=sab_fields["api_key"])

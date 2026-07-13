@@ -82,6 +82,8 @@ class StubSettingsStore:
         bandwidth_check_interval_seconds: int = 15,
         trending_sync_interval_minutes: int = 1440,
         anime_ids_refresh_days: int = 3,
+        rating_ttl_days: int = 7,
+        omdb_daily_budget_per_key: int = 800,
         deletarr_movies_path: str = "/media/movies",
         deletarr_tv_path: str = "/media/tv",
         deletarr_use_arr_source: bool = False,
@@ -94,6 +96,8 @@ class StubSettingsStore:
         self._bandwidth_check_interval_seconds = bandwidth_check_interval_seconds
         self._trending_sync_interval_minutes = trending_sync_interval_minutes
         self._anime_ids_refresh_days = anime_ids_refresh_days
+        self._rating_ttl_days = rating_ttl_days
+        self._omdb_daily_budget_per_key = omdb_daily_budget_per_key
         self._deletarr_settings = {
             "movies_path": deletarr_movies_path,
             "tv_path": deletarr_tv_path,
@@ -233,6 +237,23 @@ class StubSettingsStore:
             days = 3
         self._anime_ids_refresh_days = days
         return days
+
+    def rating_ttl_days(self) -> int:
+        return self._rating_ttl_days
+
+    def update_rating_ttl_days(self, days: int) -> int:
+        if days not in {5, 7, 10}:
+            days = 7
+        self._rating_ttl_days = days
+        return days
+
+    def omdb_daily_budget_per_key(self) -> int:
+        return self._omdb_daily_budget_per_key
+
+    def update_omdb_daily_budget_per_key(self, budget: int) -> int:
+        budget = max(100, min(int(budget), 1000))
+        self._omdb_daily_budget_per_key = budget
+        return budget
 
     def findarr_settings(self) -> dict[str, Any]:
         return {
@@ -416,6 +437,7 @@ class StubService:
         self.fetch_rating = AsyncMock(
             return_value={"imdb_rating": None, "imdb_votes": None}
         )
+        self.key_count = MagicMock(return_value=1)
         self.get_stats = AsyncMock(
             return_value={
                 "online": True,

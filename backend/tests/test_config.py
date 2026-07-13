@@ -75,7 +75,12 @@ def test_service_seeds_shape() -> None:
     assert seeds["sonarr"] == {"url": "http://sonarr:8989", "api_key": "sk"}
     assert seeds["radarr"] == {"url": "http://radarr:7878", "api_key": "rk"}
     assert seeds["tmdb"] == {"api_key": "tk"}
-    assert seeds["omdb"] == {"api_key": "ok"}
+    assert seeds["omdb"] == {
+        "api_key": "ok",
+        "api_key_2": "",
+        "api_key_3": "",
+        "api_key_4": "",
+    }
     assert seeds["sabnzbd"] == {"url": "http://sab:8080", "api_key": "zk"}
     assert seeds["qbittorrent"] == {"url": "http://qb:8080", "api_key": "qbt_key"}
 

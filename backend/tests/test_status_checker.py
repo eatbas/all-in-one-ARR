@@ -101,3 +101,20 @@ async def test_check_once_handles_base_exception(checker) -> None:
     await checker._check_once()
     result = checker.get_statuses()
     assert any("kapow" in s.detail for s in result.services.values())
+
+
+async def test_check_one_prefers_a_cheap_status_probe(checker) -> None:
+    # A client exposing status_probe (OMDb) is checked through it so the
+    # recurring cycle never sweeps the whole key pool.
+    from unittest.mock import AsyncMock
+
+    client = type("Probed", (), {})()
+    client.status_probe = AsyncMock(return_value={"ok": True, "detail": "cheap"})
+    client.test_connection = AsyncMock()
+
+    snapshot = await checker._check_one("omdb", client)
+
+    assert snapshot.ok is True
+    assert snapshot.detail == "cheap"
+    client.status_probe.assert_awaited_once()
+    client.test_connection.assert_not_awaited()

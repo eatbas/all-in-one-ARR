@@ -48,8 +48,10 @@ SERVICES: tuple[ServiceDescriptor, ...] = (
     ServiceDescriptor(
         "omdb",
         "OMDb",
-        ("api_key",),
-        ("api_key",),
+        # One primary key plus up to three optional rotation keys: lookups
+        # rotate to the next key when one hits its daily request limit.
+        ("api_key", "api_key_2", "api_key_3", "api_key_4"),
+        ("api_key", "api_key_2", "api_key_3", "api_key_4"),
         default_url="https://www.omdbapi.com",
     ),
     ServiceDescriptor("sabnzbd", "SABnzbd", ("url", "api_key"), ("api_key",)),

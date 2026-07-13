@@ -65,6 +65,8 @@ import {
   useTraktAuthStatus,
   useTraktSettings,
   useUpdateAnimeIdsRefresh,
+  useUpdateOmdbBudget,
+  useUpdateRatingTtl,
   useUpdateServiceSettings,
   useUpdateStatusInterval,
   useUpdateTraktSettings,
@@ -273,6 +275,36 @@ function CredentialsCard() {
 }
 
 /** Edit a service connection (URL / API key) and test it. */
+/** UI metadata for the API-key slots a service tab can declare. */
+const API_KEY_FIELDS = [
+  {
+    field: "apiKey",
+    payload: "api_key",
+    setFlag: "api_key_set",
+    label: "API key",
+  },
+  {
+    field: "apiKey2",
+    payload: "api_key_2",
+    setFlag: "api_key_2_set",
+    label: "API key 2 (optional)",
+  },
+  {
+    field: "apiKey3",
+    payload: "api_key_3",
+    setFlag: "api_key_3_set",
+    label: "API key 3 (optional)",
+  },
+  {
+    field: "apiKey4",
+    payload: "api_key_4",
+    setFlag: "api_key_4_set",
+    label: "API key 4 (optional)",
+  },
+] as const
+
+type ApiKeyFieldMeta = (typeof API_KEY_FIELDS)[number]
+
 function ServiceConnectionCard({ name, label, fields }: ServiceTab) {
   const { data: services } = useServiceSettings()
   const { data: statuses } = useServiceStatuses()
@@ -283,11 +315,13 @@ function ServiceConnectionCard({ name, label, fields }: ServiceTab) {
   const test = useTestService()
   const current = services?.[name]
   const [urlEdit, setUrlEdit] = useState<string | null>(null)
-  const [apiKey, setApiKey] = useState("")
+  const [keyEdits, setKeyEdits] = useState<Record<string, string>>({})
   const [serviceDraftRevision, setServiceDraftRevision] = useState(0)
 
-  // Every managed service carries an API key; only some also carry a URL.
+  // Every managed service carries an API key; only some also carry a URL, and
+  // OMDb additionally declares up to three optional rotation-key slots.
   const hasUrl = fields.includes("url")
+  const keyFields = API_KEY_FIELDS.filter((key) => fields.includes(key.field))
   const savedUrl = current?.url ?? ""
   const url = urlEdit ?? savedUrl
 
@@ -296,14 +330,17 @@ function ServiceConnectionCard({ name, label, fields }: ServiceTab) {
     if (hasUrl && url.trim() !== savedUrl.trim()) {
       body.url = url
     }
-    if (apiKey) {
-      body.api_key = apiKey
+    for (const key of keyFields) {
+      const draft = keyEdits[key.payload]
+      if (draft) {
+        body[key.payload] = draft
+      }
     }
     return Object.keys(body).length > 0 ? body : null
-  }, [hasUrl, url, apiKey, savedUrl])
+  }, [hasUrl, url, keyEdits, keyFields, savedUrl])
 
   const clearServiceEdit = useCallback(() => {
-    setApiKey("")
+    setKeyEdits({})
     setUrlEdit(null)
   }, [])
 
@@ -312,8 +349,8 @@ function ServiceConnectionCard({ name, label, fields }: ServiceTab) {
     setServiceDraftRevision((revision) => revision + 1)
   }, [])
 
-  const editApiKey = useCallback((value: string) => {
-    setApiKey(value)
+  const editKey = useCallback((payload: string, value: string) => {
+    setKeyEdits((edits) => ({ ...edits, [payload]: value }))
     setServiceDraftRevision((revision) => revision + 1)
   }, [])
 
@@ -348,11 +385,16 @@ function ServiceConnectionCard({ name, label, fields }: ServiceTab) {
     : savedUrl
       ? "Saved"
       : "Not set"
-  const apiKeyHint = apiKey
-    ? "Unsaved"
-    : current?.api_key_set
-      ? "Saved"
-      : "Not set"
+  function keyHint(key: ApiKeyFieldMeta): string {
+    if (keyEdits[key.payload]) return "Unsaved"
+    return current?.[key.setFlag] ? "Saved" : "Not set"
+  }
+
+  function clearSavedKey(key: ApiKeyFieldMeta) {
+    // Extras are cleared by saving an explicit empty value (the regular
+    // convention is "blank keeps current", so blanking alone cannot clear).
+    saveService({ [key.payload]: "" })
+  }
 
   return (
     <Card>
@@ -377,18 +419,37 @@ function ServiceConnectionCard({ name, label, fields }: ServiceTab) {
             />
           </Field>
         ) : null}
-        <Field
-          label="API key"
-          hint={apiKeyHint}
-          helpText="API key saved server-side. Existing keys are never returned to the browser."
-        >
-          <Input
-            type="password"
-            value={apiKey}
-            onChange={(event) => editApiKey(event.target.value)}
-            placeholder="Leave blank to keep current"
-          />
-        </Field>
+        {keyFields.map((key) => (
+          <Field
+            key={key.payload}
+            label={key.label}
+            hint={keyHint(key)}
+            helpText={
+              key.payload === "api_key"
+                ? "API key saved server-side. Existing keys are never returned to the browser."
+                : "Optional rotation key: lookups switch to it when the previous key hits its daily request limit."
+            }
+          >
+            <Input
+              type="password"
+              value={keyEdits[key.payload] ?? ""}
+              onChange={(event) => editKey(key.payload, event.target.value)}
+              placeholder="Leave blank to keep current"
+              aria-label={key.label}
+            />
+            {key.payload !== "api_key" && current?.[key.setFlag] ? (
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="self-start text-muted-foreground"
+                onClick={() => clearSavedKey(key)}
+              >
+                Remove this key
+              </Button>
+            ) : null}
+          </Field>
+        ))}
         <div className="flex flex-wrap gap-3">
           <ActionWithHelp
             label="Test connection"
@@ -415,8 +476,68 @@ function ServiceConnectionCard({ name, label, fields }: ServiceTab) {
             {test.data.detail}
           </p>
         ) : null}
+        {name === "omdb" ? (
+          <OmdbBudgetSection
+            configuredKeys={
+              keyFields.filter((key) => Boolean(current?.[key.setFlag])).length
+            }
+          />
+        ) : null}
       </CardContent>
     </Card>
+  )
+}
+
+/**
+ * Editable per-key daily OMDb budget, shown beneath the Test connection block
+ * on the OMDb tab. The value commits on blur, clamped to OMDb's free-tier
+ * bounds; the summary line shows the effective daily total across the
+ * configured keys.
+ */
+function OmdbBudgetSection({ configuredKeys }: { configuredKeys: number }) {
+  const { data: general } = useGeneralSettings()
+  const updateBudget = useUpdateOmdbBudget()
+  const saved = general?.omdb_daily_budget_per_key ?? 800
+  const [draft, setDraft] = useState<string | null>(null)
+
+  function commit() {
+    if (draft === null) return
+    const trimmed = draft.trim()
+    setDraft(null)
+    // An emptied or unparseable input reverts to the saved value rather than
+    // committing an accidental clamp-to-minimum.
+    if (!trimmed) return
+    // A number input only ever yields a valid float string or "" (handled
+    // above), and the clamp folds even scientific-notation overflow back to
+    // the bounds, so no separate finiteness guard is needed.
+    const clamped = Math.max(100, Math.min(Math.round(Number(trimmed)), 1000))
+    if (clamped !== saved) {
+      updateBudget.mutate(clamped)
+    }
+  }
+
+  return (
+    <Field
+      label="Daily request budget per key"
+      hint={updateBudget.isPending ? "Saving…" : "Saved"}
+      helpText="OMDb's free tier allows 1,000 requests per key per day; the default of 800 leaves headroom for poster lookups. The rating backfill spends at most this many requests per key per day."
+    >
+      <Input
+        type="number"
+        min={100}
+        max={1000}
+        step={50}
+        value={draft ?? String(saved)}
+        onChange={(event) => setDraft(event.target.value)}
+        onBlur={commit}
+        aria-label="Daily request budget per key"
+      />
+      <p className="text-xs text-muted-foreground">
+        {configuredKeys > 0
+          ? `${saved} × ${configuredKeys} key${configuredKeys === 1 ? "" : "s"} = ${saved * configuredKeys} rating lookups/day`
+          : "No API key configured — the rating backfill is skipped."}
+      </p>
+    </Field>
   )
 }
 
@@ -672,14 +793,22 @@ const ANIME_IDS_REFRESH_OPTIONS = [
   { value: 5, label: "5 days" },
 ] as const
 
+const RATING_TTL_OPTIONS = [
+  { value: 5, label: "5 days" },
+  { value: 7, label: "7 days" },
+  { value: 10, label: "10 days" },
+] as const
+
 /** App scheduler: background refresh cadences for the Trending page's data. */
 function AppSchedulerCard() {
   const { data: general } = useGeneralSettings()
   const updateTrendingInterval = useUpdateTrendingInterval()
   const updateAnimeIdsRefresh = useUpdateAnimeIdsRefresh()
+  const updateRatingTtl = useUpdateRatingTtl()
 
   const interval = general?.trending_sync_interval_minutes ?? 1440
   const animeIdsRefreshDays = general?.anime_ids_refresh_days ?? 3
+  const ratingTtlDays = general?.rating_ttl_days ?? 7
 
   return (
     <Card>
@@ -712,6 +841,17 @@ function AppSchedulerCard() {
           disabled={updateAnimeIdsRefresh.isPending}
           placeholder="Select cadence"
           onChange={(days) => updateAnimeIdsRefresh.mutate(days)}
+        />
+        <SettingsSelectRow
+          id="rating-ttl"
+          label="Rating refresh window"
+          help="How often a title's stored IMDb rating is refreshed from OMDb. Ratings change slowly, so longer windows save request quota; stale titles refresh as the daily budget allows."
+          description="How often stored IMDb ratings are refreshed."
+          options={RATING_TTL_OPTIONS}
+          value={ratingTtlDays}
+          disabled={updateRatingTtl.isPending}
+          placeholder="Select window"
+          onChange={(days) => updateRatingTtl.mutate(days)}
         />
       </CardContent>
     </Card>

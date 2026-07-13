@@ -27,6 +27,18 @@ DEFAULT_TRENDING_SYNC_INTERVAL = 1440
 VALID_ANIME_IDS_REFRESH_DAYS: frozenset[int] = frozenset({1, 3, 5})
 DEFAULT_ANIME_IDS_REFRESH_DAYS = 3
 
+# Allowed IMDb-rating refresh windows in days offered by the dashboard's App
+# scheduler: a stored rating older than this is re-fetched by the OMDb backfill.
+VALID_RATING_TTL_DAYS: frozenset[int] = frozenset({5, 7, 10})
+DEFAULT_RATING_TTL_DAYS = 7
+
+# Per-key daily OMDb request budget for the rating backfill. OMDb's free tier
+# allows 1000 requests per key per day; the default leaves headroom for the
+# poster fallback and the compat rating route. User-editable within bounds.
+DEFAULT_OMDB_DAILY_BUDGET_PER_KEY = 800
+OMDB_DAILY_BUDGET_PER_KEY_MIN = 100
+OMDB_DAILY_BUDGET_PER_KEY_MAX = 1000
+
 # Allowed Findarr scheduler intervals in minutes offered by the dashboard.
 VALID_FINDARR_INTERVALS: frozenset[int] = frozenset({15, 30, 45, 60})
 
@@ -115,6 +127,27 @@ def normalise_anime_ids_refresh_days(value: int) -> int:
         value
         if value in VALID_ANIME_IDS_REFRESH_DAYS
         else DEFAULT_ANIME_IDS_REFRESH_DAYS
+    )
+
+
+def normalise_rating_ttl_days(value: int) -> int:
+    """Return a valid IMDb-rating refresh window in days, defaulting to 7."""
+    return value if value in VALID_RATING_TTL_DAYS else DEFAULT_RATING_TTL_DAYS
+
+
+def normalise_omdb_daily_budget_per_key(value: Any) -> int:
+    """Return a bounded per-key OMDb daily budget, defaulting to 800.
+
+    Out-of-range values clamp to the 100–1000 bounds (OMDb's free tier is
+    1000/day per key); unparseable input falls back to the default.
+    """
+    try:
+        parsed = int(value)
+    except TypeError, ValueError:
+        return DEFAULT_OMDB_DAILY_BUDGET_PER_KEY
+    return max(
+        OMDB_DAILY_BUDGET_PER_KEY_MIN,
+        min(parsed, OMDB_DAILY_BUDGET_PER_KEY_MAX),
     )
 
 

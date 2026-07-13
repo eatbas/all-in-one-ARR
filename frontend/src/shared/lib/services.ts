@@ -1,6 +1,6 @@
 import type { ServiceName } from "@/shared/lib/api"
 
-type ServiceField = "url" | "apiKey"
+type ServiceField = "url" | "apiKey" | "apiKey2" | "apiKey3" | "apiKey4"
 
 export interface ServiceTab {
   name: ServiceName
@@ -17,7 +17,13 @@ export const SERVICE_TABS: readonly ServiceTab[] = [
   { name: "sonarr", label: "Sonarr", fields: ["url", "apiKey"] },
   { name: "radarr", label: "Radarr", fields: ["url", "apiKey"] },
   { name: "tmdb", label: "TMDB", fields: ["apiKey"] },
-  { name: "omdb", label: "OMDb", fields: ["apiKey"] },
+  {
+    name: "omdb",
+    label: "OMDb",
+    // One primary key plus up to three optional rotation keys: lookups rotate
+    // to the next key when one hits its daily request limit.
+    fields: ["apiKey", "apiKey2", "apiKey3", "apiKey4"],
+  },
   { name: "sabnzbd", label: "SABnzbd", fields: ["url", "apiKey"] },
   { name: "qbittorrent", label: "qBittorrent", fields: ["url", "apiKey"] },
 ]

@@ -10,9 +10,10 @@ jobs read (APScheduler 4 cannot serialise a closure — this mirrors
 The snapshot is mirrored into the database (``trending_feeds``) so a restart
 within the configured interval reloads it instead of refetching every provider.
 IMDb ratings are filled into ``trending_ratings`` by a background backfill that
-spends at most :data:`_OMDB_DAILY_BUDGET` OMDb requests per UTC day (tracked in
-``omdb_usage``); whatever does not fit is picked up by the next run — the daily
-cron drains the backlog even on days the feed refresh does not fire.
+spends at most the configured per-key budget (Settings -> OMDb tab, default
+800) per configured API key per UTC day (tracked in ``omdb_usage``; the client
+rotates keys on quota exhaustion); whatever does not fit is picked up by the next run — the
+daily cron drains the backlog even on days the feed refresh does not fire.
 """
 
 from __future__ import annotations
@@ -39,9 +40,9 @@ if TYPE_CHECKING:  # pragma: no cover
 # The job ids under which the schedules are registered (and rescheduled).
 _JOB_ID = "trending_sync"
 _BACKFILL_JOB_ID = "trending_rating_backfill"
-# The daily backfill cron fires at a quiet hour; the budget resets per UTC day.
-_BACKFILL_CRON_HOUR = 3
-_BACKFILL_CRON_MINUTE = 30
+# The backfill re-runs hourly (single-flight, cheap no-op when nothing is
+# pending) so the backlog drains as soon as budget frees or new titles appear.
+_BACKFILL_INTERVAL_MINUTES = 60
 _log = get_logger("trending_sync")
 
 # Poster pre-warm bounds: how many posters to fetch concurrently, and how long any
@@ -53,13 +54,19 @@ _PREWARM_TIMEOUT_SECONDS = 20
 # before completion (per the asyncio docs); cleared by a done-callback.
 _PREWARM_TASKS: set[asyncio.Task] = set()
 
-# Rating backfill bounds. The budget stays under OMDb's ~1000/day free tier,
-# leaving headroom for the poster pipeline's OMDb fallback and the compat rating
-# route. Stored ratings are refreshed once older than the TTL; missing ones come
+# Rating backfill bounds. The per-key daily budget is user-configured
+# (Settings -> OMDb tab, default 800 of OMDb's ~1000/day free tier, leaving
+# headroom for the poster fallback and the compat rating route); the effective
+# run budget scales with the number of configured keys (see
+# ``backfill_ratings``). Stored ratings are refreshed once older than the
+# configured window (Settings -> General: 5/7/10 days); missing ones come
 # first so new titles gain a badge before old ratings are re-polled.
-_OMDB_DAILY_BUDGET = 800
-_RATING_DB_TTL_DAYS = 7
 _BACKFILL_CONCURRENCY = 8
+# Circuit breaker: when this many OMDb lookups fail in a row, the whole pool
+# is evidently unavailable (all keys exhausted or rejected, or OMDb is down),
+# so the run defers the rest of the backlog instead of probing every pending
+# title once per hour for nothing.
+_BACKFILL_FAILURE_BREAKER = 10
 # Strong references to in-flight backfill tasks (same rationale as _PREWARM_TASKS).
 # Also the concurrency guard: a non-empty set means a backfill is in flight, so
 # duplicate triggers are skipped rather than double-spending the daily budget.
@@ -332,7 +339,8 @@ async def backfill_ratings(ctx: AppContext) -> None:
     if not targets:
         return
     stored = ctx.db.trending_ratings_get_many([target.canonical for target in targets])
-    cutoff = (datetime.now(UTC) - timedelta(days=_RATING_DB_TTL_DAYS)).isoformat()
+    ttl_days = ctx.settings_store.rating_ttl_days()
+    cutoff = (datetime.now(UTC) - timedelta(days=ttl_days)).isoformat()
     missing = [target for target in targets if target.canonical not in stored]
     stale = [
         target
@@ -342,9 +350,21 @@ async def backfill_ratings(ctx: AppContext) -> None:
     ]
     pending = missing + stale
     if not pending:
+        _log.info(
+            "rating backfill: all %d stored titles rated; nothing pending",
+            len(targets),
+        )
+        return
+    key_count = ctx.omdb.key_count()
+    if key_count == 0:
+        _log.info("no OMDb API key configured; rating backfill skipped")
         return
     today = utcnow_iso()[:10]
-    remaining = _OMDB_DAILY_BUDGET - ctx.db.omdb_usage_count(today)
+    # The daily budget scales with the configured OMDb keys (the client rotates
+    # to the next key when one hits its request limit); the per-key figure is
+    # user-configured and read live so an edit applies on the next run.
+    budget = ctx.settings_store.omdb_daily_budget_per_key() * key_count
+    remaining = budget - ctx.db.omdb_usage_count(today)
     if remaining <= 0:
         _log.info(
             "rating backfill: %d pending, daily OMDb budget exhausted", len(pending)
@@ -352,9 +372,14 @@ async def backfill_ratings(ctx: AppContext) -> None:
         return
     batch = pending[:remaining]
     semaphore = asyncio.Semaphore(_BACKFILL_CONCURRENCY)
+    consecutive_failures = 0
+    breaker_tripped = False
 
-    async def _one(target: _RatingGroup) -> bool:
+    async def _one(target: _RatingGroup) -> bool | None:
+        nonlocal consecutive_failures, breaker_tripped
         async with semaphore:
+            if breaker_tripped:
+                return None  # deferred to a later run; not an attempt
             imdb_id = target.imdb
             if not imdb_id:
                 imdb_id = await ctx.tmdb.fetch_external_ids(
@@ -376,6 +401,16 @@ async def backfill_ratings(ctx: AppContext) -> None:
                         )
                     return True
             rating = await ctx.omdb.fetch_rating(imdb_id=imdb_id)
+            if rating is None:
+                # Failed lookup (keys exhausted/rejected, network): store
+                # nothing and charge nothing so a later run retries — only a
+                # definitive OMDb answer may be remembered. A long failure
+                # streak trips the breaker and defers the rest of the batch.
+                consecutive_failures += 1
+                if consecutive_failures >= _BACKFILL_FAILURE_BREAKER:
+                    breaker_tripped = True
+                return False
+            consecutive_failures = 0
             ctx.db.omdb_usage_add(today, 1)
             for key in target.aliases:
                 ctx.db.trending_ratings_upsert(
@@ -396,7 +431,15 @@ async def backfill_ratings(ctx: AppContext) -> None:
     )
     fetched = sum(1 for result in results if result is True)
     failed = sum(1 for result in results if isinstance(result, Exception))
-    unresolved = len(batch) - fetched - failed
+    deferred = sum(1 for result in results if result is None)
+    unresolved = len(batch) - fetched - failed - deferred
+    if breaker_tripped:
+        _log.warning(
+            "rating backfill: %d consecutive OMDb failures — OMDb appears "
+            "unavailable; deferring %d titles to a later run",
+            _BACKFILL_FAILURE_BREAKER,
+            deferred,
+        )
     _log.info(
         "rating backfill: %d pending, %d fetched, %d unresolved, %d failed, "
         "%d left for a later run",
@@ -404,7 +447,7 @@ async def backfill_ratings(ctx: AppContext) -> None:
         fetched,
         unresolved,
         failed,
-        len(pending) - len(batch),
+        len(pending) - len(batch) + deferred,
     )
 
 
@@ -475,9 +518,9 @@ async def _trending_sync_job() -> None:
 async def _rating_backfill_job() -> None:
     """Scheduled entrypoint: drain the rating backlog within the daily budget.
 
-    Runs daily so the backlog keeps draining on days the 1–3-day feed refresh
-    does not fire (and after a day-rollover restores spent budget). Skipped when
-    a refresh-triggered backfill is already in flight (see
+    Runs hourly (a cheap no-op when nothing is pending) so failed lookups are
+    retried promptly and the backlog resumes as soon as the day rolls over and
+    budget frees. Skipped when another backfill is already in flight (see
     :func:`_spawn_rating_backfill`).
     """
     ctx = _trending_sync.ctx
@@ -579,11 +622,13 @@ async def start_trending_sync(ctx: AppContext) -> None:
         )
 
     ctx.reschedule_trending = _reschedule_trending
-    await ctx.scheduler.add_cron(
+    # defer_first_run: the boot path below already spawns a backfill; the
+    # hourly re-run keeps draining the backlog afterwards.
+    await ctx.scheduler.add_interval(
         _rating_backfill_job,
-        hour=_BACKFILL_CRON_HOUR,
-        minute=_BACKFILL_CRON_MINUTE,
+        minutes=_BACKFILL_INTERVAL_MINUTES,
         id=_BACKFILL_JOB_ID,
+        defer_first_run=True,
     )
     last = _restore_trending_store(ctx)
     interval = ctx.settings_store.trending_sync_interval_minutes()

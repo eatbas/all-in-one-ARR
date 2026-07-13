@@ -97,6 +97,8 @@ class GeneralSettingsRequest(BaseModel):
     sync_interval_minutes: int | None = None
     trending_sync_interval_minutes: int | None = None
     anime_ids_refresh_days: int | None = None
+    rating_ttl_days: int | None = None
+    omdb_daily_budget_per_key: int | None = None
     auto_remove_when_available: bool | None = None
 
 
@@ -105,6 +107,8 @@ class GeneralSettingsResponse(BaseModel):
     sync_interval_minutes: int
     trending_sync_interval_minutes: int
     anime_ids_refresh_days: int
+    rating_ttl_days: int
+    omdb_daily_budget_per_key: int
     auto_remove_when_available: bool
 
 
@@ -189,6 +193,36 @@ def _apply_anime_ids_refresh(ctx: AppContext, days: int) -> None:
         )
     if ctx.anime_ids is not None:
         ctx.anime_ids.update_refresh_days(updated)
+
+
+def _apply_rating_ttl(ctx: AppContext, days: int) -> None:
+    """Persist a rating refresh-window change and record it when it changed.
+
+    No scheduler interaction: the backfill reads the window from the store on
+    every run, so the next run simply uses the new value.
+    """
+    previous = ctx.settings_store.rating_ttl_days()
+    updated = ctx.settings_store.update_rating_ttl_days(days)
+    if updated != previous:
+        ctx.db.add_activity(
+            "Rating refresh window updated",
+            f"Stored IMDb ratings now refresh every {updated} day(s)",
+        )
+
+
+def _apply_omdb_budget(ctx: AppContext, budget: int) -> None:
+    """Persist a per-key OMDb budget change and record it when it changed.
+
+    No scheduler interaction: the backfill reads the budget from the store on
+    every run, so the next run simply uses the new value.
+    """
+    previous = ctx.settings_store.omdb_daily_budget_per_key()
+    updated = ctx.settings_store.update_omdb_daily_budget_per_key(budget)
+    if updated != previous:
+        ctx.db.add_activity(
+            "OMDb daily budget updated",
+            f"Rating backfill now spends up to {updated} requests per key per day",
+        )
 
 
 def _apply_auto_remove(ctx: AppContext, enabled: bool) -> None:
@@ -312,6 +346,8 @@ def create_api_router(ctx: AppContext) -> APIRouter:
                 ctx.settings_store.trending_sync_interval_minutes()
             ),
             anime_ids_refresh_days=ctx.settings_store.anime_ids_refresh_days(),
+            rating_ttl_days=ctx.settings_store.rating_ttl_days(),
+            omdb_daily_budget_per_key=(ctx.settings_store.omdb_daily_budget_per_key()),
             auto_remove_when_available=ctx.settings_store.auto_remove_when_available(),
         )
 
@@ -390,6 +426,10 @@ def create_api_router(ctx: AppContext) -> APIRouter:
             await _apply_trending_interval(ctx, body.trending_sync_interval_minutes)
         if body.anime_ids_refresh_days is not None:
             _apply_anime_ids_refresh(ctx, body.anime_ids_refresh_days)
+        if body.rating_ttl_days is not None:
+            _apply_rating_ttl(ctx, body.rating_ttl_days)
+        if body.omdb_daily_budget_per_key is not None:
+            _apply_omdb_budget(ctx, body.omdb_daily_budget_per_key)
         if body.auto_remove_when_available is not None:
             _apply_auto_remove(ctx, body.auto_remove_when_available)
         return _general_settings()

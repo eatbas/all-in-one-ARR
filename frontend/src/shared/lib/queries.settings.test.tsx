@@ -38,6 +38,8 @@ import {
   useUpdateSyncInterval,
   useUpdateTraktSettings,
   useUpdateAnimeIdsRefresh,
+  useUpdateOmdbBudget,
+  useUpdateRatingTtl,
   useUpdateTrendingInterval,
 } from "@/shared/lib/queries"
 import { setup } from "@/shared/test/query-provider"
@@ -77,6 +79,8 @@ beforeEach(() => {
     sync_interval_minutes: 15,
     trending_sync_interval_minutes: 60,
     anime_ids_refresh_days: 3,
+    rating_ttl_days: 7,
+    omdb_daily_budget_per_key: 800,
     auto_remove_when_available: false,
   })
 })
@@ -392,6 +396,8 @@ describe("general settings hooks", () => {
       sync_interval_minutes: 15,
       trending_sync_interval_minutes: 60,
       anime_ids_refresh_days: 3,
+      rating_ttl_days: 7,
+      omdb_daily_budget_per_key: 800,
       auto_remove_when_available: false,
     })
     const { queryClient, wrapper } = setup()
@@ -433,6 +439,8 @@ describe("general settings hooks", () => {
       sync_interval_minutes: 30,
       trending_sync_interval_minutes: 60,
       anime_ids_refresh_days: 3,
+      rating_ttl_days: 7,
+      omdb_daily_budget_per_key: 800,
       auto_remove_when_available: false,
     })
     const { queryClient, wrapper } = setup()
@@ -471,6 +479,8 @@ describe("general settings hooks", () => {
       sync_interval_minutes: 15,
       trending_sync_interval_minutes: 120,
       anime_ids_refresh_days: 3,
+      rating_ttl_days: 7,
+      omdb_daily_budget_per_key: 800,
       auto_remove_when_available: false,
     })
     const { queryClient, wrapper } = setup()
@@ -522,6 +532,8 @@ describe("general settings hooks", () => {
       sync_interval_minutes: 15,
       trending_sync_interval_minutes: 60,
       anime_ids_refresh_days: 1,
+      rating_ttl_days: 7,
+      omdb_daily_budget_per_key: 800,
       auto_remove_when_available: false,
     })
     const { queryClient, wrapper } = setup()
@@ -564,12 +576,106 @@ describe("general settings hooks", () => {
     )
   })
 
+  it("useUpdateRatingTtl saves the window and invalidates queries", async () => {
+    vi.mocked(api.updateGeneralSettings).mockResolvedValue({
+      interval_seconds: 60,
+      sync_interval_minutes: 15,
+      trending_sync_interval_minutes: 1440,
+      anime_ids_refresh_days: 3,
+      rating_ttl_days: 5,
+      omdb_daily_budget_per_key: 800,
+      auto_remove_when_available: false,
+    })
+    const { queryClient, wrapper } = setup()
+    const invalidate = vi.spyOn(queryClient, "invalidateQueries")
+    const { result } = renderHook(() => useUpdateRatingTtl(), { wrapper })
+
+    act(() => result.current.mutate(5))
+
+    await waitFor(() => expect(result.current.isSuccess).toBe(true))
+    expect(api.updateGeneralSettings).toHaveBeenCalledWith({
+      rating_ttl_days: 5,
+    })
+    expect(toast.success).toHaveBeenCalledWith(
+      "Rating refresh window updated",
+      expect.objectContaining({ description: expect.any(String) }),
+    )
+    expect(invalidate).toHaveBeenCalledWith({
+      queryKey: queryKeys.generalSettings,
+    })
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: queryKeys.activity })
+  })
+
+  it("useUpdateRatingTtl toasts on error", async () => {
+    vi.mocked(api.updateGeneralSettings).mockRejectedValue(new Error("boom"))
+    const { wrapper } = setup()
+    const { result } = renderHook(() => useUpdateRatingTtl(), { wrapper })
+
+    act(() => result.current.mutate(10))
+
+    await waitFor(() => expect(result.current.isError).toBe(true))
+    expect(toast.error).toHaveBeenCalledWith(
+      "Could not update the rating refresh window",
+      {
+        description: "boom",
+      },
+    )
+  })
+
+  it("useUpdateOmdbBudget saves the budget and invalidates queries", async () => {
+    vi.mocked(api.updateGeneralSettings).mockResolvedValue({
+      interval_seconds: 60,
+      sync_interval_minutes: 15,
+      trending_sync_interval_minutes: 1440,
+      anime_ids_refresh_days: 3,
+      rating_ttl_days: 7,
+      omdb_daily_budget_per_key: 500,
+      auto_remove_when_available: false,
+    })
+    const { queryClient, wrapper } = setup()
+    const invalidate = vi.spyOn(queryClient, "invalidateQueries")
+    const { result } = renderHook(() => useUpdateOmdbBudget(), { wrapper })
+
+    act(() => result.current.mutate(500))
+
+    await waitFor(() => expect(result.current.isSuccess).toBe(true))
+    expect(api.updateGeneralSettings).toHaveBeenCalledWith({
+      omdb_daily_budget_per_key: 500,
+    })
+    expect(toast.success).toHaveBeenCalledWith(
+      "OMDb daily budget updated",
+      expect.objectContaining({ description: expect.any(String) }),
+    )
+    expect(invalidate).toHaveBeenCalledWith({
+      queryKey: queryKeys.generalSettings,
+    })
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: queryKeys.activity })
+  })
+
+  it("useUpdateOmdbBudget toasts on error", async () => {
+    vi.mocked(api.updateGeneralSettings).mockRejectedValue(new Error("boom"))
+    const { wrapper } = setup()
+    const { result } = renderHook(() => useUpdateOmdbBudget(), { wrapper })
+
+    act(() => result.current.mutate(900))
+
+    await waitFor(() => expect(result.current.isError).toBe(true))
+    expect(toast.error).toHaveBeenCalledWith(
+      "Could not update the OMDb daily budget",
+      {
+        description: "boom",
+      },
+    )
+  })
+
   it("useUpdateAutoRemoveWhenAvailable announces enabled and invalidates general settings", async () => {
     vi.mocked(api.updateGeneralSettings).mockResolvedValue({
       interval_seconds: 60,
       sync_interval_minutes: 15,
       trending_sync_interval_minutes: 60,
       anime_ids_refresh_days: 3,
+      rating_ttl_days: 7,
+      omdb_daily_budget_per_key: 800,
       auto_remove_when_available: true,
     })
     const { queryClient, wrapper } = setup()
@@ -600,6 +706,8 @@ describe("general settings hooks", () => {
       sync_interval_minutes: 15,
       trending_sync_interval_minutes: 60,
       anime_ids_refresh_days: 3,
+      rating_ttl_days: 7,
+      omdb_daily_budget_per_key: 800,
       auto_remove_when_available: false,
     })
     const { wrapper } = setup()

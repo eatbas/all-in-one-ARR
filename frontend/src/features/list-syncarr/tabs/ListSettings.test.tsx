@@ -62,6 +62,8 @@ const GENERAL: GeneralSettings = {
   sync_interval_minutes: 15,
   trending_sync_interval_minutes: 60,
   anime_ids_refresh_days: 3,
+  rating_ttl_days: 7,
+  omdb_daily_budget_per_key: 800,
   auto_remove_when_available: false,
 }
 

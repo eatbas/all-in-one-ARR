@@ -867,6 +867,14 @@ export type GeneralSettingsRequest = {
      */
     interval_seconds?: number | null;
     /**
+     * Omdb Daily Budget Per Key
+     */
+    omdb_daily_budget_per_key?: number | null;
+    /**
+     * Rating Ttl Days
+     */
+    rating_ttl_days?: number | null;
+    /**
      * Sync Interval Minutes
      */
     sync_interval_minutes?: number | null;
@@ -892,6 +900,14 @@ export type GeneralSettingsResponse = {
      * Interval Seconds
      */
     interval_seconds: number;
+    /**
+     * Omdb Daily Budget Per Key
+     */
+    omdb_daily_budget_per_key: number;
+    /**
+     * Rating Ttl Days
+     */
+    rating_ttl_days: number;
     /**
      * Sync Interval Minutes
      */
@@ -1375,6 +1391,18 @@ export type UpdateServiceRequest = {
      * Api Key
      */
     api_key?: string | null;
+    /**
+     * Api Key 2
+     */
+    api_key_2?: string | null;
+    /**
+     * Api Key 3
+     */
+    api_key_3?: string | null;
+    /**
+     * Api Key 4
+     */
+    api_key_4?: string | null;
     /**
      * Url
      */

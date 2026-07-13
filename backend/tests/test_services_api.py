@@ -97,7 +97,12 @@ def test_get_services_masks_new_service_shapes(db) -> None:
     body = build_client(make_ctx(db=db)).get("/api/settings/services").json()
     # API-key-only services expose only the boolean (no url field).
     assert body["tmdb"] == {"api_key_set": False}
-    assert body["omdb"] == {"api_key_set": False}
+    assert body["omdb"] == {
+        "api_key_set": False,
+        "api_key_2_set": False,
+        "api_key_3_set": False,
+        "api_key_4_set": False,
+    }
     assert body["sabnzbd"] == {"url": "", "api_key_set": False}
     # qBittorrent exposes url in clear, api_key masked away.
     assert body["qbittorrent"] == {"url": "", "api_key_set": False}
@@ -139,3 +144,45 @@ def test_test_new_service_ok(db) -> None:
     ctx = make_ctx(db=db, sabnzbd=sab)
     body = build_client(ctx).post("/api/services/sabnzbd/test").json()
     assert body == {"ok": True, "detail": "Connected to SABnzbd"}
+
+
+def test_put_omdb_extra_keys_round_trip(db) -> None:
+    # The three rotation keys save, mask to booleans, and are pushed into the
+    # live client alongside the primary in one update.
+    ctx = make_ctx(db=db)
+    body = (
+        build_client(ctx)
+        .put(
+            "/api/settings/services/omdb",
+            json={"api_key": "k1", "api_key_2": "k2", "api_key_4": "k4"},
+        )
+        .json()
+    )
+    assert body["omdb"] == {
+        "api_key_set": True,
+        "api_key_2_set": True,
+        "api_key_3_set": False,
+        "api_key_4_set": True,
+    }
+    assert ctx.settings_store.service_fields("omdb") == {
+        "api_key": "k1",
+        "api_key_2": "k2",
+        "api_key_3": "",
+        "api_key_4": "k4",
+    }
+    ctx.omdb.update_credentials.assert_called_with(
+        api_key="k1", api_key_2="k2", api_key_3="", api_key_4="k4"
+    )
+
+
+def test_put_omdb_clearing_one_key_keeps_the_others(db) -> None:
+    ctx = make_ctx(db=db)
+    client = build_client(ctx)
+    client.put(
+        "/api/settings/services/omdb",
+        json={"api_key": "k1", "api_key_2": "k2"},
+    )
+    body = client.put("/api/settings/services/omdb", json={"api_key_2": ""}).json()
+    assert body["omdb"]["api_key_set"] is True
+    assert body["omdb"]["api_key_2_set"] is False
+    assert ctx.settings_store.service_fields("omdb")["api_key"] == "k1"

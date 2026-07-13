@@ -27,8 +27,12 @@ if TYPE_CHECKING:  # pragma: no cover
 class UpdateServiceRequest(BaseModel):
     # ``None`` leaves a field unchanged (so the UI can save one field without
     # re-entering the others). Fields not declared by a service are ignored.
+    # The ``api_key_2..4`` slots exist only for OMDb's rotation keys.
     url: str | None = None
     api_key: str | None = None
+    api_key_2: str | None = None
+    api_key_3: str | None = None
+    api_key_4: str | None = None
 
 
 class ServiceTestResponse(BaseModel):
@@ -52,14 +56,16 @@ def _client_for(ctx: AppContext, name: str):
 def _apply_credentials(ctx: AppContext, name: str) -> None:
     """Push the stored connection fields into the live client for ``name``.
 
-    Each client's ``update_credentials`` takes only the keyword arguments for the
-    fields its service declares (``url`` is passed as ``base_url``), so this maps
-    the descriptor's fields onto that call generically. Every managed service
-    carries an ``api_key``; only some also carry a ``url``.
+    Each client's ``update_credentials`` takes exactly the keyword arguments
+    for the fields its service declares (``url`` is passed as ``base_url``),
+    so this maps the descriptor's fields onto that call generically — OMDb's
+    extra rotation keys included.
     """
     desc: ServiceDescriptor = BY_NAME[name]
     values = ctx.settings_store.service_fields(name)
-    kwargs: dict[str, str] = {"api_key": values["api_key"]}
+    kwargs: dict[str, str] = {
+        field: values[field] for field in desc.fields if field != "url"
+    }
     if "url" in desc.fields:
         kwargs["base_url"] = values["url"]
     _client_for(ctx, name).update_credentials(**kwargs)
@@ -95,14 +101,18 @@ def create_services_router(ctx: AppContext) -> APIRouter:
         desc = BY_NAME[name]
         before = ctx.settings_store.service_fields(name)
         ctx.settings_store.update_service_fields(
-            name, url=body.url, api_key=body.api_key
+            name,
+            url=body.url,
+            api_key=body.api_key,
+            api_key_2=body.api_key_2,
+            api_key_3=body.api_key_3,
+            api_key_4=body.api_key_4,
         )
         _apply_credentials(ctx, name)
         changed = any(
-            field in desc.fields
-            and getattr(body, field) is not None
+            getattr(body, field, None) is not None
             and getattr(body, field).strip() != before[field]
-            for field in ("url", "api_key")
+            for field in desc.fields
         )
         if changed:
             label = desc.label

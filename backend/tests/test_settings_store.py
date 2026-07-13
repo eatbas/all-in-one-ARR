@@ -288,7 +288,12 @@ def test_seeds_and_masks_api_key_only_service(tmp_path) -> None:
     # An API-key-only service stores and masks just that field.
     assert store.service_fields("tmdb") == {"api_key": "tk"}
     assert store.masked_services()["tmdb"] == {"api_key_set": True}
-    assert store.masked_services()["omdb"] == {"api_key_set": False}
+    assert store.masked_services()["omdb"] == {
+        "api_key_set": False,
+        "api_key_2_set": False,
+        "api_key_3_set": False,
+        "api_key_4_set": False,
+    }
 
 
 def test_seeds_updates_and_reloads_qbittorrent_service(tmp_path) -> None:
@@ -646,3 +651,153 @@ def test_legacy_store_without_trending_key_defaults(tmp_path) -> None:
     reopened.load_or_seed(client_id="x", client_secret="x")
     assert reopened.trending_sync_interval_minutes() == 1440
     assert json.loads(path.read_text())["trending_sync_interval_minutes"] == 1440
+
+
+def test_rating_ttl_defaults_to_seven_days(tmp_path) -> None:
+    store = SettingsStore(str(tmp_path / "settings.json"))
+    _seed(store)
+    assert store.rating_ttl_days() == 7
+
+
+def test_rating_ttl_seed_and_reload(tmp_path) -> None:
+    path = tmp_path / "settings.json"
+    store = SettingsStore(str(path))
+    store.load_or_seed(client_id="cid", client_secret="sec", rating_ttl_days=10)
+    assert store.rating_ttl_days() == 10
+    assert json.loads(path.read_text())["rating_ttl_days"] == 10
+
+    reopened = SettingsStore(str(path))
+    reopened.load_or_seed(client_id="x", client_secret="x")
+    assert reopened.rating_ttl_days() == 10
+
+
+def test_rating_ttl_invalid_value_falls_back(tmp_path) -> None:
+    store = SettingsStore(str(tmp_path / "settings.json"))
+    _seed(store)
+    assert store.update_rating_ttl_days(5) == 5
+    assert store.update_rating_ttl_days(6) == 7
+    assert store.rating_ttl_days() == 7
+
+
+def test_rating_ttl_in_masked(tmp_path) -> None:
+    store = SettingsStore(str(tmp_path / "settings.json"))
+    _seed(store)
+    store.update_rating_ttl_days(10)
+    assert store.masked()["rating_ttl_days"] == 10
+
+
+def test_legacy_store_without_rating_ttl_key_defaults(tmp_path) -> None:
+    # A store created before the rating window existed loads without the key
+    # and falls back to the default, persisting it on the next save.
+    path = tmp_path / "settings.json"
+    SettingsStore(str(path)).load_or_seed(client_id="cid", client_secret="sec")
+    data = json.loads(path.read_text())
+    data.pop("rating_ttl_days", None)
+    path.write_text(json.dumps(data), encoding="utf-8")
+
+    reopened = SettingsStore(str(path))
+    reopened.load_or_seed(client_id="x", client_secret="x")
+    assert reopened.rating_ttl_days() == 7
+    assert json.loads(path.read_text())["rating_ttl_days"] == 7
+
+
+def test_new_service_fields_backfill_from_env_seed_on_upgrade(tmp_path) -> None:
+    # An existing store written before the OMDb rotation keys existed carries
+    # only {api_key}; the newly declared fields are filled from the env seed
+    # once and persisted (the user's .env keys appear in the UI after upgrade).
+    path = tmp_path / "settings.json"
+    store = SettingsStore(str(path))
+    store.load_or_seed(client_id="c", client_secret="s")
+    data = json.loads(path.read_text())
+    data["services"]["omdb"] = {"api_key": "primary"}
+    path.write_text(json.dumps(data), encoding="utf-8")
+
+    reopened = SettingsStore(str(path))
+    reopened.load_or_seed(
+        client_id="x",
+        client_secret="x",
+        services={"omdb": {"api_key": "ignored", "api_key_2": "extra2"}},
+    )
+    fields = reopened.service_fields("omdb")
+    # The present field keeps its stored value; absent fields take the seed.
+    assert fields["api_key"] == "primary"
+    assert fields["api_key_2"] == "extra2"
+    assert fields["api_key_3"] == ""
+    assert json.loads(path.read_text())["services"]["omdb"]["api_key_2"] == "extra2"
+
+
+def test_present_but_empty_service_field_is_not_reseeded(tmp_path) -> None:
+    # A field the user explicitly cleared (present, empty) must never be
+    # resurrected from the environment seed on a later boot.
+    path = tmp_path / "settings.json"
+    store = SettingsStore(str(path))
+    store.load_or_seed(client_id="c", client_secret="s")
+    data = json.loads(path.read_text())
+    data["services"]["omdb"] = {
+        "api_key": "primary",
+        "api_key_2": "",
+        "api_key_3": "",
+        "api_key_4": "",
+    }
+    path.write_text(json.dumps(data), encoding="utf-8")
+
+    reopened = SettingsStore(str(path))
+    reopened.load_or_seed(
+        client_id="x",
+        client_secret="x",
+        services={"omdb": {"api_key_2": "from-env"}},
+    )
+    assert reopened.service_fields("omdb")["api_key_2"] == ""
+
+
+def test_omdb_budget_defaults_to_eight_hundred(tmp_path) -> None:
+    store = SettingsStore(str(tmp_path / "settings.json"))
+    _seed(store)
+    assert store.omdb_daily_budget_per_key() == 800
+
+
+def test_omdb_budget_seed_and_reload(tmp_path) -> None:
+    path = tmp_path / "settings.json"
+    store = SettingsStore(str(path))
+    store.load_or_seed(
+        client_id="cid", client_secret="sec", omdb_daily_budget_per_key=500
+    )
+    assert store.omdb_daily_budget_per_key() == 500
+    assert json.loads(path.read_text())["omdb_daily_budget_per_key"] == 500
+
+    reopened = SettingsStore(str(path))
+    reopened.load_or_seed(client_id="x", client_secret="x")
+    assert reopened.omdb_daily_budget_per_key() == 500
+
+
+def test_omdb_budget_clamps_to_bounds(tmp_path) -> None:
+    # Out-of-range values clamp to the 100-1000 bounds; unparseable input
+    # falls back to the default.
+    from core.settings_normalisers import normalise_omdb_daily_budget_per_key
+
+    store = SettingsStore(str(tmp_path / "settings.json"))
+    _seed(store)
+    assert store.update_omdb_daily_budget_per_key(1500) == 1000
+    assert store.update_omdb_daily_budget_per_key(1) == 100
+    assert store.omdb_daily_budget_per_key() == 100
+    assert normalise_omdb_daily_budget_per_key("abc") == 800
+
+
+def test_omdb_budget_in_masked(tmp_path) -> None:
+    store = SettingsStore(str(tmp_path / "settings.json"))
+    _seed(store)
+    store.update_omdb_daily_budget_per_key(900)
+    assert store.masked()["omdb_daily_budget_per_key"] == 900
+
+
+def test_legacy_store_without_omdb_budget_key_defaults(tmp_path) -> None:
+    path = tmp_path / "settings.json"
+    SettingsStore(str(path)).load_or_seed(client_id="cid", client_secret="sec")
+    data = json.loads(path.read_text())
+    data.pop("omdb_daily_budget_per_key", None)
+    path.write_text(json.dumps(data), encoding="utf-8")
+
+    reopened = SettingsStore(str(path))
+    reopened.load_or_seed(client_id="x", client_secret="x")
+    assert reopened.omdb_daily_budget_per_key() == 800
+    assert json.loads(path.read_text())["omdb_daily_budget_per_key"] == 800

@@ -98,4 +98,9 @@ CREATE TABLE IF NOT EXISTS omdb_usage (
     day TEXT PRIMARY KEY,
     count INTEGER NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS app_state (
+    key TEXT PRIMARY KEY,
+    value TEXT NOT NULL
+);
 """

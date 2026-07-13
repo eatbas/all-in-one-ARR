@@ -244,6 +244,8 @@ def _general_settings_body(**overrides) -> dict:
         "sync_interval_minutes": 15,
         "trending_sync_interval_minutes": 1440,
         "anime_ids_refresh_days": 3,
+        "rating_ttl_days": 7,
+        "omdb_daily_budget_per_key": 800,
         "auto_remove_when_available": True,
         **overrides,
     }
@@ -533,3 +535,45 @@ def test_clear_posters_endpoint_clears_cache_and_records_audit(db, tmp_path) -> 
     assert body["poster_cache_bytes"] == 0
     assert any(a["action"] == "Poster cache cleared" for a in db.recent_activity())
     assert list(cache_dir.glob("*.jpg")) == []
+
+
+def test_put_general_settings_updates_rating_ttl(db) -> None:
+    ctx = make_ctx(db=db)
+    resp = build_client(ctx).put("/api/settings/general", json={"rating_ttl_days": 5})
+    assert resp.status_code == 200
+    assert resp.json()["rating_ttl_days"] == 5
+    assert ctx.settings_store.rating_ttl_days() == 5
+    assert any(
+        a["action"] == "Rating refresh window updated" for a in db.recent_activity()
+    )
+
+
+def test_put_general_settings_rejects_invalid_rating_ttl(db) -> None:
+    ctx = make_ctx(db=db)
+    resp = build_client(ctx).put("/api/settings/general", json={"rating_ttl_days": 6})
+    assert resp.status_code == 200
+    assert resp.json()["rating_ttl_days"] == 7
+    assert ctx.settings_store.rating_ttl_days() == 7
+
+
+def test_put_general_settings_updates_omdb_budget(db) -> None:
+    ctx = make_ctx(db=db)
+    resp = build_client(ctx).put(
+        "/api/settings/general", json={"omdb_daily_budget_per_key": 500}
+    )
+    assert resp.status_code == 200
+    assert resp.json()["omdb_daily_budget_per_key"] == 500
+    assert ctx.settings_store.omdb_daily_budget_per_key() == 500
+    assert any(a["action"] == "OMDb daily budget updated" for a in db.recent_activity())
+
+
+def test_put_general_settings_clamps_omdb_budget(db) -> None:
+    ctx = make_ctx(db=db)
+    client = build_client(ctx)
+    resp = client.put("/api/settings/general", json={"omdb_daily_budget_per_key": 5000})
+    assert resp.status_code == 200
+    assert resp.json()["omdb_daily_budget_per_key"] == 1000
+    # Re-submitting the stored value records no duplicate activity entry.
+    entries_before = len(db.recent_activity())
+    client.put("/api/settings/general", json={"omdb_daily_budget_per_key": 1000})
+    assert len(db.recent_activity()) == entries_before

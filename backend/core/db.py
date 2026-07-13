@@ -18,6 +18,7 @@ from pathlib import Path
 from typing import Any
 
 from core.db_schema import INIT_SQL
+from core.logging import get_logger
 
 # Activity rows are kept for this many days; the absolute maximum is 30 days.
 ACTIVITY_RETENTION_DAYS = 15
@@ -58,6 +59,7 @@ class Database:
         with self._lock:
             self._conn.executescript(INIT_SQL)
             self._migrate_items_columns()
+            self._purge_failure_null_ratings_once()
             self._conn.commit()
 
     def _migrate_items_columns(self) -> None:
@@ -81,6 +83,52 @@ class Database:
                 self._conn.execute(
                     "UPDATE items SET seer_request_id = jellyseerr_request_id"
                 )
+
+    def _purge_failure_null_ratings_once(self) -> None:
+        """One-time cleanup of null ratings written before failures were retried.
+
+        Early backfill runs stored a null rating for *failed* OMDb lookups
+        (rejected keys, exhausted quotas), poisoning those titles as "known to
+        have no rating" for the whole refresh window. Failed lookups are no
+        longer stored at all, so after this purge a null row can only mean a
+        genuine OMDb "N/A". Guarded by an ``app_state`` flag so genuine nulls
+        written after the fix survive later boots.
+        """
+        flag = self._conn.execute(
+            "SELECT value FROM app_state WHERE key='null_ratings_purged_v1'"
+        ).fetchone()
+        if flag is not None:
+            return
+        cursor = self._conn.execute(
+            "DELETE FROM trending_ratings WHERE imdb_rating IS NULL"
+        )
+        self._conn.execute(
+            "INSERT INTO app_state (key, value) VALUES ('null_ratings_purged_v1', ?)",
+            (utcnow_iso(),),
+        )
+        if cursor.rowcount:
+            get_logger("db").info(
+                "purged %d null ratings recorded before failed lookups "
+                "became retryable",
+                cursor.rowcount,
+            )
+
+    def app_state_get(self, key: str) -> str | None:
+        """Return a persisted application-state value, or ``None`` when unset."""
+        row = self._conn.execute(
+            "SELECT value FROM app_state WHERE key=?", (key,)
+        ).fetchone()
+        return row["value"] if row is not None else None
+
+    def app_state_set(self, key: str, value: str) -> None:
+        """Persist one application-state value (idempotent upsert)."""
+        with self._lock:
+            self._conn.execute(
+                "INSERT INTO app_state (key, value) VALUES (?, ?) "
+                "ON CONFLICT(key) DO UPDATE SET value=excluded.value",
+                (key, value),
+            )
+            self._conn.commit()
 
     # ---- items ----
 

@@ -121,10 +121,17 @@ class StatusChecker:
         self._log.debug("status checks complete: %d services", len(new_results))
 
     async def _check_one(self, name: str, client: Any) -> StatusSnapshot:
-        """Ping a single service and normalise the result."""
+        """Ping a single service and normalise the result.
+
+        A client may expose a cheaper ``status_probe`` for this recurring
+        check (OMDb does: its ``test_connection`` sweeps every configured API
+        key, which would multiply into thousands of requests per day at this
+        cadence); otherwise the regular connection test is used.
+        """
         checked_at = _now_iso()
+        probe = getattr(client, "status_probe", None) or client.test_connection
         try:
-            result = await client.test_connection()
+            result = await probe()
         except Exception as exc:  # noqa: BLE001 - clients may raise unexpectedly
             self._log.warning("%s status check raised: %s", name, exc)
             return StatusSnapshot(
