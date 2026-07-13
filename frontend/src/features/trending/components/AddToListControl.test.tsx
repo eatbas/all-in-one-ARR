@@ -142,7 +142,7 @@ describe("AddToListControl", () => {
   it.each([
     [5, "h-8", "size-8", "size-4", "group-hover/add:pl-2"],
     [6, "h-7", "size-7", "size-3.5", "group-hover/add:pl-1.5"],
-    [7, "h-6", "size-6", "size-3", "group-hover/add:pl-1.5"],
+    [7, "h-7", "size-7", "size-3.5", "group-hover/add:pl-1.5"],
   ] as const)(
     "uses the shared pill shell at density %i",
     (density, shellHeight, slotSize, iconSize, labelOuterPadding) => {

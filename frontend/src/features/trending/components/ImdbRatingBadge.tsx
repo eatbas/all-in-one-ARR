@@ -8,11 +8,13 @@ import type { PillDensity } from "@/shared/components/poster-pill/poster-pill-va
 const RATING_SIZE: Record<PillDensity, { star: string; rating: string }> = {
   5: { star: "size-3", rating: "text-[11px]" },
   6: { star: "size-3", rating: "text-[11px]" },
-  7: { star: "size-2.5", rating: "text-[10px]" },
-  8: { star: "size-2.5", rating: "text-[10px]" },
-  9: { star: "size-2.5", rating: "text-[9px]" },
-  10: { star: "size-2", rating: "text-[9px]" },
-  11: { star: "size-2", rating: "text-[8px]" },
+  // Dense grids clamp rather than shrinking further, mirroring the corner
+  // pills: the star and figure stay legible at every density.
+  7: { star: "size-3", rating: "text-[11px]" },
+  8: { star: "size-3", rating: "text-[11px]" },
+  9: { star: "size-2.5", rating: "text-[10px]" },
+  10: { star: "size-2.5", rating: "text-[10px]" },
+  11: { star: "size-2.5", rating: "text-[10px]" },
 }
 
 /**

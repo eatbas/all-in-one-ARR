@@ -26,36 +26,38 @@ const SIZE: Record<
     icon: "size-3.5",
   },
   7: {
+    shell: "h-7",
+    iconSlot: "size-7",
+    label: "text-[10px]",
+    icon: "size-3.5",
+  },
+  // Dense grids (7–11) clamp instead of shrinking further: below ~24px the
+  // controls become unreadable and untappable, while even the clamped pill
+  // stays around a quarter of the narrowest poster's width — well inside the
+  // agreed "up to half the poster" ceiling.
+  8: {
     shell: "h-6",
     iconSlot: "size-6",
     label: "text-[9px]",
     icon: "size-3",
   },
-  // Dense grids (8–11) keep shrinking so the overlay pills track the smaller
-  // posters instead of clamping at the density-7 size.
-  8: {
-    shell: "h-[22px]",
-    iconSlot: "size-[22px]",
+  9: {
+    shell: "h-6",
+    iconSlot: "size-6",
     label: "text-[9px]",
     icon: "size-3",
   },
-  9: {
-    shell: "h-5",
-    iconSlot: "size-5",
-    label: "text-[8px]",
-    icon: "size-[11px]",
-  },
   10: {
-    shell: "h-[18px]",
-    iconSlot: "size-[18px]",
-    label: "text-[8px]",
-    icon: "size-2.5",
+    shell: "h-6",
+    iconSlot: "size-6",
+    label: "text-[9px]",
+    icon: "size-3",
   },
   11: {
-    shell: "h-4",
-    iconSlot: "size-4",
-    label: "text-[8px]",
-    icon: "size-2",
+    shell: "h-6",
+    iconSlot: "size-6",
+    label: "text-[9px]",
+    icon: "size-3",
   },
 }
 

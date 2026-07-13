@@ -14,20 +14,20 @@ const DENSITIES: PillDensity[] = [5, 6, 7, 8, 9, 10, 11]
 const SHELL_HEIGHT: Record<PillDensity, string> = {
   5: "h-8",
   6: "h-7",
-  7: "h-6",
-  8: "h-[22px]",
-  9: "h-5",
-  10: "h-[18px]",
-  11: "h-4",
+  7: "h-7",
+  8: "h-6",
+  9: "h-6",
+  10: "h-6",
+  11: "h-6",
 }
 const SLOT_SIZE: Record<PillDensity, string> = {
   5: "size-8",
   6: "size-7",
-  7: "size-6",
-  8: "size-[22px]",
-  9: "size-5",
-  10: "size-[18px]",
-  11: "size-4",
+  7: "size-7",
+  8: "size-6",
+  9: "size-6",
+  10: "size-6",
+  11: "size-6",
 }
 
 describe("poster-pill-variants", () => {
@@ -44,15 +44,17 @@ describe("poster-pill-variants", () => {
     }
   })
 
-  it("keeps shrinking past density 7 (the 8–11 clamp is gone)", () => {
-    // Regression: 8–11 used to reuse density 7's pill size, so the overlay icons
-    // never shrank on the denser grids. They must now be distinctly smaller.
+  it("clamps the dense grids at the h-6 pill instead of shrinking further", () => {
+    // Regression: 8–11 once shrank all the way to a 16px shell with an 8px
+    // glyph, which was unreadable and untappable. Dense grids now clamp at
+    // the density-7 treatment (a 24px shell — still only about a quarter of
+    // the narrowest poster's width).
     expect(pillShell(5)).toContain("h-8")
-    expect(pillShell(7)).toContain("h-6")
-    expect(pillShell(11)).toContain("h-4")
-    expect(pillShell(11)).not.toBe(pillShell(7))
-    expect(pillIcon(7)).toBe("size-3")
-    expect(pillIcon(11)).toBe("size-2")
+    expect(pillShell(7)).toContain("h-7")
+    expect(pillShell(8)).toContain("h-6")
+    expect(pillShell(11)).toBe(pillShell(8))
+    expect(pillIcon(7)).toBe("size-3.5")
+    expect(pillIcon(11)).toBe("size-3")
   })
 
   it("keeps every icon slot fixed and centred inside its matching shell", () => {

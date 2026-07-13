@@ -78,11 +78,12 @@ describe("TrendingStatusIndicator", () => {
   it.each([
     [5, "h-8", "size-8", "size-4"],
     [6, "h-7", "size-7", "size-3.5"],
-    [7, "h-6", "size-6", "size-3"],
-    [8, "h-[22px]", "size-[22px]", "size-3"],
-    [9, "h-5", "size-5", "size-[11px]"],
-    [10, "h-[18px]", "size-[18px]", "size-2.5"],
-    [11, "h-4", "size-4", "size-2"],
+    [7, "h-7", "size-7", "size-3.5"],
+    // Dense grids clamp at the h-6 size so the controls stay legible.
+    [8, "h-6", "size-6", "size-3"],
+    [9, "h-6", "size-6", "size-3"],
+    [10, "h-6", "size-6", "size-3"],
+    [11, "h-6", "size-6", "size-3"],
   ] as const)(
     "centres both status icons within the shared slot at density %i",
     (density, shellHeight, slotSize, iconSize) => {

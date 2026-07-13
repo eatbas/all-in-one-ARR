@@ -476,10 +476,10 @@ describe("Lists page", () => {
 
     const grid = screen.getByTestId("list-syncarr-grid")
     expect(grid).toHaveClass("lg:grid-cols-8")
-    // Density 8 uses a 22px pill shell.
+    // Dense grids clamp at the 24px pill shell so controls stay tappable.
     expect(
       screen.getByRole("button", { name: 'Remove "Dune" from the list' }),
-    ).toHaveClass("h-[22px]")
+    ).toHaveClass("h-6")
   })
 
   it("updates the grid and every overlay density when the slider changes", async () => {
