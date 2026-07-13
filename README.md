@@ -370,6 +370,16 @@ The dashboard **Bandwidth-Controllarr** page (left menu) has two tabs:
 downloads, queue size, and a **PAUSED/RESUMED** badge for SABnzbd), plus a
 system-status banner that shows the last control check and turns red while
 qBittorrent has active torrents. The page auto-refreshes every few seconds.
+Beneath the cards sit two collapsible sections:
+  - **Queue** — the qBittorrent and SABnzbd queues, each paged **5 rows at a
+  time** with its own pager. The badges are cumulative: they count the whole
+  queue, not the rows on screen. The backend returns at most 100 rows per
+  downloader; a deeper queue is still counted honestly and the section says how
+  many rows were withheld. SABnzbd exposes only a queue-wide speed and downloads
+  jobs sequentially, so that speed is attributed to the one slot that is actually
+  downloading — idle rows show `—`.
+  - **Download history** — the 10 most recent completed downloads across both
+  clients. It carries no count badge, being a fixed window.
 - **Settings** — the master **Enable bandwidth control** switch and a **Check
 interval** selector (10, 15, 30, or 60 seconds). The switch is also available on
 the Status tab for convenience. A link to the Prometheus metrics endpoint
@@ -742,7 +752,11 @@ after both check jobs have passed.
   posters are also evicted automatically by the scheduled churn job.
 - `GET /api/bandwidth/status` – live Bandwidth-Controllarr state: enabled flag,
   control status, last-check timestamp, configured interval, and current
-  qBittorrent/SABnzbd stats.
+  qBittorrent/SABnzbd stats. `download_history` holds the 10 most recent
+  completions; `queue` holds one group per downloader as
+  `{ items, total }`, where `items` is capped at 100 rows and `total` is the
+  uncapped queue depth (so the dashboard can page through `items` while still
+  reporting the true count).
 - `PUT /api/bandwidth/settings` – update `{ enabled?, check_interval_seconds? }`;
   persists the change, reschedules the control loop on interval change, and
   returns the updated state.
