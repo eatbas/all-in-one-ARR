@@ -649,6 +649,12 @@ pip install -e "./backend[dev]"
 cd backend && pytest   # runs with --cov-fail-under=100
 ```
 
+Run the backend suite with the project virtual environment (Python 3.14+, as
+created under Local development): the backend uses PEP 758 unparenthesised
+`except` clauses (`except TypeError, ValueError:`), which older interpreters
+reject at collection time with `SyntaxError: multiple exception types must be
+parenthesized`.
+
 Coverage spans Trakt list parsing, the TMDB/TVDB reverse mapping, and the Trakt
 removal paths — sync availability-driven, manual, and reconcile — with mocked HTTP
 clients.
