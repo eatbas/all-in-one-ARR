@@ -26,70 +26,13 @@ BACKEND_PORT="${BACKEND_PORT:-3223}"
 # alongside the backend port before start-up and shown in the banner below.
 FRONTEND_PORT="${FRONTEND_PORT:-5173}"
 
-# --- Locate the virtual environment's Python (Unix vs Windows/Git Bash) -------
+# --- Locate the virtual environment's Python (POSIX vs Windows/Git Bash) ------
 # IS_WINDOWS selects the backend reload strategy below: uvicorn's own --reload
 # hangs on Windows (see the backend start-up block), so a Windows venv uses a
 # watchfiles wrapper instead.
-# Locate an existing venv's Python (Unix vs Windows/Git Bash). IS_WINDOWS selects
-# the backend reload strategy further below.
-VENV_PY=""
-IS_WINDOWS=0
-if [[ -f "$ROOT_DIR/.venv/bin/python" ]]; then
-  VENV_PY="$ROOT_DIR/.venv/bin/python"
-  IS_WINDOWS=0
-elif [[ -f "$ROOT_DIR/.venv/Scripts/python.exe" ]]; then
-  VENV_PY="$ROOT_DIR/.venv/Scripts/python.exe"
-  IS_WINDOWS=1
-fi
-
-# A usable venv must satisfy backend/pyproject.toml `requires-python` (>=3.14)
-# and ship pip. A stale 3.11/3.12 venv cannot resolve the backend deps — pytest 9
-# needs pytest-asyncio wheels that dropped older Python, so pip backtracks through
-# every aio-arr/pytest-asyncio version and dies with "ResolutionImpossible" — and a
-# uv-created venv has no pip. Rebuild it rather than fail with an opaque error.
-if [[ -n "$VENV_PY" ]] \
-   && ! { "$VENV_PY" -c 'import sys; raise SystemExit(0 if sys.version_info >= (3, 14) else 1)' \
-          && "$VENV_PY" -m pip --version; } >/dev/null 2>&1; then
-  echo "Existing .venv is unusable (need Python 3.14+ with pip; found $("$VENV_PY" -V 2>&1)); rebuilding…"
-  rm -rf "${ROOT_DIR:?}/.venv"
-  VENV_PY=""
-fi
-
-if [[ -z "$VENV_PY" ]]; then
-  echo "No usable virtual environment at .venv/ — creating one now…"
-  # Pick an interpreter that satisfies `requires-python` (>=3.14). Prefer an
-  # explicit python3.14, then generic launchers — python3, the Windows `py`
-  # launcher (`py -3.14`/`py -3`), or a bare python — verifying the version so a
-  # too-old system default (e.g. macOS's `python3` = 3.11) is never used to build
-  # the venv. `py` is preferred over a bare `python` because it unambiguously
-  # resolves to a real Python 3 rather than a Microsoft Store stub.
-  BOOTSTRAP_PY=""
-  for candidate in python3.14 python3 "py -3.14" "py -3" python; do
-    if $candidate -c 'import sys; raise SystemExit(0 if sys.version_info >= (3, 14) else 1)' >/dev/null 2>&1; then
-      BOOTSTRAP_PY="$candidate"
-      break
-    fi
-  done
-  if [[ -z "$BOOTSTRAP_PY" ]]; then
-    echo "Error: no suitable Python interpreter found (need Python 3.14+ on PATH)." >&2
-    echo "  Tried: python3.14, python3, py -3.14, py -3, python. Install Python 3.14+ and re-run: bash dev.sh" >&2
-    exit 1
-  fi
-  $BOOTSTRAP_PY -m venv "$ROOT_DIR/.venv"
-  # Determine the pip path (Unix vs Windows/Git Bash).
-  if [[ -f "$ROOT_DIR/.venv/bin/pip" ]]; then
-    VENV_PIP="$ROOT_DIR/.venv/bin/pip"
-    VENV_PY="$ROOT_DIR/.venv/bin/python"
-    IS_WINDOWS=0
-  else
-    VENV_PIP="$ROOT_DIR/.venv/Scripts/pip.exe"
-    VENV_PY="$ROOT_DIR/.venv/Scripts/python.exe"
-    IS_WINDOWS=1
-  fi
-  echo "Installing backend (with dev extras)…"
-  "$VENV_PIP" install -e "./backend[dev]"
-  echo "  ✔ Virtual environment created and backend installed."
-fi
+# shellcheck source=scripts/python_venv.sh
+source "$ROOT_DIR/scripts/python_venv.sh"
+ensure_project_venv "$ROOT_DIR"
 
 # --- Verify prerequisites -----------------------------------------------------
 if ! "$VENV_PY" - <<'PY' >/dev/null 2>&1; then

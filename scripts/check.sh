@@ -7,12 +7,9 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT_DIR"
 
-PYTHON_BIN="${PYTHON_BIN:-python3}"
-VENV_PY="$ROOT_DIR/.venv/bin/python"
-
-if [[ ! -x "$VENV_PY" ]]; then
-  "$PYTHON_BIN" -m venv "$ROOT_DIR/.venv"
-fi
+# shellcheck source=scripts/python_venv.sh
+source "$ROOT_DIR/scripts/python_venv.sh"
+ensure_project_venv "$ROOT_DIR"
 
 "$VENV_PY" -m pip install -e "./backend[dev]" -c backend/requirements.lock
 

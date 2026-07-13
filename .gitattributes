@@ -1,0 +1,3 @@
+# Keep text files reproducible across POSIX and Windows checkouts. In particular,
+# shell scripts require LF and Prettier's default end-of-line setting is LF.
+* text=auto eol=lf
