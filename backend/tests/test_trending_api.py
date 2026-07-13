@@ -542,7 +542,7 @@ def test_add_movie_triggers_sync(db) -> None:
     assert ran["sync"] is True
     ctx.trakt.add_items.assert_awaited_once()
     # No trakt id in the body, so the tmdb id is resolved to one before the add.
-    ctx.trakt.lookup_ids_by_tmdb.assert_awaited_once()
+    ctx.trakt.lookup_ids.assert_awaited_once()
     assert ctx.trakt.add_items.await_args.kwargs["movies"] == [
         {"trakt": 500, "tmdb": 100}
     ]
@@ -590,16 +590,93 @@ def test_add_skips_lookup_when_trakt_id_present(db) -> None:
         },
     )
     assert response.json() == {"status": "added"}
-    ctx.trakt.lookup_ids_by_tmdb.assert_not_awaited()
+    ctx.trakt.lookup_ids.assert_not_awaited()
     assert ctx.trakt.add_items.await_args.kwargs["movies"] == [
         {"trakt": 7, "tmdb": 100}
     ]
 
 
-def test_add_lookup_failure_falls_back_to_tmdb(db) -> None:
-    # A dead lookup must not break the add: it degrades to a bare-tmdb add.
+def test_add_resolves_via_imdb_when_tmdb_absent(db) -> None:
+    # An anime-shaped payload (Fribb mapping filled imdb/tvdb but no tmdb)
+    # resolves through the IMDb lookup — the first usable candidate.
     ctx = _owned_ctx(db)
-    ctx.trakt.lookup_ids_by_tmdb.side_effect = RuntimeError("search down")
+    ctx.trakt.lookup_ids.return_value = {"trakt": 42, "imdb": "tt5", "tvdb": 77}
+
+    async def sync_now():
+        return None
+
+    ctx.sync_now = sync_now
+    response = build_client(ctx).post(
+        "/api/trending/add",
+        json={
+            "media_type": "show",
+            "owner_user": "me",
+            "slug": "my-list",
+            "imdb": "tt5",
+            "tvdb": 77,
+        },
+    )
+    assert response.json() == {"status": "added"}
+    ctx.trakt.lookup_ids.assert_awaited_once_with(
+        id_type="imdb", id_value="tt5", media_type="show"
+    )
+    assert ctx.trakt.add_items.await_args.kwargs["shows"] == [
+        {"trakt": 42, "imdb": "tt5", "tvdb": 77}
+    ]
+
+
+def test_add_falls_back_to_tvdb_for_shows(db) -> None:
+    # With only a tvdb id available, a show still resolves via the TVDB lookup.
+    ctx = _owned_ctx(db)
+    ctx.trakt.lookup_ids.return_value = {"trakt": 43, "tvdb": 88}
+
+    async def sync_now():
+        return None
+
+    ctx.sync_now = sync_now
+    response = build_client(ctx).post(
+        "/api/trending/add",
+        json={
+            "media_type": "show",
+            "owner_user": "me",
+            "slug": "my-list",
+            "tvdb": 88,
+        },
+    )
+    assert response.json() == {"status": "added"}
+    ctx.trakt.lookup_ids.assert_awaited_once_with(
+        id_type="tvdb", id_value=88, media_type="show"
+    )
+
+
+def test_add_movie_never_attempts_tvdb_lookup(db) -> None:
+    # Trakt does not index movies by TVDB id: a movie with only a tvdb id has
+    # no resolvable candidate and must fail fast without any lookup or add.
+    ctx = _owned_ctx(db)
+    response = build_client(ctx).post(
+        "/api/trending/add",
+        json={
+            "media_type": "movie",
+            "owner_user": "me",
+            "slug": "my-list",
+            "tvdb": 88,
+            "title": "Odd Movie",
+        },
+    )
+    assert response.status_code == 502
+    assert "Odd Movie" in response.json()["detail"]
+    ctx.trakt.lookup_ids.assert_not_awaited()
+    ctx.trakt.add_items.assert_not_awaited()
+
+
+def test_add_lookup_failure_tries_next_candidate(db) -> None:
+    # The tmdb lookup dying must not abort resolution: the imdb candidate is
+    # tried next and its trakt id carries the add.
+    ctx = _owned_ctx(db)
+    ctx.trakt.lookup_ids.side_effect = [
+        RuntimeError("search down"),
+        {"trakt": 44, "imdb": "tt6"},
+    ]
 
     async def sync_now():
         return None
@@ -612,10 +689,61 @@ def test_add_lookup_failure_falls_back_to_tmdb(db) -> None:
             "owner_user": "me",
             "slug": "my-list",
             "tmdb": 100,
+            "imdb": "tt6",
         },
     )
     assert response.json() == {"status": "added"}
-    assert ctx.trakt.add_items.await_args.kwargs["movies"] == [{"tmdb": 100}]
+    assert ctx.trakt.lookup_ids.await_count == 2
+    assert ctx.trakt.add_items.await_args.kwargs["movies"] == [
+        {"trakt": 44, "imdb": "tt6", "tmdb": 100}
+    ]
+
+
+def test_add_trakt_less_resolution_tries_next_candidate(db) -> None:
+    # A lookup that answers without a trakt id is a miss, not a success.
+    ctx = _owned_ctx(db)
+    ctx.trakt.lookup_ids.side_effect = [
+        {"tmdb": 100},  # no trakt id: keep looking
+        {"trakt": 45, "imdb": "tt7"},
+    ]
+
+    async def sync_now():
+        return None
+
+    ctx.sync_now = sync_now
+    response = build_client(ctx).post(
+        "/api/trending/add",
+        json={
+            "media_type": "movie",
+            "owner_user": "me",
+            "slug": "my-list",
+            "tmdb": 100,
+            "imdb": "tt7",
+        },
+    )
+    assert response.json() == {"status": "added"}
+    assert ctx.trakt.lookup_ids.await_count == 2
+
+
+def test_add_unresolvable_trakt_id_fails_fast(db) -> None:
+    # Every add must post a trakt id: when no candidate resolves one, the add
+    # fails with a title-naming detail and nothing is posted to the list.
+    ctx = _owned_ctx(db)
+    ctx.trakt.lookup_ids.return_value = None
+
+    response = build_client(ctx).post(
+        "/api/trending/add",
+        json={
+            "media_type": "movie",
+            "owner_user": "me",
+            "slug": "my-list",
+            "tmdb": 100,
+            "title": "Ghost Film",
+        },
+    )
+    assert response.status_code == 502
+    assert response.json()["detail"] == "Could not resolve a Trakt id for Ghost Film"
+    ctx.trakt.add_items.assert_not_awaited()
 
 
 def test_add_not_found_is_502(db) -> None:

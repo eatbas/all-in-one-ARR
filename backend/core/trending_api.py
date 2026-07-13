@@ -425,26 +425,52 @@ def create_trending_router(ctx: AppContext) -> APIRouter:
             ids["tvdb"] = body.tvdb
         if body.tmdb is not None:
             ids["tmdb"] = body.tmdb
-        # TMDB/Seer cards carry only a TMDB id, which Trakt's list-add resolves
-        # unreliably (the title lands in not_found); resolve it to a Trakt id first
-        # so the add lands deterministically.
-        if "trakt" not in ids and body.tmdb is not None:
-            try:
-                resolved = await ctx.trakt.lookup_ids_by_tmdb(
-                    media_type=body.media_type, tmdb_id=body.tmdb
-                )
-            except Exception as exc:  # noqa: BLE001 - a failed lookup degrades to a bare-tmdb add
-                log.warning("trending tmdb lookup failed for %s: %s", body.tmdb, exc)
-                resolved = None
-            if resolved:
-                ids = {
-                    **resolved,
-                    **ids,
-                }  # add trakt/imdb/tvdb; keep explicit body values
         if not ids:
             return JSONResponse(
                 status_code=422, content={"detail": "No usable media id supplied"}
             )
+        # Every add posts a resolved trakt id: Trakt's list-add resolves weak
+        # ids unreliably (the title can land in not_found), so a card without
+        # one — TMDB/Seer cards carry only a tmdb id, some mapped anime cards
+        # only imdb/tvdb — is resolved via the strongest available id first.
+        # No resolvable trakt id fails fast rather than gambling on a weak add.
+        if "trakt" not in ids:
+            candidates: list[tuple[Literal["tmdb", "imdb", "tvdb"], int | str]] = []
+            if body.tmdb is not None:
+                candidates.append(("tmdb", body.tmdb))
+            if body.imdb:
+                candidates.append(("imdb", body.imdb))
+            # Trakt does not index movies by TVDB id, so tvdb is shows-only.
+            if body.media_type == "show" and body.tvdb is not None:
+                candidates.append(("tvdb", body.tvdb))
+            for id_type, id_value in candidates:
+                try:
+                    resolved = await ctx.trakt.lookup_ids(
+                        id_type=id_type,
+                        id_value=id_value,
+                        media_type=body.media_type,
+                    )
+                except Exception as exc:  # noqa: BLE001 - try the next candidate id
+                    log.warning(
+                        "trending %s lookup failed for %s: %s", id_type, id_value, exc
+                    )
+                    continue
+                if resolved and resolved.get("trakt") is not None:
+                    ids = {
+                        **resolved,
+                        **ids,
+                    }  # add trakt/imdb/tvdb; keep explicit body values
+                    break
+            if "trakt" not in ids:
+                return JSONResponse(
+                    status_code=502,
+                    content={
+                        "detail": (
+                            "Could not resolve a Trakt id for "
+                            f"{body.title or 'this title'}"
+                        )
+                    },
+                )
         movies = [ids] if body.media_type == "movie" else None
         shows = [ids] if body.media_type == "show" else None
         try:
@@ -468,7 +494,11 @@ def create_trending_router(ctx: AppContext) -> APIRouter:
             )
             return JSONResponse(
                 status_code=502,
-                content={"detail": "Trakt could not find this title to add"},
+                content={
+                    "detail": (
+                        f"Trakt could not find {body.title or 'this title'} to add"
+                    )
+                },
             )
         ctx.db.add_activity(
             "Trending add", f"Added {body.title or ids} to {target.name}"

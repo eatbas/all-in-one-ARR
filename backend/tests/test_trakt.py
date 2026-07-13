@@ -352,7 +352,7 @@ async def test_lookup_ids_by_tmdb_returns_ids(tmp_path) -> None:
         )
     )
     client = make_client(tmp_path)
-    result = await client.lookup_ids_by_tmdb(media_type="movie", tmdb_id=100)
+    result = await client.lookup_ids(id_type="tmdb", id_value=100, media_type="movie")
     # Only the strong id fields are kept (slug is dropped); type filter is sent.
     assert result == {"trakt": 1, "tmdb": 100, "imdb": "tt1"}
     assert route.calls.last.request.url.params["type"] == "movie"
@@ -375,13 +375,51 @@ async def test_lookup_ids_by_tmdb_show_type(tmp_path) -> None:
         )
     )
     client = make_client(tmp_path)
-    result = await client.lookup_ids_by_tmdb(media_type="show", tmdb_id=200)
+    result = await client.lookup_ids(id_type="tmdb", id_value=200, media_type="show")
     assert result == {"trakt": 2, "tvdb": 300, "tmdb": 200}
     assert route.calls.last.request.url.params["type"] == "show"
 
 
 @respx.mock
-async def test_lookup_ids_by_tmdb_no_match_returns_none(tmp_path) -> None:
+async def test_lookup_ids_by_imdb(tmp_path) -> None:
+    # Anime rows mapped without a TMDB id resolve via the IMDb lookup instead.
+    route = respx.get(f"{TRAKT_BASE_URL}/search/imdb/tt5").mock(
+        return_value=httpx.Response(
+            200,
+            json=[
+                {
+                    "type": "show",
+                    "show": {"ids": {"trakt": 3, "imdb": "tt5", "tvdb": 77}},
+                }
+            ],
+        )
+    )
+    client = make_client(tmp_path)
+    result = await client.lookup_ids(id_type="imdb", id_value="tt5", media_type="show")
+    assert result == {"trakt": 3, "imdb": "tt5", "tvdb": 77}
+    assert route.calls.last.request.url.params["type"] == "show"
+
+
+@respx.mock
+async def test_lookup_ids_by_tvdb(tmp_path) -> None:
+    respx.get(f"{TRAKT_BASE_URL}/search/tvdb/300").mock(
+        return_value=httpx.Response(
+            200,
+            json=[
+                {
+                    "type": "show",
+                    "show": {"ids": {"trakt": 4, "tvdb": 300, "tmdb": 200}},
+                }
+            ],
+        )
+    )
+    client = make_client(tmp_path)
+    result = await client.lookup_ids(id_type="tvdb", id_value=300, media_type="show")
+    assert result == {"trakt": 4, "tvdb": 300, "tmdb": 200}
+
+
+@respx.mock
+async def test_lookup_ids_no_match_returns_none(tmp_path) -> None:
     respx.get(f"{TRAKT_BASE_URL}/search/tmdb/999").mock(
         return_value=httpx.Response(
             200,
@@ -393,7 +431,7 @@ async def test_lookup_ids_by_tmdb_no_match_returns_none(tmp_path) -> None:
         )
     )
     client = make_client(tmp_path)
-    result = await client.lookup_ids_by_tmdb(media_type="movie", tmdb_id=999)
+    result = await client.lookup_ids(id_type="tmdb", id_value=999, media_type="movie")
     assert result is None
 
 
@@ -585,3 +623,18 @@ async def test_test_connection_returns_failure_on_http_error(tmp_path) -> None:
     assert result["ok"] is False
     assert "401" in result["detail"]
     assert result["username"] is None
+
+
+@respx.mock
+async def test_lookup_ids_url_encodes_the_id_value(tmp_path) -> None:
+    # The id value comes from a request body: path characters must stay one
+    # quoted path segment instead of steering the request at another endpoint.
+    route = respx.get(f"{TRAKT_BASE_URL}/search/imdb/x%2F..%2Flists").mock(
+        return_value=httpx.Response(200, json=[])
+    )
+    client = make_client(tmp_path)
+    result = await client.lookup_ids(
+        id_type="imdb", id_value="x/../lists", media_type="movie"
+    )
+    assert result is None
+    assert route.called

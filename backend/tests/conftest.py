@@ -33,7 +33,7 @@ class StubTrakt:
         self.read_list_items = AsyncMock(return_value=self._items)
         self.remove_items = AsyncMock(return_value={"ok": True})
         self.add_items = AsyncMock(return_value={"added": {"movies": 1}})
-        self.lookup_ids_by_tmdb = AsyncMock(return_value={"trakt": 500, "tmdb": 100})
+        self.lookup_ids = AsyncMock(return_value={"trakt": 500, "tmdb": 100})
         self.get_trending = AsyncMock(return_value=[])
         self.get_popular = AsyncMock(return_value=[])
         self.update_credentials = MagicMock()

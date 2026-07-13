@@ -11,7 +11,8 @@ import os
 import time
 from collections.abc import Awaitable, Callable
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
+from urllib.parse import quote
 
 import httpx
 
@@ -347,21 +348,29 @@ class TraktClient:
             if isinstance(entry, dict)
         ]
 
-    async def lookup_ids_by_tmdb(
-        self, *, media_type: str, tmdb_id: int
+    async def lookup_ids(
+        self,
+        *,
+        id_type: Literal["tmdb", "imdb", "tvdb"],
+        id_value: int | str,
+        media_type: str,
     ) -> dict[str, int | str] | None:
-        """Resolve a TMDB id to a Trakt item's id set via the ID-lookup search.
+        """Resolve an external id to a Trakt item's id set via the ID-lookup search.
 
-        TMDB and Seer discovery rows carry only a TMDB id, which Trakt's list-add
-        resolves unreliably (the title can land in ``not_found``). Looking the id
-        up first yields the ``trakt`` id (plus ``imdb``/``tvdb``) so the add can use
-        a strong id. Uses the public (API-key-only) headers, like the discovery
-        endpoints. Returns the matched item's id mapping, or ``None`` when nothing
-        matches.
+        Discovery rows outside the Trakt tabs carry no ``trakt`` id, which
+        Trakt's list-add resolves unreliably from weak ids (the title can land
+        in ``not_found``). Looking the strongest known id up first yields the
+        ``trakt`` id (plus ``imdb``/``tvdb``/``tmdb``) so the add posts a strong
+        id. Uses the public (API-key-only) headers, like the discovery
+        endpoints. Returns the matched item's id mapping, or ``None`` when
+        nothing matches. TVDB lookups are only valid for shows — Trakt does not
+        index movies by TVDB id — so callers gate that id type accordingly.
         """
         search_type = "movie" if media_type == "movie" else "show"
+        # The id value originates from a request body, so it is quoted into a
+        # single path segment rather than interpolated raw into the URL.
         response = await self._client.get(
-            f"/search/tmdb/{tmdb_id}",
+            f"/search/{id_type}/{quote(str(id_value), safe='')}",
             headers=self._public_headers(),
             params={"type": search_type},
         )
