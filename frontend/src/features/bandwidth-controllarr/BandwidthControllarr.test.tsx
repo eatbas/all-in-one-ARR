@@ -46,7 +46,10 @@ const STATUS: BandwidthStatus = {
     paused: false,
   },
   download_history: [],
-  queue: { qbittorrent: [], sabnzbd: [] },
+  queue: {
+    qbittorrent: { items: [], total: 0 },
+    sabnzbd: { items: [], total: 0 },
+  },
 }
 
 function render(ui: ReactElement) {

@@ -44,7 +44,10 @@ beforeEach(() => {
       paused: false,
     },
     download_history: [],
-    queue: { qbittorrent: [], sabnzbd: [] },
+    queue: {
+    qbittorrent: { items: [], total: 0 },
+    sabnzbd: { items: [], total: 0 },
+  },
   })
 })
 
@@ -80,7 +83,10 @@ describe("bandwidth hooks", () => {
         paused: false,
       },
       download_history: [],
-      queue: { qbittorrent: [], sabnzbd: [] },
+      queue: {
+    qbittorrent: { items: [], total: 0 },
+    sabnzbd: { items: [], total: 0 },
+  },
     })
     const { queryClient, wrapper } = setup()
     const invalidate = vi.spyOn(queryClient, "invalidateQueries")

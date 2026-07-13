@@ -10,6 +10,7 @@ from core.clients.sabnzbd import (
     SabnzbdClient,
     _format_bytes,
     _percent_value,
+    _queue_activity,
     _queue_slots_from_payload,
     _slot_size_bytes,
     _timeleft_seconds,
@@ -439,6 +440,7 @@ async def test_get_download_activity_parses_queue_and_history() -> None:
                 200,
                 json={
                     "queue": {
+                        "speed": "2.5 M",
                         "slots": [
                             {
                                 "nzo_id": "SABnzbd_nzo_queue",
@@ -451,7 +453,7 @@ async def test_get_download_activity_parses_queue_and_history() -> None:
                                 "time_added": 1_704_067_200,
                                 "path": "/downloads/incomplete",
                             }
-                        ]
+                        ],
                     }
                 },
             ),
@@ -482,7 +484,8 @@ async def test_get_download_activity_parses_queue_and_history() -> None:
     result = await SabnzbdClient(base_url=_BASE, api_key="x").get_download_activity()
 
     assert route.calls[0].request.url.params["mode"] == "queue"
-    assert route.calls[0].request.url.params["limit"] == "12"
+    # The queue is fetched unlimited so the uncapped depth can be counted.
+    assert route.calls[0].request.url.params["limit"] == "0"
     assert route.calls[1].request.url.params["mode"] == "history"
     assert route.calls[1].request.url.params["limit"] == "10"
     assert route.calls[1].request.url.params["archive"] == "1"
@@ -495,12 +498,15 @@ async def test_get_download_activity_parses_queue_and_history() -> None:
             "progress": 42,
             "size_bytes": 2 * 1024 * 1024 * 1024,
             "size_label": "2.0 GB",
-            "speed_mbps": None,
+            # SABnzbd exposes no per-slot speed; the queue-level speed belongs to
+            # the one slot that is actually downloading.
+            "speed_mbps": 2.5,
             "eta_seconds": 630,
             "added_at": "2024-01-01T00:00:00Z",
             "completed_at": None,
         }
     ]
+    assert result["queue_total"] == 1
     assert result["history"] == [
         {
             "client": "sabnzbd",
@@ -554,10 +560,88 @@ async def test_get_download_activity_applies_limits() -> None:
         history_limit=1, queue_limit=1
     )
 
-    assert route.calls[0].request.url.params["limit"] == "1"
+    # The queue limit is applied to the rows, not to the SABnzbd request: the
+    # full queue is fetched so the cumulative total stays truthful above the cap.
+    assert route.calls[0].request.url.params["limit"] == "0"
     assert route.calls[1].request.url.params["limit"] == "1"
     assert [item["name"] for item in result["queue"]] == ["First"]
+    assert result["queue_total"] == 2
     assert [item["name"] for item in result["history"]] == ["Done 1"]
+
+
+def _queue_payload(speed: str, *statuses: str) -> dict:
+    """Build a SABnzbd queue payload with one slot per status."""
+    return {
+        "queue": {
+            "speed": speed,
+            "slots": [
+                {
+                    "nzo_id": f"nzo-{index}",
+                    "filename": f"Job {index}",
+                    "status": status,
+                }
+                for index, status in enumerate(statuses)
+            ],
+        }
+    }
+
+
+def test_queue_activity_credits_the_queue_speed_to_the_downloading_slot() -> None:
+    # SABnzbd reports one speed for the whole queue and downloads sequentially,
+    # so only the downloading slot may claim it; the idle ones report no speed.
+    payload = _queue_payload("2.5 M", "Queued", "Downloading", "Queued")
+
+    items, total = _queue_activity(payload["queue"], limit=10)
+
+    assert [item["speed_mbps"] for item in items] == [None, 2.5, None]
+    assert total == 3
+
+
+def test_queue_activity_reports_no_speed_when_nothing_is_downloading() -> None:
+    payload = _queue_payload("2.5 M", "Queued", "Paused")
+
+    items, _ = _queue_activity(payload["queue"], limit=10)
+
+    assert [item["speed_mbps"] for item in items] == [None, None]
+
+
+@pytest.mark.parametrize("speed", ["0", "", "fast"])
+def test_queue_activity_reports_no_speed_for_zero_or_unparseable_speed(
+    speed: str,
+) -> None:
+    # A stalled or unreadable speed must read as "—" rather than a bogus 0.0.
+    payload = _queue_payload(speed, "Downloading")
+
+    items, _ = _queue_activity(payload["queue"], limit=10)
+
+    assert items[0]["speed_mbps"] is None
+
+
+def test_queue_activity_credits_only_the_first_of_several_downloading_slots() -> None:
+    # Duplicating one figure across rows would imply twice the real throughput.
+    payload = _queue_payload("2.5 M", "Downloading", "Downloading")
+
+    items, _ = _queue_activity(payload["queue"], limit=10)
+
+    assert [item["speed_mbps"] for item in items] == [2.5, None]
+
+
+def test_queue_activity_counts_the_whole_queue_beyond_the_row_cap() -> None:
+    payload = _queue_payload("1 M", "Downloading", "Queued", "Queued", "Queued")
+
+    items, total = _queue_activity(payload["queue"], limit=2)
+
+    assert [item["name"] for item in items] == ["Job 0", "Job 1"]
+    assert total == 4
+
+
+def test_queue_activity_handles_a_non_positive_row_cap() -> None:
+    payload = _queue_payload("1 M", "Downloading", "Queued")
+
+    items, total = _queue_activity(payload["queue"], limit=0)
+
+    assert items == []
+    assert total == 2
 
 
 @respx.mock
@@ -594,40 +678,6 @@ async def test_get_download_activity_invalid_history_returns_empty_history() -> 
 
     assert [item["name"] for item in result["queue"]] == ["Queued"]
     assert result["history"] == []
-
-
-@respx.mock
-@pytest.mark.parametrize(
-    "response",
-    [
-        httpx.ConnectError("down"),
-        httpx.Response(500),
-        httpx.Response(200, text="not json"),
-        httpx.Response(200, json=["bad"]),
-        httpx.Response(200, json={"queue": "bad"}),
-        httpx.Response(200, json={"queue": {"slots": ["bad"]}}),
-    ],
-)
-async def test_queue_slots_failure_branches_return_empty(response) -> None:
-    route = respx.get(_API)
-    if isinstance(response, Exception):
-        route.mock(side_effect=response)
-    else:
-        route.mock(return_value=response)
-    result = await SabnzbdClient(base_url=_BASE, api_key="x")._queue_slots(limit=1)
-    assert result == []
-
-
-@respx.mock
-async def test_queue_slots_success_returns_payload_slots() -> None:
-    respx.get(_API).mock(
-        return_value=httpx.Response(
-            200,
-            json={"queue": {"slots": [{"nzo_id": "a", "filename": "A"}]}},
-        )
-    )
-    result = await SabnzbdClient(base_url=_BASE, api_key="x")._queue_slots(limit=5)
-    assert [slot["nzo_id"] for slot in result] == ["a"]
 
 
 def test_queue_slots_from_payload_guards_bad_slots_and_limits() -> None:

@@ -52,8 +52,14 @@ async def gather_status(ctx: AppContext) -> dict:
         "sabnzbd": sab_stats,
         "download_history": download_history,
         "queue": {
-            "qbittorrent": qb_activity["queue"],
-            "sabnzbd": sab_activity["queue"],
+            "qbittorrent": {
+                "items": qb_activity["queue"],
+                "total": qb_activity["queue_total"],
+            },
+            "sabnzbd": {
+                "items": sab_activity["queue"],
+                "total": sab_activity["queue_total"],
+            },
         },
     }
 
@@ -165,17 +171,17 @@ def _client_label(client: BandwidthClientName) -> str:
     return "qBittorrent" if client == "qbittorrent" else "SABnzbd"
 
 
-async def _download_activity(client: Any) -> dict[str, list[dict[str, Any]]]:
+async def _download_activity(client: Any) -> dict[str, Any]:
     """Return optional downloader activity for clients that expose it."""
     get_download_activity = getattr(client, "get_download_activity", None)
     if get_download_activity is None:
-        return {"queue": [], "history": []}
+        return {"queue": [], "queue_total": 0, "history": []}
     return await get_download_activity()
 
 
 async def _status_snapshot(
     client: Any,
-) -> tuple[dict[str, Any], dict[str, list[dict[str, Any]]]]:
+) -> tuple[dict[str, Any], dict[str, Any]]:
     """Return downloader stats and activity, preferring a shared fetch path."""
     get_status_snapshot = getattr(client, "get_status_snapshot", None)
     if get_status_snapshot is not None:

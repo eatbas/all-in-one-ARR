@@ -240,22 +240,34 @@
         "title": "BandwidthDownloadItem",
         "type": "object"
       },
+      "BandwidthQueueGroup": {
+        "description": "One downloader's visible queue page plus its uncapped depth.\n\n``total`` counts the whole queue even when ``items`` is capped at\n``QUEUE_ITEM_LIMIT``, so the dashboard can page through the items it has\nwhile still reporting an honest queue depth.",
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/BandwidthDownloadItem"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "total": {
+            "default": 0,
+            "minimum": 0.0,
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "title": "BandwidthQueueGroup",
+        "type": "object"
+      },
       "BandwidthQueueResponse": {
         "description": "Current queue items grouped by downloader.",
         "properties": {
           "qbittorrent": {
-            "items": {
-              "$ref": "#/components/schemas/BandwidthDownloadItem"
-            },
-            "title": "Qbittorrent",
-            "type": "array"
+            "$ref": "#/components/schemas/BandwidthQueueGroup"
           },
           "sabnzbd": {
-            "items": {
-              "$ref": "#/components/schemas/BandwidthDownloadItem"
-            },
-            "title": "Sabnzbd",
-            "type": "array"
+            "$ref": "#/components/schemas/BandwidthQueueGroup"
           }
         },
         "title": "BandwidthQueueResponse",

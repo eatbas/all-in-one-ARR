@@ -2,6 +2,7 @@ import type {
   BandwidthClientRequest,
   BandwidthClientStatsResponse,
   BandwidthDownloadItem as GeneratedBandwidthDownloadItem,
+  BandwidthQueueGroup as GeneratedBandwidthQueueGroup,
   BandwidthSettingsRequest,
   BandwidthStatusResponse,
 } from "@/shared/lib/generated"
@@ -17,8 +18,18 @@ export type BandwidthClientStats = BandwidthClientStatsResponse
 /** Display-safe activity item with server-defaulted fields present. */
 export type BandwidthDownloadItem = Required<GeneratedBandwidthDownloadItem>
 
-/** Queue items grouped by the generated closed client domain. */
-export type BandwidthQueue = Record<BandwidthClient, BandwidthDownloadItem[]>
+/**
+ * One downloader's visible queue page plus its uncapped depth. `total` counts
+ * the whole queue even when `items` is capped by the backend, so the queue badge
+ * stays honest while the page shows a slice of it.
+ */
+export type BandwidthQueueGroup = Omit<
+  Required<GeneratedBandwidthQueueGroup>,
+  "items"
+> & { items: BandwidthDownloadItem[] }
+
+/** Queue groups keyed by the generated closed client domain. */
+export type BandwidthQueue = Record<BandwidthClient, BandwidthQueueGroup>
 
 /** Full live status returned by `GET /api/bandwidth/status`. */
 export type BandwidthStatus = Omit<

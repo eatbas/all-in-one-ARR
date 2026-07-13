@@ -13,10 +13,9 @@ from typing import Any
 
 import httpx
 
-from core.bandwidth_types import DOWNLOAD_HISTORY_LIMIT
+from core.bandwidth_types import DOWNLOAD_HISTORY_LIMIT, QUEUE_ITEM_LIMIT
 from core.logging import get_logger
 
-_QUEUE_ITEM_LIMIT = 12
 _BYTES_PER_MB = 1024 * 1024
 
 
@@ -95,29 +94,24 @@ class SabnzbdClient:
         self,
         *,
         history_limit: int = DOWNLOAD_HISTORY_LIMIT,
-        queue_limit: int = _QUEUE_ITEM_LIMIT,
+        queue_limit: int = QUEUE_ITEM_LIMIT,
     ) -> dict[str, Any]:
         """Return aggregate stats and activity from one queue request."""
         queue = await self._queue_payload(limit=0)
         history_slots = await self._history_slots(limit=max(history_limit, 0))
+        history = [_history_item(slot) for slot in history_slots]
         if queue is None:
             return {
                 "stats": _offline_stats(),
-                "activity": {
-                    "queue": [],
-                    "history": [_history_item(slot) for slot in history_slots],
-                },
+                "activity": {"queue": [], "queue_total": 0, "history": history},
             }
+        queue_items, queue_total = _queue_activity(queue, limit=queue_limit)
         return {
             "stats": _stats_from_queue(queue),
             "activity": {
-                "queue": [
-                    _queue_item(slot)
-                    for slot in _queue_slots_from_payload(
-                        queue, limit=max(queue_limit, 0)
-                    )
-                ],
-                "history": [_history_item(slot) for slot in history_slots],
+                "queue": queue_items,
+                "queue_total": queue_total,
+                "history": history,
             },
         }
 
@@ -125,27 +119,25 @@ class SabnzbdClient:
         self,
         *,
         history_limit: int = DOWNLOAD_HISTORY_LIMIT,
-        queue_limit: int = _QUEUE_ITEM_LIMIT,
-    ) -> dict[str, list[dict[str, Any]]]:
-        """Return display-safe queue and completed-download history."""
-        queue = await self._queue_payload(limit=max(queue_limit, 0))
-        queue_slots = (
-            []
-            if queue is None
-            else _queue_slots_from_payload(queue, limit=max(queue_limit, 0))
-        )
+        queue_limit: int = QUEUE_ITEM_LIMIT,
+    ) -> dict[str, Any]:
+        """Return display-safe queue and completed-download history.
+
+        The queue is fetched unlimited (``limit=0``) rather than pre-truncated by
+        SABnzbd: the uncapped depth is needed for ``queue_total``, and the speed
+        attribution in :func:`_queue_activity` has to see the whole queue to find
+        the downloading slot.
+        """
+        queue = await self._queue_payload(limit=0)
         history_slots = await self._history_slots(limit=max(history_limit, 0))
+        queue_items, queue_total = (
+            ([], 0) if queue is None else _queue_activity(queue, limit=queue_limit)
+        )
         return {
-            "queue": [_queue_item(slot) for slot in queue_slots],
+            "queue": queue_items,
+            "queue_total": queue_total,
             "history": [_history_item(slot) for slot in history_slots],
         }
-
-    async def _queue_slots(self, *, limit: int) -> list[dict[str, Any]]:
-        """Fetch SABnzbd queue slots, returning an empty list on failure."""
-        queue = await self._queue_payload(limit=limit)
-        if queue is None:
-            return []
-        return _queue_slots_from_payload(queue, limit=limit)
 
     async def _queue_payload(self, *, limit: int) -> dict[str, Any] | None:
         """Fetch and validate a SABnzbd queue payload."""
@@ -317,7 +309,41 @@ def _queue_slots_from_payload(
     return slots[:limit]
 
 
-def _queue_item(slot: dict[str, Any]) -> dict[str, Any]:
+def _queue_activity(
+    queue: dict[str, Any], *, limit: int
+) -> tuple[list[dict[str, Any]], int]:
+    """Map the visible queue slots and report the uncapped queue depth.
+
+    SABnzbd reports a single speed for the whole queue and no per-slot speed, but
+    it downloads jobs sequentially, so that figure belongs to the one slot whose
+    status is ``Downloading``; every other slot is idle and reports no speed. If
+    SABnzbd ever reports several downloading slots at once, only the first is
+    credited — duplicating one figure across rows would imply several times the
+    real throughput.
+    """
+    slots = _queue_slots_from_payload(queue, limit=None)
+    speed_mbps = _parse_sab_speed(queue.get("speed"))
+    active_index = next(
+        (
+            index
+            for index, slot in enumerate(slots)
+            if _string_value(slot.get("status")) == "Downloading"
+        ),
+        None,
+    )
+    items = [
+        _queue_item(
+            slot,
+            speed_mbps=(
+                speed_mbps if index == active_index and speed_mbps > 0 else None
+            ),
+        )
+        for index, slot in enumerate(slots[: max(limit, 0)])
+    ]
+    return items, len(slots)
+
+
+def _queue_item(slot: dict[str, Any], *, speed_mbps: float | None) -> dict[str, Any]:
     """Map a SABnzbd queue slot to the dashboard's safe display shape."""
     size_bytes = _slot_size_bytes(slot)
     return {
@@ -328,7 +354,7 @@ def _queue_item(slot: dict[str, Any]) -> dict[str, Any]:
         "progress": _percent_value(slot.get("percentage")),
         "size_bytes": size_bytes,
         "size_label": _string_value(slot.get("size")) or _format_bytes(size_bytes),
-        "speed_mbps": None,
+        "speed_mbps": speed_mbps,
         "eta_seconds": _timeleft_seconds(slot.get("timeleft")),
         "added_at": _unix_to_iso(slot.get("time_added")),
         "completed_at": None,

@@ -310,7 +310,7 @@ _OFFLINE_SNAPSHOT = {
         "active_downloads": 0,
         "queue_size": 0,
     },
-    "activity": {"queue": [], "history": []},
+    "activity": {"queue": [], "queue_total": 0, "history": []},
 }
 
 
@@ -445,13 +445,17 @@ async def test_get_download_activity_applies_limits_and_queue_order() -> None:
 
     assert [item["name"] for item in result["queue"]] == ["Active", "Queued"]
     assert [item["name"] for item in result["history"]] == ["Queued"]
+    # The total counts every torrent in the queue view — downloading, queued and
+    # paused — even though only two rows fit the cap. It is deliberately not the
+    # `queue_size` statistic, which counts `queuedDL` alone (here: 1).
+    assert result["queue_total"] == 3
 
 
 @respx.mock
 async def test_get_download_activity_blank_key_returns_empty_without_request() -> None:
     route = respx.get(_TORRENTS).mock(return_value=httpx.Response(200, json=[]))
     result = await make_client(api_key=" ").get_download_activity()
-    assert result == {"queue": [], "history": []}
+    assert result == {"queue": [], "queue_total": 0, "history": []}
     assert not route.called
 
 
@@ -459,25 +463,25 @@ async def test_get_download_activity_blank_key_returns_empty_without_request() -
 async def test_get_download_activity_invalid_payload_returns_empty() -> None:
     respx.get(_TORRENTS).mock(return_value=httpx.Response(200, json={"bad": True}))
     result = await make_client().get_download_activity()
-    assert result == {"queue": [], "history": []}
+    assert result == {"queue": [], "queue_total": 0, "history": []}
 
 
 @respx.mock
 async def test_get_download_activity_network_error_returns_empty() -> None:
     respx.get(_TORRENTS).mock(side_effect=httpx.ConnectError("down"))
     result = await make_client().get_download_activity()
-    assert result == {"queue": [], "history": []}
+    assert result == {"queue": [], "queue_total": 0, "history": []}
 
 
 @respx.mock
 async def test_get_download_activity_non_200_returns_empty() -> None:
     respx.get(_TORRENTS).mock(return_value=httpx.Response(500))
     result = await make_client().get_download_activity()
-    assert result == {"queue": [], "history": []}
+    assert result == {"queue": [], "queue_total": 0, "history": []}
 
 
 @respx.mock
 async def test_get_download_activity_invalid_json_returns_empty() -> None:
     respx.get(_TORRENTS).mock(return_value=httpx.Response(200, text="not json"))
     result = await make_client().get_download_activity()
-    assert result == {"queue": [], "history": []}
+    assert result == {"queue": [], "queue_total": 0, "history": []}

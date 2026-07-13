@@ -11,6 +11,13 @@ import {
 } from "@/shared/lib/queries"
 import { formatTimestamp } from "@/shared/lib/format"
 import { cn } from "@/shared/lib/utils"
+import type { BandwidthQueue } from "@/shared/lib/api"
+
+/** Queue shown before the first status response arrives. */
+const EMPTY_QUEUE: BandwidthQueue = {
+  qbittorrent: { items: [], total: 0 },
+  sabnzbd: { items: [], total: 0 },
+}
 
 /**
  * Bandwidth-Controllarr Status tab: shows the system-status banner, the master
@@ -27,7 +34,7 @@ export function Status() {
   const qb = status?.qbittorrent
   const sab = status?.sabnzbd
   const downloadHistory = status?.download_history ?? []
-  const queue = status?.queue ?? { qbittorrent: [], sabnzbd: [] }
+  const queue = status?.queue ?? EMPTY_QUEUE
   const controlLabel = enabled
     ? status?.tracking_suspended
       ? "Suspended"

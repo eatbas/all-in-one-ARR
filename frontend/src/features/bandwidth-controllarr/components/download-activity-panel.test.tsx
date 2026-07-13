@@ -3,31 +3,25 @@ import userEvent from "@testing-library/user-event"
 import { describe, expect, it } from "vitest"
 
 import { DownloadActivityPanel } from "@/features/bandwidth-controllarr/components/download-activity-panel"
-import type { BandwidthDownloadItem, BandwidthQueue } from "@/shared/lib/api"
+import { downloadItem as item } from "@/features/bandwidth-controllarr/components/download-test-fixtures"
+import type {
+  BandwidthDownloadItem,
+  BandwidthQueue,
+  BandwidthQueueGroup,
+} from "@/shared/lib/api"
 
-function item(
-  overrides: Partial<BandwidthDownloadItem> = {},
-): BandwidthDownloadItem {
-  return {
-    client: "qbittorrent",
-    id: "download-1",
-    name: "Download.One",
-    status: "downloading",
-    progress: 50,
-    size_bytes: 2 * 1024 * 1024,
-    size_label: "2.0 MB",
-    speed_mbps: 1.25,
-    eta_seconds: 125,
-    added_at: "2026-06-26T20:00:00Z",
-    completed_at: null,
-    ...overrides,
-  }
+/** A queue group; `total` defaults to the row count but may exceed it. */
+function group(
+  items: BandwidthDownloadItem[] = [],
+  total: number = items.length,
+): BandwidthQueueGroup {
+  return { items, total }
 }
 
 function queue(overrides: Partial<BandwidthQueue> = {}): BandwidthQueue {
   return {
-    qbittorrent: [],
-    sabnzbd: [],
+    qbittorrent: group(),
+    sabnzbd: group(),
     ...overrides,
   }
 }
@@ -50,7 +44,7 @@ describe("DownloadActivityPanel", () => {
       <DownloadActivityPanel
         downloadHistory={[item({ id: "done", name: "Finished.Movie" })]}
         queue={queue({
-          qbittorrent: [item({ id: "queued", name: "Queued.Movie" })],
+          qbittorrent: group([item({ id: "queued", name: "Queued.Movie" })]),
         })}
       />,
     )
@@ -74,7 +68,7 @@ describe("DownloadActivityPanel", () => {
       <DownloadActivityPanel
         downloadHistory={[]}
         queue={queue({
-          qbittorrent: [item({ id: "queued", name: "Queued.Movie" })],
+          qbittorrent: group([item({ id: "queued", name: "Queued.Movie" })]),
         })}
       />,
     )
@@ -144,7 +138,7 @@ describe("DownloadActivityPanel", () => {
     render(
       <DownloadActivityPanel
         downloadHistory={[]}
-        queue={queue({ qbittorrent: [item()] })}
+        queue={queue({ qbittorrent: group([item()]) })}
       />,
     )
 
@@ -201,7 +195,7 @@ describe("DownloadActivityPanel", () => {
       <DownloadActivityPanel
         downloadHistory={[]}
         queue={queue({
-          qbittorrent: [
+          qbittorrent: group([
             item({
               id: "fallback",
               name: "Fallback.Download",
@@ -225,7 +219,7 @@ describe("DownloadActivityPanel", () => {
               name: "Hour.Minute",
               eta_seconds: 3720,
             }),
-          ],
+          ]),
         })}
       />,
     )
@@ -253,6 +247,48 @@ describe("DownloadActivityPanel", () => {
     expect(screen.getByText("No download history")).toBeInTheDocument()
   })
 
+  it("counts the whole queue across both downloaders, not the visible rows", () => {
+    render(
+      <DownloadActivityPanel
+        downloadHistory={[]}
+        queue={queue({
+          qbittorrent: group([item({ id: "q1" })], 14),
+          sabnzbd: group([item({ client: "sabnzbd", id: "s1" })], 9),
+        })}
+      />,
+    )
+
+    const trigger = screen.getByRole("button", {
+      name: "Collapse downloader queue",
+    })
+    // 14 + 9 queued in total, though only two rows are on screen.
+    expect(within(trigger).getByText("23")).toBeInTheDocument()
+  })
+
+  it("renders the download history without a count badge", async () => {
+    const user = userEvent.setup()
+    render(
+      <DownloadActivityPanel
+        downloadHistory={[
+          item({ id: "done-1", name: "Finished.One" }),
+          item({ id: "done-2", name: "Finished.Two" }),
+        ]}
+        queue={queue()}
+      />,
+    )
+
+    const trigger = screen.getByRole("button", {
+      name: "Expand download history",
+    })
+    expect(trigger).toHaveTextContent("Download history")
+    expect(within(trigger).queryByText("2")).not.toBeInTheDocument()
+
+    // The rows themselves are unaffected — only the badge is gone.
+    await user.click(trigger)
+    expect(screen.getAllByText("Finished.One").length).toBeGreaterThan(0)
+    expect(screen.getAllByText("Finished.Two").length).toBeGreaterThan(0)
+  })
+
   it("exposes long names through a title attribute", () => {
     const longName =
       "Very.Long.Release.Name.With.Many.Sections.2026.2160p.WEB-DL.Atmos"
@@ -261,7 +297,9 @@ describe("DownloadActivityPanel", () => {
       <DownloadActivityPanel
         downloadHistory={[]}
         queue={queue({
-          sabnzbd: [item({ client: "sabnzbd", id: "long", name: longName })],
+          sabnzbd: group([
+            item({ client: "sabnzbd", id: "long", name: longName }),
+          ]),
         })}
       />,
     )

@@ -112,7 +112,10 @@ async def test_gather_status_merges_state_and_stats(db) -> None:
     assert result["qbittorrent"]["active_downloads"] == 2
     assert result["sabnzbd"]["paused"] is True
     assert result["download_history"] == []
-    assert result["queue"] == {"qbittorrent": [], "sabnzbd": []}
+    assert result["queue"] == {
+        "qbittorrent": {"items": [], "total": 0},
+        "sabnzbd": {"items": [], "total": 0},
+    }
 
 
 async def test_gather_status_includes_download_activity_sorted_by_completion(
@@ -122,6 +125,7 @@ async def test_gather_status_includes_download_activity_sorted_by_completion(
     qbit.get_download_activity = AsyncMock(
         return_value={
             "queue": [{"client": "qbittorrent", "name": "Queued torrent"}],
+            "queue_total": 4,
             "history": [
                 {
                     "client": "qbittorrent",
@@ -144,6 +148,7 @@ async def test_gather_status_includes_download_activity_sorted_by_completion(
     sab.get_download_activity = AsyncMock(
         return_value={
             "queue": [{"client": "sabnzbd", "name": "Queued NZB"}],
+            "queue_total": 7,
             "history": [
                 {
                     "client": "sabnzbd",
@@ -163,9 +168,16 @@ async def test_gather_status_includes_download_activity_sorted_by_completion(
         "Added-only torrent",
         "No timestamp torrent",
     ]
+    # The totals stay uncapped: one visible row each, but a deeper real queue.
     assert result["queue"] == {
-        "qbittorrent": [{"client": "qbittorrent", "name": "Queued torrent"}],
-        "sabnzbd": [{"client": "sabnzbd", "name": "Queued NZB"}],
+        "qbittorrent": {
+            "items": [{"client": "qbittorrent", "name": "Queued torrent"}],
+            "total": 4,
+        },
+        "sabnzbd": {
+            "items": [{"client": "sabnzbd", "name": "Queued NZB"}],
+            "total": 7,
+        },
     }
 
 
@@ -174,6 +186,7 @@ async def test_gather_status_limits_download_history_after_sorting(db) -> None:
     qbit.get_download_activity = AsyncMock(
         return_value={
             "queue": [],
+            "queue_total": 0,
             "history": [
                 {
                     "client": "qbittorrent",
@@ -185,7 +198,9 @@ async def test_gather_status_limits_download_history_after_sorting(db) -> None:
         }
     )
     sab = _make_sab_stub()
-    sab.get_download_activity = AsyncMock(return_value={"queue": [], "history": []})
+    sab.get_download_activity = AsyncMock(
+        return_value={"queue": [], "queue_total": 0, "history": []}
+    )
 
     result = await gather_status(make_ctx(db=db, qbittorrent=qbit, sabnzbd=sab))
 
@@ -206,6 +221,7 @@ async def test_gather_status_uses_combined_snapshots_when_available(db) -> None:
             },
             "activity": {
                 "queue": [{"client": "qbittorrent", "name": "Queued torrent"}],
+                "queue_total": 1,
                 "history": [],
             },
         }
@@ -223,6 +239,7 @@ async def test_gather_status_uses_combined_snapshots_when_available(db) -> None:
             },
             "activity": {
                 "queue": [{"client": "sabnzbd", "name": "Queued NZB"}],
+                "queue_total": 1,
                 "history": [],
             },
         }
@@ -241,8 +258,14 @@ async def test_gather_status_uses_combined_snapshots_when_available(db) -> None:
     assert result["qbittorrent"]["active_downloads"] == 1
     assert result["sabnzbd"]["active_downloads"] == 1
     assert result["queue"] == {
-        "qbittorrent": [{"client": "qbittorrent", "name": "Queued torrent"}],
-        "sabnzbd": [{"client": "sabnzbd", "name": "Queued NZB"}],
+        "qbittorrent": {
+            "items": [{"client": "qbittorrent", "name": "Queued torrent"}],
+            "total": 1,
+        },
+        "sabnzbd": {
+            "items": [{"client": "sabnzbd", "name": "Queued NZB"}],
+            "total": 1,
+        },
     }
 
 

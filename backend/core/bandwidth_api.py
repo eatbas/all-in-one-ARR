@@ -62,11 +62,23 @@ class BandwidthDownloadItem(BaseModel):
     completed_at: str | None = None
 
 
+class BandwidthQueueGroup(BaseModel):
+    """One downloader's visible queue page plus its uncapped depth.
+
+    ``total`` counts the whole queue even when ``items`` is capped at
+    ``QUEUE_ITEM_LIMIT``, so the dashboard can page through the items it has
+    while still reporting an honest queue depth.
+    """
+
+    items: list[BandwidthDownloadItem] = Field(default_factory=list)
+    total: int = Field(default=0, ge=0)
+
+
 class BandwidthQueueResponse(BaseModel):
     """Current queue items grouped by downloader."""
 
-    qbittorrent: list[BandwidthDownloadItem] = Field(default_factory=list)
-    sabnzbd: list[BandwidthDownloadItem] = Field(default_factory=list)
+    qbittorrent: BandwidthQueueGroup = Field(default_factory=BandwidthQueueGroup)
+    sabnzbd: BandwidthQueueGroup = Field(default_factory=BandwidthQueueGroup)
 
 
 class BandwidthStatusResponse(BaseModel):

@@ -82,22 +82,28 @@ def bandwidth_app(db):
             }
         ],
         "queue": {
-            "qbittorrent": [
-                {
-                    "client": "qbittorrent",
-                    "id": "abc",
-                    "name": "Queued.Movie",
-                    "status": "queuedDL",
-                    "progress": 25,
-                    "size_bytes": 2048,
-                    "size_label": "2.0 KB",
-                    "speed_mbps": 0.5,
-                    "eta_seconds": 60,
-                    "added_at": "2024-01-01T00:00:00Z",
-                    "completed_at": None,
-                }
-            ],
-            "sabnzbd": [],
+            "qbittorrent": {
+                "items": [
+                    {
+                        "client": "qbittorrent",
+                        "id": "abc",
+                        "name": "Queued.Movie",
+                        "status": "queuedDL",
+                        "progress": 25,
+                        "size_bytes": 2048,
+                        "size_label": "2.0 KB",
+                        "speed_mbps": 0.5,
+                        "eta_seconds": 60,
+                        "added_at": "2024-01-01T00:00:00Z",
+                        "completed_at": None,
+                        # Unmodelled upstream field: the response model must
+                        # strip it rather than leak a local filesystem path.
+                        "content_path": "/downloads/Queued.Movie",
+                    }
+                ],
+                "total": 9,
+            },
+            "sabnzbd": {"items": [], "total": 0},
         },
     }
     ctx.bandwidth_status = AsyncMock(return_value=default_payload)
@@ -119,8 +125,12 @@ async def test_get_status_returns_bandwidth_payload(bandwidth_app) -> None:
     assert body["enabled"] is True
     assert body["status"] == "No active torrents"
     assert body["download_history"][0]["name"] == "Finished.Show.S01E01"
-    assert body["queue"]["qbittorrent"][0]["status"] == "queuedDL"
-    assert "content_path" not in body["queue"]["qbittorrent"][0]
+    queued = body["queue"]["qbittorrent"]
+    assert queued["items"][0]["status"] == "queuedDL"
+    assert "content_path" not in queued["items"][0]
+    # The count is cumulative: one row rendered, nine actually queued.
+    assert queued["total"] == 9
+    assert body["queue"]["sabnzbd"] == {"items": [], "total": 0}
     ctx.bandwidth_status.assert_awaited_once()
 
 

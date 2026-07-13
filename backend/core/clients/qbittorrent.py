@@ -15,10 +15,8 @@ from typing import Any
 
 import httpx
 
-from core.bandwidth_types import DOWNLOAD_HISTORY_LIMIT
+from core.bandwidth_types import DOWNLOAD_HISTORY_LIMIT, QUEUE_ITEM_LIMIT
 from core.logging import get_logger
-
-_QUEUE_ITEM_LIMIT = 12
 
 _ACTIVE_STATES = {
     "downloading",
@@ -134,7 +132,7 @@ class QbittorrentClient:
         self,
         *,
         history_limit: int = DOWNLOAD_HISTORY_LIMIT,
-        queue_limit: int = _QUEUE_ITEM_LIMIT,
+        queue_limit: int = QUEUE_ITEM_LIMIT,
     ) -> dict[str, Any]:
         """Return aggregate stats and activity from a single torrent payload."""
         api_key = self._api_key.strip()
@@ -157,8 +155,8 @@ class QbittorrentClient:
         self,
         *,
         history_limit: int = DOWNLOAD_HISTORY_LIMIT,
-        queue_limit: int = _QUEUE_ITEM_LIMIT,
-    ) -> dict[str, list[dict[str, Any]]]:
+        queue_limit: int = QUEUE_ITEM_LIMIT,
+    ) -> dict[str, Any]:
         """Return display-safe queue and completed-download history."""
         api_key = self._api_key.strip()
         if not api_key:
@@ -268,9 +266,9 @@ def _offline_stats() -> dict[str, Any]:
     }
 
 
-def _empty_activity() -> dict[str, list[dict[str, Any]]]:
+def _empty_activity() -> dict[str, Any]:
     """Return an empty queue/history payload for offline or invalid responses."""
-    return {"queue": [], "history": []}
+    return {"queue": [], "queue_total": 0, "history": []}
 
 
 def _offline_snapshot() -> dict[str, Any]:
@@ -309,32 +307,42 @@ def _activity_from_torrents(
     *,
     history_limit: int,
     queue_limit: int,
-) -> dict[str, list[dict[str, Any]]]:
-    """Derive display-safe activity rows from a validated torrent list."""
-    queue_items = [
-        _torrent_item(torrent, include_completed=False)
-        for torrent in sorted(
-            (
-                torrent
-                for torrent in torrent_data
-                if torrent.get("state") in _DOWNLOAD_QUEUE_STATES
-            ),
-            key=_torrent_queue_sort_key,
-        )
-    ][: max(queue_limit, 0)]
-    history_items = [
-        _torrent_item(torrent, include_completed=True)
-        for torrent in sorted(
-            (
-                torrent
-                for torrent in torrent_data
-                if _number_value(torrent.get("completion_on")) > 0
-            ),
-            key=lambda torrent: _number_value(torrent.get("completion_on")),
-            reverse=True,
-        )
-    ][: max(history_limit, 0)]
-    return {"queue": queue_items, "history": history_items}
+) -> dict[str, Any]:
+    """Derive display-safe activity rows, plus the uncapped queue depth.
+
+    ``queue_total`` counts every torrent in the queue view — active, queued,
+    paused and checking — so it cannot be substituted with the ``queue_size``
+    statistic, which counts only torrents in ``queuedDL``. Both lists are sliced
+    before their rows are mapped so a deep queue costs no wasted mapping work.
+    """
+    queued = sorted(
+        (
+            torrent
+            for torrent in torrent_data
+            if torrent.get("state") in _DOWNLOAD_QUEUE_STATES
+        ),
+        key=_torrent_queue_sort_key,
+    )
+    completed = sorted(
+        (
+            torrent
+            for torrent in torrent_data
+            if _number_value(torrent.get("completion_on")) > 0
+        ),
+        key=lambda torrent: _number_value(torrent.get("completion_on")),
+        reverse=True,
+    )
+    return {
+        "queue": [
+            _torrent_item(torrent, include_completed=False)
+            for torrent in queued[: max(queue_limit, 0)]
+        ],
+        "queue_total": len(queued),
+        "history": [
+            _torrent_item(torrent, include_completed=True)
+            for torrent in completed[: max(history_limit, 0)]
+        ],
+    }
 
 
 def _torrent_queue_sort_key(torrent: dict[str, Any]) -> tuple[int, float, str]:

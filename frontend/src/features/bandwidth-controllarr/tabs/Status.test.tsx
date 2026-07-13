@@ -45,7 +45,10 @@ const BASE: BandwidthStatus = {
     paused: false,
   },
   download_history: [],
-  queue: { qbittorrent: [], sabnzbd: [] },
+  queue: {
+    qbittorrent: { items: [], total: 0 },
+    sabnzbd: { items: [], total: 0 },
+  },
 }
 
 function render(ui: ReactElement) {
@@ -119,22 +122,25 @@ describe("Status", () => {
           },
         ],
         queue: {
-          qbittorrent: [
-            {
-              client: "qbittorrent",
-              id: "queued",
-              name: "Queued.Movie",
-              status: "queuedDL",
-              progress: 25,
-              size_bytes: 2048,
-              size_label: "2.0 KB",
-              speed_mbps: 0.5,
-              eta_seconds: 60,
-              added_at: "2026-06-26T20:00:00Z",
-              completed_at: null,
-            },
-          ],
-          sabnzbd: [],
+          qbittorrent: {
+            items: [
+              {
+                client: "qbittorrent",
+                id: "queued",
+                name: "Queued.Movie",
+                status: "queuedDL",
+                progress: 25,
+                size_bytes: 2048,
+                size_label: "2.0 KB",
+                speed_mbps: 0.5,
+                eta_seconds: 60,
+                added_at: "2026-06-26T20:00:00Z",
+                completed_at: null,
+              },
+            ],
+            total: 1,
+          },
+          sabnzbd: { items: [], total: 0 },
         },
       }),
     )

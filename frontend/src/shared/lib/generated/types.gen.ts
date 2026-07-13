@@ -137,19 +137,33 @@ export type BandwidthDownloadItem = {
 };
 
 /**
+ * BandwidthQueueGroup
+ *
+ * One downloader's visible queue page plus its uncapped depth.
+ *
+ * ``total`` counts the whole queue even when ``items`` is capped at
+ * ``QUEUE_ITEM_LIMIT``, so the dashboard can page through the items it has
+ * while still reporting an honest queue depth.
+ */
+export type BandwidthQueueGroup = {
+    /**
+     * Items
+     */
+    items?: Array<BandwidthDownloadItem>;
+    /**
+     * Total
+     */
+    total?: number;
+};
+
+/**
  * BandwidthQueueResponse
  *
  * Current queue items grouped by downloader.
  */
 export type BandwidthQueueResponse = {
-    /**
-     * Qbittorrent
-     */
-    qbittorrent?: Array<BandwidthDownloadItem>;
-    /**
-     * Sabnzbd
-     */
-    sabnzbd?: Array<BandwidthDownloadItem>;
+    qbittorrent?: BandwidthQueueGroup;
+    sabnzbd?: BandwidthQueueGroup;
 };
 
 /**
