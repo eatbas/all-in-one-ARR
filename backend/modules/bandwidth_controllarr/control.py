@@ -48,6 +48,8 @@ async def gather_status(ctx: AppContext) -> dict:
         "tracking_suspended": bool(_STATE.manual_paused_clients),
         "manual_paused_clients": sorted(_STATE.manual_paused_clients),
         "check_interval_seconds": ctx.settings_store.bandwidth_check_interval_seconds(),
+        "sab_limit_enabled": ctx.settings_store.bandwidth_sab_limit_enabled(),
+        "sab_limit_mbps": ctx.settings_store.bandwidth_sab_limit_mbps(),
         "qbittorrent": qb_stats,
         "sabnzbd": sab_stats,
         "download_history": download_history,
@@ -80,6 +82,8 @@ async def _apply_control_locked(ctx: AppContext) -> None:
         enabled = ctx.settings_store.bandwidth_control_enabled()
         qb_stats = await ctx.qbittorrent.get_stats()
         sab_stats = await ctx.sabnzbd.get_stats()
+
+        await _enforce_sab_speed_limit(ctx, sab_stats)
 
         has_torrents = qb_stats["online"] and qb_stats["active_downloads"] > 0
         sab_paused = (
@@ -129,6 +133,80 @@ async def _apply_control_locked(ctx: AppContext) -> None:
     except Exception:
         update_bandwidth_metrics({"online": False}, {"online": False}, check_ok=False)
         raise
+
+
+async def apply_sab_limit_settings(
+    ctx: AppContext, *, enabled: bool | None = None, mbps: float | None = None
+) -> None:
+    """Persist SABnzbd limiter changes and push the new limit to SABnzbd once.
+
+    A failed client call is logged rather than raised: the persisted setting is
+    authoritative and the control tick re-asserts it as soon as SABnzbd is
+    reachable again. Clearing only happens on an enabled→disabled transition so
+    a limit the user set directly in SABnzbd is never clobbered while the
+    limiter stays disabled.
+    """
+    from modules.bandwidth_controllarr import _STATE
+
+    async with _STATE.control_lock():
+        store = ctx.settings_store
+        was_enabled = store.bandwidth_sab_limit_enabled()
+        if mbps is not None:
+            store.update_bandwidth_sab_limit_mbps(mbps)
+        if enabled is not None:
+            store.update_bandwidth_sab_limit_enabled(enabled)
+
+        if store.bandwidth_sab_limit_enabled():
+            limit = store.bandwidth_sab_limit_mbps()
+            if await ctx.sabnzbd.set_speed_limit(limit):
+                ctx.db.add_activity(
+                    "SABnzbd speed limit set",
+                    f"Bandwidth-Controllarr limited SABnzbd downloads to {limit} MB/s",
+                )
+            else:
+                _log.warning("could not apply the SABnzbd speed limit")
+        elif was_enabled:
+            if await ctx.sabnzbd.set_speed_limit(None):
+                ctx.db.add_activity(
+                    "SABnzbd speed limit removed",
+                    "Bandwidth-Controllarr removed the SABnzbd download limit",
+                )
+            else:
+                _log.warning("could not clear the SABnzbd speed limit")
+
+
+async def _enforce_sab_speed_limit(ctx: AppContext, sab_stats: dict[str, Any]) -> None:
+    """Re-assert the configured SABnzbd speed limit when it has drifted.
+
+    SABnzbd can lose or change the limit outside this app (a restart, or a
+    manual change in its own interface); while the limiter is enabled the
+    configured cap is the source of truth, so drift is corrected on the next
+    tick. A disabled limiter never touches SABnzbd.
+    """
+    if not ctx.settings_store.bandwidth_sab_limit_enabled():
+        return
+    if not sab_stats["online"]:
+        return
+    desired = ctx.settings_store.bandwidth_sab_limit_mbps()
+    if not _sab_limit_drifted(sab_stats.get("speed_limit_mbps"), desired):
+        return
+    if await ctx.sabnzbd.set_speed_limit(desired):
+        ctx.db.add_activity(
+            "SABnzbd speed limit re-applied",
+            f"Bandwidth-Controllarr restored the {desired} MB/s SABnzbd download limit",
+        )
+
+
+def _sab_limit_drifted(observed: float | None, desired: float) -> bool:
+    """Whether the observed SABnzbd limit differs enough to re-apply.
+
+    The tolerance absorbs the MB/s → integer-KB/s rounding of the config call;
+    an unknown observed limit always counts as drift so the (idempotent)
+    re-apply errs towards enforcement.
+    """
+    if observed is None:
+        return True
+    return abs(observed - desired) > max(0.01, desired * 0.01)
 
 
 async def set_client_paused(

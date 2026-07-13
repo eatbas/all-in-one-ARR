@@ -81,6 +81,8 @@ class StubSettingsStore:
         auto_remove_when_available: bool = True,
         bandwidth_control_enabled: bool = False,
         bandwidth_check_interval_seconds: int = 15,
+        bandwidth_sab_limit_enabled: bool = False,
+        bandwidth_sab_limit_mbps: float = 5.0,
         trending_sync_interval_minutes: int = 1440,
         anime_ids_refresh_days: int = 3,
         rating_ttl_days: int = 7,
@@ -95,6 +97,8 @@ class StubSettingsStore:
         self._auto_remove_when_available = auto_remove_when_available
         self._bandwidth_control_enabled = bandwidth_control_enabled
         self._bandwidth_check_interval_seconds = bandwidth_check_interval_seconds
+        self._bandwidth_sab_limit_enabled = bandwidth_sab_limit_enabled
+        self._bandwidth_sab_limit_mbps = bandwidth_sab_limit_mbps
         self._trending_sync_interval_minutes = trending_sync_interval_minutes
         self._anime_ids_refresh_days = anime_ids_refresh_days
         self._rating_ttl_days = rating_ttl_days
@@ -220,6 +224,20 @@ class StubSettingsStore:
             seconds = 15
         self._bandwidth_check_interval_seconds = seconds
         return seconds
+
+    def bandwidth_sab_limit_enabled(self) -> bool:
+        return self._bandwidth_sab_limit_enabled
+
+    def update_bandwidth_sab_limit_enabled(self, enabled: bool) -> bool:
+        self._bandwidth_sab_limit_enabled = bool(enabled)
+        return self._bandwidth_sab_limit_enabled
+
+    def bandwidth_sab_limit_mbps(self) -> float:
+        return self._bandwidth_sab_limit_mbps
+
+    def update_bandwidth_sab_limit_mbps(self, mbps: float) -> float:
+        self._bandwidth_sab_limit_mbps = round(max(0.1, min(float(mbps), 1024.0)), 2)
+        return self._bandwidth_sab_limit_mbps
 
     def trending_sync_interval_minutes(self) -> int:
         return self._trending_sync_interval_minutes
@@ -453,6 +471,7 @@ class StubService:
         )
         self.pause = AsyncMock(return_value=True)
         self.resume = AsyncMock(return_value=True)
+        self.set_speed_limit = AsyncMock(return_value=True)
         self.aclose = AsyncMock()
 
 

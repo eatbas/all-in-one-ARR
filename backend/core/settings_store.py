@@ -34,6 +34,7 @@ from core.settings_normalisers import (
     DEFAULT_FINDARR_SETTINGS,
     DEFAULT_OMDB_DAILY_BUDGET_PER_KEY,
     DEFAULT_RATING_TTL_DAYS,
+    DEFAULT_SAB_LIMIT_MBPS,
     DEFAULT_TRENDING_SYNC_INTERVAL,
     normalise_anime_ids_refresh_days,
     normalise_bandwidth_interval,
@@ -42,6 +43,7 @@ from core.settings_normalisers import (
     normalise_interval,
     normalise_omdb_daily_budget_per_key,
     normalise_rating_ttl_days,
+    normalise_sab_limit_mbps,
     normalise_service_url,
     normalise_sync_interval,
     normalise_trending_sync_interval,
@@ -91,6 +93,8 @@ class SettingsStore:
         self._auto_remove_when_available = False
         self._bandwidth_control_enabled = False
         self._bandwidth_check_interval_seconds = 15
+        self._bandwidth_sab_limit_enabled = False
+        self._bandwidth_sab_limit_mbps = DEFAULT_SAB_LIMIT_MBPS
         self._trending_sync_interval_minutes = DEFAULT_TRENDING_SYNC_INTERVAL
         self._anime_ids_refresh_days = DEFAULT_ANIME_IDS_REFRESH_DAYS
         self._rating_ttl_days = DEFAULT_RATING_TTL_DAYS
@@ -205,6 +209,16 @@ class SettingsStore:
         self._bandwidth_check_interval_seconds = normalise_bandwidth_interval(
             data.get("bandwidth_check_interval_seconds", 15)
         )
+        migrated_sab_limit = (
+            "bandwidth_sab_limit_enabled" not in data
+            or "bandwidth_sab_limit_mbps" not in data
+        )
+        self._bandwidth_sab_limit_enabled = bool(
+            data.get("bandwidth_sab_limit_enabled", False)
+        )
+        self._bandwidth_sab_limit_mbps = normalise_sab_limit_mbps(
+            data.get("bandwidth_sab_limit_mbps", DEFAULT_SAB_LIMIT_MBPS)
+        )
         migrated_trending = "trending_sync_interval_minutes" not in data
         self._trending_sync_interval_minutes = normalise_trending_sync_interval(
             data.get("trending_sync_interval_minutes", DEFAULT_TRENDING_SYNC_INTERVAL)
@@ -288,6 +302,7 @@ class SettingsStore:
             or fields_backfilled
             or migrated_auto_remove
             or migrated_bandwidth
+            or migrated_sab_limit
             or migrated_trending
             or migrated_anime_ids
             or migrated_rating_ttl
@@ -299,7 +314,8 @@ class SettingsStore:
             self._log.info(
                 "persisted store migration (services_backfilled=%s "
                 "service_fields_backfilled=%s auto_remove_key_migrated=%s "
-                "bandwidth_keys_migrated=%s trending_key_migrated=%s "
+                "bandwidth_keys_migrated=%s sab_limit_keys_migrated=%s "
+                "trending_key_migrated=%s "
                 "anime_ids_key_migrated=%s rating_ttl_key_migrated=%s "
                 "omdb_budget_key_migrated=%s findarr_keys_migrated=%s "
                 "deletarr_keys_migrated=%s)",
@@ -307,6 +323,7 @@ class SettingsStore:
                 fields_backfilled,
                 migrated_auto_remove,
                 migrated_bandwidth,
+                migrated_sab_limit,
                 migrated_trending,
                 migrated_anime_ids,
                 migrated_rating_ttl,
@@ -326,6 +343,8 @@ class SettingsStore:
             "auto_remove_when_available": self._auto_remove_when_available,
             "bandwidth_control_enabled": self._bandwidth_control_enabled,
             "bandwidth_check_interval_seconds": self._bandwidth_check_interval_seconds,
+            "bandwidth_sab_limit_enabled": self._bandwidth_sab_limit_enabled,
+            "bandwidth_sab_limit_mbps": self._bandwidth_sab_limit_mbps,
             "trending_sync_interval_minutes": self._trending_sync_interval_minutes,
             "anime_ids_refresh_days": self._anime_ids_refresh_days,
             "rating_ttl_days": self._rating_ttl_days,
@@ -447,6 +466,34 @@ class SettingsStore:
             self._save_locked()
             self._log.info("updated bandwidth check interval to %s seconds", seconds)
             return seconds
+
+    def bandwidth_sab_limit_enabled(self) -> bool:
+        """Whether Bandwidth-Controllarr caps SABnzbd's download speed."""
+        with self._lock:
+            return self._bandwidth_sab_limit_enabled
+
+    def update_bandwidth_sab_limit_enabled(self, enabled: bool) -> bool:
+        """Enable or disable the SABnzbd download limiter; returns the new value."""
+        enabled = bool(enabled)
+        with self._lock:
+            self._bandwidth_sab_limit_enabled = enabled
+            self._save_locked()
+            self._log.info("updated SABnzbd download limiter enabled to %s", enabled)
+            return enabled
+
+    def bandwidth_sab_limit_mbps(self) -> float:
+        """Return the configured SABnzbd download limit in MB/s."""
+        with self._lock:
+            return self._bandwidth_sab_limit_mbps
+
+    def update_bandwidth_sab_limit_mbps(self, mbps: float) -> float:
+        """Update the SABnzbd download limit; values clamp to 0.1–1024 MB/s."""
+        mbps = normalise_sab_limit_mbps(mbps)
+        with self._lock:
+            self._bandwidth_sab_limit_mbps = mbps
+            self._save_locked()
+            self._log.info("updated SABnzbd download limit to %s MB/s", mbps)
+            return mbps
 
     # ---- trending sync interval ----
 
@@ -696,6 +743,8 @@ class SettingsStore:
                 "auto_remove_when_available": self._auto_remove_when_available,
                 "bandwidth_control_enabled": self._bandwidth_control_enabled,
                 "bandwidth_check_interval_seconds": self._bandwidth_check_interval_seconds,
+                "bandwidth_sab_limit_enabled": self._bandwidth_sab_limit_enabled,
+                "bandwidth_sab_limit_mbps": self._bandwidth_sab_limit_mbps,
                 "trending_sync_interval_minutes": self._trending_sync_interval_minutes,
                 "anime_ids_refresh_days": self._anime_ids_refresh_days,
                 "rating_ttl_days": self._rating_ttl_days,

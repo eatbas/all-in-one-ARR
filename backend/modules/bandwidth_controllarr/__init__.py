@@ -24,6 +24,7 @@ from core.bandwidth_types import BandwidthClientName
 from core.logging import get_logger
 from modules.bandwidth_controllarr.control import (
     apply_control,
+    apply_sab_limit_settings,
     gather_status,
     set_client_paused,
 )
@@ -112,6 +113,8 @@ def _make_update_settings(
         *,
         enabled: bool | None = None,
         check_interval_seconds: int | None = None,
+        sab_limit_enabled: bool | None = None,
+        sab_limit_mbps: float | None = None,
     ) -> dict:
         if enabled is not None:
             _STATE.enabled = ctx.settings_store.update_bandwidth_control_enabled(
@@ -126,6 +129,12 @@ def _make_update_settings(
             )
             await scheduler.reschedule_interval(
                 control_job, seconds=seconds, id="bandwidth_control"
+            )
+        if sab_limit_enabled is not None or sab_limit_mbps is not None:
+            # Persist and push the limiter change immediately rather than
+            # waiting for the next scheduled tick to notice the drift.
+            await apply_sab_limit_settings(
+                ctx, enabled=sab_limit_enabled, mbps=sab_limit_mbps
             )
         return await gather_status(ctx)
 

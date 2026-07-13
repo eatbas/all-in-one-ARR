@@ -30,6 +30,8 @@ beforeEach(() => {
     tracking_suspended: false,
     manual_paused_clients: [],
     check_interval_seconds: 15,
+    sab_limit_enabled: false,
+    sab_limit_mbps: 5,
     qbittorrent: {
       online: true,
       speed_mbps: 0,
@@ -45,9 +47,9 @@ beforeEach(() => {
     },
     download_history: [],
     queue: {
-    qbittorrent: { items: [], total: 0 },
-    sabnzbd: { items: [], total: 0 },
-  },
+      qbittorrent: { items: [], total: 0 },
+      sabnzbd: { items: [], total: 0 },
+    },
   })
 })
 
@@ -69,6 +71,8 @@ describe("bandwidth hooks", () => {
       tracking_suspended: false,
       manual_paused_clients: [],
       check_interval_seconds: 30,
+      sab_limit_enabled: false,
+      sab_limit_mbps: 5,
       qbittorrent: {
         online: true,
         speed_mbps: 0,
@@ -84,9 +88,9 @@ describe("bandwidth hooks", () => {
       },
       download_history: [],
       queue: {
-    qbittorrent: { items: [], total: 0 },
-    sabnzbd: { items: [], total: 0 },
-  },
+        qbittorrent: { items: [], total: 0 },
+        sabnzbd: { items: [], total: 0 },
+      },
     })
     const { queryClient, wrapper } = setup()
     const invalidate = vi.spyOn(queryClient, "invalidateQueries")

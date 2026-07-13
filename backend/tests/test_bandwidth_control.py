@@ -75,7 +75,13 @@ def _make_qbit_stub(*, online=True, speed_mbps=0, active_downloads=0, queue_size
 
 
 def _make_sab_stub(
-    *, online=True, speed_mbps=0, active_downloads=0, queue_size=0, paused=False
+    *,
+    online=True,
+    speed_mbps=0,
+    active_downloads=0,
+    queue_size=0,
+    paused=False,
+    speed_limit_mbps=None,
 ):
     stub = StubService()
     stub.get_stats = AsyncMock(
@@ -85,6 +91,7 @@ def _make_sab_stub(
             "active_downloads": active_downloads,
             "queue_size": queue_size,
             "paused": paused,
+            "speed_limit_mbps": speed_limit_mbps,
         }
     )
     return stub
@@ -109,6 +116,8 @@ async def test_gather_status_merges_state_and_stats(db) -> None:
     assert result["tracking_suspended"] is False
     assert result["manual_paused_clients"] == []
     assert result["check_interval_seconds"] == 15
+    assert result["sab_limit_enabled"] is False
+    assert result["sab_limit_mbps"] == 5.0
     assert result["qbittorrent"]["active_downloads"] == 2
     assert result["sabnzbd"]["paused"] is True
     assert result["download_history"] == []
@@ -753,6 +762,168 @@ async def test_update_settings_interval_reschedules_job(db) -> None:
         control_job, seconds=30, id="bandwidth_control"
     )
     assert result["check_interval_seconds"] == 30
+
+
+async def test_update_settings_sab_limit_enables_and_applies(db) -> None:
+    qbit = _make_qbit_stub()
+    sab = _make_sab_stub()
+    ctx = make_ctx(db=db, qbittorrent=qbit, sabnzbd=sab)
+
+    await setup(ctx.scheduler, None, ctx)
+    result = await ctx.bandwidth_update_settings(
+        sab_limit_enabled=True, sab_limit_mbps=7.5
+    )
+
+    sab.set_speed_limit.assert_awaited_once_with(7.5)
+    assert ctx.settings_store.bandwidth_sab_limit_enabled() is True
+    assert ctx.settings_store.bandwidth_sab_limit_mbps() == 7.5
+    assert result["sab_limit_enabled"] is True
+    assert result["sab_limit_mbps"] == 7.5
+    assert ctx.db.recent_activity(limit=1)[0]["action"] == "SABnzbd speed limit set"
+
+
+async def test_update_settings_sab_limit_disable_clears_limit(db) -> None:
+    qbit = _make_qbit_stub()
+    sab = _make_sab_stub()
+    ctx = make_ctx(db=db, qbittorrent=qbit, sabnzbd=sab)
+    ctx.settings_store.update_bandwidth_sab_limit_enabled(True)
+
+    await setup(ctx.scheduler, None, ctx)
+    result = await ctx.bandwidth_update_settings(sab_limit_enabled=False)
+
+    sab.set_speed_limit.assert_awaited_once_with(None)
+    assert ctx.settings_store.bandwidth_sab_limit_enabled() is False
+    assert result["sab_limit_enabled"] is False
+    assert ctx.db.recent_activity(limit=1)[0]["action"] == (
+        "SABnzbd speed limit removed"
+    )
+
+
+async def test_update_settings_sab_limit_value_while_disabled_persists_only(
+    db,
+) -> None:
+    # Changing the MB/s value while the limiter is off must persist the number
+    # without touching SABnzbd — the limit only applies when the toggle is on.
+    qbit = _make_qbit_stub()
+    sab = _make_sab_stub()
+    ctx = make_ctx(db=db, qbittorrent=qbit, sabnzbd=sab)
+
+    await setup(ctx.scheduler, None, ctx)
+    before = len(ctx.db.recent_activity(limit=10))
+    await ctx.bandwidth_update_settings(sab_limit_mbps=3.5)
+
+    sab.set_speed_limit.assert_not_awaited()
+    assert ctx.settings_store.bandwidth_sab_limit_mbps() == 3.5
+    assert len(ctx.db.recent_activity(limit=10)) == before
+
+
+async def test_update_settings_sab_limit_apply_failure_persists_setting(db) -> None:
+    # A rejected config call must not raise or roll back: the persisted setting
+    # is authoritative and the control tick retries once SABnzbd responds.
+    qbit = _make_qbit_stub()
+    sab = _make_sab_stub()
+    sab.set_speed_limit = AsyncMock(return_value=False)
+    ctx = make_ctx(db=db, qbittorrent=qbit, sabnzbd=sab)
+
+    await setup(ctx.scheduler, None, ctx)
+    before = len(ctx.db.recent_activity(limit=10))
+    await ctx.bandwidth_update_settings(sab_limit_enabled=True, sab_limit_mbps=2.5)
+
+    sab.set_speed_limit.assert_awaited_once_with(2.5)
+    assert ctx.settings_store.bandwidth_sab_limit_enabled() is True
+    assert len(ctx.db.recent_activity(limit=10)) == before
+
+
+async def test_update_settings_sab_limit_clear_failure_keeps_disabled(db) -> None:
+    qbit = _make_qbit_stub()
+    sab = _make_sab_stub()
+    sab.set_speed_limit = AsyncMock(return_value=False)
+    ctx = make_ctx(db=db, qbittorrent=qbit, sabnzbd=sab)
+    ctx.settings_store.update_bandwidth_sab_limit_enabled(True)
+
+    await setup(ctx.scheduler, None, ctx)
+    before = len(ctx.db.recent_activity(limit=10))
+    await ctx.bandwidth_update_settings(sab_limit_enabled=False)
+
+    sab.set_speed_limit.assert_awaited_once_with(None)
+    assert ctx.settings_store.bandwidth_sab_limit_enabled() is False
+    assert len(ctx.db.recent_activity(limit=10)) == before
+
+
+async def test_apply_control_reapplies_missing_sab_limit(db) -> None:
+    # The master pause/resume switch stays off: the limiter is independent and
+    # an unknown observed limit (e.g. after a SABnzbd restart) counts as drift.
+    qbit = _make_qbit_stub()
+    sab = _make_sab_stub(speed_limit_mbps=None)
+    ctx = make_ctx(db=db, qbittorrent=qbit, sabnzbd=sab)
+    ctx.settings_store.update_bandwidth_sab_limit_enabled(True)
+
+    await apply_control(ctx)
+
+    sab.set_speed_limit.assert_awaited_once_with(5.0)
+    assert ctx.db.recent_activity(limit=1)[0]["action"] == (
+        "SABnzbd speed limit re-applied"
+    )
+
+
+async def test_apply_control_reapplies_drifted_sab_limit(db) -> None:
+    qbit = _make_qbit_stub()
+    sab = _make_sab_stub(speed_limit_mbps=2.0)
+    ctx = make_ctx(db=db, qbittorrent=qbit, sabnzbd=sab)
+    ctx.settings_store.update_bandwidth_sab_limit_enabled(True)
+
+    await apply_control(ctx)
+
+    sab.set_speed_limit.assert_awaited_once_with(5.0)
+
+
+async def test_apply_control_skips_sab_limit_within_tolerance(db) -> None:
+    # The tolerance absorbs the MB/s → integer-KB/s rounding, so a near-exact
+    # observed limit must not trigger a config call on every tick.
+    qbit = _make_qbit_stub()
+    sab = _make_sab_stub(speed_limit_mbps=5.02)
+    ctx = make_ctx(db=db, qbittorrent=qbit, sabnzbd=sab)
+    ctx.settings_store.update_bandwidth_sab_limit_enabled(True)
+
+    await apply_control(ctx)
+
+    sab.set_speed_limit.assert_not_awaited()
+
+
+async def test_apply_control_disabled_limiter_never_touches_limit(db) -> None:
+    # A limit the user set directly in SABnzbd survives while the limiter is off.
+    qbit = _make_qbit_stub()
+    sab = _make_sab_stub(speed_limit_mbps=1.0)
+    ctx = make_ctx(db=db, qbittorrent=qbit, sabnzbd=sab)
+
+    await apply_control(ctx)
+
+    sab.set_speed_limit.assert_not_awaited()
+
+
+async def test_apply_control_offline_sab_skips_limit_enforcement(db) -> None:
+    qbit = _make_qbit_stub()
+    sab = _make_sab_stub(online=False)
+    ctx = make_ctx(db=db, qbittorrent=qbit, sabnzbd=sab)
+    ctx.settings_store.update_bandwidth_sab_limit_enabled(True)
+
+    await apply_control(ctx)
+
+    sab.set_speed_limit.assert_not_awaited()
+
+
+async def test_apply_control_sab_limit_reapply_failure_adds_no_activity(db) -> None:
+    qbit = _make_qbit_stub()
+    sab = _make_sab_stub(speed_limit_mbps=None)
+    sab.set_speed_limit = AsyncMock(return_value=False)
+    ctx = make_ctx(db=db, qbittorrent=qbit, sabnzbd=sab)
+    ctx.settings_store.update_bandwidth_sab_limit_enabled(True)
+
+    before = len(ctx.db.recent_activity(limit=10))
+    await apply_control(ctx)
+
+    sab.set_speed_limit.assert_awaited_once_with(5.0)
+    assert len(ctx.db.recent_activity(limit=10)) == before
 
 
 async def test_require_context_raises_when_unset() -> None:

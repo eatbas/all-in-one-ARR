@@ -573,6 +573,72 @@ def test_legacy_store_without_bandwidth_keys_defaults(tmp_path) -> None:
     assert saved["bandwidth_check_interval_seconds"] == 15
 
 
+def test_sab_limit_defaults_to_disabled_five_mbps(tmp_path) -> None:
+    store = SettingsStore(str(tmp_path / "settings.json"))
+    _seed(store)
+    assert store.bandwidth_sab_limit_enabled() is False
+    assert store.bandwidth_sab_limit_mbps() == 5.0
+
+
+def test_sab_limit_update_persists_and_reloads(tmp_path) -> None:
+    path = tmp_path / "settings.json"
+    store = SettingsStore(str(path))
+    _seed(store)
+    assert store.update_bandwidth_sab_limit_enabled(True) is True
+    assert store.update_bandwidth_sab_limit_mbps(7.5) == 7.5
+    saved = json.loads(path.read_text())
+    assert saved["bandwidth_sab_limit_enabled"] is True
+    assert saved["bandwidth_sab_limit_mbps"] == 7.5
+
+    reopened = SettingsStore(str(path))
+    reopened.load_or_seed(client_id="x", client_secret="x")
+    assert reopened.bandwidth_sab_limit_enabled() is True
+    assert reopened.bandwidth_sab_limit_mbps() == 7.5
+
+
+def test_sab_limit_clamps_and_rounds(tmp_path) -> None:
+    # Out-of-range values clamp to the 0.1–1024 MB/s bounds; unparseable input
+    # falls back to the default; decimals round to two places.
+    from core.settings_normalisers import normalise_sab_limit_mbps
+
+    store = SettingsStore(str(tmp_path / "settings.json"))
+    _seed(store)
+    assert store.update_bandwidth_sab_limit_mbps(2000) == 1024.0
+    assert store.update_bandwidth_sab_limit_mbps(0.01) == 0.1
+    assert store.update_bandwidth_sab_limit_mbps(3.14159) == 3.14
+    assert normalise_sab_limit_mbps("garbage") == 5.0
+    assert normalise_sab_limit_mbps(None) == 5.0
+
+
+def test_sab_limit_in_masked(tmp_path) -> None:
+    store = SettingsStore(str(tmp_path / "settings.json"))
+    _seed(store)
+    store.update_bandwidth_sab_limit_enabled(True)
+    store.update_bandwidth_sab_limit_mbps(2.5)
+    masked = store.masked()
+    assert masked["bandwidth_sab_limit_enabled"] is True
+    assert masked["bandwidth_sab_limit_mbps"] == 2.5
+
+
+def test_legacy_store_without_sab_limit_keys_defaults(tmp_path) -> None:
+    # A store created before the SABnzbd download limiter existed loads without
+    # the new keys, falls back to the defaults, and re-saves them on load.
+    path = tmp_path / "settings.json"
+    SettingsStore(str(path)).load_or_seed(client_id="cid", client_secret="sec")
+    data = json.loads(path.read_text())
+    data.pop("bandwidth_sab_limit_enabled", None)
+    data.pop("bandwidth_sab_limit_mbps", None)
+    path.write_text(json.dumps(data), encoding="utf-8")
+
+    reopened = SettingsStore(str(path))
+    reopened.load_or_seed(client_id="x", client_secret="x")
+    assert reopened.bandwidth_sab_limit_enabled() is False
+    assert reopened.bandwidth_sab_limit_mbps() == 5.0
+    saved = json.loads(path.read_text())
+    assert saved["bandwidth_sab_limit_enabled"] is False
+    assert saved["bandwidth_sab_limit_mbps"] == 5.0
+
+
 def test_trending_sync_interval_defaults_to_one_day(tmp_path) -> None:
     store = SettingsStore(str(tmp_path / "settings.json"))
     _seed(store)

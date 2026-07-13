@@ -39,6 +39,12 @@ DEFAULT_OMDB_DAILY_BUDGET_PER_KEY = 800
 OMDB_DAILY_BUDGET_PER_KEY_MIN = 100
 OMDB_DAILY_BUDGET_PER_KEY_MAX = 1000
 
+# Bounds for the SABnzbd download limiter in MB/s. The dashboard accepts
+# decimal values (e.g. 7.5); stored values are rounded to two decimal places.
+DEFAULT_SAB_LIMIT_MBPS = 5.0
+SAB_LIMIT_MBPS_MIN = 0.1
+SAB_LIMIT_MBPS_MAX = 1024.0
+
 # Allowed Findarr scheduler intervals in minutes offered by the dashboard.
 VALID_FINDARR_INTERVALS: frozenset[int] = frozenset({15, 30, 45, 60})
 
@@ -133,6 +139,19 @@ def normalise_sync_interval(value: int) -> int:
 def normalise_bandwidth_interval(value: int) -> int:
     """Return a valid Bandwidth-Controllarr interval in seconds, defaulting to 15."""
     return value if value in VALID_BANDWIDTH_INTERVALS else 15
+
+
+def normalise_sab_limit_mbps(value: Any) -> float:
+    """Return a bounded SABnzbd download limit in MB/s, defaulting to 5.0.
+
+    Out-of-range values clamp to the 0.1–1024 bounds; unparseable input falls
+    back to the default.
+    """
+    try:
+        parsed = float(value)
+    except TypeError, ValueError:
+        return DEFAULT_SAB_LIMIT_MBPS
+    return round(max(SAB_LIMIT_MBPS_MIN, min(parsed, SAB_LIMIT_MBPS_MAX)), 2)
 
 
 def normalise_trending_sync_interval(value: int) -> int:

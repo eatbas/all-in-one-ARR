@@ -110,6 +110,18 @@
             "title": "Queue Size",
             "type": "integer"
           },
+          "speed_limit_mbps": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Speed Limit Mbps"
+          },
           "speed_mbps": {
             "minimum": 0.0,
             "title": "Speed Mbps",
@@ -298,6 +310,30 @@
               }
             ],
             "title": "Enabled"
+          },
+          "sab_limit_enabled": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sab Limit Enabled"
+          },
+          "sab_limit_mbps": {
+            "anyOf": [
+              {
+                "maximum": 1024.0,
+                "minimum": 0.1,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sab Limit Mbps"
           }
         },
         "title": "BandwidthSettingsRequest",
@@ -349,6 +385,14 @@
           "queue": {
             "$ref": "#/components/schemas/BandwidthQueueResponse"
           },
+          "sab_limit_enabled": {
+            "title": "Sab Limit Enabled",
+            "type": "boolean"
+          },
+          "sab_limit_mbps": {
+            "title": "Sab Limit Mbps",
+            "type": "number"
+          },
           "sabnzbd": {
             "$ref": "#/components/schemas/BandwidthClientStatsResponse"
           },
@@ -368,6 +412,8 @@
           "tracking_suspended",
           "manual_paused_clients",
           "check_interval_seconds",
+          "sab_limit_enabled",
+          "sab_limit_mbps",
           "qbittorrent",
           "sabnzbd"
         ],

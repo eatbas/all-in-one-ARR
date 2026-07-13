@@ -53,6 +53,8 @@ def bandwidth_app(db):
         "tracking_suspended": False,
         "manual_paused_clients": [],
         "check_interval_seconds": 15,
+        "sab_limit_enabled": False,
+        "sab_limit_mbps": 5.0,
         "qbittorrent": {
             "online": True,
             "speed_mbps": 0,
@@ -148,7 +150,10 @@ async def test_put_settings_applies_enabled(bandwidth_app) -> None:
         response = client.put("/api/bandwidth/settings", json={"enabled": False})
     assert response.status_code == 200
     ctx.bandwidth_update_settings.assert_awaited_once_with(
-        enabled=False, check_interval_seconds=None
+        enabled=False,
+        check_interval_seconds=None,
+        sab_limit_enabled=None,
+        sab_limit_mbps=None,
     )
 
 
@@ -160,7 +165,10 @@ async def test_put_settings_applies_interval(bandwidth_app) -> None:
         )
     assert response.status_code == 200
     ctx.bandwidth_update_settings.assert_awaited_once_with(
-        enabled=None, check_interval_seconds=30
+        enabled=None,
+        check_interval_seconds=30,
+        sab_limit_enabled=None,
+        sab_limit_mbps=None,
     )
 
 
@@ -181,6 +189,31 @@ async def test_put_settings_rejects_zero_interval(bandwidth_app) -> None:
             "/api/bandwidth/settings", json={"check_interval_seconds": 0}
         )
     assert response.status_code == 422
+
+
+async def test_put_settings_applies_sab_limit(bandwidth_app) -> None:
+    app, ctx = bandwidth_app
+    with TestClient(app) as client:
+        response = client.put(
+            "/api/bandwidth/settings",
+            json={"sab_limit_enabled": True, "sab_limit_mbps": 7.5},
+        )
+    assert response.status_code == 200
+    ctx.bandwidth_update_settings.assert_awaited_once_with(
+        enabled=None,
+        check_interval_seconds=None,
+        sab_limit_enabled=True,
+        sab_limit_mbps=7.5,
+    )
+
+
+@pytest.mark.parametrize("mbps", [0, 0.05, 2000])
+async def test_put_settings_rejects_out_of_range_sab_limit(bandwidth_app, mbps) -> None:
+    app, ctx = bandwidth_app
+    with TestClient(app) as client:
+        response = client.put("/api/bandwidth/settings", json={"sab_limit_mbps": mbps})
+    assert response.status_code == 422
+    ctx.bandwidth_update_settings.assert_not_awaited()
 
 
 async def test_put_settings_returns_503_when_not_ready(bandwidth_app) -> None:

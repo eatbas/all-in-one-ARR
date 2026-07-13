@@ -14,7 +14,11 @@ from pydantic import BaseModel, Field
 
 from core.bandwidth_types import BandwidthClientName
 from core.context import BandwidthClientControlError
-from core.settings_normalisers import VALID_BANDWIDTH_INTERVALS
+from core.settings_normalisers import (
+    SAB_LIMIT_MBPS_MAX,
+    SAB_LIMIT_MBPS_MIN,
+    VALID_BANDWIDTH_INTERVALS,
+)
 
 if TYPE_CHECKING:  # pragma: no cover
     from core.context import AppContext
@@ -28,6 +32,10 @@ class BandwidthSettingsRequest(BaseModel):
 
     enabled: bool | None = None
     check_interval_seconds: int | None = Field(default=None, ge=1)
+    sab_limit_enabled: bool | None = None
+    sab_limit_mbps: float | None = Field(
+        default=None, ge=SAB_LIMIT_MBPS_MIN, le=SAB_LIMIT_MBPS_MAX
+    )
 
 
 class BandwidthClientRequest(BaseModel):
@@ -44,6 +52,7 @@ class BandwidthClientStatsResponse(BaseModel):
     active_downloads: int = Field(ge=0)
     queue_size: int = Field(ge=0)
     paused: bool | None = None
+    speed_limit_mbps: float | None = Field(default=None, ge=0)
 
 
 class BandwidthDownloadItem(BaseModel):
@@ -90,6 +99,8 @@ class BandwidthStatusResponse(BaseModel):
     tracking_suspended: bool
     manual_paused_clients: list[BandwidthClientName]
     check_interval_seconds: int
+    sab_limit_enabled: bool
+    sab_limit_mbps: float
     qbittorrent: BandwidthClientStatsResponse
     sabnzbd: BandwidthClientStatsResponse
     download_history: list[BandwidthDownloadItem] = Field(default_factory=list)
@@ -126,6 +137,8 @@ def create_bandwidth_router(ctx: AppContext) -> APIRouter:
         return await ctx.bandwidth_update_settings(
             enabled=body.enabled,
             check_interval_seconds=body.check_interval_seconds,
+            sab_limit_enabled=body.sab_limit_enabled,
+            sab_limit_mbps=body.sab_limit_mbps,
         )
 
     @router.put(

@@ -214,8 +214,20 @@ class SabnzbdClient:
         """Resume the SABnzbd queue. Returns ``True`` if the command succeeded."""
         return await self._send_mode_command("resume")
 
-    async def _send_mode_command(self, mode: str) -> bool:
-        """Send a mode command (pause/resume) and return whether it was accepted."""
+    async def set_speed_limit(self, mbps: float | None) -> bool:
+        """Set or clear the SABnzbd download speed limit.
+
+        A positive ``mbps`` is sent as an integer KB/s value (``7.5`` →
+        ``7680K``) because SABnzbd treats a plain number as a percentage of the
+        configured line speed and a ``K``/``M`` suffix as an absolute limit.
+        ``None`` restores ``100`` (100 % of line speed), SABnzbd's default
+        uncapped state.
+        """
+        value = "100" if mbps is None else f"{max(1, round(mbps * 1024))}K"
+        return await self._send_mode_command("config", name="speedlimit", value=value)
+
+    async def _send_mode_command(self, mode: str, **params: str) -> bool:
+        """Send a command (pause/resume/config) and return whether it was accepted."""
         try:
             response = await self._client.get(
                 f"{self._base_url}/api",
@@ -223,6 +235,7 @@ class SabnzbdClient:
                     "mode": mode,
                     "output": "json",
                     "apikey": self._api_key,
+                    **params,
                 },
             )
         except httpx.HTTPError:
@@ -276,6 +289,7 @@ def _offline_stats() -> dict[str, Any]:
         "active_downloads": 0,
         "queue_size": 0,
         "paused": False,
+        "speed_limit_mbps": None,
     }
 
 
@@ -292,7 +306,20 @@ def _stats_from_queue(queue: dict[str, Any]) -> dict[str, Any]:
         "active_downloads": active_downloads,
         "queue_size": len(slots),
         "paused": paused,
+        "speed_limit_mbps": _speed_limit_mbps(queue.get("speedlimit_abs")),
     }
+
+
+def _speed_limit_mbps(value: Any) -> float | None:
+    """Convert SABnzbd's ``speedlimit_abs`` (bytes/s string) into MB/s.
+
+    Returns ``None`` when the field is absent, unparseable, or non-positive so
+    an unknown limit is never mistaken for a configured one.
+    """
+    number = _float_from_text(value)
+    if number is None or number <= 0:
+        return None
+    return round(number / _BYTES_PER_MB, 2)
 
 
 def _queue_slots_from_payload(

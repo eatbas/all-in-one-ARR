@@ -14,6 +14,8 @@ const sampleBandwidthStatus: BandwidthStatus = {
   tracking_suspended: false,
   manual_paused_clients: [],
   check_interval_seconds: 15,
+  sab_limit_enabled: false,
+  sab_limit_mbps: 5,
   qbittorrent: {
     online: true,
     speed_mbps: 12.5,

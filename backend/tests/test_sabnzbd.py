@@ -13,6 +13,7 @@ from core.clients.sabnzbd import (
     _queue_activity,
     _queue_slots_from_payload,
     _slot_size_bytes,
+    _speed_limit_mbps,
     _timeleft_seconds,
     _unix_to_iso,
 )
@@ -118,6 +119,7 @@ async def test_get_stats_success_m_speed() -> None:
         "active_downloads": 2,
         "queue_size": 3,
         "paused": False,
+        "speed_limit_mbps": None,
     }
     assert route.calls.last.request.url.params["mode"] == "queue"
 
@@ -238,6 +240,7 @@ async def test_get_status_snapshot_reuses_single_queue_response() -> None:
         "active_downloads": 1,
         "queue_size": 2,
         "paused": False,
+        "speed_limit_mbps": None,
     }
     assert [item["name"] for item in result["activity"]["queue"]] == ["Active.Show"]
     assert [item["name"] for item in result["activity"]["history"]] == ["Finished.Show"]
@@ -804,3 +807,79 @@ async def test_resume_failure() -> None:
     respx.get(_API).mock(return_value=httpx.Response(200, json={"status": False}))
     result = await SabnzbdClient(base_url=_BASE, api_key="x").resume()
     assert result is False
+
+
+@respx.mock
+async def test_set_speed_limit_sends_integer_kb_value() -> None:
+    # MB/s decimals convert to an integer KB/s value with a unit suffix, because
+    # SABnzbd would read a plain number as a percentage of the line speed.
+    route = respx.get(_API).mock(
+        return_value=httpx.Response(200, json={"status": True})
+    )
+    result = await SabnzbdClient(base_url=_BASE, api_key="x").set_speed_limit(7.5)
+    assert result is True
+    params = route.calls.last.request.url.params
+    assert params["mode"] == "config"
+    assert params["name"] == "speedlimit"
+    assert params["value"] == "7680K"
+
+
+@respx.mock
+async def test_set_speed_limit_floors_tiny_values_to_one_kb() -> None:
+    route = respx.get(_API).mock(
+        return_value=httpx.Response(200, json={"status": True})
+    )
+    result = await SabnzbdClient(base_url=_BASE, api_key="x").set_speed_limit(0.0001)
+    assert result is True
+    assert route.calls.last.request.url.params["value"] == "1K"
+
+
+@respx.mock
+async def test_set_speed_limit_none_restores_full_line_speed() -> None:
+    # Clearing the limit resets SABnzbd to 100 % of line speed, its default
+    # uncapped state.
+    route = respx.get(_API).mock(
+        return_value=httpx.Response(200, json={"status": True})
+    )
+    result = await SabnzbdClient(base_url=_BASE, api_key="x").set_speed_limit(None)
+    assert result is True
+    assert route.calls.last.request.url.params["value"] == "100"
+
+
+@respx.mock
+async def test_set_speed_limit_failure_branches_return_false() -> None:
+    respx.get(_API).mock(return_value=httpx.Response(500))
+    client = SabnzbdClient(base_url=_BASE, api_key="x")
+    assert await client.set_speed_limit(5) is False
+
+    respx.get(_API).mock(return_value=httpx.Response(200, json={"status": False}))
+    assert await client.set_speed_limit(5) is False
+
+    respx.get(_API).mock(side_effect=httpx.ConnectError("down"))
+    assert await client.set_speed_limit(5) is False
+
+
+@respx.mock
+async def test_get_stats_reports_observed_speed_limit() -> None:
+    # ``speedlimit_abs`` is reported in bytes/s; 7864320 B/s == 7.5 MB/s.
+    respx.get(_API).mock(
+        return_value=httpx.Response(
+            200,
+            json={
+                "queue": {
+                    "speed": "1 M",
+                    "paused": False,
+                    "speedlimit_abs": "7864320.0",
+                    "slots": [],
+                }
+            },
+        )
+    )
+    result = await SabnzbdClient(base_url=_BASE, api_key="x").get_stats()
+    assert result["speed_limit_mbps"] == 7.5
+
+
+@pytest.mark.parametrize("raw", [None, "", "fast", "0", "-1"])
+def test_speed_limit_mbps_rejects_absent_or_non_positive_values(raw) -> None:
+    # An unknown limit must never be mistaken for a configured one.
+    assert _speed_limit_mbps(raw) is None

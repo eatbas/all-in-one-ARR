@@ -1,3 +1,4 @@
+import { useState } from "react"
 import { ExternalLinkIcon } from "lucide-react"
 
 import { Button } from "@/shared/components/ui/button"
@@ -8,6 +9,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/shared/components/ui/card"
+import { Input } from "@/shared/components/ui/input"
 import {
   Select,
   SelectContent,
@@ -15,6 +17,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/shared/components/ui/select"
+import { Switch } from "@/shared/components/ui/switch"
 import {
   useBandwidthStatus,
   useUpdateBandwidthSettings,
@@ -23,15 +26,40 @@ import { SettingsHelp } from "@/shared/components/settings-help"
 
 const INTERVAL_OPTIONS = [10, 15, 30, 60] as const
 
+/** Bounds mirrored from the backend's SABnzbd limiter validation (MB/s). */
+const SAB_LIMIT_MBPS_MIN = 0.1
+const SAB_LIMIT_MBPS_MAX = 1024
+
 /**
- * Bandwidth-Controllarr Settings tab: choose the control-loop check interval
- * and expose a link to the Prometheus metrics.
+ * Bandwidth-Controllarr Settings tab: choose the control-loop check interval,
+ * cap SABnzbd's download speed, and expose a link to the Prometheus metrics.
  */
 export function BandwidthSettings() {
   const { data: status } = useBandwidthStatus()
   const updateSettings = useUpdateBandwidthSettings()
 
   const interval = status?.check_interval_seconds ?? 15
+  const sabLimitEnabled = status?.sab_limit_enabled ?? false
+  const sabLimitMbps = status?.sab_limit_mbps ?? 5
+
+  // The status query re-polls every few seconds, so a controlled input bound
+  // straight to the server value would be overwritten mid-edit. A null draft
+  // means "not editing — show the server value"; the draft is committed on
+  // blur or Enter, never per keystroke (each PUT drives a live SABnzbd call).
+  const [limitDraft, setLimitDraft] = useState<string | null>(null)
+
+  function commitLimit() {
+    if (limitDraft === null) return
+    setLimitDraft(null)
+    const parsed = Number(limitDraft)
+    if (!Number.isFinite(parsed) || parsed <= 0) return
+    const bounded = Math.min(
+      Math.max(parsed, SAB_LIMIT_MBPS_MIN),
+      SAB_LIMIT_MBPS_MAX,
+    )
+    if (bounded === sabLimitMbps) return
+    updateSettings.mutate({ sab_limit_mbps: bounded })
+  }
 
   return (
     <div className="flex flex-col gap-6">
@@ -85,6 +113,50 @@ export function BandwidthSettings() {
                 ))}
               </SelectContent>
             </Select>
+          </div>
+
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <div className="flex items-center gap-1.5">
+                <label htmlFor="sab-limit-mbps" className="text-sm font-medium">
+                  Download limit (MB/s)
+                </label>
+                <SettingsHelp label="Download limit (MB/s)">
+                  Caps SABnzbd&apos;s download speed at the configured MB/s. The
+                  cap is re-applied if SABnzbd loses it, for example after a
+                  restart.
+                </SettingsHelp>
+              </div>
+              <p className="text-sm text-muted-foreground">
+                The SABnzbd download limiter holds downloads to a fixed speed.
+              </p>
+            </div>
+            <div className="flex items-center gap-3">
+              <Switch
+                aria-label="SABnzbd download limiter"
+                checked={sabLimitEnabled}
+                disabled={updateSettings.isPending}
+                onCheckedChange={(checked) =>
+                  updateSettings.mutate({ sab_limit_enabled: checked })
+                }
+              />
+              <Input
+                id="sab-limit-mbps"
+                type="number"
+                inputMode="decimal"
+                min={SAB_LIMIT_MBPS_MIN}
+                max={SAB_LIMIT_MBPS_MAX}
+                step={0.1}
+                className="w-full sm:w-28"
+                value={limitDraft ?? String(sabLimitMbps)}
+                disabled={!sabLimitEnabled || updateSettings.isPending}
+                onChange={(event) => setLimitDraft(event.target.value)}
+                onBlur={commitLimit}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") commitLimit()
+                }}
+              />
+            </div>
           </div>
 
           <div className="flex items-center justify-between gap-4">

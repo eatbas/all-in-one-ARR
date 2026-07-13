@@ -79,6 +79,10 @@ export type BandwidthClientStatsResponse = {
      */
     queue_size: number;
     /**
+     * Speed Limit Mbps
+     */
+    speed_limit_mbps?: number | null;
+    /**
      * Speed Mbps
      */
     speed_mbps: number;
@@ -182,6 +186,14 @@ export type BandwidthSettingsRequest = {
      * Enabled
      */
     enabled?: boolean | null;
+    /**
+     * Sab Limit Enabled
+     */
+    sab_limit_enabled?: boolean | null;
+    /**
+     * Sab Limit Mbps
+     */
+    sab_limit_mbps?: number | null;
 };
 
 /**
@@ -212,6 +224,14 @@ export type BandwidthStatusResponse = {
     manual_paused_clients: Array<'qbittorrent' | 'sabnzbd'>;
     qbittorrent: BandwidthClientStatsResponse;
     queue?: BandwidthQueueResponse;
+    /**
+     * Sab Limit Enabled
+     */
+    sab_limit_enabled: boolean;
+    /**
+     * Sab Limit Mbps
+     */
+    sab_limit_mbps: number;
     sabnzbd: BandwidthClientStatsResponse;
     /**
      * Status
