@@ -4,6 +4,9 @@ from __future__ import annotations
 
 import json
 
+import pytest
+
+from core.settings_normalisers import normalise_service_url
 from core.settings_store import SettingsStore, TrackedList
 
 
@@ -263,6 +266,31 @@ def test_update_service_connection_leaves_unset_fields(tmp_path) -> None:
     assert store.service_connection("sonarr") == ("http://new", "sk")
     store.update_service_connection("sonarr", api_key="sk2")  # url unchanged
     assert store.service_connection("sonarr") == ("http://new", "sk2")
+
+
+def test_normalise_service_url() -> None:
+    assert normalise_service_url("seer:5055") == "http://seer:5055"
+    assert normalise_service_url("  http://js:5055/  ") == "http://js:5055"
+    assert (
+        normalise_service_url("https://req.example.com/path/")
+        == "https://req.example.com/path"
+    )
+    assert normalise_service_url("") == ""
+    assert normalise_service_url("http://localhost:5055") == "http://localhost:5055"
+
+
+def test_normalise_service_url_rejects_unsupported_schemes() -> None:
+    with pytest.raises(ValueError, match="http:// or https://"):
+        normalise_service_url("ftp://host")
+    with pytest.raises(ValueError, match="http:// or https://"):
+        normalise_service_url("file:///etc/passwd")
+
+
+def test_update_service_fields_normalises_url(tmp_path) -> None:
+    store = SettingsStore(str(tmp_path / "settings.json"))
+    store.load_or_seed(client_id="c", client_secret="s")
+    store.update_service_fields("seer", url="seer:5055")
+    assert store.service_fields("seer")["url"] == "http://seer:5055"
 
 
 def test_masked_services_hides_keys(tmp_path) -> None:

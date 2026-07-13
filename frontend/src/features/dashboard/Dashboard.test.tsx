@@ -6,21 +6,37 @@ vi.mock("@/shared/lib/queries", () => ({
   useActivity: vi.fn(),
   useServiceStatuses: vi.fn(),
   useCheckServiceStatuses: vi.fn(),
+  useServiceSettings: vi.fn(),
 }))
 
 import {
   useActivity,
   useCheckServiceStatuses,
+  useServiceSettings,
   useServiceStatuses,
 } from "@/shared/lib/queries"
 import { Dashboard } from "@/features/dashboard/Dashboard"
-import type { ActivityEntry, ServicesStatusResponse } from "@/shared/lib/api"
+import type {
+  ActivityEntry,
+  ServicesSettings,
+  ServicesStatusResponse,
+} from "@/shared/lib/api"
 import { queryResult } from "@/shared/test/mock-query"
 
 const emptyServiceStatuses = {
   interval_seconds: 60,
   last_check_at: null,
   services: {},
+}
+
+const emptyServiceSettings: ServicesSettings = {
+  seer: { url: "", api_key_set: false },
+  sonarr: { url: "", api_key_set: false },
+  radarr: { url: "", api_key_set: false },
+  tmdb: { api_key_set: false },
+  omdb: { api_key_set: false },
+  sabnzbd: { url: "", api_key_set: false },
+  qbittorrent: { url: "", api_key_set: false },
 }
 
 const checkNowMutate = vi.fn()
@@ -46,6 +62,9 @@ describe("Dashboard", () => {
     )
     vi.mocked(useServiceStatuses).mockReturnValue(
       queryResult(emptyServiceStatuses, false),
+    )
+    vi.mocked(useServiceSettings).mockReturnValue(
+      queryResult<ServicesSettings>(emptyServiceSettings, false),
     )
     vi.mocked(useCheckServiceStatuses).mockReturnValue({
       mutate: checkNowMutate,
@@ -303,14 +322,60 @@ describe("Dashboard", () => {
 
     render(<Dashboard />)
     expect(screen.getByText("Integrations")).toBeInTheDocument()
-    expect(screen.getByText("Trakt")).toBeInTheDocument()
-    expect(screen.getByText("Seer")).toBeInTheDocument()
+    expect(
+      screen.getByText("Trakt", { selector: "[data-slot='card-title']" }),
+    ).toBeInTheDocument()
+    expect(
+      screen.getByText("Seer", { selector: "[data-slot='card-title']" }),
+    ).toBeInTheDocument()
     const lastChecked = screen.getByText(/Last checked/)
     const checkNow = screen.getByRole("button", { name: /check now/i })
     expect(
       lastChecked.compareDocumentPosition(checkNow) &
         Node.DOCUMENT_POSITION_FOLLOWING,
     ).toBeTruthy()
+  })
+
+  it("passes configured URLs to URL-bearing service cards", () => {
+    vi.mocked(useServiceSettings).mockReturnValue(
+      queryResult<ServicesSettings>(
+        {
+          ...emptyServiceSettings,
+          seer: { url: "http://seer.example.com:5055", api_key_set: true },
+          sonarr: { url: "http://sonarr.example.com:8989", api_key_set: true },
+          sabnzbd: { url: "http://sab.example.com:8080", api_key_set: true },
+        },
+        false,
+      ),
+    )
+
+    render(<Dashboard />)
+    expect(screen.getByRole("link", { name: /Open Seer/ })).toHaveAttribute(
+      "href",
+      "http://seer.example.com:5055",
+    )
+    expect(screen.getByRole("link", { name: /Open Sonarr/ })).toHaveAttribute(
+      "href",
+      "http://sonarr.example.com:8989",
+    )
+    expect(screen.getByRole("link", { name: /Open SABnzbd/ })).toHaveAttribute(
+      "href",
+      "http://sab.example.com:8080",
+    )
+  })
+
+  it("links Trakt to trakt.tv and omits links for API-key-only services", () => {
+    render(<Dashboard />)
+    expect(screen.getByRole("link", { name: /Open Trakt/ })).toHaveAttribute(
+      "href",
+      "https://trakt.tv",
+    )
+    expect(
+      screen.queryByRole("link", { name: /Open TMDB/ }),
+    ).not.toBeInTheDocument()
+    expect(
+      screen.queryByRole("link", { name: /Open OMDb/ }),
+    ).not.toBeInTheDocument()
   })
 
   it("triggers a fresh check when 'Check now' is clicked", async () => {

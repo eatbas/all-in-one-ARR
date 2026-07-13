@@ -18,6 +18,7 @@ from pydantic import BaseModel
 
 from core.logging import get_logger
 from core.service_registry import BY_NAME, SERVICE_NAMES
+from core.settings_normalisers import normalise_service_url
 
 if TYPE_CHECKING:  # pragma: no cover
     from core.context import AppContext
@@ -100,9 +101,18 @@ def create_services_router(ctx: AppContext) -> APIRouter:
             return _unknown_service(name)
         desc = BY_NAME[name]
         before = ctx.settings_store.service_fields(name)
+        url = body.url
+        if url is not None and url.strip():
+            try:
+                url = normalise_service_url(url)
+            except ValueError:
+                return JSONResponse(
+                    status_code=422,
+                    content={"detail": "URL must start with http:// or https://"},
+                )
         ctx.settings_store.update_service_fields(
             name,
-            url=body.url,
+            url=url,
             api_key=body.api_key,
             api_key_2=body.api_key_2,
             api_key_3=body.api_key_3,

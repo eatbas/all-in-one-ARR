@@ -20,9 +20,8 @@ describe("IntegrationStatusCard", () => {
     )
 
     expect(screen.getByText("Trakt")).toBeInTheDocument()
-    expect(screen.getByText("Online")).toBeInTheDocument()
+    expect(screen.getByLabelText("Online")).toBeInTheDocument()
     expect(screen.getByText("Connected as erena")).toBeInTheDocument()
-    expect(screen.getByText("trakt")).toBeInTheDocument()
   })
 
   it("renders an offline card for a failing integration", () => {
@@ -39,7 +38,7 @@ describe("IntegrationStatusCard", () => {
     )
 
     expect(screen.getByText("Seer")).toBeInTheDocument()
-    expect(screen.getByText("Offline")).toBeInTheDocument()
+    expect(screen.getByLabelText("Offline")).toBeInTheDocument()
     expect(screen.getByText("Connection refused")).toBeInTheDocument()
   })
 
@@ -49,7 +48,37 @@ describe("IntegrationStatusCard", () => {
     )
 
     expect(screen.getByText("Sonarr")).toBeInTheDocument()
-    expect(screen.getByText("Offline")).toBeInTheDocument()
+    expect(screen.getByLabelText("Offline")).toBeInTheDocument()
     expect(screen.getByText("Not checked yet")).toBeInTheDocument()
+  })
+
+  it("renders a link pill and a status light on the description line when a URL is provided", () => {
+    render(
+      <IntegrationStatusCard
+        name="seer"
+        label="Seer"
+        status={sampleStatus}
+        url="http://seer.example.com:5055"
+      />,
+    )
+
+    const link = screen.getByRole("link", { name: /Open Seer/ })
+    expect(link).toHaveAttribute("href", "http://seer.example.com:5055")
+    expect(link).toHaveAttribute("target", "_blank")
+    expect(
+      screen.getByText("Seer", { selector: "[data-slot='card-title']" }),
+    ).toBeInTheDocument()
+    expect(screen.getByLabelText("Online")).toBeInTheDocument()
+  })
+
+  it("does not render a link pill when no URL is provided", () => {
+    render(
+      <IntegrationStatusCard name="tmdb" label="TMDB" status={sampleStatus} />,
+    )
+
+    expect(
+      screen.queryByRole("link", { name: /Open TMDB/ }),
+    ).not.toBeInTheDocument()
+    expect(screen.getByLabelText("Online")).toBeInTheDocument()
   })
 })

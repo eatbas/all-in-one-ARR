@@ -1317,6 +1317,79 @@ describe("Settings — service tabs", () => {
     expect(badge).toHaveClass("border-amber-500/40")
   })
 
+  it("normalises a service URL before autosaving", async () => {
+    const user = userEvent.setup()
+    render(<Settings />)
+    await user.click(screen.getByRole("tab", { name: "Seer" }))
+    vi.useFakeTimers()
+
+    act(() => {
+      fireEvent.change(screen.getByPlaceholderText("http://host:port"), {
+        target: { value: "seer:5055" },
+      })
+    })
+    expect(serviceUpdateMutate).not.toHaveBeenCalled()
+
+    act(() => vi.advanceTimersByTime(800))
+    expect(serviceUpdateMutate).toHaveBeenCalledTimes(1)
+    expect(serviceUpdateMutate).toHaveBeenCalledWith({
+      name: "seer",
+      body: { url: "http://seer:5055" },
+    })
+
+    vi.useRealTimers()
+  })
+
+  it("leaves an unsupported URL scheme as-is so the server rejects it", async () => {
+    const user = userEvent.setup()
+    render(<Settings />)
+    await user.click(screen.getByRole("tab", { name: "Seer" }))
+    vi.useFakeTimers()
+
+    act(() => {
+      fireEvent.change(screen.getByPlaceholderText("http://host:port"), {
+        target: { value: "ftp://host" },
+      })
+    })
+    act(() => vi.advanceTimersByTime(800))
+    expect(serviceUpdateMutate).toHaveBeenCalledTimes(1)
+    expect(serviceUpdateMutate).toHaveBeenCalledWith({
+      name: "seer",
+      body: { url: "ftp://host" },
+    })
+
+    vi.useRealTimers()
+  })
+
+  it("shows a warning for an internal-looking service URL", async () => {
+    vi.mocked(useServiceSettings).mockReturnValue(
+      queryResult<ServicesSettings>({
+        ...SERVICES,
+        seer: { url: "http://seer:5055", api_key_set: true },
+      }),
+    )
+    const user = userEvent.setup()
+    render(<Settings />)
+    await user.click(screen.getByRole("tab", { name: "Seer" }))
+    expect(
+      screen.getByText(/may not be reachable from your browser/),
+    ).toBeInTheDocument()
+  })
+
+  it("does not show an internal-URL warning for an external hostname", async () => {
+    vi.mocked(useServiceSettings).mockReturnValue(
+      queryResult<ServicesSettings>({
+        ...SERVICES,
+        seer: { url: "http://192.168.1.5:5055", api_key_set: true },
+      }),
+    )
+    const user = userEvent.setup()
+    render(<Settings />)
+    await user.click(screen.getByRole("tab", { name: "Seer" }))
+    expect(
+      screen.queryByText(/may not be reachable from your browser/),
+    ).not.toBeInTheDocument()
+  })
 })
 
 describe("Settings — tab persistence", () => {

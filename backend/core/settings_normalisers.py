@@ -97,6 +97,29 @@ def service_seed(
     return {field: (seed.get(field) or "").strip() for field in desc.fields}
 
 
+def normalise_service_url(url: str) -> str:
+    """Normalise a service base URL for storage and browser deep-links.
+
+    - Trims whitespace.
+    - Default to ``http://`` when no scheme is present.
+    - Reject schemes other than ``http`` and ``https``.
+    - Strip trailing slashes while preserving any path.
+
+    Raises ``ValueError`` when the scheme is unsupported.
+    """
+    url = url.strip()
+    if not url:
+        return ""
+    if "://" not in url:
+        url = "http://" + url
+    scheme, remainder = url.split("://", 1)
+    if scheme not in ("http", "https"):
+        raise ValueError("URL must start with http:// or https://")
+    # Preserve any path but remove trailing slashes.
+    remainder = remainder.rstrip("/")
+    return f"{scheme}://{remainder}"
+
+
 def normalise_interval(value: int) -> int:
     """Return a valid status-check interval, defaulting to 60 seconds."""
     return value if value in VALID_STATUS_INTERVALS else 60

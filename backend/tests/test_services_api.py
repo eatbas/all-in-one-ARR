@@ -64,6 +64,40 @@ def test_put_unknown_service_is_404(db) -> None:
     assert resp.status_code == 404
 
 
+def test_put_service_normalises_url(db) -> None:
+    seer = make_ctx(db=db).seer
+    ctx = make_ctx(db=db, seer=seer)
+    resp = build_client(ctx).put(
+        "/api/settings/services/seer",
+        json={"url": "seer:5055"},
+    )
+    assert resp.status_code == 200
+    assert resp.json()["seer"]["url"] == "http://seer:5055"
+    seer.update_credentials.assert_called_once_with(
+        base_url="http://seer:5055", api_key="k"
+    )
+
+
+def test_put_service_strips_trailing_slashes(db) -> None:
+    ctx = make_ctx(db=db)
+    resp = build_client(ctx).put(
+        "/api/settings/services/seer",
+        json={"url": "http://js:5055/"},
+    )
+    assert resp.status_code == 200
+    assert resp.json()["seer"]["url"] == "http://js:5055"
+
+
+def test_put_service_rejects_unsupported_scheme(db) -> None:
+    ctx = make_ctx(db=db)
+    resp = build_client(ctx).put(
+        "/api/settings/services/seer",
+        json={"url": "ftp://host"},
+    )
+    assert resp.status_code == 422
+    assert "http:// or https://" in resp.json()["detail"]
+
+
 def test_test_service_ok(db) -> None:
     radarr = StubArr()
     radarr.test_connection = AsyncMock(

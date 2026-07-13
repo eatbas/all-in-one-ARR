@@ -42,6 +42,7 @@ from core.settings_normalisers import (
     normalise_interval,
     normalise_omdb_daily_budget_per_key,
     normalise_rating_ttl_days,
+    normalise_service_url,
     normalise_sync_interval,
     normalise_trending_sync_interval,
     service_seed,
@@ -643,7 +644,9 @@ class SettingsStore:
         """Update a service's stored fields; ``None`` leaves a field unchanged.
 
         Only the keys declared by the service descriptor are applied; any other
-        keyword (e.g. ``username`` for a URL/API-key service) is ignored.
+        keyword (e.g. ``username`` for a URL/API-key service) is ignored. URLs
+        are normalised so browser deep-links do not end up with unsupported
+        schemes such as ``seer:5055``.
         """
         desc = BY_NAME[name]
         with self._lock:
@@ -651,6 +654,8 @@ class SettingsStore:
             for field in desc.fields:
                 value = fields.get(field)
                 if value is not None:
+                    if field == "url":
+                        value = normalise_service_url(value)
                     entry[field] = value.strip()
             self._save_locked()
             self._log.info("updated %s connection", name)

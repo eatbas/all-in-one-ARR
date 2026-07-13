@@ -72,6 +72,7 @@ import {
   useUpdateTraktSettings,
   useUpdateTrendingInterval,
 } from "@/shared/lib/queries"
+import { isLikelyInternalUrl, normaliseServiceUrl } from "@/shared/lib/api"
 import type {
   UpdateServicePayload,
   UpdateTraktSettings,
@@ -328,7 +329,13 @@ function ServiceConnectionCard({ name, label, fields }: ServiceTab) {
   const serviceBody = useMemo<UpdateServicePayload | null>(() => {
     const body: UpdateServicePayload = {}
     if (hasUrl && url.trim() !== savedUrl.trim()) {
-      body.url = url
+      try {
+        body.url = normaliseServiceUrl(url)
+      } catch {
+        // Invalid URLs are left as-is so the server can reject them and the UI
+        // can surface the error; do not silently swallow the user's input.
+        body.url = url
+      }
     }
     for (const key of keyFields) {
       const draft = keyEdits[key.payload]
@@ -338,6 +345,8 @@ function ServiceConnectionCard({ name, label, fields }: ServiceTab) {
     }
     return Object.keys(body).length > 0 ? body : null
   }, [hasUrl, url, keyEdits, keyFields, savedUrl])
+
+  const urlLooksInternal = hasUrl && isLikelyInternalUrl(url)
 
   const clearServiceEdit = useCallback(() => {
     setKeyEdits({})
@@ -417,6 +426,13 @@ function ServiceConnectionCard({ name, label, fields }: ServiceTab) {
               onChange={(event) => editUrl(event.target.value)}
               placeholder="http://host:port"
             />
+            {urlLooksInternal ? (
+              <p className="text-xs text-amber-600 dark:text-amber-400">
+                This hostname may not be reachable from your browser. Use the
+                external IP or hostname if you want dashboard and trending links
+                to work.
+              </p>
+            ) : null}
           </Field>
         ) : null}
         {keyFields.map((key) => (

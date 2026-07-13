@@ -22,6 +22,7 @@ import type { ServicesStatusResponse } from "@/shared/lib/api"
 import {
   useActivity,
   useCheckServiceStatuses,
+  useServiceSettings,
   useServiceStatuses,
 } from "@/shared/lib/queries"
 import { formatTimestamp } from "@/shared/lib/format"
@@ -33,6 +34,7 @@ export function Dashboard() {
   const { data: activity, isLoading: activityLoading } = useActivity()
   const { data: serviceStatuses, isLoading: servicesLoading } =
     useServiceStatuses()
+  const { data: serviceSettings } = useServiceSettings()
   const checkNow = useCheckServiceStatuses()
   const [activityOpen, setActivityOpen] = useState(false)
   const [activityPage, setActivityPage] = useState(1)
@@ -112,6 +114,7 @@ export function Dashboard() {
             name="trakt"
             label="Trakt"
             status={services["trakt"]}
+            url="https://trakt.tv"
             compact
           />
           {SERVICE_TABS.map((tab) => (
@@ -120,6 +123,11 @@ export function Dashboard() {
               name={tab.name}
               label={tab.label}
               status={services[tab.name]}
+              url={
+                tab.fields.includes("url")
+                  ? serviceSettings?.[tab.name]?.url
+                  : undefined
+              }
               compact
             />
           ))}

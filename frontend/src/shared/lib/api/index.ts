@@ -267,6 +267,59 @@ export function seerMediaUrl(
   return `${root}/${path}/${tmdbId}`
 }
 
+/**
+ * Normalise a service base URL for storage and browser deep-links.
+ *
+ * - Trims whitespace.
+ * - Defaults to `http://` when no scheme is present.
+ * - Throws when the scheme is not `http` or `https`.
+ * - Strips trailing slashes while preserving any path.
+ */
+export function normaliseServiceUrl(url: string): string {
+  let normalised = url.trim()
+  if (!normalised) {
+    return ""
+  }
+  if (!normalised.includes("://")) {
+    normalised = "http://" + normalised
+  }
+  const parts = normalised.split("://")
+  const scheme = parts[0]
+  const remainder = parts.slice(1).join("://")
+  if (scheme !== "http" && scheme !== "https") {
+    throw new Error("URL must start with http:// or https://")
+  }
+  return `${scheme}://${remainder.replace(/\/+$/, "")}`
+}
+
+/**
+ * Heuristic check for URLs that are likely reachable only inside the Docker
+ * network (single-label hostnames or localhost). These work for backend API
+ * calls but break when opened from a browser outside the container network.
+ */
+export function isLikelyInternalUrl(url: string): boolean {
+  let normalised: string
+  try {
+    normalised = normaliseServiceUrl(url)
+  } catch {
+    return false
+  }
+  if (!normalised) {
+    return false
+  }
+  try {
+    const parsed = new URL(normalised)
+    const hostname = parsed.hostname
+    return (
+      hostname === "localhost" ||
+      hostname === "127.0.0.1" ||
+      !hostname.includes(".")
+    )
+  } catch {
+    return false
+  }
+}
+
 export function getActivity(): Promise<ActivityEntry[]> {
   return request<ActivityEntry[]>("/api/activity")
 }

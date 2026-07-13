@@ -31,6 +31,8 @@ import {
   getTrendingStatus,
   trendingSourceUrl,
   seerMediaUrl,
+  normaliseServiceUrl,
+  isLikelyInternalUrl,
   posterUrl,
   removeAvailable,
   removeItem,
@@ -183,6 +185,52 @@ describe("seerMediaUrl", () => {
     expect(seerMediaUrl("https://req.example.com///", "movie", 603)).toBe(
       "https://req.example.com/movie/603",
     )
+  })
+})
+
+describe("normaliseServiceUrl", () => {
+  it("adds http:// when no scheme is present", () => {
+    expect(normaliseServiceUrl("seer:5055")).toBe("http://seer:5055")
+  })
+
+  it("trims whitespace and trailing slashes", () => {
+    expect(normaliseServiceUrl("  http://js:5055/  ")).toBe("http://js:5055")
+    expect(normaliseServiceUrl("https://req.example.com/path/")).toBe(
+      "https://req.example.com/path",
+    )
+  })
+
+  it("returns an empty string for an empty input", () => {
+    expect(normaliseServiceUrl("")).toBe("")
+  })
+
+  it("rejects unsupported schemes", () => {
+    expect(() => normaliseServiceUrl("ftp://host")).toThrow(
+      "http:// or https://",
+    )
+    expect(() => normaliseServiceUrl("file:///etc/passwd")).toThrow(
+      "http:// or https://",
+    )
+  })
+})
+
+describe("isLikelyInternalUrl", () => {
+  it("flags single-label hostnames and localhost", () => {
+    expect(isLikelyInternalUrl("http://seer:5055")).toBe(true)
+    expect(isLikelyInternalUrl("http://sonarr:8989")).toBe(true)
+    expect(isLikelyInternalUrl("http://localhost:5055")).toBe(true)
+    expect(isLikelyInternalUrl("http://127.0.0.1:5055")).toBe(true)
+  })
+
+  it("does not flag hostnames with dots", () => {
+    expect(isLikelyInternalUrl("http://192.168.1.5:5055")).toBe(false)
+    expect(isLikelyInternalUrl("https://seer.example.com")).toBe(false)
+  })
+
+  it("is forgiving with malformed input", () => {
+    expect(isLikelyInternalUrl("")).toBe(false)
+    expect(isLikelyInternalUrl("not a url")).toBe(false)
+    expect(isLikelyInternalUrl("ftp://host")).toBe(false)
   })
 })
 
