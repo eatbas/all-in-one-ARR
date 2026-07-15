@@ -4027,7 +4027,7 @@
     },
     "/api/trending/rating": {
       "get": {
-        "description": "Compat single-item lookup served from the persistent rating store.\n\nPre-deploy frontend bundles still call this once per card; the current\ndashboard reads ``imdb_rating`` off the feed instead. Served entirely\nfrom the store the backfill fills — no OMDb or TMDB call — and kept only\nuntil cached bundles have cycled out.",
+        "description": "Compat single-item lookup served from the persistent rating store.\n\nPre-deploy frontend bundles still call this once per card; the current\ndashboard reads ``imdb_rating`` off the feed instead. Served entirely\nfrom the store the backfill fills â€” no OMDb or TMDB call â€” and kept only\nuntil cached bundles have cycled out.",
         "operationId": "get_rating_api_trending_rating_get",
         "parameters": [
           {
@@ -4113,7 +4113,7 @@
     },
     "/api/trending/search": {
       "get": {
-        "description": "Live title search on one discovery source, with the usual overlays.\n\nAlways fetched from the upstream source — the scheduler snapshot holds\nonly the trending/popular feeds, and long-tail search results would\nbloat it — and cached client-side by the dashboard. A dead source\ndegrades to an empty result list.",
+        "description": "Live title search on one discovery source, with the usual overlays.\n\nAlways fetched from the upstream source â€” the scheduler snapshot holds\nonly the trending/popular feeds, and long-tail search results would\nbloat it â€” and cached client-side by the dashboard. A dead source\ndegrades to an empty result list.",
         "operationId": "get_trending_search_api_trending_search_get",
         "parameters": [
           {

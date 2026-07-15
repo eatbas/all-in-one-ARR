@@ -73,7 +73,11 @@ def export_schema(output: Path) -> None:
                     os.environ[key] = value
 
     output.parent.mkdir(parents=True, exist_ok=True)
-    output.write_text(json.dumps(schema, indent=2, ensure_ascii=False) + "\n")
+    output.write_text(
+        json.dumps(schema, indent=2, ensure_ascii=False) + "\n",
+        encoding="utf-8",
+        newline="\n",
+    )
 
 
 def main() -> int:
