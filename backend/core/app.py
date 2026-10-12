@@ -38,6 +38,7 @@ from core.context import AppContext
 from core.db import Database
 from core.deletarr_api import create_deletarr_router
 from core.findarr_api import create_findarr_router
+from core.languagarr_api import create_languagarr_router
 from core.logging import configure_logging, get_logger
 from core.posters import PosterCache
 from core.scheduler import SchedulerService
@@ -235,6 +236,7 @@ def _mount_frontend(app: FastAPI) -> None:
         @app.get("/bandwidth-controllarr", response_class=HTMLResponse)
         @app.get("/findarr", response_class=HTMLResponse)
         @app.get("/deletarr", response_class=HTMLResponse)
+        @app.get("/languagarr", response_class=HTMLResponse)
         @app.get("/settings", response_class=HTMLResponse)
         async def _spa_entry() -> FileResponse:
             return FileResponse(index_file)
@@ -325,6 +327,7 @@ def create_app() -> FastAPI:
     app.include_router(create_bandwidth_router(ctx))
     app.include_router(create_findarr_router(ctx))
     app.include_router(create_deletarr_router(ctx))
+    app.include_router(create_languagarr_router(ctx))
     app.include_router(create_trending_router(ctx))
     app.include_router(ctx.webhooks.router)
 

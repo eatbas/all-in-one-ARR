@@ -162,3 +162,22 @@ class AppContext:
         default=None
     )
     deletarr_gate: SyncGate = field(default_factory=SyncGate)
+    # Languagarr callables, set by the module during setup(); the core router
+    # calls these so the anime audio audit stays module-owned. The gate
+    # serialises scans, the scheduled search worker and reviewed deletions.
+    languagarr_status: Callable[[], Awaitable[dict]] | None = field(default=None)
+    languagarr_scan: Callable[[], Awaitable[dict]] | None = field(default=None)
+    languagarr_results: Callable[[], Awaitable[dict]] | None = field(default=None)
+    languagarr_enqueue: Callable[[list[int]], Awaitable[dict]] | None = field(
+        default=None
+    )
+    languagarr_delete: Callable[[list[int]], Awaitable[dict]] | None = field(
+        default=None
+    )
+    languagarr_queue: Callable[[], Awaitable[dict]] | None = field(default=None)
+    languagarr_clear_pending: Callable[[], Awaitable[dict]] | None = field(default=None)
+    languagarr_run_now: Callable[[], Awaitable[dict]] | None = field(default=None)
+    languagarr_update_settings: Callable[[dict], Awaitable[dict]] | None = field(
+        default=None
+    )
+    languagarr_gate: SyncGate = field(default_factory=SyncGate)

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 import sqlite3
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import pytest
@@ -477,12 +478,17 @@ def test_trending_ratings_get_many_chunks_and_dedupes(db: Database) -> None:
 
 
 def test_omdb_usage_counts_accumulate_per_day(db: Database) -> None:
-    assert db.omdb_usage_count("2026-07-12") == 0
-    db.omdb_usage_add("2026-07-12", 5)
-    db.omdb_usage_add("2026-07-12", 3)
-    db.omdb_usage_add("2026-07-13", 1)
-    assert db.omdb_usage_count("2026-07-12") == 8
-    assert db.omdb_usage_count("2026-07-13") == 1
+    # Dates are relative to today: ``omdb_usage_add`` prunes days older than the
+    # retention window, so fixed calendar dates eventually age out and fail.
+    today = datetime.now(UTC).date()
+    day = (today - timedelta(days=1)).isoformat()
+    next_day = today.isoformat()
+    assert db.omdb_usage_count(day) == 0
+    db.omdb_usage_add(day, 5)
+    db.omdb_usage_add(day, 3)
+    db.omdb_usage_add(next_day, 1)
+    assert db.omdb_usage_count(day) == 8
+    assert db.omdb_usage_count(next_day) == 1
 
 
 def test_omdb_usage_add_prunes_old_days(db: Database) -> None:

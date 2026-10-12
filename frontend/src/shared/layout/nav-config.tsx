@@ -1,5 +1,6 @@
 import {
   GaugeIcon,
+  LanguagesIcon,
   LayoutDashboardIcon,
   ListChecksIcon,
   SearchIcon,
@@ -61,6 +62,12 @@ export const NAV_ITEMS: ReadonlyArray<NavItem> = [
     to: "/deletarr",
     icon: Trash2Icon,
     description: "Review and delete junk files from media libraries",
+  },
+  {
+    title: "Languagarr",
+    to: "/languagarr",
+    icon: LanguagesIcon,
+    description: "Find anime without English dual audio and replace it",
   },
   {
     title: "Settings",

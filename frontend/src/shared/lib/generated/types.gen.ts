@@ -1017,6 +1017,409 @@ export type Item = {
 };
 
 /**
+ * LanguagarrClearResult
+ */
+export type LanguagarrClearResult = {
+    /**
+     * Removed
+     */
+    removed: number;
+};
+
+/**
+ * LanguagarrDeleteRequest
+ */
+export type LanguagarrDeleteRequest = {
+    /**
+     * Confirm
+     */
+    confirm: true;
+    /**
+     * Episode File Ids
+     */
+    episode_file_ids: Array<number>;
+};
+
+/**
+ * LanguagarrDeleteResult
+ */
+export type LanguagarrDeleteResult = {
+    /**
+     * Deleted
+     */
+    deleted: number;
+    /**
+     * Deleted Ids
+     */
+    deleted_ids: Array<number>;
+    /**
+     * Errors
+     */
+    errors: Array<LanguagarrItemError>;
+    /**
+     * Failed
+     */
+    failed: number;
+    /**
+     * Searched
+     */
+    searched: number;
+};
+
+/**
+ * LanguagarrEnqueueResult
+ */
+export type LanguagarrEnqueueResult = {
+    /**
+     * Errors
+     */
+    errors: Array<LanguagarrItemError>;
+    /**
+     * Queued
+     */
+    queued: number;
+    /**
+     * Skipped
+     */
+    skipped: number;
+};
+
+/**
+ * LanguagarrFileIdsRequest
+ */
+export type LanguagarrFileIdsRequest = {
+    /**
+     * Episode File Ids
+     */
+    episode_file_ids: Array<number>;
+};
+
+/**
+ * LanguagarrItem
+ */
+export type LanguagarrItem = {
+    /**
+     * Audio Languages
+     */
+    audio_languages: string;
+    /**
+     * Custom Format Score
+     */
+    custom_format_score: number;
+    /**
+     * Cutoff Format Score
+     */
+    cutoff_format_score: number;
+    /**
+     * Episode File Id
+     */
+    episode_file_id: number;
+    /**
+     * Episode Ids
+     */
+    episode_ids: Array<number>;
+    /**
+     * Episode Label
+     */
+    episode_label: string;
+    /**
+     * Last Searched At
+     */
+    last_searched_at: string | null;
+    /**
+     * Queue Status
+     */
+    queue_status: 'none' | 'pending' | 'searched' | 'failed';
+    /**
+     * Recommended Action
+     */
+    recommended_action: 'search' | 'delete_and_search';
+    /**
+     * Relative Path
+     */
+    relative_path: string;
+    /**
+     * Release Group
+     */
+    release_group: string | null;
+    /**
+     * Season Number
+     */
+    season_number: number | null;
+    /**
+     * Series Id
+     */
+    series_id: number;
+    /**
+     * Series Title
+     */
+    series_title: string;
+    /**
+     * Sonarr Languages
+     */
+    sonarr_languages: Array<string>;
+    /**
+     * Verdict
+     */
+    verdict: 'compliant' | 'missing_english' | 'single_language' | 'unknown';
+};
+
+/**
+ * LanguagarrItemError
+ */
+export type LanguagarrItemError = {
+    /**
+     * Episode File Id
+     */
+    episode_file_id: number;
+    /**
+     * Error
+     */
+    error: string;
+};
+
+/**
+ * LanguagarrQueue
+ */
+export type LanguagarrQueue = {
+    counts: LanguagarrQueueCounts;
+    /**
+     * Rows
+     */
+    rows: Array<LanguagarrQueueRow>;
+};
+
+/**
+ * LanguagarrQueueCounts
+ */
+export type LanguagarrQueueCounts = {
+    /**
+     * Failed
+     */
+    failed: number;
+    /**
+     * Pending
+     */
+    pending: number;
+    /**
+     * Searched
+     */
+    searched: number;
+};
+
+/**
+ * LanguagarrQueueRow
+ */
+export type LanguagarrQueueRow = {
+    /**
+     * Attempts
+     */
+    attempts: number;
+    /**
+     * Episode File Id
+     */
+    episode_file_id: number;
+    /**
+     * Episode Ids
+     */
+    episode_ids: Array<number>;
+    /**
+     * Last Error
+     */
+    last_error: string | null;
+    /**
+     * Queued At
+     */
+    queued_at: string;
+    /**
+     * Reason
+     */
+    reason: string;
+    /**
+     * Searched At
+     */
+    searched_at: string | null;
+    /**
+     * Series Id
+     */
+    series_id: number;
+    /**
+     * Status
+     */
+    status: 'pending' | 'searched' | 'failed';
+    /**
+     * Title
+     */
+    title: string;
+};
+
+/**
+ * LanguagarrResults
+ */
+export type LanguagarrResults = {
+    /**
+     * Results
+     */
+    results: Array<LanguagarrItem>;
+    scan: LanguagarrScanSummary;
+    /**
+     * Unknown
+     */
+    unknown: Array<LanguagarrItem>;
+};
+
+/**
+ * LanguagarrRunResult
+ */
+export type LanguagarrRunResult = {
+    /**
+     * Failed
+     */
+    failed: number;
+    /**
+     * Resolved
+     */
+    resolved: number;
+    /**
+     * Searched
+     */
+    searched: number;
+    /**
+     * Status
+     */
+    status: string;
+};
+
+/**
+ * LanguagarrScanSummary
+ */
+export type LanguagarrScanSummary = {
+    /**
+     * Files Scanned
+     */
+    files_scanned: number;
+    /**
+     * Is Scanning
+     */
+    is_scanning: boolean;
+    /**
+     * Last Error
+     */
+    last_error: string | null;
+    /**
+     * Last Scan At
+     */
+    last_scan_at: string | null;
+    /**
+     * Missing English
+     */
+    missing_english: number;
+    /**
+     * Non Compliant
+     */
+    non_compliant: number;
+    /**
+     * Profiles In Scope
+     */
+    profiles_in_scope: Array<string>;
+    /**
+     * Series Scanned
+     */
+    series_scanned: number;
+    /**
+     * Single Language
+     */
+    single_language: number;
+    /**
+     * Unknown
+     */
+    unknown: number;
+};
+
+/**
+ * LanguagarrSettings
+ */
+export type LanguagarrSettings = {
+    /**
+     * Auto Queue
+     */
+    auto_queue: boolean;
+    /**
+     * Enabled
+     */
+    enabled: boolean;
+    /**
+     * Interval Minutes
+     */
+    interval_minutes: number;
+    /**
+     * Monitored Only
+     */
+    monitored_only: boolean;
+    /**
+     * Quality Profile Names
+     */
+    quality_profile_names: Array<string>;
+    /**
+     * Retry After Hours
+     */
+    retry_after_hours: number;
+    /**
+     * Searches Per Run
+     */
+    searches_per_run: number;
+};
+
+/**
+ * LanguagarrSettingsUpdate
+ *
+ * Partial settings update; bounds are the normaliser's, exposed in OpenAPI.
+ */
+export type LanguagarrSettingsUpdate = {
+    /**
+     * Auto Queue
+     */
+    auto_queue?: boolean | null;
+    /**
+     * Enabled
+     */
+    enabled?: boolean | null;
+    /**
+     * Interval Minutes
+     */
+    interval_minutes?: number | null;
+    /**
+     * Monitored Only
+     */
+    monitored_only?: boolean | null;
+    /**
+     * Quality Profile Names
+     */
+    quality_profile_names?: Array<string> | null;
+    /**
+     * Retry After Hours
+     */
+    retry_after_hours?: number | null;
+    /**
+     * Searches Per Run
+     */
+    searches_per_run?: number | null;
+};
+
+/**
+ * LanguagarrStatus
+ */
+export type LanguagarrStatus = {
+    queue: LanguagarrQueueCounts;
+    /**
+     * Running
+     */
+    running: boolean;
+    scan: LanguagarrScanSummary;
+    settings: LanguagarrSettings;
+};
+
+/**
  * ListSummary
  */
 export type ListSummary = {
@@ -1951,6 +2354,193 @@ export type DeleteItemApiItemsListIdTraktIdDeleteResponses = {
     200: unknown;
 };
 
+export type PostDeleteApiLanguagarrDeletePostData = {
+    body: LanguagarrDeleteRequest;
+    path?: never;
+    query?: never;
+    url: '/api/languagarr/delete';
+};
+
+export type PostDeleteApiLanguagarrDeletePostErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type PostDeleteApiLanguagarrDeletePostError = PostDeleteApiLanguagarrDeletePostErrors[keyof PostDeleteApiLanguagarrDeletePostErrors];
+
+export type PostDeleteApiLanguagarrDeletePostResponses = {
+    /**
+     * Successful Response
+     */
+    200: LanguagarrDeleteResult;
+};
+
+export type PostDeleteApiLanguagarrDeletePostResponse = PostDeleteApiLanguagarrDeletePostResponses[keyof PostDeleteApiLanguagarrDeletePostResponses];
+
+export type PostEnqueueApiLanguagarrEnqueuePostData = {
+    body: LanguagarrFileIdsRequest;
+    path?: never;
+    query?: never;
+    url: '/api/languagarr/enqueue';
+};
+
+export type PostEnqueueApiLanguagarrEnqueuePostErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type PostEnqueueApiLanguagarrEnqueuePostError = PostEnqueueApiLanguagarrEnqueuePostErrors[keyof PostEnqueueApiLanguagarrEnqueuePostErrors];
+
+export type PostEnqueueApiLanguagarrEnqueuePostResponses = {
+    /**
+     * Successful Response
+     */
+    200: LanguagarrEnqueueResult;
+};
+
+export type PostEnqueueApiLanguagarrEnqueuePostResponse = PostEnqueueApiLanguagarrEnqueuePostResponses[keyof PostEnqueueApiLanguagarrEnqueuePostResponses];
+
+export type GetQueueApiLanguagarrQueueGetData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/languagarr/queue';
+};
+
+export type GetQueueApiLanguagarrQueueGetResponses = {
+    /**
+     * Successful Response
+     */
+    200: LanguagarrQueue;
+};
+
+export type GetQueueApiLanguagarrQueueGetResponse = GetQueueApiLanguagarrQueueGetResponses[keyof GetQueueApiLanguagarrQueueGetResponses];
+
+export type DeletePendingApiLanguagarrQueuePendingDeleteData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/languagarr/queue/pending';
+};
+
+export type DeletePendingApiLanguagarrQueuePendingDeleteResponses = {
+    /**
+     * Successful Response
+     */
+    200: LanguagarrClearResult;
+};
+
+export type DeletePendingApiLanguagarrQueuePendingDeleteResponse = DeletePendingApiLanguagarrQueuePendingDeleteResponses[keyof DeletePendingApiLanguagarrQueuePendingDeleteResponses];
+
+export type GetResultsApiLanguagarrResultsGetData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/languagarr/results';
+};
+
+export type GetResultsApiLanguagarrResultsGetResponses = {
+    /**
+     * Successful Response
+     */
+    200: LanguagarrResults;
+};
+
+export type GetResultsApiLanguagarrResultsGetResponse = GetResultsApiLanguagarrResultsGetResponses[keyof GetResultsApiLanguagarrResultsGetResponses];
+
+export type PostRunApiLanguagarrRunPostData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/languagarr/run';
+};
+
+export type PostRunApiLanguagarrRunPostResponses = {
+    /**
+     * Successful Response
+     */
+    200: LanguagarrRunResult;
+};
+
+export type PostRunApiLanguagarrRunPostResponse = PostRunApiLanguagarrRunPostResponses[keyof PostRunApiLanguagarrRunPostResponses];
+
+export type PostScanApiLanguagarrScanPostData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/languagarr/scan';
+};
+
+export type PostScanApiLanguagarrScanPostResponses = {
+    /**
+     * Successful Response
+     */
+    200: LanguagarrResults;
+};
+
+export type PostScanApiLanguagarrScanPostResponse = PostScanApiLanguagarrScanPostResponses[keyof PostScanApiLanguagarrScanPostResponses];
+
+export type GetSettingsApiLanguagarrSettingsGetData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/languagarr/settings';
+};
+
+export type GetSettingsApiLanguagarrSettingsGetResponses = {
+    /**
+     * Successful Response
+     */
+    200: LanguagarrSettings;
+};
+
+export type GetSettingsApiLanguagarrSettingsGetResponse = GetSettingsApiLanguagarrSettingsGetResponses[keyof GetSettingsApiLanguagarrSettingsGetResponses];
+
+export type PutSettingsApiLanguagarrSettingsPutData = {
+    body: LanguagarrSettingsUpdate;
+    path?: never;
+    query?: never;
+    url: '/api/languagarr/settings';
+};
+
+export type PutSettingsApiLanguagarrSettingsPutErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type PutSettingsApiLanguagarrSettingsPutError = PutSettingsApiLanguagarrSettingsPutErrors[keyof PutSettingsApiLanguagarrSettingsPutErrors];
+
+export type PutSettingsApiLanguagarrSettingsPutResponses = {
+    /**
+     * Successful Response
+     */
+    200: LanguagarrStatus;
+};
+
+export type PutSettingsApiLanguagarrSettingsPutResponse = PutSettingsApiLanguagarrSettingsPutResponses[keyof PutSettingsApiLanguagarrSettingsPutResponses];
+
+export type GetStatusApiLanguagarrStatusGetData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/languagarr/status';
+};
+
+export type GetStatusApiLanguagarrStatusGetResponses = {
+    /**
+     * Successful Response
+     */
+    200: LanguagarrStatus;
+};
+
+export type GetStatusApiLanguagarrStatusGetResponse = GetStatusApiLanguagarrStatusGetResponses[keyof GetStatusApiLanguagarrStatusGetResponses];
+
 export type GetListsApiListsGetData = {
     body?: never;
     path?: never;
@@ -2643,6 +3233,22 @@ export type HealthHealthGetResponses = {
 };
 
 export type HealthHealthGetResponse = HealthHealthGetResponses[keyof HealthHealthGetResponses];
+
+export type SpaEntryLanguagarrGetData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/languagarr';
+};
+
+export type SpaEntryLanguagarrGetResponses = {
+    /**
+     * Successful Response
+     */
+    200: string;
+};
+
+export type SpaEntryLanguagarrGetResponse = SpaEntryLanguagarrGetResponses[keyof SpaEntryLanguagarrGetResponses];
 
 export type SpaEntryListSyncarrGetData = {
     body?: never;

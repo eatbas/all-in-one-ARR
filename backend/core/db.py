@@ -17,8 +17,10 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
+from core.db_languagarr import LanguagarrQueueMixin
 from core.db_schema import INIT_SQL
 from core.logging import get_logger
+from core.timefmt import utcnow_iso as utcnow_iso
 
 # Activity rows are kept for this many days; the absolute maximum is 30 days.
 ACTIVITY_RETENTION_DAYS = 15
@@ -31,12 +33,7 @@ OMDB_USAGE_RETENTION_DAYS = 30
 ITEM_STATUSES = ("synced", "requested", "available", "removed")
 
 
-def utcnow_iso() -> str:
-    """Return the current UTC time as an ISO-8601 string."""
-    return datetime.now(UTC).isoformat()
-
-
-class Database:
+class Database(LanguagarrQueueMixin):
     """Thin, thread-safe wrapper around a SQLite connection."""
 
     def __init__(self, path: str) -> None:

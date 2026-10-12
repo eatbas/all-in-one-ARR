@@ -10,6 +10,7 @@ import pytest
 from core.context import AppContext
 from core.db import Database
 from core.service_registry import BY_NAME, SERVICES, empty_values, masked_entry
+from core.settings_normalisers import normalise_languagarr_settings
 from core.settings_store import TrackedList
 from core.status_checker import StatusChecker
 from core.webhooks import WebhookRegistry
@@ -90,6 +91,7 @@ class StubSettingsStore:
         deletarr_movies_path: str = "/media/movies",
         deletarr_tv_path: str = "/media/tv",
         deletarr_use_arr_source: bool = False,
+        languagarr_settings: dict[str, Any] | None = None,
     ) -> None:
         # Defaults to True (unlike the real store, which seeds False) so the
         # availability-removal tests exercise the enabled path without having to opt
@@ -108,6 +110,7 @@ class StubSettingsStore:
             "tv_path": deletarr_tv_path,
             "use_arr_source": deletarr_use_arr_source,
         }
+        self._languagarr_settings = normalise_languagarr_settings(languagarr_settings)
         self._findarr_settings = {
             "enabled": False,
             "interval_minutes": 30,
@@ -331,6 +334,25 @@ class StubSettingsStore:
         if use_arr_source is not None:
             self._deletarr_settings["use_arr_source"] = bool(use_arr_source)
         return self.deletarr_settings()
+
+    def languagarr_settings(self) -> dict[str, Any]:
+        return {
+            **self._languagarr_settings,
+            "quality_profile_names": list(
+                self._languagarr_settings["quality_profile_names"]
+            ),
+        }
+
+    def languagarr_interval_minutes(self) -> int:
+        return int(self._languagarr_settings["interval_minutes"])
+
+    def update_languagarr_settings(self, updates: dict[str, Any]) -> dict[str, Any]:
+        merged = {**self._languagarr_settings}
+        merged.update(
+            {key: value for key, value in updates.items() if value is not None}
+        )
+        self._languagarr_settings = normalise_languagarr_settings(merged)
+        return self.languagarr_settings()
 
     def masked_services(self) -> dict[str, dict[str, Any]]:
         return {

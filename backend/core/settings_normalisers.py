@@ -5,6 +5,7 @@ from __future__ import annotations
 import copy
 from typing import Any
 
+from core.coerce import bounded_int, coerce_int
 from core.service_registry import ServiceDescriptor
 
 # Allowed status-check intervals offered by the dashboard.
@@ -56,6 +57,15 @@ _FINDARR_SLEEP_MAX = 60
 _FINDARR_RESET_HOURS_MIN = 1
 _FINDARR_RESET_HOURS_MAX = 8760
 
+# Languagarr bounds.
+LANGUAGARR_INTERVAL_MIN = 15
+LANGUAGARR_INTERVAL_MAX = 1440
+LANGUAGARR_SEARCHES_PER_RUN_MIN = 1
+LANGUAGARR_SEARCHES_PER_RUN_MAX = 100
+LANGUAGARR_RETRY_HOURS_MIN = 24
+LANGUAGARR_RETRY_HOURS_MAX = 2160
+LANGUAGARR_PROFILE_NAMES_MAX = 20
+
 DEFAULT_FINDARR_SETTINGS: dict[str, Any] = {
     "enabled": False,
     "interval_minutes": 30,
@@ -92,6 +102,23 @@ DEFAULT_DELETARR_SETTINGS: dict[str, Any] = {
     # files belong on disk; it falls back to the heuristic scan when the matching
     # app is unconfigured or unreachable.
     "use_arr_source": True,
+}
+
+
+# Languagarr: audits Sonarr anime episode files for English dual audio and
+# queues bounded replacement searches. ``enabled`` gates the scheduled search
+# worker only; scans and reviewed actions are always available from the page.
+DEFAULT_LANGUAGARR_SETTINGS: dict[str, Any] = {
+    "enabled": False,
+    "interval_minutes": 60,
+    "searches_per_run": 10,
+    "retry_after_hours": 168,
+    "auto_queue": False,
+    # Like Findarr's monitored-only default: unmonitored series and episodes are
+    # never searched, because Sonarr runs API-triggered searches as user-invoked
+    # and would otherwise replace files the user deliberately froze.
+    "monitored_only": True,
+    "quality_profile_names": ["Anime"],
 }
 
 
@@ -200,11 +227,7 @@ def normalise_findarr_interval(value: int) -> int:
 
 def _normalise_findarr_limit(value: Any, *, default: int) -> int:
     """Return a bounded non-negative Findarr per-cycle/API limit."""
-    try:
-        parsed = int(value)
-    except TypeError, ValueError:
-        parsed = default
-    return max(0, min(parsed, _FINDARR_LIMIT_MAX))
+    return bounded_int(value, default=default, minimum=0, maximum=_FINDARR_LIMIT_MAX)
 
 
 def _normalise_findarr_queue_limit(value: Any) -> int:
@@ -223,27 +246,17 @@ def _normalise_findarr_search_mode(value: Any, *, default: str = "episodes") -> 
 
 def _normalise_findarr_sleep_seconds(value: Any) -> int:
     """Return a bounded inter-command sleep in seconds, defaulting to 0."""
-    try:
-        parsed = int(value)
-    except TypeError, ValueError:
-        return 0
-    return max(0, min(parsed, _FINDARR_SLEEP_MAX))
+    return bounded_int(value, default=0, minimum=0, maximum=_FINDARR_SLEEP_MAX)
 
 
 def _normalise_findarr_reset_hours(value: Any) -> int:
     """Return a bounded stateful-reset window in hours, defaulting to 168."""
-    try:
-        parsed = int(value)
-    except TypeError, ValueError:
-        return 168
-    return max(_FINDARR_RESET_HOURS_MIN, min(parsed, _FINDARR_RESET_HOURS_MAX))
-
-
-def _coerce_int(value: Any, default: int) -> int:
-    try:
-        return int(value)
-    except TypeError, ValueError:
-        return default
+    return bounded_int(
+        value,
+        default=168,
+        minimum=_FINDARR_RESET_HOURS_MIN,
+        maximum=_FINDARR_RESET_HOURS_MAX,
+    )
 
 
 def normalise_findarr_settings(raw: dict[str, Any] | None = None) -> dict[str, Any]:
@@ -284,7 +297,7 @@ def normalise_findarr_settings(raw: dict[str, Any] | None = None) -> dict[str, A
     normalised = {
         "enabled": bool(raw.get("enabled", defaults["enabled"])),
         "interval_minutes": normalise_findarr_interval(
-            _coerce_int(raw.get("interval_minutes"), defaults["interval_minutes"])
+            coerce_int(raw.get("interval_minutes"), defaults["interval_minutes"])
         ),
         "hourly_cap": _normalise_findarr_limit(
             raw.get("hourly_cap", defaults["hourly_cap"]),
@@ -327,4 +340,56 @@ def normalise_deletarr_settings(
             raw.get("tv_path", tv_path), default=tv_path
         ),
         "use_arr_source": bool(raw.get("use_arr_source", use_arr_source)),
+    }
+
+
+def _normalise_languagarr_profile_names(value: Any) -> list[str]:
+    """Return a non-empty, de-duplicated list of stripped quality-profile names.
+
+    Order is preserved. Anything that is not a list of non-blank strings falls
+    back to the default (``["Anime"]``) so a corrupt store never widens the scope
+    to every series.
+    """
+    default = list(DEFAULT_LANGUAGARR_SETTINGS["quality_profile_names"])
+    if not isinstance(value, list):
+        return default
+    names: list[str] = []
+    for entry in value:
+        if not isinstance(entry, str):
+            continue
+        name = entry.strip()
+        if name and name not in names:
+            names.append(name)
+    return names[:LANGUAGARR_PROFILE_NAMES_MAX] or default
+
+
+def normalise_languagarr_settings(raw: dict[str, Any] | None = None) -> dict[str, Any]:
+    """Merge and validate persisted Languagarr settings with safe defaults."""
+    raw = raw or {}
+    defaults = DEFAULT_LANGUAGARR_SETTINGS
+    return {
+        "enabled": bool(raw.get("enabled", defaults["enabled"])),
+        "interval_minutes": bounded_int(
+            raw.get("interval_minutes"),
+            default=defaults["interval_minutes"],
+            minimum=LANGUAGARR_INTERVAL_MIN,
+            maximum=LANGUAGARR_INTERVAL_MAX,
+        ),
+        "searches_per_run": bounded_int(
+            raw.get("searches_per_run"),
+            default=defaults["searches_per_run"],
+            minimum=LANGUAGARR_SEARCHES_PER_RUN_MIN,
+            maximum=LANGUAGARR_SEARCHES_PER_RUN_MAX,
+        ),
+        "retry_after_hours": bounded_int(
+            raw.get("retry_after_hours"),
+            default=defaults["retry_after_hours"],
+            minimum=LANGUAGARR_RETRY_HOURS_MIN,
+            maximum=LANGUAGARR_RETRY_HOURS_MAX,
+        ),
+        "auto_queue": bool(raw.get("auto_queue", defaults["auto_queue"])),
+        "monitored_only": bool(raw.get("monitored_only", defaults["monitored_only"])),
+        "quality_profile_names": _normalise_languagarr_profile_names(
+            raw.get("quality_profile_names", defaults["quality_profile_names"])
+        ),
     }

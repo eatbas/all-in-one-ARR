@@ -5,7 +5,8 @@ connected they are the source of truth for which media files *belong* on disk, s
 this client fetches the managed inventory (the on-disk folder of each movie/series
 and the files each app tracks). It mirrors the Findarr client's request pattern
 (`X-Api-Key` header, raise on failure) but exposes only the read-only endpoints
-Deletarr needs.
+Deletarr needs. ``series()`` and ``episode_files()`` are inherited from the
+shared :class:`ServarrClient`.
 """
 
 from __future__ import annotations
@@ -28,13 +29,6 @@ class DeletarrArrClient(ServarrClient):
 
     error_class = DeletarrArrError
 
-    @staticmethod
-    def _as_dicts(data: Any) -> list[dict[str, Any]]:
-        """Return only the dict entries of a JSON list payload."""
-        if not isinstance(data, list):
-            return []
-        return [item for item in data if isinstance(item, dict)]
-
     async def root_folders(self) -> list[dict[str, Any]]:
         """Return `/api/v3/rootfolder` entries (each carries a ``path``)."""
         return self._as_dicts(await self._request("GET", "/api/v3/rootfolder"))
@@ -42,18 +36,6 @@ class DeletarrArrClient(ServarrClient):
     async def movies(self) -> list[dict[str, Any]]:
         """Return `/api/v3/movie` (Radarr): folder ``path`` + embedded ``movieFile``."""
         return self._as_dicts(await self._request("GET", "/api/v3/movie"))
-
-    async def series(self) -> list[dict[str, Any]]:
-        """Return `/api/v3/series` (Sonarr): folder ``path`` per series."""
-        return self._as_dicts(await self._request("GET", "/api/v3/series"))
-
-    async def episode_files(self, series_id: int) -> list[dict[str, Any]]:
-        """Return `/api/v3/episodefile?seriesId=` (Sonarr): tracked episode files."""
-        return self._as_dicts(
-            await self._request(
-                "GET", "/api/v3/episodefile", params={"seriesId": series_id}
-            )
-        )
 
 
 def client_for(ctx: AppContext, library_type: LibraryType) -> DeletarrArrClient:

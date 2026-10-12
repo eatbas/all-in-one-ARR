@@ -198,6 +198,10 @@ vi.mock("@/features/deletarr/Deletarr", () => ({
   Deletarr: () => <div>Deletarr route</div>,
 }))
 
+vi.mock("@/features/languagarr/Languagarr", () => ({
+  Languagarr: () => <div>Languagarr route</div>,
+}))
+
 vi.mock("@/features/settings/Settings", () => ({
   Settings: () => <div>Settings route</div>,
 }))
@@ -261,6 +265,11 @@ describe("App routing", () => {
   it("renders the Deletarr page at /deletarr", () => {
     renderAt("/deletarr")
     expect(screen.getByText("Deletarr route")).toBeInTheDocument()
+  })
+
+  it("renders the Languagarr page at /languagarr", () => {
+    renderAt("/languagarr")
+    expect(screen.getByText("Languagarr route")).toBeInTheDocument()
   })
 
   it("redirects unknown routes back to the dashboard", () => {

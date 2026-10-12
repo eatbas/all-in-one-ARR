@@ -1,0 +1,60 @@
+import type { LanguagarrItem } from "@/shared/lib/api"
+
+/** Non-compliant files of one series, in scan order. */
+export interface SeriesGroup {
+  seriesId: number
+  title: string
+  items: LanguagarrItem[]
+}
+
+/**
+ * Whether a file can be queued or deleted. A file whose episodes are all
+ * unmonitored (or unlinked) has no searchable episodes, so the backend rejects
+ * every action on it; the UI must not offer one.
+ */
+export function isActionable(item: LanguagarrItem): boolean {
+  return item.episode_ids.length > 0
+}
+
+/** Group scan results by series, keeping the backend's series/episode order. */
+export function groupBySeries(items: LanguagarrItem[]): SeriesGroup[] {
+  const groups = new Map<number, SeriesGroup>()
+  for (const item of items) {
+    const group = groups.get(item.series_id)
+    if (group) {
+      group.items.push(item)
+    } else {
+      groups.set(item.series_id, {
+        seriesId: item.series_id,
+        title: item.series_title,
+        items: [item],
+      })
+    }
+  }
+  return [...groups.values()]
+}
+
+/** Display labels for the audio verdicts. */
+export const VERDICT_LABELS: Record<LanguagarrItem["verdict"], string> = {
+  compliant: "Compliant",
+  missing_english: "No English",
+  single_language: "English only",
+  unknown: "Unknown audio",
+}
+
+/** Display labels for the recommended fix. */
+export const ACTION_LABELS: Record<
+  LanguagarrItem["recommended_action"],
+  string
+> = {
+  search: "Search",
+  delete_and_search: "Delete & search",
+}
+
+/** Display labels for an item's replacement-queue state. */
+export const QUEUE_LABELS: Record<LanguagarrItem["queue_status"], string> = {
+  none: "Not queued",
+  pending: "Queued",
+  searched: "Searched",
+  failed: "Failed",
+}

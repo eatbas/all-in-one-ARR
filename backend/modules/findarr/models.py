@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from core.clients.servarr import Compatibility as Compatibility
+
 APP_NAMES = ("sonarr", "radarr")
 MODES = ("missing", "upgrade")
 
@@ -63,16 +65,6 @@ class SearchUnit:
     movie_ids: tuple[int, ...] = ()
     series_id: int | None = None
     season_number: int | None = None
-
-
-@dataclass(frozen=True)
-class Compatibility:
-    """Connected Servarr application compatibility result."""
-
-    ok: bool
-    app_name: str
-    version: str
-    detail: str
 
 
 @dataclass

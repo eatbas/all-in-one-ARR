@@ -3,7 +3,7 @@ interface StatBlockProps {
   value: number | string
 }
 
-/** Compact stat card used on the Deletarr scan tab. */
+/** Compact stat card used on the Deletarr and Languagarr scan tabs. */
 export function StatBlock({ label, value }: StatBlockProps) {
   return (
     <div className="rounded-lg border bg-background p-4">

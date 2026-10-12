@@ -5,7 +5,8 @@ from __future__ import annotations
 from typing import Any
 
 from core.clients.servarr import ServarrClient, ServarrClientError
-from modules.findarr.models import Compatibility, SearchUnit
+from core.clients.servarr import parse_version as parse_version
+from modules.findarr.models import SearchUnit
 
 
 class FindarrClientError(ServarrClientError):
@@ -27,71 +28,11 @@ def _command_payload(unit: SearchUnit) -> dict[str, Any]:
     return {"name": "MoviesSearch", "movieIds": list(unit.movie_ids)}
 
 
-def parse_version(value: str) -> tuple[int, int, int]:
-    """Parse a semantic-ish version into a comparable three-part tuple."""
-    parts: list[int] = []
-    for raw_part in value.split(".")[:3]:
-        digits = ""
-        for char in raw_part:
-            if char.isdigit():
-                digits += char
-            else:
-                break
-        parts.append(int(digits or 0))
-    while len(parts) < 3:
-        parts.append(0)
-    return tuple(parts)  # type: ignore[return-value]
-
-
-def _normalise_app_name(value: str) -> str:
-    """Return a comparable application name from a Servarr status payload."""
-    return value.strip().lower().replace(" ", "")
-
-
 class FindarrArrClient(ServarrClient):
     """Small client for the Sonarr/Radarr endpoints Findarr needs."""
 
     error_class = FindarrClientError
-
-    async def system_status(self) -> dict[str, Any]:
-        """Return `/api/v3/system/status`."""
-        data = await self._request("GET", "/api/v3/system/status")
-        if not isinstance(data, dict):
-            raise FindarrClientError(f"{self.app} returned an invalid status payload")
-        return data
-
-    async def compatibility(self) -> Compatibility:
-        """Return whether the connected app satisfies Findarr's version target."""
-        status = await self.system_status()
-        version = str(status.get("version") or "0.0.0")
-        app_name = str(status.get("appName") or self.app)
-        expected_name = self.app.capitalize()
-        if _normalise_app_name(app_name) != self.app:
-            return Compatibility(
-                ok=False,
-                app_name=app_name,
-                version=version,
-                detail=(
-                    f"Connected service is {app_name}; Findarr expected "
-                    f"{expected_name} for the configured {self.app} connection"
-                ),
-            )
-        minimum = (4, 0, 0) if self.app == "sonarr" else (6, 0, 0)
-        actual = parse_version(version)
-        if actual < minimum:
-            required = "4+" if self.app == "sonarr" else "6+"
-            return Compatibility(
-                ok=False,
-                app_name=app_name,
-                version=version,
-                detail=f"{app_name} {version} is unsupported; Findarr requires {self.app.capitalize()} {required}",
-            )
-        return Compatibility(
-            ok=True,
-            app_name=app_name,
-            version=version,
-            detail=f"Connected to {app_name} {version}",
-        )
+    feature_name = "Findarr"
 
     async def queue_size(self) -> int:
         """Return current download queue size."""

@@ -28,10 +28,12 @@ from core.service_registry import (
     empty_values,
     masked_entry,
 )
+from core.settings_modules import ModuleSettingsMixin
 from core.settings_normalisers import (
     DEFAULT_ANIME_IDS_REFRESH_DAYS,
     DEFAULT_DELETARR_SETTINGS,
     DEFAULT_FINDARR_SETTINGS,
+    DEFAULT_LANGUAGARR_SETTINGS,
     DEFAULT_OMDB_DAILY_BUDGET_PER_KEY,
     DEFAULT_RATING_TTL_DAYS,
     DEFAULT_SAB_LIMIT_MBPS,
@@ -41,6 +43,7 @@ from core.settings_normalisers import (
     normalise_deletarr_settings,
     normalise_findarr_settings,
     normalise_interval,
+    normalise_languagarr_settings,
     normalise_omdb_daily_budget_per_key,
     normalise_rating_ttl_days,
     normalise_sab_limit_mbps,
@@ -78,7 +81,7 @@ class TrackedList:
         return {"owner_user": self.owner_user, "slug": self.slug, "name": self.name}
 
 
-class SettingsStore:
+class SettingsStore(ModuleSettingsMixin):
     """Thread-safe JSON-backed store for UI-managed settings."""
 
     def __init__(self, path: str) -> None:
@@ -101,6 +104,7 @@ class SettingsStore:
         self._omdb_daily_budget_per_key = DEFAULT_OMDB_DAILY_BUDGET_PER_KEY
         self._findarr_settings = copy.deepcopy(DEFAULT_FINDARR_SETTINGS)
         self._deletarr_settings = copy.deepcopy(DEFAULT_DELETARR_SETTINGS)
+        self._languagarr_settings = copy.deepcopy(DEFAULT_LANGUAGARR_SETTINGS)
         self._services: dict[str, dict[str, str]] = {
             desc.name: empty_values(desc) for desc in SERVICES
         }
@@ -176,6 +180,7 @@ class SettingsStore:
                     tv_path=deletarr_tv_path,
                     use_arr_source=deletarr_use_arr_source,
                 )
+                self._languagarr_settings = normalise_languagarr_settings()
                 for desc in SERVICES:
                     self._services[desc.name] = service_seed(
                         desc, (services or {}).get(desc.name)
@@ -248,6 +253,10 @@ class SettingsStore:
                 "use_arr_source", DEFAULT_DELETARR_SETTINGS["use_arr_source"]
             ),
         )
+        migrated_languagarr = "languagarr" not in data
+        self._languagarr_settings = normalise_languagarr_settings(
+            data.get("languagarr")
+        )
         # Migration: the flag was historically persisted as ``auto_remove_on_import``
         # (remove when Radarr/Sonarr imported the title). It now means "remove from
         # Trakt once Seer reports the item available". An existing store is read
@@ -309,6 +318,7 @@ class SettingsStore:
             or migrated_omdb_budget
             or migrated_findarr
             or migrated_deletarr
+            or migrated_languagarr
         ):
             self._save_locked()
             self._log.info(
@@ -318,7 +328,7 @@ class SettingsStore:
                 "trending_key_migrated=%s "
                 "anime_ids_key_migrated=%s rating_ttl_key_migrated=%s "
                 "omdb_budget_key_migrated=%s findarr_keys_migrated=%s "
-                "deletarr_keys_migrated=%s)",
+                "deletarr_keys_migrated=%s languagarr_keys_migrated=%s)",
                 backfilled,
                 fields_backfilled,
                 migrated_auto_remove,
@@ -330,6 +340,7 @@ class SettingsStore:
                 migrated_omdb_budget,
                 migrated_findarr,
                 migrated_deletarr,
+                migrated_languagarr,
             )
 
     def _save_locked(self) -> None:
@@ -351,6 +362,7 @@ class SettingsStore:
             "omdb_daily_budget_per_key": self._omdb_daily_budget_per_key,
             "findarr": self._findarr_settings,
             "deletarr": self._deletarr_settings,
+            "languagarr": self._languagarr_settings,
             "lists": [item.to_dict() for item in self._lists],
             "services": self._services,
         }
@@ -557,79 +569,6 @@ class SettingsStore:
             self._log.info("updated OMDb daily budget to %s per key", budget)
             return budget
 
-    # ---- Findarr ----
-
-    def findarr_settings(self) -> dict[str, Any]:
-        """Return a copy of the persisted Findarr settings."""
-        with self._lock:
-            return copy.deepcopy(self._findarr_settings)
-
-    def findarr_interval_minutes(self) -> int:
-        """Return Findarr's configured scheduler interval in minutes."""
-        with self._lock:
-            return int(self._findarr_settings["interval_minutes"])
-
-    def update_findarr_settings(self, updates: dict[str, Any]) -> dict[str, Any]:
-        """Merge, validate, persist, and return Findarr settings."""
-        with self._lock:
-            merged = copy.deepcopy(self._findarr_settings)
-            for key in (
-                "enabled",
-                "interval_minutes",
-                "hourly_cap",
-                "queue_limit",
-                "command_sleep_seconds",
-                "state_reset_hours",
-            ):
-                if key in updates and updates[key] is not None:
-                    merged[key] = updates[key]
-            app_updates = updates.get("apps")
-            if isinstance(app_updates, dict):
-                merged.setdefault("apps", {})
-                for app_name in ("sonarr", "radarr"):
-                    if isinstance(app_updates.get(app_name), dict):
-                        merged["apps"].setdefault(app_name, {})
-                        for key, value in app_updates[app_name].items():
-                            if value is not None:
-                                merged["apps"][app_name][key] = value
-            self._findarr_settings = normalise_findarr_settings(merged)
-            self._save_locked()
-            self._log.info("updated Findarr settings")
-            return copy.deepcopy(self._findarr_settings)
-
-    # ---- Deletarr ----
-
-    def deletarr_settings(self) -> dict[str, Any]:
-        """Return a copy of the persisted Deletarr settings."""
-        with self._lock:
-            return dict(self._deletarr_settings)
-
-    def update_deletarr_settings(
-        self,
-        *,
-        movies_path: str | None = None,
-        tv_path: str | None = None,
-        use_arr_source: bool | None = None,
-    ) -> dict[str, Any]:
-        """Update Deletarr settings; ``None`` leaves a field unchanged."""
-        with self._lock:
-            merged = dict(self._deletarr_settings)
-            if movies_path is not None:
-                merged["movies_path"] = movies_path
-            if tv_path is not None:
-                merged["tv_path"] = tv_path
-            if use_arr_source is not None:
-                merged["use_arr_source"] = use_arr_source
-            self._deletarr_settings = normalise_deletarr_settings(
-                merged,
-                movies_path=self._deletarr_settings["movies_path"],
-                tv_path=self._deletarr_settings["tv_path"],
-                use_arr_source=self._deletarr_settings["use_arr_source"],
-            )
-            self._save_locked()
-            self._log.info("updated Deletarr settings")
-            return dict(self._deletarr_settings)
-
     # ---- tracked lists ----
 
     def tracked_lists(self) -> list[TrackedList]:
@@ -751,6 +690,7 @@ class SettingsStore:
                 "omdb_daily_budget_per_key": self._omdb_daily_budget_per_key,
                 "findarr": copy.deepcopy(self._findarr_settings),
                 "deletarr": dict(self._deletarr_settings),
+                "languagarr": copy.deepcopy(self._languagarr_settings),
                 "lists": [item.to_dict() for item in self._lists],
                 "services": self.masked_services(),
             }

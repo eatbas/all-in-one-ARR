@@ -5,14 +5,8 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from typing import Any
 
+from core.coerce import parse_int
 from modules.findarr.models import FindarrItem
-
-
-def _as_int(value: Any) -> int | None:
-    try:
-        return int(value)
-    except TypeError, ValueError:
-        return None
 
 
 def _is_future(value: str | None) -> bool:
@@ -40,10 +34,10 @@ def normalise(record: dict[str, Any], *, mode: str) -> FindarrItem | None:
         else episode.get("series", {})
     )
     series_title = series.get("title") if isinstance(series, dict) else None
-    series_year = _as_int(series.get("year")) if isinstance(series, dict) else None
+    series_year = parse_int(series.get("year")) if isinstance(series, dict) else None
     title = episode.get("title") or "Episode"
-    season = _as_int(episode.get("seasonNumber"))
-    episode_number = _as_int(episode.get("episodeNumber"))
+    season = parse_int(episode.get("seasonNumber"))
+    episode_number = parse_int(episode.get("episodeNumber"))
     label = f"{series_title or 'Unknown series'}"
     if series_year:
         label += f" ({series_year})"
@@ -53,9 +47,9 @@ def normalise(record: dict[str, Any], *, mode: str) -> FindarrItem | None:
     monitored = bool(episode.get("monitored", True)) and bool(
         series.get("monitored", True) if isinstance(series, dict) else True
     )
-    series_id = _as_int(episode.get("seriesId"))
+    series_id = parse_int(episode.get("seriesId"))
     if series_id is None and isinstance(series, dict):
-        series_id = _as_int(series.get("id"))
+        series_id = parse_int(series.get("id"))
     return FindarrItem(
         app="sonarr",
         mode=mode,

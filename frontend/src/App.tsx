@@ -5,6 +5,7 @@ import { BandwidthControllarr } from "@/features/bandwidth-controllarr/Bandwidth
 import { Dashboard } from "@/features/dashboard/Dashboard"
 import { Deletarr } from "@/features/deletarr/Deletarr"
 import { Findarr } from "@/features/findarr/Findarr"
+import { Languagarr } from "@/features/languagarr/Languagarr"
 import { ListSyncarr } from "@/features/list-syncarr/ListSyncarr"
 import { Settings } from "@/features/settings/Settings"
 import { Trending } from "@/features/trending/Trending"
@@ -23,6 +24,7 @@ export default function App() {
         />
         <Route path="/findarr" element={<Findarr />} />
         <Route path="/deletarr" element={<Deletarr />} />
+        <Route path="/languagarr" element={<Languagarr />} />
         <Route path="/settings" element={<Settings />} />
         {/* Unknown client-side routes fall back to the dashboard. */}
         <Route path="*" element={<Navigate to="/" replace />} />

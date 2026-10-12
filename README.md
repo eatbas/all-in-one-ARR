@@ -11,10 +11,14 @@ quality-cutoff searches in **Sonarr 4+** and **Radarr 6+** (off by default).
 It also includes **Deletarr**, which scans mounted media folders for junk files
 and deletes only explicitly selected current scan results under the configured
 library roots.
+It also includes **Languagarr**, which audits the real audio tracks of Sonarr
+anime episode files, lists every file that is not dual audio with an English
+track, and replaces them through bounded Sonarr searches or a reviewed
+delete-and-search (searches off by default).
 It uses **official REST APIs only** (no scraping).
 
-This is the plugin **core** plus four modules, **`list_syncarr`**,
-**`bandwidth_controllarr`**, **`findarr`**, and **`deletarr`**. Future modules
+This is the plugin **core** plus five modules, **`list_syncarr`**,
+**`bandwidth_controllarr`**, **`findarr`**, **`deletarr`**, and **`languagarr`**. Future modules
 drop into `backend/modules/` and auto-load — see [Adding a module](#adding-a-module).
 
 ## How it works
@@ -65,6 +69,7 @@ backend/
     bandwidth_controllarr/  # pause SABnzbd while qBittorrent has active torrents
     findarr/              # bounded Sonarr/Radarr missing and upgrade searches
     deletarr/             # reviewed junk-file scans and validated deletion
+    languagarr/           # anime English dual-audio audit, search queue, reviewed delete
   main.py            # entrypoint: `uvicorn main:app --app-dir backend`
   pyproject.toml     # packaging + pytest + coverage config
   tests/             # backend test suite (100% coverage)
@@ -493,6 +498,56 @@ reviewed junk candidates and deletes only what you explicitly confirm:
 - **Container paths** — when running in Docker, the media paths must be mounted
   into the container at the same paths Deletarr is configured to scan.
 
+### Languagarr page
+
+The dashboard **Languagarr** page (left menu) keeps Sonarr anime on **dual audio
+with an English track**. Configure **Sonarr** in **Settings** first.
+
+- **Rule** — a file passes only when Sonarr's `mediaInfo.audioLanguages` (read
+  from the file's real audio tracks, not Sonarr's language label) contains `eng`
+  **and** at least one other language. `und`/`zxx`/`mis`/`mul` are ignored.
+  English-only dubs and Japanese-only, Japanese + Portuguese, or German + Japanese
+  releases all fail. Files with no audio-language data are listed as *Unknown
+  audio* and never actioned.
+- **Scope** — series on the Sonarr quality profiles named in Settings (default
+  `Anime`), regardless of series type. A configured name Sonarr does not know
+  stops the scan instead of being skipped. **Monitored series and episodes only**
+  (on by default) skips unmonitored series and never searches unmonitored
+  episodes: Sonarr runs API-triggered searches as manual ones, which bypass its
+  own monitored check and would otherwise replace files you deliberately froze.
+- **Review** — **Scan** lists the offending files grouped by series, with the
+  audio tracks, Sonarr's custom-format score against the profile cutoff, and the
+  recommended fix. Results live in memory (re-scan after a restart); the queue
+  persists in SQLite.
+- **Queue search** (never destructive) — selected files are queued and the
+  scheduled worker sends bounded Sonarr `EpisodeSearch` commands
+  (`searches_per_run` every `interval_minutes`, default 10 per 60 minutes, off by
+  default). Sonarr replaces a file only when it imports a release that scores
+  higher, so the old file stays until a better one exists. Before each search the
+  file, its series and (with monitored-only) its episodes are re-read from Sonarr;
+  a row whose file was replaced, removed or is now compliant, whose series left the
+  configured profiles or was unmonitored, or whose episodes were all unmonitored
+  drops out of the queue instead of spending an indexer search. Files whose
+  episodes are all unmonitored are shown as *Not searchable* and cannot be selected. A searched file is
+  not re-queued until `retry_after_hours` (default 168) has passed; a search Sonarr
+  rejected (failed) can be queued again immediately. **Run a batch now**
+  processes one batch on demand; **Scan and queue automatically** makes each
+  worker run rescan and queue every file a search can fix.
+- **Delete & search** (explicit, at most 25 files) — for files whose score already
+  meets the profile cutoff, Sonarr never upgrades them on its own. After a
+  confirmation, each file is re-read from Sonarr (still present, same path, still
+  non-compliant, series still in scope), deleted **through Sonarr's API** and its
+  episodes searched immediately. Sonarr deletes permanently unless its Recycle Bin
+  is configured, and an episode stays missing if no compliant release exists.
+- **Why not Findarr?** — Sonarr's *Cutoff Unmet* list (which Findarr's upgrade
+  mode reads) considers quality only, never custom-format scores, so
+  language-driven upgrades must be searched per episode. Findarr's *missing* mode
+  still searches episodes whose file Languagarr deleted.
+- **Prevention** — Languagarr fixes what is already downloaded; reject new
+  non-compliant releases with Sonarr custom formats (for example via Recyclarr),
+  scoring non-English "DUAL" groups and foreign-dub markers below the profile's
+  minimum score.
+
 ### Trending page
 
 The dashboard **Trending** page (left menu, directly below the Dashboard)
@@ -793,10 +848,31 @@ after both check jobs have passed.
 - `POST /api/deletarr/delete` – delete `{ type, paths }` after validating each
   path is a current scan result, resolves under that library root, and (for
   Arr-backed scans) is not a file the library manager now tracks.
+- `GET /api/languagarr/settings` / `PUT /api/languagarr/settings` – Languagarr
+  settings `{ enabled, interval_minutes, searches_per_run, retry_after_hours,
+  auto_queue, monitored_only, quality_profile_names }`; out-of-range values return
+  `422`, and a changed interval reschedules the worker.
+- `GET /api/languagarr/status` – settings, running flag, latest scan summary and
+  queue counts.
+- `GET /api/languagarr/results` – latest scan results (non-compliant and unknown
+  files) joined with live queue status.
+- `POST /api/languagarr/scan` – audit every in-scope Sonarr series. `409` while
+  Languagarr is busy, `400` for an unknown profile name, `502` when Sonarr is
+  unreachable or not Sonarr 4+.
+- `POST /api/languagarr/enqueue` – queue `{ episode_file_ids }` (1–500 current
+  scan results) for replacement searches.
+- `POST /api/languagarr/delete` – `{ episode_file_ids, confirm: true }` (1–25):
+  re-validate each file against Sonarr, delete it through Sonarr, then search its
+  episodes.
+- `GET /api/languagarr/queue`, `DELETE /api/languagarr/queue/pending`,
+  `POST /api/languagarr/run` – inspect the queue, drop pending rows, or send one
+  batch of searches now (`{ status, searched, failed, resolved }`, where
+  `resolved` counts rows dropped because the file no longer needed a search).
 - `GET /metrics` – Prometheus-compatible text exposition. Existing
   Bandwidth-Controllarr gauges are preserved (`bw_qbit_*`, `bw_sab_*`,
   `bw_check_status`), and application-wide `aio_arr_*` metrics cover sync runs,
-  integration health, scheduled jobs, Findarr activity, and Deletarr scans /
+  integration health, scheduled jobs, Findarr activity, Deletarr scans /
+  deletions, and Languagarr scans, non-compliant file counts, searches and
   deletions.
 - `GET /api/trending?source=&media=&category=[&window=]` – normalised trending or
   popular items for the Trending page. `source` is `trakt|tmdb|seer`, `media` is

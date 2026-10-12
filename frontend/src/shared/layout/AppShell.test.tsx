@@ -27,6 +27,7 @@ function renderAt(path: string) {
           <Route path="/" element={<div>dashboard-page</div>} />
           <Route path="/list-syncarr" element={<div>list-syncarr-page</div>} />
           <Route path="/deletarr" element={<div>deletarr-page</div>} />
+          <Route path="/languagarr" element={<div>languagarr-page</div>} />
         </Route>
       </Routes>
     </MemoryRouter>,
@@ -102,6 +103,16 @@ describe("AppShell", () => {
 
     expect(screen.getByText("deletarr-page")).toBeInTheDocument()
     expect(screen.getByRole("link", { name: /deletarr/i })).toHaveAttribute(
+      "aria-current",
+      "page",
+    )
+  })
+
+  it("marks the Languagarr link active on its route", () => {
+    renderAt("/languagarr")
+
+    expect(screen.getByText("languagarr-page")).toBeInTheDocument()
+    expect(screen.getByRole("link", { name: /languagarr/i })).toHaveAttribute(
       "aria-current",
       "page",
     )

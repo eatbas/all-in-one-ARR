@@ -1727,6 +1727,695 @@
         "title": "Item",
         "type": "object"
       },
+      "LanguagarrClearResult": {
+        "properties": {
+          "removed": {
+            "title": "Removed",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "removed"
+        ],
+        "title": "LanguagarrClearResult",
+        "type": "object"
+      },
+      "LanguagarrDeleteRequest": {
+        "properties": {
+          "confirm": {
+            "const": true,
+            "title": "Confirm",
+            "type": "boolean"
+          },
+          "episode_file_ids": {
+            "items": {
+              "type": "integer"
+            },
+            "maxItems": 25,
+            "minItems": 1,
+            "title": "Episode File Ids",
+            "type": "array"
+          }
+        },
+        "required": [
+          "episode_file_ids",
+          "confirm"
+        ],
+        "title": "LanguagarrDeleteRequest",
+        "type": "object"
+      },
+      "LanguagarrDeleteResult": {
+        "properties": {
+          "deleted": {
+            "title": "Deleted",
+            "type": "integer"
+          },
+          "deleted_ids": {
+            "items": {
+              "type": "integer"
+            },
+            "title": "Deleted Ids",
+            "type": "array"
+          },
+          "errors": {
+            "items": {
+              "$ref": "#/components/schemas/LanguagarrItemError"
+            },
+            "title": "Errors",
+            "type": "array"
+          },
+          "failed": {
+            "title": "Failed",
+            "type": "integer"
+          },
+          "searched": {
+            "title": "Searched",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "deleted",
+          "searched",
+          "failed",
+          "deleted_ids",
+          "errors"
+        ],
+        "title": "LanguagarrDeleteResult",
+        "type": "object"
+      },
+      "LanguagarrEnqueueResult": {
+        "properties": {
+          "errors": {
+            "items": {
+              "$ref": "#/components/schemas/LanguagarrItemError"
+            },
+            "title": "Errors",
+            "type": "array"
+          },
+          "queued": {
+            "title": "Queued",
+            "type": "integer"
+          },
+          "skipped": {
+            "title": "Skipped",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "queued",
+          "skipped",
+          "errors"
+        ],
+        "title": "LanguagarrEnqueueResult",
+        "type": "object"
+      },
+      "LanguagarrFileIdsRequest": {
+        "properties": {
+          "episode_file_ids": {
+            "items": {
+              "type": "integer"
+            },
+            "maxItems": 500,
+            "minItems": 1,
+            "title": "Episode File Ids",
+            "type": "array"
+          }
+        },
+        "required": [
+          "episode_file_ids"
+        ],
+        "title": "LanguagarrFileIdsRequest",
+        "type": "object"
+      },
+      "LanguagarrItem": {
+        "properties": {
+          "audio_languages": {
+            "title": "Audio Languages",
+            "type": "string"
+          },
+          "custom_format_score": {
+            "title": "Custom Format Score",
+            "type": "integer"
+          },
+          "cutoff_format_score": {
+            "title": "Cutoff Format Score",
+            "type": "integer"
+          },
+          "episode_file_id": {
+            "title": "Episode File Id",
+            "type": "integer"
+          },
+          "episode_ids": {
+            "items": {
+              "type": "integer"
+            },
+            "title": "Episode Ids",
+            "type": "array"
+          },
+          "episode_label": {
+            "title": "Episode Label",
+            "type": "string"
+          },
+          "last_searched_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Searched At"
+          },
+          "queue_status": {
+            "enum": [
+              "none",
+              "pending",
+              "searched",
+              "failed"
+            ],
+            "title": "Queue Status",
+            "type": "string"
+          },
+          "recommended_action": {
+            "enum": [
+              "search",
+              "delete_and_search"
+            ],
+            "title": "Recommended Action",
+            "type": "string"
+          },
+          "relative_path": {
+            "title": "Relative Path",
+            "type": "string"
+          },
+          "release_group": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Release Group"
+          },
+          "season_number": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Season Number"
+          },
+          "series_id": {
+            "title": "Series Id",
+            "type": "integer"
+          },
+          "series_title": {
+            "title": "Series Title",
+            "type": "string"
+          },
+          "sonarr_languages": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Sonarr Languages",
+            "type": "array"
+          },
+          "verdict": {
+            "enum": [
+              "compliant",
+              "missing_english",
+              "single_language",
+              "unknown"
+            ],
+            "title": "Verdict",
+            "type": "string"
+          }
+        },
+        "required": [
+          "episode_file_id",
+          "series_id",
+          "series_title",
+          "season_number",
+          "episode_ids",
+          "episode_label",
+          "relative_path",
+          "audio_languages",
+          "sonarr_languages",
+          "verdict",
+          "release_group",
+          "custom_format_score",
+          "cutoff_format_score",
+          "recommended_action",
+          "queue_status",
+          "last_searched_at"
+        ],
+        "title": "LanguagarrItem",
+        "type": "object"
+      },
+      "LanguagarrItemError": {
+        "properties": {
+          "episode_file_id": {
+            "title": "Episode File Id",
+            "type": "integer"
+          },
+          "error": {
+            "title": "Error",
+            "type": "string"
+          }
+        },
+        "required": [
+          "episode_file_id",
+          "error"
+        ],
+        "title": "LanguagarrItemError",
+        "type": "object"
+      },
+      "LanguagarrQueue": {
+        "properties": {
+          "counts": {
+            "$ref": "#/components/schemas/LanguagarrQueueCounts"
+          },
+          "rows": {
+            "items": {
+              "$ref": "#/components/schemas/LanguagarrQueueRow"
+            },
+            "title": "Rows",
+            "type": "array"
+          }
+        },
+        "required": [
+          "counts",
+          "rows"
+        ],
+        "title": "LanguagarrQueue",
+        "type": "object"
+      },
+      "LanguagarrQueueCounts": {
+        "properties": {
+          "failed": {
+            "title": "Failed",
+            "type": "integer"
+          },
+          "pending": {
+            "title": "Pending",
+            "type": "integer"
+          },
+          "searched": {
+            "title": "Searched",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "pending",
+          "searched",
+          "failed"
+        ],
+        "title": "LanguagarrQueueCounts",
+        "type": "object"
+      },
+      "LanguagarrQueueRow": {
+        "properties": {
+          "attempts": {
+            "title": "Attempts",
+            "type": "integer"
+          },
+          "episode_file_id": {
+            "title": "Episode File Id",
+            "type": "integer"
+          },
+          "episode_ids": {
+            "items": {
+              "type": "integer"
+            },
+            "title": "Episode Ids",
+            "type": "array"
+          },
+          "last_error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Error"
+          },
+          "queued_at": {
+            "title": "Queued At",
+            "type": "string"
+          },
+          "reason": {
+            "title": "Reason",
+            "type": "string"
+          },
+          "searched_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Searched At"
+          },
+          "series_id": {
+            "title": "Series Id",
+            "type": "integer"
+          },
+          "status": {
+            "enum": [
+              "pending",
+              "searched",
+              "failed"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "episode_file_id",
+          "series_id",
+          "title",
+          "episode_ids",
+          "reason",
+          "status",
+          "queued_at",
+          "searched_at",
+          "attempts",
+          "last_error"
+        ],
+        "title": "LanguagarrQueueRow",
+        "type": "object"
+      },
+      "LanguagarrResults": {
+        "properties": {
+          "results": {
+            "items": {
+              "$ref": "#/components/schemas/LanguagarrItem"
+            },
+            "title": "Results",
+            "type": "array"
+          },
+          "scan": {
+            "$ref": "#/components/schemas/LanguagarrScanSummary"
+          },
+          "unknown": {
+            "items": {
+              "$ref": "#/components/schemas/LanguagarrItem"
+            },
+            "title": "Unknown",
+            "type": "array"
+          }
+        },
+        "required": [
+          "scan",
+          "results",
+          "unknown"
+        ],
+        "title": "LanguagarrResults",
+        "type": "object"
+      },
+      "LanguagarrRunResult": {
+        "properties": {
+          "failed": {
+            "title": "Failed",
+            "type": "integer"
+          },
+          "resolved": {
+            "title": "Resolved",
+            "type": "integer"
+          },
+          "searched": {
+            "title": "Searched",
+            "type": "integer"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "status",
+          "searched",
+          "failed",
+          "resolved"
+        ],
+        "title": "LanguagarrRunResult",
+        "type": "object"
+      },
+      "LanguagarrScanSummary": {
+        "properties": {
+          "files_scanned": {
+            "title": "Files Scanned",
+            "type": "integer"
+          },
+          "is_scanning": {
+            "title": "Is Scanning",
+            "type": "boolean"
+          },
+          "last_error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Error"
+          },
+          "last_scan_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Scan At"
+          },
+          "missing_english": {
+            "title": "Missing English",
+            "type": "integer"
+          },
+          "non_compliant": {
+            "title": "Non Compliant",
+            "type": "integer"
+          },
+          "profiles_in_scope": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Profiles In Scope",
+            "type": "array"
+          },
+          "series_scanned": {
+            "title": "Series Scanned",
+            "type": "integer"
+          },
+          "single_language": {
+            "title": "Single Language",
+            "type": "integer"
+          },
+          "unknown": {
+            "title": "Unknown",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "is_scanning",
+          "last_scan_at",
+          "last_error",
+          "profiles_in_scope",
+          "series_scanned",
+          "files_scanned",
+          "non_compliant",
+          "unknown",
+          "missing_english",
+          "single_language"
+        ],
+        "title": "LanguagarrScanSummary",
+        "type": "object"
+      },
+      "LanguagarrSettings": {
+        "properties": {
+          "auto_queue": {
+            "title": "Auto Queue",
+            "type": "boolean"
+          },
+          "enabled": {
+            "title": "Enabled",
+            "type": "boolean"
+          },
+          "interval_minutes": {
+            "title": "Interval Minutes",
+            "type": "integer"
+          },
+          "monitored_only": {
+            "title": "Monitored Only",
+            "type": "boolean"
+          },
+          "quality_profile_names": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Quality Profile Names",
+            "type": "array"
+          },
+          "retry_after_hours": {
+            "title": "Retry After Hours",
+            "type": "integer"
+          },
+          "searches_per_run": {
+            "title": "Searches Per Run",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "enabled",
+          "interval_minutes",
+          "searches_per_run",
+          "retry_after_hours",
+          "auto_queue",
+          "monitored_only",
+          "quality_profile_names"
+        ],
+        "title": "LanguagarrSettings",
+        "type": "object"
+      },
+      "LanguagarrSettingsUpdate": {
+        "description": "Partial settings update; bounds are the normaliser's, exposed in OpenAPI.",
+        "properties": {
+          "auto_queue": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Auto Queue"
+          },
+          "enabled": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Enabled"
+          },
+          "interval_minutes": {
+            "anyOf": [
+              {
+                "maximum": 1440.0,
+                "minimum": 15.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Interval Minutes"
+          },
+          "monitored_only": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Monitored Only"
+          },
+          "quality_profile_names": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "maxItems": 20,
+                "minItems": 1,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Quality Profile Names"
+          },
+          "retry_after_hours": {
+            "anyOf": [
+              {
+                "maximum": 2160.0,
+                "minimum": 24.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Retry After Hours"
+          },
+          "searches_per_run": {
+            "anyOf": [
+              {
+                "maximum": 100.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Searches Per Run"
+          }
+        },
+        "title": "LanguagarrSettingsUpdate",
+        "type": "object"
+      },
+      "LanguagarrStatus": {
+        "properties": {
+          "queue": {
+            "$ref": "#/components/schemas/LanguagarrQueueCounts"
+          },
+          "running": {
+            "title": "Running",
+            "type": "boolean"
+          },
+          "scan": {
+            "$ref": "#/components/schemas/LanguagarrScanSummary"
+          },
+          "settings": {
+            "$ref": "#/components/schemas/LanguagarrSettings"
+          }
+        },
+        "required": [
+          "settings",
+          "running",
+          "scan",
+          "queue"
+        ],
+        "title": "LanguagarrStatus",
+        "type": "object"
+      },
       "ListSummary": {
         "properties": {
           "interval_minutes": {
@@ -3289,6 +3978,274 @@
         "summary": "Delete Item"
       }
     },
+    "/api/languagarr/delete": {
+      "post": {
+        "operationId": "post_delete_api_languagarr_delete_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LanguagarrDeleteRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LanguagarrDeleteResult"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Post Delete",
+        "tags": [
+          "languagarr"
+        ]
+      }
+    },
+    "/api/languagarr/enqueue": {
+      "post": {
+        "operationId": "post_enqueue_api_languagarr_enqueue_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LanguagarrFileIdsRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LanguagarrEnqueueResult"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Post Enqueue",
+        "tags": [
+          "languagarr"
+        ]
+      }
+    },
+    "/api/languagarr/queue": {
+      "get": {
+        "operationId": "get_queue_api_languagarr_queue_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LanguagarrQueue"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Get Queue",
+        "tags": [
+          "languagarr"
+        ]
+      }
+    },
+    "/api/languagarr/queue/pending": {
+      "delete": {
+        "operationId": "delete_pending_api_languagarr_queue_pending_delete",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LanguagarrClearResult"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Delete Pending",
+        "tags": [
+          "languagarr"
+        ]
+      }
+    },
+    "/api/languagarr/results": {
+      "get": {
+        "operationId": "get_results_api_languagarr_results_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LanguagarrResults"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Get Results",
+        "tags": [
+          "languagarr"
+        ]
+      }
+    },
+    "/api/languagarr/run": {
+      "post": {
+        "operationId": "post_run_api_languagarr_run_post",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LanguagarrRunResult"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Post Run",
+        "tags": [
+          "languagarr"
+        ]
+      }
+    },
+    "/api/languagarr/scan": {
+      "post": {
+        "operationId": "post_scan_api_languagarr_scan_post",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LanguagarrResults"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Post Scan",
+        "tags": [
+          "languagarr"
+        ]
+      }
+    },
+    "/api/languagarr/settings": {
+      "get": {
+        "operationId": "get_settings_api_languagarr_settings_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LanguagarrSettings"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Get Settings",
+        "tags": [
+          "languagarr"
+        ]
+      },
+      "put": {
+        "operationId": "put_settings_api_languagarr_settings_put",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LanguagarrSettingsUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LanguagarrStatus"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Put Settings",
+        "tags": [
+          "languagarr"
+        ]
+      }
+    },
+    "/api/languagarr/status": {
+      "get": {
+        "operationId": "get_status_api_languagarr_status_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LanguagarrStatus"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Get Status",
+        "tags": [
+          "languagarr"
+        ]
+      }
+    },
     "/api/lists": {
       "get": {
         "operationId": "get_lists_api_lists_get",
@@ -4286,6 +5243,24 @@
           }
         },
         "summary": "Health"
+      }
+    },
+    "/languagarr": {
+      "get": {
+        "operationId": "_spa_entry_languagarr_get",
+        "responses": {
+          "200": {
+            "content": {
+              "text/html": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": " Spa Entry"
       }
     },
     "/list-syncarr": {

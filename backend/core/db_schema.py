@@ -103,4 +103,22 @@ CREATE TABLE IF NOT EXISTS app_state (
     key TEXT PRIMARY KEY,
     value TEXT NOT NULL
 );
+
+-- Languagarr replacement-search queue, keyed by the Sonarr episode file whose
+-- audio is non-compliant. ``episode_ids`` is a JSON array of Sonarr episode ids.
+CREATE TABLE IF NOT EXISTS languagarr_queue (
+    episode_file_id INTEGER PRIMARY KEY,
+    series_id INTEGER NOT NULL,
+    title TEXT NOT NULL,
+    episode_ids TEXT NOT NULL,
+    reason TEXT NOT NULL,
+    status TEXT NOT NULL CHECK(status IN ('pending','searched','failed')),
+    queued_at TEXT NOT NULL,
+    searched_at TEXT,
+    attempts INTEGER NOT NULL DEFAULT 0,
+    last_error TEXT
+);
+
+CREATE INDEX IF NOT EXISTS idx_languagarr_queue_status
+    ON languagarr_queue(status, queued_at);
 """

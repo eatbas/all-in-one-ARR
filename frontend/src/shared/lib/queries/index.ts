@@ -84,6 +84,18 @@ export {
   useUpdateFindarrSettings,
 } from "@/shared/lib/queries/findarr"
 export {
+  useClearLanguagarrPending,
+  useDeleteLanguagarr,
+  useEnqueueLanguagarr,
+  useLanguagarrQueue,
+  useLanguagarrResults,
+  useLanguagarrSettings,
+  useLanguagarrStatus,
+  useRunLanguagarr,
+  useScanLanguagarr,
+  useUpdateLanguagarrSettings,
+} from "@/shared/lib/queries/languagarr"
+export {
   useAddTrending,
   useTrending,
   useTrendingSearch,

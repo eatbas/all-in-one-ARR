@@ -1,6 +1,6 @@
 import { FolderIcon, RefreshCwIcon } from "lucide-react"
 
-import { StatBlock } from "@/features/deletarr/components/stat-block"
+import { StatBlock } from "@/shared/components/stat-block"
 import { Button } from "@/shared/components/ui/button"
 import {
   Card,

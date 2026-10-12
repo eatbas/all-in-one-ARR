@@ -85,6 +85,27 @@ deletarr_freed_bytes_total = Counter(
     ("library",),
 )
 
+languagarr_scans_total = Counter(
+    "aio_arr_languagarr_scans_total",
+    "Languagarr anime audio scans by outcome",
+    ("status",),
+)
+languagarr_noncompliant_files = Gauge(
+    "aio_arr_languagarr_noncompliant_files",
+    "Anime episode files failing the English dual-audio rule, by verdict",
+    ("verdict",),
+)
+languagarr_searches_total = Counter(
+    "aio_arr_languagarr_searches_total",
+    "Languagarr replacement searches by outcome",
+    ("status",),
+)
+languagarr_deletes_total = Counter(
+    "aio_arr_languagarr_deletes_total",
+    "Languagarr reviewed episode-file deletions by outcome",
+    ("status",),
+)
+
 
 def initialise_metrics() -> None:
     """Initialise known low-cardinality metric label sets."""
@@ -108,6 +129,7 @@ def initialise_metrics() -> None:
         "list_syncarr_poll",
         "bandwidth_control",
         "findarr_poll",
+        "languagarr_poll",
         "trending_sync",
         "poster_cache_churn",
     ):
@@ -130,6 +152,12 @@ def initialise_metrics() -> None:
             deletarr_scan_results.labels(library, mode).set(0)
             for status in ("success", "error"):
                 deletarr_scans_total.labels(library, mode, status)
+    for status in ("success", "error"):
+        languagarr_scans_total.labels(status)
+        languagarr_searches_total.labels(status)
+        languagarr_deletes_total.labels(status)
+    for verdict in ("missing_english", "single_language", "unknown"):
+        languagarr_noncompliant_files.labels(verdict).set(0)
 
 
 def record_sync_run(*, trigger: str, status: str, duration_seconds: float) -> None:
@@ -198,6 +226,31 @@ def record_deletarr_delete(
         deletarr_deleted_items_total.labels(library, "failed").inc(failed)
     if freed_bytes:
         deletarr_freed_bytes_total.labels(library).inc(freed_bytes)
+
+
+def record_languagarr_scan(
+    *, status: str, verdict_counts: dict[str, int] | None = None
+) -> None:
+    """Record a Languagarr scan outcome and, on success, the per-verdict counts."""
+    languagarr_scans_total.labels(status).inc()
+    for verdict, count in (verdict_counts or {}).items():
+        languagarr_noncompliant_files.labels(verdict).set(count)
+
+
+def record_languagarr_searches(*, succeeded: int, failed: int) -> None:
+    """Record Languagarr replacement-search outcomes."""
+    if succeeded:
+        languagarr_searches_total.labels("success").inc(succeeded)
+    if failed:
+        languagarr_searches_total.labels("error").inc(failed)
+
+
+def record_languagarr_deletes(*, deleted: int, failed: int) -> None:
+    """Record Languagarr reviewed-deletion outcomes."""
+    if deleted:
+        languagarr_deletes_total.labels("success").inc(deleted)
+    if failed:
+        languagarr_deletes_total.labels("error").inc(failed)
 
 
 initialise_metrics()
