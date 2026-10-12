@@ -10,6 +10,7 @@ import {
   getLanguagarrStatus,
   runLanguagarr,
   scanLanguagarr,
+  sonarrSeriesUrl,
   updateLanguagarrSettings,
 } from "@/shared/lib/api/languagarr"
 
@@ -26,6 +27,17 @@ function mockFetch(body: unknown) {
 
 afterEach(() => {
   vi.restoreAllMocks()
+})
+
+describe("sonarrSeriesUrl", () => {
+  it("joins the base URL and an encoded title slug", () => {
+    expect(sonarrSeriesUrl("http://192.168.0.2:8989/", "log-horizon")).toBe(
+      "http://192.168.0.2:8989/series/log-horizon",
+    )
+    expect(sonarrSeriesUrl("https://nas.lan/sonarr", "a b")).toBe(
+      "https://nas.lan/sonarr/series/a%20b",
+    )
+  })
 })
 
 describe("Languagarr API", () => {

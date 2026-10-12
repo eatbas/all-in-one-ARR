@@ -1151,6 +1151,10 @@ export type LanguagarrItem = {
      */
     series_id: number;
     /**
+     * Series Slug
+     */
+    series_slug: string | null;
+    /**
      * Series Title
      */
     series_title: string;
@@ -1243,6 +1247,10 @@ export type LanguagarrQueueRow = {
      * Series Id
      */
     series_id: number;
+    /**
+     * Series Slug
+     */
+    series_slug: string | null;
     /**
      * Status
      */
@@ -1364,6 +1372,10 @@ export type LanguagarrSettings = {
      * Searches Per Run
      */
     searches_per_run: number;
+    /**
+     * Sonarr Link Url
+     */
+    sonarr_link_url: string;
 };
 
 /**
@@ -1400,6 +1412,10 @@ export type LanguagarrSettingsUpdate = {
      * Searches Per Run
      */
     searches_per_run?: number | null;
+    /**
+     * Sonarr Link Url
+     */
+    sonarr_link_url?: string | null;
 };
 
 /**

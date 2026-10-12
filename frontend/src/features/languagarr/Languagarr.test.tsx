@@ -13,6 +13,7 @@ vi.mock("@/shared/lib/queries", () => ({
   useRunLanguagarr: vi.fn(),
   useClearLanguagarrPending: vi.fn(),
   useUpdateLanguagarrSettings: vi.fn(),
+  useServiceSettings: vi.fn(),
 }))
 
 import { Languagarr } from "@/features/languagarr/Languagarr"
@@ -24,6 +25,7 @@ import type {
   LanguagarrScanSummary,
   LanguagarrSettings,
   LanguagarrStatus,
+  ServicesSettings,
 } from "@/shared/lib/api"
 import {
   useClearLanguagarrPending,
@@ -35,6 +37,7 @@ import {
   useLanguagarrStatus,
   useRunLanguagarr,
   useScanLanguagarr,
+  useServiceSettings,
   useUpdateLanguagarrSettings,
 } from "@/shared/lib/queries"
 import { mutationResult, queryResult } from "@/shared/test/mock-query"
@@ -47,6 +50,12 @@ const SETTINGS: LanguagarrSettings = {
   auto_queue: false,
   monitored_only: true,
   quality_profile_names: ["Anime"],
+  sonarr_link_url: "http://192.168.0.2:8989",
+}
+
+/** Service settings whose Sonarr URL is `sonarrUrl`. */
+function services(sonarrUrl: string): ServicesSettings {
+  return { sonarr: { url: sonarrUrl } } as ServicesSettings
 }
 
 const SCAN: LanguagarrScanSummary = {
@@ -69,6 +78,7 @@ function item(
     episode_file_id: id,
     series_id: 1,
     series_title: "Log Horizon",
+    series_slug: "log-horizon",
     season_number: 1,
     episode_ids: [id * 10],
     episode_label: `S01E${String(id).padStart(2, "0")}`,
@@ -94,6 +104,7 @@ const RESULTS: LanguagarrResults = {
     item(3, {
       series_id: 2,
       series_title: "My Hero Academia",
+      series_slug: null,
       audio_languages: "jpn/jpn",
       verdict: "missing_english",
       release_group: null,
@@ -123,6 +134,7 @@ const QUEUE: LanguagarrQueue = {
     {
       episode_file_id: 2,
       series_id: 1,
+      series_slug: "log-horizon",
       title: "Log Horizon - S01E02",
       episode_ids: [20],
       reason: "missing_english",
@@ -135,6 +147,7 @@ const QUEUE: LanguagarrQueue = {
     {
       episode_file_id: 4,
       series_id: 1,
+      series_slug: null,
       title: "Log Horizon - S01E04",
       episode_ids: [40],
       reason: "missing_english",
@@ -147,6 +160,7 @@ const QUEUE: LanguagarrQueue = {
     {
       episode_file_id: 5,
       series_id: 1,
+      series_slug: null,
       title: "Log Horizon - S01E05",
       episode_ids: [50],
       reason: "legacy_reason",
@@ -179,6 +193,9 @@ beforeEach(() => {
   vi.mocked(useClearLanguagarrPending).mockReturnValue(mutationResult(vi.fn()))
   vi.mocked(useUpdateLanguagarrSettings).mockReturnValue(
     mutationResult(vi.fn()),
+  )
+  vi.mocked(useServiceSettings).mockReturnValue(
+    queryResult(services("http://sonarr:8989")),
   )
 })
 
@@ -238,6 +255,57 @@ describe("Languagarr review", () => {
     expect(
       screen.getByText("Log Horizon — Season 01/unknown.mkv"),
     ).toBeInTheDocument()
+  })
+
+  it("links each series to Sonarr through the configured link URL", () => {
+    render(<Languagarr />)
+    const logHorizon = screen.getByRole("region", { name: "Log Horizon" })
+    const link = within(logHorizon).getByRole("link", {
+      name: "Open Log Horizon in Sonarr",
+    })
+    expect(link).toHaveAttribute(
+      "href",
+      "http://192.168.0.2:8989/series/log-horizon",
+    )
+    expect(link).toHaveAttribute("target", "_blank")
+    // A series Sonarr reported no slug for gets no link.
+    const mha = screen.getByRole("region", { name: "My Hero Academia" })
+    expect(within(mha).queryByRole("link")).toBeNull()
+    expect(screen.queryByText(/Set the Sonarr link URL/)).toBeNull()
+  })
+
+  it("falls back to a browser-reachable Sonarr service URL", () => {
+    vi.mocked(useLanguagarrStatus).mockReturnValue(
+      queryResult({
+        ...STATUS,
+        settings: { ...SETTINGS, sonarr_link_url: "" },
+      }),
+    )
+    vi.mocked(useServiceSettings).mockReturnValue(
+      queryResult(services("http://nas.lan:8989")),
+    )
+    render(<Languagarr />)
+    expect(
+      screen.getByRole("link", { name: "Open Log Horizon in Sonarr" }),
+    ).toHaveAttribute("href", "http://nas.lan:8989/series/log-horizon")
+  })
+
+  it("hides the links when only a Docker-internal Sonarr URL is known", () => {
+    vi.mocked(useLanguagarrStatus).mockReturnValue(
+      queryResult({
+        ...STATUS,
+        settings: { ...SETTINGS, sonarr_link_url: "" },
+      }),
+    )
+    const { rerender } = render(<Languagarr />)
+    expect(screen.queryByRole("link")).toBeNull()
+    expect(screen.getByText(/Set the Sonarr link URL/)).toBeInTheDocument()
+
+    vi.mocked(useServiceSettings).mockReturnValue(
+      queryResult<ServicesSettings>(undefined),
+    )
+    rerender(<Languagarr />)
+    expect(screen.queryByRole("link")).toBeNull()
   })
 
   it("starts a scan and shows the scanning label and errors", async () => {
@@ -506,6 +574,14 @@ describe("Languagarr queue", () => {
     // The stat label and the failed row's status badge.
     expect(screen.getAllByText("Failed")).toHaveLength(2)
     expect(screen.getByText(/scheduled worker is off/)).toBeInTheDocument()
+    // Only the row with a known series slug links to Sonarr.
+    const links = screen.getAllByRole("link")
+    expect(links).toHaveLength(1)
+    expect(links[0]).toHaveAccessibleName("Open Log Horizon - S01E02 in Sonarr")
+    expect(links[0]).toHaveAttribute(
+      "href",
+      "http://192.168.0.2:8989/series/log-horizon",
+    )
   })
 
   it("describes the enabled worker", () => {
@@ -598,6 +674,9 @@ describe("Languagarr settings", () => {
     const profiles = screen.getByLabelText("Sonarr quality profiles in scope")
     await user.clear(profiles)
     await user.type(profiles, "Anime, Anime 4K,")
+    const linkUrl = screen.getByLabelText("Sonarr link URL")
+    await user.clear(linkUrl)
+    await user.type(linkUrl, "nas.lan:8989/")
     await user.click(saveButton)
 
     expect(save).toHaveBeenCalledWith({
@@ -606,7 +685,23 @@ describe("Languagarr settings", () => {
       monitored_only: false,
       searches_per_run: 5,
       quality_profile_names: ["Anime", "Anime 4K"],
+      sonarr_link_url: "http://nas.lan:8989",
     })
+  })
+
+  it("clears the link URL and blocks unsupported schemes", async () => {
+    const user = userEvent.setup()
+    const save = vi.fn()
+    vi.mocked(useUpdateLanguagarrSettings).mockReturnValue(mutationResult(save))
+    render(<Languagarr />)
+    const linkUrl = screen.getByLabelText("Sonarr link URL")
+    await user.clear(linkUrl)
+    await user.type(linkUrl, "ftp://nas.lan")
+    expect(screen.getByRole("button", { name: "Save" })).toBeDisabled()
+
+    await user.clear(linkUrl)
+    await user.click(screen.getByRole("button", { name: "Save" }))
+    expect(save).toHaveBeenCalledWith({ sonarr_link_url: "" })
   })
 
   it("blocks saving invalid numbers or an empty profile list", async () => {

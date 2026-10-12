@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Annotated, Literal
 
 from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 from core.clients.servarr import ServarrClientError
 from core.context import SyncAlreadyRunning
@@ -17,6 +17,7 @@ from core.settings_normalisers import (
     LANGUAGARR_RETRY_HOURS_MIN,
     LANGUAGARR_SEARCHES_PER_RUN_MAX,
     LANGUAGARR_SEARCHES_PER_RUN_MIN,
+    normalise_service_url,
 )
 
 if TYPE_CHECKING:  # pragma: no cover
@@ -35,6 +36,7 @@ class LanguagarrSettings(BaseModel):
     auto_queue: bool
     monitored_only: bool
     quality_profile_names: list[str]
+    sonarr_link_url: str
 
 
 class LanguagarrSettingsUpdate(BaseModel):
@@ -69,6 +71,14 @@ class LanguagarrSettingsUpdate(BaseModel):
         ]
         | None
     ) = None
+    # Empty clears the override (links then use the Sonarr service URL).
+    sonarr_link_url: Annotated[str, Field(max_length=2048)] | None = None
+
+    @field_validator("sonarr_link_url")
+    @classmethod
+    def _valid_link_url(cls, value: str | None) -> str | None:
+        """Reject non-``http(s)`` schemes with a 422 instead of dropping them."""
+        return None if value is None else normalise_service_url(value)
 
 
 class LanguagarrScanSummary(BaseModel):
@@ -100,6 +110,7 @@ class LanguagarrItem(BaseModel):
     episode_file_id: int
     series_id: int
     series_title: str
+    series_slug: str | None
     season_number: int | None
     episode_ids: list[int]
     episode_label: str
@@ -153,6 +164,7 @@ class LanguagarrDeleteResult(BaseModel):
 class LanguagarrQueueRow(BaseModel):
     episode_file_id: int
     series_id: int
+    series_slug: str | None
     title: str
     episode_ids: list[int]
     reason: str

@@ -1935,6 +1935,17 @@
             "title": "Series Id",
             "type": "integer"
           },
+          "series_slug": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Series Slug"
+          },
           "series_title": {
             "title": "Series Title",
             "type": "string"
@@ -1960,6 +1971,7 @@
           "episode_file_id",
           "series_id",
           "series_title",
+          "series_slug",
           "season_number",
           "episode_ids",
           "episode_label",
@@ -2089,6 +2101,17 @@
             "title": "Series Id",
             "type": "integer"
           },
+          "series_slug": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Series Slug"
+          },
           "status": {
             "enum": [
               "pending",
@@ -2106,6 +2129,7 @@
         "required": [
           "episode_file_id",
           "series_id",
+          "series_slug",
           "title",
           "episode_ids",
           "reason",
@@ -2276,6 +2300,10 @@
           "searches_per_run": {
             "title": "Searches Per Run",
             "type": "integer"
+          },
+          "sonarr_link_url": {
+            "title": "Sonarr Link Url",
+            "type": "string"
           }
         },
         "required": [
@@ -2285,7 +2313,8 @@
           "retry_after_hours",
           "auto_queue",
           "monitored_only",
-          "quality_profile_names"
+          "quality_profile_names",
+          "sonarr_link_url"
         ],
         "title": "LanguagarrSettings",
         "type": "object"
@@ -2380,6 +2409,18 @@
               }
             ],
             "title": "Searches Per Run"
+          },
+          "sonarr_link_url": {
+            "anyOf": [
+              {
+                "maxLength": 2048,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sonarr Link Url"
           }
         },
         "title": "LanguagarrSettingsUpdate",

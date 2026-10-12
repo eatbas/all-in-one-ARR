@@ -4,6 +4,8 @@ import type { LanguagarrItem } from "@/shared/lib/api"
 export interface SeriesGroup {
   seriesId: number
   title: string
+  /** Sonarr `titleSlug` for the series link, when Sonarr reported one. */
+  slug: string | null
   items: LanguagarrItem[]
 }
 
@@ -27,6 +29,7 @@ export function groupBySeries(items: LanguagarrItem[]): SeriesGroup[] {
       groups.set(item.series_id, {
         seriesId: item.series_id,
         title: item.series_title,
+        slug: item.series_slug,
         items: [item],
       })
     }

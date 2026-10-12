@@ -119,6 +119,10 @@ DEFAULT_LANGUAGARR_SETTINGS: dict[str, Any] = {
     # and would otherwise replace files the user deliberately froze.
     "monitored_only": True,
     "quality_profile_names": ["Anime"],
+    # Browser-facing Sonarr address for the series links. Empty falls back to
+    # the Sonarr service URL, which is often a Docker hostname the browser
+    # cannot resolve (``http://sonarr:8989``).
+    "sonarr_link_url": "",
 }
 
 
@@ -363,6 +367,16 @@ def _normalise_languagarr_profile_names(value: Any) -> list[str]:
     return names[:LANGUAGARR_PROFILE_NAMES_MAX] or default
 
 
+def _normalise_link_url(value: Any) -> str:
+    """Return a normalised ``http(s)`` link URL, or ``""`` for anything invalid."""
+    if not isinstance(value, str):
+        return ""
+    try:
+        return normalise_service_url(value)
+    except ValueError:
+        return ""
+
+
 def normalise_languagarr_settings(raw: dict[str, Any] | None = None) -> dict[str, Any]:
     """Merge and validate persisted Languagarr settings with safe defaults."""
     raw = raw or {}
@@ -392,4 +406,5 @@ def normalise_languagarr_settings(raw: dict[str, Any] | None = None) -> dict[str
         "quality_profile_names": _normalise_languagarr_profile_names(
             raw.get("quality_profile_names", defaults["quality_profile_names"])
         ),
+        "sonarr_link_url": _normalise_link_url(raw.get("sonarr_link_url")),
     }

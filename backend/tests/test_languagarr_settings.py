@@ -70,6 +70,24 @@ def test_booleans_are_coerced() -> None:
     assert normalise_languagarr_settings()["monitored_only"] is True
 
 
+@pytest.mark.parametrize(
+    ("value", "expected"),
+    [
+        ("192.168.0.2:8989/", "http://192.168.0.2:8989"),
+        (" https://sonarr.example/base/ ", "https://sonarr.example/base"),
+        ("ftp://sonarr", ""),
+        ("", ""),
+        (None, ""),
+        (8989, ""),
+    ],
+)
+def test_sonarr_link_url_is_normalised_or_cleared(value: object, expected: str) -> None:
+    assert (
+        normalise_languagarr_settings({"sonarr_link_url": value})["sonarr_link_url"]
+        == expected
+    )
+
+
 def test_store_seeds_updates_persists_and_migrates(tmp_path) -> None:
     path = tmp_path / "settings.json"
     store = SettingsStore(str(path))

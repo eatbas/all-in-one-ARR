@@ -1,5 +1,7 @@
 import { PlayIcon, XCircleIcon } from "lucide-react"
 
+import { SonarrSeriesLink } from "@/features/languagarr/components/sonarr-series-link"
+import { useSonarrLinkBase } from "@/features/languagarr/sonarr-link"
 import { StatBlock } from "@/shared/components/stat-block"
 import {
   AlertDialog,
@@ -56,6 +58,7 @@ export function Queue() {
   const status = useLanguagarrStatus().data
   const runNow = useRunLanguagarr()
   const clearPending = useClearLanguagarrPending()
+  const sonarrUrl = useSonarrLinkBase()
 
   if (isLoading || !queue) {
     return <p className="text-sm text-muted-foreground">Loading queue…</p>
@@ -130,7 +133,14 @@ export function Queue() {
             {queue.rows.map((row) => (
               <TableRow key={row.episode_file_id}>
                 <TableCell>
-                  <div className="font-medium">{row.title}</div>
+                  <div className="flex items-center gap-2">
+                    <span className="font-medium">{row.title}</span>
+                    <SonarrSeriesLink
+                      baseUrl={sonarrUrl}
+                      slug={row.series_slug}
+                      title={row.title}
+                    />
+                  </div>
                   {row.last_error ? (
                     <div className="text-xs text-destructive">
                       {row.last_error}

@@ -2,6 +2,10 @@
 
 from __future__ import annotations
 
+import sqlite3
+
+from core.db import Database
+
 
 def _entry(file_id: int, **overrides) -> dict:
     entry = {
@@ -78,3 +82,57 @@ def test_prune_and_clear_pending(db) -> None:
     assert db.languagarr_queue_counts() == {"pending": 0, "searched": 1, "failed": 0}
     assert db.languagarr_prune([]) == 1
     assert db.languagarr_queue_rows() == []
+
+
+def test_series_slugs_are_stored_and_backfilled(db) -> None:
+    db.languagarr_enqueue(
+        [_entry(1, series_slug="show"), _entry(2), _entry(3, series_id=2)],
+        retry_before_iso="0",
+    )
+    slugs = {
+        row["episode_file_id"]: row["series_slug"] for row in db.languagarr_queue_rows()
+    }
+    assert slugs == {1: "show", 2: None, 3: None}
+
+    db.languagarr_set_series_slugs({1: "show-renamed"})
+    slugs = {
+        row["episode_file_id"]: row["series_slug"] for row in db.languagarr_queue_rows()
+    }
+    assert slugs == {1: "show-renamed", 2: "show-renamed", 3: None}
+
+
+def test_init_db_adds_series_slug_to_a_legacy_queue(tmp_path) -> None:
+    # A queue created before v1.11 lacks series_slug; init_db must add it and
+    # keep the existing rows (their slug stays NULL until the next scan).
+    path = tmp_path / "legacy.db"
+    legacy = sqlite3.connect(str(path))
+    legacy.executescript(
+        """
+        CREATE TABLE languagarr_queue (
+            episode_file_id INTEGER PRIMARY KEY,
+            series_id INTEGER NOT NULL,
+            title TEXT NOT NULL,
+            episode_ids TEXT NOT NULL,
+            reason TEXT NOT NULL,
+            status TEXT NOT NULL,
+            queued_at TEXT NOT NULL,
+            searched_at TEXT,
+            attempts INTEGER NOT NULL DEFAULT 0,
+            last_error TEXT
+        );
+        INSERT INTO languagarr_queue VALUES
+            (1, 7, 'Show - S01E01', '[10]', 'missing_english', 'pending',
+             '2026-10-12T00:00:00+00:00', NULL, 0, NULL);
+        """
+    )
+    legacy.commit()
+    legacy.close()
+
+    database = Database(str(path))
+    database.init_db()
+    database.init_db()  # the migration is idempotent
+    [row] = database.languagarr_queue_rows()
+    assert row["series_slug"] is None
+    database.languagarr_set_series_slugs({7: "show"})
+    assert database.languagarr_queue_rows()[0]["series_slug"] == "show"
+    database.close()

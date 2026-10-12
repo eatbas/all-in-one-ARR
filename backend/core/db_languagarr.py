@@ -28,7 +28,8 @@ class LanguagarrQueueMixin:
         """Queue replacement searches; return ``(queued, skipped)``.
 
         Each entry carries ``episode_file_id``, ``series_id``, ``title``,
-        ``episode_ids`` (list of ints) and ``reason``. An entry is skipped when
+        ``episode_ids`` (list of ints), ``reason`` and optionally
+        ``series_slug`` (Sonarr's ``titleSlug``, for the series link). An entry is skipped when
         its file is already ``pending``, or was successfully searched at or after
         ``retry_before_iso`` — the retry window — so repeated scans never
         re-search the same file every run. A ``failed`` row (Sonarr rejected the
@@ -58,11 +59,13 @@ class LanguagarrQueueMixin:
                 self._conn.execute(
                     """
                     INSERT INTO languagarr_queue (
-                        episode_file_id, series_id, title, episode_ids, reason,
-                        status, queued_at, searched_at, attempts, last_error
-                    ) VALUES (?, ?, ?, ?, ?, 'pending', ?, NULL, 0, NULL)
+                        episode_file_id, series_id, series_slug, title,
+                        episode_ids, reason, status, queued_at, searched_at,
+                        attempts, last_error
+                    ) VALUES (?, ?, ?, ?, ?, ?, 'pending', ?, NULL, 0, NULL)
                     ON CONFLICT(episode_file_id) DO UPDATE SET
                         series_id=excluded.series_id,
+                        series_slug=excluded.series_slug,
                         title=excluded.title,
                         episode_ids=excluded.episode_ids,
                         reason=excluded.reason,
@@ -73,6 +76,7 @@ class LanguagarrQueueMixin:
                     (
                         file_id,
                         int(entry["series_id"]),
+                        entry.get("series_slug"),
                         str(entry["title"]),
                         json.dumps([int(value) for value in entry["episode_ids"]]),
                         str(entry["reason"]),
@@ -164,6 +168,15 @@ class LanguagarrQueueMixin:
             )
             self._conn.commit()
         return len(stale)
+
+    def languagarr_set_series_slugs(self, slugs: dict[int, str]) -> None:
+        """Set ``series_slug`` on every queue row of each ``{series_id: slug}``."""
+        with self._lock:
+            self._conn.executemany(
+                "UPDATE languagarr_queue SET series_slug=? WHERE series_id=?",
+                [(slug, int(series_id)) for series_id, slug in slugs.items()],
+            )
+            self._conn.commit()
 
     def languagarr_delete_row(self, episode_file_id: int) -> None:
         """Delete one queue row (its file was replaced, fixed or removed)."""

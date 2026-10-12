@@ -36,7 +36,7 @@ from modules.languagarr.client import (
     LanguagarrSonarrClient,
     client_for,
 )
-from modules.languagarr.models import AuditItem, ScanState, Scope
+from modules.languagarr.models import AuditItem, ScanState, Scope, series_slug
 from modules.languagarr.worker import process_rows, run_result
 
 if TYPE_CHECKING:  # pragma: no cover
@@ -119,6 +119,7 @@ def _audit_file(
         episode_file_id=coerce_int(episode_file.get("id"), 0),
         series_id=coerce_int(series.get("id"), 0),
         series_title=str(series.get("title") or "Unknown series"),
+        series_slug=series_slug(series),
         season_number=season,
         episode_ids=tuple(coerce_int(episode.get("id"), 0) for episode in searchable),
         episode_label=_episode_label(season, numbers),
@@ -218,6 +219,14 @@ class LanguagarrService:
             await client.aclose()
         pruned = self._ctx.db.languagarr_prune(
             item.episode_file_id for item in state.results
+        )
+        # Rows queued before slugs were stored gain their Sonarr link here.
+        self._ctx.db.languagarr_set_series_slugs(
+            {
+                item.series_id: item.series_slug
+                for item in state.results
+                if item.series_slug is not None
+            }
         )
         record_languagarr_scan(status="success", verdict_counts=state.verdict_counts())
         detail = (
@@ -539,6 +548,7 @@ def _queue_entry(item: AuditItem) -> dict[str, Any]:
     return {
         "episode_file_id": item.episode_file_id,
         "series_id": item.series_id,
+        "series_slug": item.series_slug,
         "title": item.queue_title,
         "episode_ids": list(item.episode_ids),
         "reason": item.verdict,

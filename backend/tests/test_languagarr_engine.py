@@ -68,8 +68,8 @@ class FakeSonarr:
             {"id": 8, "name": "HD", "cutoffFormatScore": 0},
         ]
         self.series = [
-            {"id": 1, "title": "Show", "qualityProfileId": 9},
-            {"id": 2, "title": "Live", "qualityProfileId": 8},
+            {"id": 1, "title": "Show", "titleSlug": "show", "qualityProfileId": 9},
+            {"id": 2, "title": "Live", "titleSlug": "live", "qualityProfileId": 8},
         ]
         self.files: dict[int, list[dict[str, Any]]] = {
             1: [
@@ -255,6 +255,7 @@ async def test_scan_flags_only_non_compliant_in_scope_files(db, sonarr) -> None:
     assert items[101]["recommended_action"] == "search"
     assert items[101]["release_group"] == "Anitsu"
     assert items[101]["sonarr_languages"] == ["Japanese"]
+    assert items[101]["series_slug"] == "show"
     assert items[102]["verdict"] == "missing_english"
     assert items[104]["episode_ids"] == [1004, 1005]
     assert items[104]["episode_label"] == "S01E04-E05"
@@ -330,6 +331,32 @@ async def test_scan_sorts_episodes_numerically(db, sonarr) -> None:
         "S01E11",
         "S01E100",
     ]
+
+
+async def test_scan_backfills_series_slugs_on_queued_rows(db, sonarr) -> None:
+    service = _service(db)
+    service._ctx.db.languagarr_enqueue(
+        [
+            {
+                "episode_file_id": 101,
+                "series_id": 1,
+                "title": "Show - S01E01",
+                "episode_ids": [1001],
+                "reason": "missing_english",
+            }
+        ],
+        retry_before_iso="0",
+    )
+    assert service._ctx.db.languagarr_queue_rows()[0]["series_slug"] is None
+    await service.scan()
+    assert service._ctx.db.languagarr_queue_rows()[0]["series_slug"] == "show"
+
+
+@pytest.mark.parametrize("slug", [None, "   ", 42])
+async def test_scan_without_a_usable_slug_reports_none(db, sonarr, slug) -> None:
+    sonarr.series[0]["titleSlug"] = slug
+    payload = await _service(db).scan()
+    assert {item["series_slug"] for item in payload["results"]} == {None}
 
 
 async def test_monitored_only_skips_unmonitored_series_and_episodes(db, sonarr) -> None:
@@ -436,6 +463,7 @@ async def test_enqueue_validates_and_joins_queue_status(db, sonarr) -> None:
         "Show - S01E01",
         "Show - S01E04-E05",
     }
+    assert {row["series_slug"] for row in queue["rows"]} == {"show"}
     assert "Languagarr searches queued" in _activity(service)
 
 

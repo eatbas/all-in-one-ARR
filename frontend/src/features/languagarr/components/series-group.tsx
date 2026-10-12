@@ -1,6 +1,7 @@
 import { useState } from "react"
 import { ChevronDownIcon, TvIcon } from "lucide-react"
 
+import { SonarrSeriesLink } from "@/features/languagarr/components/sonarr-series-link"
 import {
   ACTION_LABELS,
   isActionable,
@@ -27,10 +28,17 @@ interface SeriesGroupProps {
   group: SeriesGroupData
   selected: ReadonlySet<number>
   onSelect: (episodeFileIds: number[], checked: boolean) => void
+  /** Browser-facing Sonarr base URL for the series link. */
+  sonarrUrl: string | undefined
 }
 
 /** One collapsible series of non-compliant files with per-file selection. */
-export function SeriesGroup({ group, selected, onSelect }: SeriesGroupProps) {
+export function SeriesGroup({
+  group,
+  selected,
+  onSelect,
+  sonarrUrl,
+}: SeriesGroupProps) {
   const [isOpen, setIsOpen] = useState(true)
   const ids = group.items
     .filter(isActionable)
@@ -65,14 +73,21 @@ export function SeriesGroup({ group, selected, onSelect }: SeriesGroupProps) {
             </span>
             <Badge variant="secondary">{group.items.length} file(s)</Badge>
           </label>
-          <CollapsibleTrigger
-            className="rounded-md p-1 hover:bg-accent"
-            aria-label={`${isOpen ? "Collapse" : "Expand"} ${group.title}`}
-          >
-            <ChevronDownIcon
-              className={`size-4 transition-transform ${isOpen ? "" : "-rotate-90"}`}
+          <div className="flex items-center gap-1">
+            <SonarrSeriesLink
+              baseUrl={sonarrUrl}
+              slug={group.slug}
+              title={group.title}
             />
-          </CollapsibleTrigger>
+            <CollapsibleTrigger
+              className="rounded-md p-1 hover:bg-accent"
+              aria-label={`${isOpen ? "Collapse" : "Expand"} ${group.title}`}
+            >
+              <ChevronDownIcon
+                className={`size-4 transition-transform ${isOpen ? "" : "-rotate-90"}`}
+              />
+            </CollapsibleTrigger>
+          </div>
         </div>
         <CollapsibleContent>
           <Table>

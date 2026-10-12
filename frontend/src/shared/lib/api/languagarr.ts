@@ -56,6 +56,15 @@ export const LANGUAGARR_MAX_DELETE = 25
 /** Most files the backend accepts in one enqueue request. */
 export const LANGUAGARR_MAX_ENQUEUE = 500
 
+/**
+ * Sonarr's series page for a `titleSlug`, e.g.
+ * `http://192.168.0.2:8989/series/log-horizon`.
+ */
+export function sonarrSeriesUrl(baseUrl: string, titleSlug: string): string {
+  const root = baseUrl.replace(/\/+$/, "")
+  return `${root}/series/${encodeURIComponent(titleSlug)}`
+}
+
 export function getLanguagarrStatus(): Promise<LanguagarrStatus> {
   return request<LanguagarrStatus>("/api/languagarr/status")
 }

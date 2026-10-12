@@ -11,9 +11,10 @@ import {
 } from "@/shared/components/ui/card"
 import { Input } from "@/shared/components/ui/input"
 import { Switch } from "@/shared/components/ui/switch"
-import type {
-  LanguagarrSettings,
-  LanguagarrSettingsUpdate,
+import {
+  normaliseServiceUrl,
+  type LanguagarrSettings,
+  type LanguagarrSettingsUpdate,
 } from "@/shared/lib/api"
 import {
   useLanguagarrSettings,
@@ -85,6 +86,16 @@ interface Drafts {
   searches_per_run: string
   retry_after_hours: string
   profiles: string
+  sonarr_link_url: string
+}
+
+/** Normalised link URL (`""` clears it), or `null` for an unsupported scheme. */
+function parseLinkUrl(value: string): string | null {
+  try {
+    return normaliseServiceUrl(value)
+  } catch {
+    return null
+  }
 }
 
 function parseProfiles(value: string): string[] {
@@ -117,6 +128,9 @@ function buildUpdate(
   if (profiles.join("\n") !== settings.quality_profile_names.join("\n")) {
     update.quality_profile_names = profiles
   }
+  const linkUrl = parseLinkUrl(drafts.sonarr_link_url)
+  if (linkUrl === null) return null
+  if (linkUrl !== settings.sonarr_link_url) update.sonarr_link_url = linkUrl
   return update
 }
 
@@ -136,6 +150,7 @@ function SettingsForm({ settings, onSave, isPending }: SettingsFormProps) {
     searches_per_run: String(settings.searches_per_run),
     retry_after_hours: String(settings.retry_after_hours),
     profiles: settings.quality_profile_names.join(", "),
+    sonarr_link_url: settings.sonarr_link_url,
   })
   const update = buildUpdate(drafts, settings)
   const canSave = update !== null && Object.keys(update).length > 0
@@ -221,6 +236,31 @@ function SettingsForm({ settings, onSave, isPending }: SettingsFormProps) {
           <p className="text-xs text-muted-foreground">
             Comma-separated profile names. A name Sonarr does not know stops the
             scan instead of being skipped.
+          </p>
+        </div>
+        <div className="grid gap-2">
+          <label
+            htmlFor="languagarr-sonarr-link-url"
+            className="text-sm font-medium"
+          >
+            Sonarr link URL
+          </label>
+          <Input
+            id="languagarr-sonarr-link-url"
+            value={drafts.sonarr_link_url}
+            onChange={(event) =>
+              setDrafts((current) => ({
+                ...current,
+                sonarr_link_url: event.target.value,
+              }))
+            }
+            placeholder="http://192.168.0.2:8989"
+            disabled={isPending}
+          />
+          <p className="text-xs text-muted-foreground">
+            Address your browser uses to open Sonarr, for the series links on
+            the Review and Queue tabs. Leave empty to use the Sonarr service
+            URL, unless that is a Docker hostname such as http://sonarr:8989.
           </p>
         </div>
         <div className="flex justify-end">

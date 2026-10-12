@@ -56,6 +56,7 @@ class Database(LanguagarrQueueMixin):
         with self._lock:
             self._conn.executescript(INIT_SQL)
             self._migrate_items_columns()
+            self._migrate_languagarr_columns()
             self._purge_failure_null_ratings_once()
             self._conn.commit()
 
@@ -80,6 +81,23 @@ class Database(LanguagarrQueueMixin):
                 self._conn.execute(
                     "UPDATE items SET seer_request_id = jellyseerr_request_id"
                 )
+
+    def _migrate_languagarr_columns(self) -> None:
+        """Add ``languagarr_queue.series_slug`` to queues created before v1.11.
+
+        Additive and idempotent; existing rows keep a NULL slug until the next
+        scan backfills it from Sonarr.
+        """
+        columns = {
+            row["name"]
+            for row in self._conn.execute(
+                "PRAGMA table_info(languagarr_queue)"
+            ).fetchall()
+        }
+        if "series_slug" not in columns:
+            self._conn.execute(
+                "ALTER TABLE languagarr_queue ADD COLUMN series_slug TEXT"
+            )
 
     def _purge_failure_null_ratings_once(self) -> None:
         """One-time cleanup of null ratings written before failures were retried.

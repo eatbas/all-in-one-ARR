@@ -3,6 +3,7 @@ import { ListPlusIcon, RefreshCwIcon } from "lucide-react"
 
 import { DeleteDialog } from "@/features/languagarr/components/delete-dialog"
 import { SeriesGroup } from "@/features/languagarr/components/series-group"
+import { useSonarrLinkBase } from "@/features/languagarr/sonarr-link"
 import {
   groupBySeries,
   isActionable,
@@ -41,6 +42,7 @@ function Results({ items, unknown, isBusy }: ResultsProps) {
   const groups = useMemo(() => groupBySeries(items), [items])
   const enqueue = useEnqueueLanguagarr()
   const deleteFiles = useDeleteLanguagarr()
+  const sonarrUrl = useSonarrLinkBase()
   const actionableIds = useMemo(
     () => items.filter(isActionable).map((item) => item.episode_file_id),
     [items],
@@ -116,12 +118,19 @@ function Results({ items, unknown, isBusy }: ResultsProps) {
         Files marked “Delete & search” already meet the profile’s score cutoff,
         so Sonarr will never upgrade them on its own.
       </p>
+      {sonarrUrl ? null : (
+        <p className="text-xs text-muted-foreground">
+          Set the Sonarr link URL in Languagarr settings to open each series in
+          Sonarr.
+        </p>
+      )}
       {groups.map((group) => (
         <SeriesGroup
           key={group.seriesId}
           group={group}
           selected={selected}
           onSelect={updateSelection}
+          sonarrUrl={sonarrUrl}
         />
       ))}
       {unknown.length > 0 ? (

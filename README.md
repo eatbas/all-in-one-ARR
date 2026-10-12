@@ -518,7 +518,10 @@ audio track**. Configure **Sonarr** in **Settings** first.
 - **Review** — **Scan** lists the offending files grouped by series, with the
   audio tracks, Sonarr's custom-format score against the profile cutoff, and the
   recommended fix. Results live in memory (re-scan after a restart); the queue
-  persists in SQLite.
+  persists in SQLite. Each series (and each queue row) links to its Sonarr page
+  so you can check the releases yourself; set **Sonarr link URL** in Settings to
+  the address your browser uses (for example `http://192.168.0.2:8989`) when the
+  Sonarr service URL is a Docker hostname such as `http://sonarr:8989`.
 - **Queue search** (never destructive) — selected files are queued and the
   scheduled worker sends bounded Sonarr `EpisodeSearch` commands
   (`searches_per_run` every `interval_minutes`, default 10 per 60 minutes, off by
@@ -547,6 +550,12 @@ audio track**. Configure **Sonarr** in **Settings** first.
   non-compliant releases with Sonarr custom formats (for example via Recyclarr),
   scoring non-English "DUAL" groups and foreign-dub markers below the profile's
   minimum score.
+- **Quality ranking** — Sonarr compares quality before custom-format score, so a
+  Japanese `Bluray-1080p` file is never replaced by an English `WEBDL-1080p`
+  release, whatever its score ("Existing file on disk is of equal or higher
+  preference"). Put the 1080p qualities (Bluray, WEB-DL, WEBRip, HDTV) in one
+  quality group on the anime profile so the score decides; Sonarr's interactive
+  search shows each release's rejection reason.
 
 ### Trending page
 
@@ -850,8 +859,9 @@ after both check jobs have passed.
   Arr-backed scans) is not a file the library manager now tracks.
 - `GET /api/languagarr/settings` / `PUT /api/languagarr/settings` – Languagarr
   settings `{ enabled, interval_minutes, searches_per_run, retry_after_hours,
-  auto_queue, monitored_only, quality_profile_names }`; out-of-range values return
-  `422`, and a changed interval reschedules the worker.
+  auto_queue, monitored_only, quality_profile_names, sonarr_link_url }`;
+  out-of-range values or a non-`http(s)` link URL return `422`, and a changed
+  interval reschedules the worker.
 - `GET /api/languagarr/status` – settings, running flag, latest scan summary and
   queue counts.
 - `GET /api/languagarr/results` – latest scan results (non-compliant and unknown

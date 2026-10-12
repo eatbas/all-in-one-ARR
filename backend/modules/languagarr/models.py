@@ -12,6 +12,14 @@ RecommendedAction = Literal["search", "delete_and_search"]
 QueueStatus = Literal["none", "pending", "searched", "failed"]
 
 
+def series_slug(series: dict[str, Any]) -> str | None:
+    """Return a Sonarr series' non-blank ``titleSlug``, else ``None``."""
+    slug = series.get("titleSlug")
+    if not isinstance(slug, str):
+        return None
+    return slug.strip() or None
+
+
 @dataclass(frozen=True)
 class AuditItem:
     """One Sonarr episode file without an English audio track.
@@ -26,6 +34,8 @@ class AuditItem:
     episode_file_id: int
     series_id: int
     series_title: str
+    # Sonarr's ``titleSlug``: the series page lives at ``/series/{slug}``.
+    series_slug: str | None
     season_number: int | None
     episode_ids: tuple[int, ...]
     episode_label: str
@@ -53,6 +63,7 @@ class AuditItem:
             "episode_file_id": self.episode_file_id,
             "series_id": self.series_id,
             "series_title": self.series_title,
+            "series_slug": self.series_slug,
             "season_number": self.season_number,
             "episode_ids": list(self.episode_ids),
             "episode_label": self.episode_label,

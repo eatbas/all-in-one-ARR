@@ -109,6 +109,7 @@ CREATE TABLE IF NOT EXISTS app_state (
 CREATE TABLE IF NOT EXISTS languagarr_queue (
     episode_file_id INTEGER PRIMARY KEY,
     series_id INTEGER NOT NULL,
+    series_slug TEXT,
     title TEXT NOT NULL,
     episode_ids TEXT NOT NULL,
     reason TEXT NOT NULL,

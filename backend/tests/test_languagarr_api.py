@@ -29,6 +29,7 @@ _ITEM = {
     "episode_file_id": 101,
     "series_id": 1,
     "series_title": "Show",
+    "series_slug": "show",
     "season_number": 1,
     "episode_ids": [1001],
     "episode_label": "S01E01",
@@ -121,6 +122,7 @@ def test_callbacks_are_forwarded(db) -> None:
                 {
                     "episode_file_id": 101,
                     "series_id": 1,
+                    "series_slug": "show",
                     "title": "Show - S01E01",
                     "episode_ids": [1001],
                     "reason": "missing_english",
@@ -160,7 +162,9 @@ def test_callbacks_are_forwarded(db) -> None:
     )
     assert deleted.json()["deleted_ids"] == [101]
     ctx.languagarr_delete.assert_awaited_once_with([101])
-    assert client.get("/api/languagarr/queue").json()["rows"][0]["status"] == "pending"
+    queue_row = client.get("/api/languagarr/queue").json()["rows"][0]
+    assert queue_row["status"] == "pending"
+    assert queue_row["series_slug"] == "show"
     assert client.delete("/api/languagarr/queue/pending").json() == {"removed": 1}
     assert client.post("/api/languagarr/run").json()["searched"] == 1
     assert (
@@ -224,9 +228,29 @@ def test_settings_update_rejects_out_of_range_values(db) -> None:
         {"searches_per_run": 101},
         {"retry_after_hours": 1},
         {"quality_profile_names": []},
+        {"sonarr_link_url": "ftp://192.168.0.2:8989"},
+        {"sonarr_link_url": "http://" + "a" * 2048},
     ):
         assert client.put("/api/languagarr/settings", json=body).status_code == 422
     ctx.languagarr_update_settings.assert_not_awaited()
+
+
+def test_settings_update_normalises_the_sonarr_link_url(db) -> None:
+    ctx = make_ctx(db=db)
+    ctx.languagarr_update_settings = AsyncMock(return_value=_status(ctx))
+    client = build_client(ctx)
+    for sent, forwarded in (
+        (" 192.168.0.2:8989/ ", "http://192.168.0.2:8989"),
+        ("https://sonarr.example/base/", "https://sonarr.example/base"),
+        ("", ""),
+    ):
+        response = client.put(
+            "/api/languagarr/settings", json={"sonarr_link_url": sent}
+        )
+        assert response.status_code == 200
+        ctx.languagarr_update_settings.assert_awaited_with(
+            {"sonarr_link_url": forwarded}
+        )
 
 
 def test_errors_map_to_http_statuses(db) -> None:
