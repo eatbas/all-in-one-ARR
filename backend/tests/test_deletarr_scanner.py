@@ -254,6 +254,21 @@ def test_empty_detection_preserves_root_symlinks_and_hidden_content(tmp_path) ->
     assert all(item.path != str(movie / "linked") for item in results)
 
 
+def test_empty_detection_treats_a_lone_directory_symlink_as_content(
+    tmp_path,
+) -> None:
+    # The only entry is a directory symlink, so the symlink branch is reached
+    # regardless of the filesystem's directory-listing order (NTFS lists
+    # alphabetically, ext4/btrfs in hash order); deleting it is never "harmless".
+    external = tmp_path / "external"
+    external.mkdir()
+    parent = tmp_path / "Only A Link"
+    parent.mkdir()
+    (parent / "linked").symlink_to(external, target_is_directory=True)
+
+    assert MediaScanner._is_empty_tree(str(parent)) is False
+
+
 def test_empty_detection_treats_listing_errors_as_content(
     tmp_path, monkeypatch
 ) -> None:
