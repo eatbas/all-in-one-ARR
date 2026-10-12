@@ -12,8 +12,8 @@ It also includes **Deletarr**, which scans mounted media folders for junk files
 and deletes only explicitly selected current scan results under the configured
 library roots.
 It also includes **Languagarr**, which audits the real audio tracks of Sonarr
-anime episode files, lists every file that is not dual audio with an English
-track, and replaces them through bounded Sonarr searches or a reviewed
+anime episode files, lists every file without an English audio track, and
+replaces them through bounded Sonarr searches or a reviewed
 delete-and-search (searches off by default).
 It uses **official REST APIs only** (no scraping).
 
@@ -69,7 +69,7 @@ backend/
     bandwidth_controllarr/  # pause SABnzbd while qBittorrent has active torrents
     findarr/              # bounded Sonarr/Radarr missing and upgrade searches
     deletarr/             # reviewed junk-file scans and validated deletion
-    languagarr/           # anime English dual-audio audit, search queue, reviewed delete
+    languagarr/           # anime English-audio audit, search queue, reviewed delete
   main.py            # entrypoint: `uvicorn main:app --app-dir backend`
   pyproject.toml     # packaging + pytest + coverage config
   tests/             # backend test suite (100% coverage)
@@ -500,15 +500,15 @@ reviewed junk candidates and deletes only what you explicitly confirm:
 
 ### Languagarr page
 
-The dashboard **Languagarr** page (left menu) keeps Sonarr anime on **dual audio
-with an English track**. Configure **Sonarr** in **Settings** first.
+The dashboard **Languagarr** page (left menu) keeps Sonarr anime on **an English
+audio track**. Configure **Sonarr** in **Settings** first.
 
-- **Rule** — a file passes only when Sonarr's `mediaInfo.audioLanguages` (read
-  from the file's real audio tracks, not Sonarr's language label) contains `eng`
-  **and** at least one other language. `und`/`zxx`/`mis`/`mul` are ignored.
-  English-only dubs and Japanese-only, Japanese + Portuguese, or German + Japanese
-  releases all fail. Files with no audio-language data are listed as *Unknown
-  audio* and never actioned.
+- **Rule** — a file passes when Sonarr's `mediaInfo.audioLanguages` (read from
+  the file's real audio tracks, not Sonarr's language label) contains `eng`.
+  English-only dubs, Japanese + English dual audio and multi-audio files with
+  English all pass; Japanese-only, Japanese + Portuguese or German + Japanese
+  files fail. `und`/`zxx`/`mis`/`mul` are ignored. Files with no audio-language
+  data are listed as *Unknown audio* and never actioned.
 - **Scope** — series on the Sonarr quality profiles named in Settings (default
   `Anime`), regardless of series type. A configured name Sonarr does not know
   stops the scan instead of being skipped. **Monitored series and episodes only**

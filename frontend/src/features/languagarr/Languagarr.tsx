@@ -24,7 +24,7 @@ function storedTab(): LanguagarrTab {
     : "review"
 }
 
-/** Languagarr page: keep Sonarr anime on English dual audio. */
+/** Languagarr page: keep an English audio track on Sonarr anime. */
 export function Languagarr() {
   const [activeTab, setActiveTab] = useState<LanguagarrTab>(storedTab)
 
@@ -43,7 +43,7 @@ export function Languagarr() {
       <div>
         <h1 className="text-2xl font-semibold tracking-tight">Languagarr</h1>
         <p className="text-sm text-muted-foreground">
-          Find Sonarr anime episodes without English dual audio and replace
+          Find Sonarr anime episodes without an English audio track and replace
           them.
         </p>
       </div>

@@ -106,7 +106,7 @@ export function useScanLanguagarr(): UseMutationResult<
     onSuccess: (result) => {
       queryClient.setQueryData(queryKeys.languagarrResults, result)
       toast.success("Languagarr scan complete", {
-        description: `${result.scan.non_compliant} file(s) without English dual audio.`,
+        description: `${result.scan.non_compliant} file(s) without English audio.`,
       })
       invalidateLanguagarr(queryClient)
     },

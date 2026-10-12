@@ -1,4 +1,4 @@
-"""Dashboard JSON API for Languagarr (anime English dual-audio enforcement)."""
+"""Dashboard JSON API for Languagarr (anime English-audio enforcement)."""
 
 from __future__ import annotations
 
@@ -22,9 +22,7 @@ from core.settings_normalisers import (
 if TYPE_CHECKING:  # pragma: no cover
     from core.context import AppContext
 
-AudioVerdictLiteral = Literal[
-    "compliant", "missing_english", "single_language", "unknown"
-]
+AudioVerdictLiteral = Literal["compliant", "missing_english", "unknown"]
 QueueStatusLiteral = Literal["none", "pending", "searched", "failed"]
 QueueRowStatusLiteral = Literal["pending", "searched", "failed"]
 
@@ -83,7 +81,6 @@ class LanguagarrScanSummary(BaseModel):
     non_compliant: int
     unknown: int
     missing_english: int
-    single_language: int
 
 
 class LanguagarrQueueCounts(BaseModel):

@@ -1,7 +1,7 @@
 """Languagarr engine: audit anime audio, queue replacement searches, guarded delete.
 
 The audit reads each in-scope Sonarr episode file's real audio tracks and keeps
-the files that break the dual-audio-with-English rule. Fixing them is two-tier:
+the files without an English audio track. Fixing them is two-tier:
 
 * **Search** (default, never destructive): the file's episodes are queued and the
   scheduled worker sends bounded Sonarr ``EpisodeSearch`` commands. Sonarr replaces
@@ -221,7 +221,7 @@ class LanguagarrService:
         )
         record_languagarr_scan(status="success", verdict_counts=state.verdict_counts())
         detail = (
-            f"{len(state.results)} anime file(s) without English dual audio, "
+            f"{len(state.results)} anime file(s) without English audio, "
             f"{len(state.unknown)} with unknown audio, across "
             f"{state.series_scanned} series."
         )
@@ -357,7 +357,7 @@ class LanguagarrService:
         if queued:
             self._ctx.db.add_activity(
                 "Languagarr searches queued",
-                f"Queued {queued} anime file(s) for an English dual-audio replacement search.",
+                f"Queued {queued} anime file(s) for an English-audio replacement search.",
             )
         return {"queued": queued, "skipped": skipped, "errors": errors}
 

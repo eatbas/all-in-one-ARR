@@ -1,4 +1,4 @@
-"""Tests for the Languagarr dual-audio-with-English compliance rule."""
+"""Tests for the Languagarr English-audio compliance rule."""
 
 from __future__ import annotations
 
@@ -21,9 +21,10 @@ from modules.languagarr.audio import evaluate_audio
         ("jpn", "missing_english", ("jpn",)),
         ("jpn/jpn", "missing_english", ("jpn",)),
         ("ger/jpn", "missing_english", ("ger", "jpn")),
-        ("eng", "single_language", ("eng",)),
-        ("eng/eng", "single_language", ("eng",)),
-        ("und/eng", "single_language", ("eng",)),
+        ("eng", "compliant", ("eng",)),
+        ("eng/eng", "compliant", ("eng",)),
+        ("und/eng", "compliant", ("eng",)),
+        ("ENGLISH", "compliant", ("eng",)),
         ("zxx", "unknown", ()),
         ("und/mis/mul", "unknown", ()),
         ("", "unknown", ()),

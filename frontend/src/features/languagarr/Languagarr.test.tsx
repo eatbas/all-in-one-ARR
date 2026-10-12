@@ -58,8 +58,7 @@ const SCAN: LanguagarrScanSummary = {
   files_scanned: 10,
   non_compliant: 3,
   unknown: 1,
-  missing_english: 2,
-  single_language: 1,
+  missing_english: 3,
 }
 
 function item(
@@ -138,7 +137,7 @@ const QUEUE: LanguagarrQueue = {
       series_id: 1,
       title: "Log Horizon - S01E04",
       episode_ids: [40],
-      reason: "single_language",
+      reason: "missing_english",
       status: "searched",
       queued_at: "2026-10-12T17:00:00Z",
       searched_at: "2026-10-12T17:30:00Z",
@@ -222,7 +221,8 @@ describe("Languagarr page", () => {
 describe("Languagarr review", () => {
   it("shows scan statistics, grouped results and unknown files", () => {
     render(<Languagarr />)
-    expect(screen.getByText("Without English dual")).toBeInTheDocument()
+    expect(screen.getByText("Without English audio")).toBeInTheDocument()
+    expect(screen.getByText("Files checked")).toBeInTheDocument()
     expect(screen.getByText("2 series, 10 files checked")).toBeInTheDocument()
     const logHorizon = screen.getByRole("region", { name: "Log Horizon" })
     expect(within(logHorizon).getByText("S01E01")).toBeInTheDocument()
@@ -287,7 +287,7 @@ describe("Languagarr review", () => {
     )
     rerender(<Languagarr />)
     expect(
-      screen.getByText("Every scanned anime file has English dual audio."),
+      screen.getByText("Every scanned anime file has an English audio track."),
     ).toBeInTheDocument()
 
     vi.mocked(useLanguagarrResults).mockReturnValue(
@@ -501,7 +501,6 @@ describe("Languagarr queue", () => {
   it("lists queue rows with status, reason and errors", () => {
     render(<Languagarr />)
     expect(screen.getByText("Log Horizon - S01E02")).toBeInTheDocument()
-    expect(screen.getByText("English only")).toBeInTheDocument()
     expect(screen.getByText("legacy_reason")).toBeInTheDocument()
     expect(screen.getByText("sonarr API request failed")).toBeInTheDocument()
     // The stat label and the failed row's status badge.

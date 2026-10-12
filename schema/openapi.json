@@ -1950,7 +1950,6 @@
             "enum": [
               "compliant",
               "missing_english",
-              "single_language",
               "unknown"
             ],
             "title": "Verdict",
@@ -2226,10 +2225,6 @@
             "title": "Series Scanned",
             "type": "integer"
           },
-          "single_language": {
-            "title": "Single Language",
-            "type": "integer"
-          },
           "unknown": {
             "title": "Unknown",
             "type": "integer"
@@ -2244,8 +2239,7 @@
           "files_scanned",
           "non_compliant",
           "unknown",
-          "missing_english",
-          "single_language"
+          "missing_english"
         ],
         "title": "LanguagarrScanSummary",
         "type": "object"

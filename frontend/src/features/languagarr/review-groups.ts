@@ -38,7 +38,6 @@ export function groupBySeries(items: LanguagarrItem[]): SeriesGroup[] {
 export const VERDICT_LABELS: Record<LanguagarrItem["verdict"], string> = {
   compliant: "Compliant",
   missing_english: "No English",
-  single_language: "English only",
   unknown: "Unknown audio",
 }
 

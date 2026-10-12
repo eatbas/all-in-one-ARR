@@ -46,7 +46,6 @@ const SCAN = {
   non_compliant: 4,
   unknown: 0,
   missing_english: 4,
-  single_language: 0,
 }
 const RESULTS: LanguagarrResults = { scan: SCAN, results: [], unknown: [] }
 const STATUS = { running: false } as unknown as LanguagarrStatus
@@ -91,7 +90,7 @@ describe("Languagarr mutations", () => {
       RESULTS,
     )
     expect(toast.success).toHaveBeenCalledWith("Languagarr scan complete", {
-      description: "4 file(s) without English dual audio.",
+      description: "4 file(s) without English audio.",
     })
     expect(invalidate).toHaveBeenCalledWith({ queryKey: ["languagarr"] })
     expect(invalidate).toHaveBeenCalledWith({ queryKey: queryKeys.activity })

@@ -70,7 +70,7 @@ function Results({ items, unknown, isBusy }: ResultsProps) {
   if (items.length === 0 && unknown.length === 0) {
     return (
       <p className="text-sm text-muted-foreground">
-        Every scanned anime file has English dual audio.
+        Every scanned anime file has an English audio track.
       </p>
     )
   }
@@ -150,14 +150,13 @@ function Results({ items, unknown, isBusy }: ResultsProps) {
 
 function ScanStats({ scan }: { scan: LanguagarrScanSummary | undefined }) {
   return (
-    <section className="grid gap-3 md:grid-cols-5">
+    <section className="grid gap-3 md:grid-cols-4">
       <StatBlock
-        label="Without English dual"
+        label="Without English audio"
         value={scan?.non_compliant ?? 0}
       />
-      <StatBlock label="No English track" value={scan?.missing_english ?? 0} />
-      <StatBlock label="English only" value={scan?.single_language ?? 0} />
       <StatBlock label="Unknown audio" value={scan?.unknown ?? 0} />
+      <StatBlock label="Files checked" value={scan?.files_scanned ?? 0} />
       <StatBlock
         label="Last scan"
         value={
@@ -191,7 +190,8 @@ export function Review() {
           <CardDescription>
             Checks the real audio tracks of every episode file on the{" "}
             {profiles.join(", ") || "configured"} quality profile(s). A file
-            passes only with English plus at least one other language.
+            passes when it has an English audio track; English-only and
+            dual-audio files are both fine.
           </CardDescription>
         </CardHeader>
         <CardContent className="flex flex-col gap-4">
@@ -218,7 +218,7 @@ export function Review() {
         <p className="text-sm text-muted-foreground">Loading results…</p>
       ) : !resultsQuery.data.scan.last_scan_at ? (
         <p className="text-sm text-muted-foreground">
-          Run a scan to list anime files without English dual audio.
+          Run a scan to list anime files without an English audio track.
         </p>
       ) : (
         <Results

@@ -1,4 +1,4 @@
-"""Languagarr module: enforce English dual audio on Sonarr anime episode files."""
+"""Languagarr module: keep an English audio track on Sonarr anime episode files."""
 
 from __future__ import annotations
 

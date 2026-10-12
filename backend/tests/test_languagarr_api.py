@@ -23,7 +23,6 @@ _SCAN = {
     "non_compliant": 1,
     "unknown": 0,
     "missing_english": 1,
-    "single_language": 0,
 }
 _COUNTS = {"pending": 1, "searched": 0, "failed": 0}
 _ITEM = {

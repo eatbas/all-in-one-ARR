@@ -74,7 +74,7 @@ class FakeSonarr:
         self.files: dict[int, list[dict[str, Any]]] = {
             1: [
                 _file(101, "jpn/por", score=-8000, group="Anitsu"),
-                _file(102, "eng", score=-10000),
+                _file(102, "ger", score=-10000),
                 _file(103, "jpn/eng", score=12100),
                 _file(104, "jpn/jpn", score=12000, group=""),
                 _file(105, None, score=0),
@@ -255,7 +255,7 @@ async def test_scan_flags_only_non_compliant_in_scope_files(db, sonarr) -> None:
     assert items[101]["recommended_action"] == "search"
     assert items[101]["release_group"] == "Anitsu"
     assert items[101]["sonarr_languages"] == ["Japanese"]
-    assert items[102]["verdict"] == "single_language"
+    assert items[102]["verdict"] == "missing_english"
     assert items[104]["episode_ids"] == [1004, 1005]
     assert items[104]["episode_label"] == "S01E04-E05"
     assert items[104]["recommended_action"] == "delete_and_search"
@@ -268,8 +268,7 @@ async def test_scan_flags_only_non_compliant_in_scope_files(db, sonarr) -> None:
     assert scan["series_scanned"] == 1
     assert scan["files_scanned"] == 6
     assert scan["non_compliant"] == 4
-    assert scan["missing_english"] == 3
-    assert scan["single_language"] == 1
+    assert scan["missing_english"] == 4
     assert scan["unknown"] == 1
     assert scan["profiles_in_scope"] == ["Anime"]
     assert scan["last_scan_at"]

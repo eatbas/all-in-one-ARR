@@ -148,7 +148,7 @@ function SettingsForm({ settings, onSave, isPending }: SettingsFormProps) {
           Languagarr settings
         </CardTitle>
         <CardDescription>
-          Scope and pacing of the English dual-audio replacement searches.
+          Scope and pacing of the English-audio replacement searches.
         </CardDescription>
       </CardHeader>
       <CardContent className="grid gap-5">

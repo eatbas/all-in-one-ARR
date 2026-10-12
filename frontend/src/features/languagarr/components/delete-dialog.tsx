@@ -57,8 +57,8 @@ export function DeleteDialog({
             Delete {items.length} file(s) and search for replacements?
           </AlertDialogTitle>
           <AlertDialogDescription>
-            Sonarr deletes each file, then searches its episodes for an English
-            dual-audio release. Each file is re-checked first and skipped if it
+            Sonarr deletes each file, then searches its episodes for a release
+            with English audio. Each file is re-checked first and skipped if it
             changed since the scan. Deletion is permanent unless a Sonarr
             Recycle Bin is configured, and an episode stays missing if no
             compliant release exists.

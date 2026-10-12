@@ -14,7 +14,7 @@ QueueStatus = Literal["none", "pending", "searched", "failed"]
 
 @dataclass(frozen=True)
 class AuditItem:
-    """One Sonarr episode file whose audio breaks the dual-audio-with-English rule.
+    """One Sonarr episode file without an English audio track.
 
     ``recommended_action`` is ``search`` when the file's custom-format score is
     below the profile's cutoff score: Sonarr will then treat a better release as
@@ -105,7 +105,6 @@ class ScanState:
         """Return file counts per non-compliant verdict, including ``unknown``."""
         counts = {
             "missing_english": 0,
-            "single_language": 0,
             "unknown": len(self.unknown),
         }
         for item in self.results:
@@ -125,5 +124,4 @@ class ScanState:
             "non_compliant": len(self.results),
             "unknown": len(self.unknown),
             "missing_english": by_verdict["missing_english"],
-            "single_language": by_verdict["single_language"],
         }

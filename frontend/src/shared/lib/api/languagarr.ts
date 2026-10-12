@@ -26,7 +26,7 @@ export type LanguagarrScanSummary = GeneratedLanguagarrScanSummary
 /** Settings, scan summary and queue counts (`GET /api/languagarr/status`). */
 export type LanguagarrStatus = GeneratedLanguagarrStatus
 
-/** One anime episode file that breaks the English dual-audio rule. */
+/** One anime episode file without an English audio track. */
 export type LanguagarrItem = GeneratedLanguagarrItem
 
 /** Latest scan results joined with live queue status. */

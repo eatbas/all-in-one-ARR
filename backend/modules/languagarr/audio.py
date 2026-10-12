@@ -1,4 +1,8 @@
-"""The Languagarr compliance rule: anime must be dual audio with an English track.
+"""The Languagarr compliance rule: anime must have an English audio track.
+
+Any file with English audio passes — English-only dubs, Japanese + English dual
+audio and multi-audio releases alike. A file without an English track fails,
+whatever else it carries (Japanese-only, Japanese + Portuguese, a German dub).
 
 Sonarr reports a file's real audio tracks in ``mediaInfo.audioLanguages`` as
 ISO-639-2 codes joined with ``/`` (for example ``"jpn/eng"``). That field is read
@@ -11,7 +15,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, Literal
 
-AudioStatus = Literal["compliant", "missing_english", "single_language", "unknown"]
+AudioStatus = Literal["compliant", "missing_english", "unknown"]
 
 ENGLISH = "eng"
 
@@ -19,7 +23,7 @@ ENGLISH = "eng"
 _ENGLISH_ALIASES = frozenset({"en", "eng", "english"})
 
 # Codes that say nothing about the spoken language: undetermined, no linguistic
-# content, uncoded and multiple. They never count towards "dual audio".
+# content, uncoded and multiple. They are ignored when reading the tracks.
 _IGNORED_CODES = frozenset({"und", "zxx", "mis", "mul"})
 
 
@@ -36,7 +40,7 @@ class AudioVerdict:
 
     @property
     def compliant(self) -> bool:
-        """Whether the file satisfies the dual-audio-with-English rule."""
+        """Whether the file has an English audio track."""
         return self.status == "compliant"
 
 
@@ -52,8 +56,7 @@ def evaluate_audio(audio_languages: str | None) -> AudioVerdict:
     aliases map to ``eng``, and blank or non-linguistic codes (``und``, ``zxx``,
     ``mis``, ``mul``) are discarded. Duplicates (two Japanese tracks) count once.
 
-    * ``compliant``: ``eng`` is present and at least two distinct languages remain.
-    * ``single_language``: ``eng`` is the only distinct language (an English-only dub).
+    * ``compliant``: an ``eng`` track is present.
     * ``missing_english``: at least one language remains but none is English.
     * ``unknown``: nothing remains — Sonarr has no usable audio-language data, so
       the file is reported for review but never actioned automatically.
@@ -68,8 +71,6 @@ def evaluate_audio(audio_languages: str | None) -> AudioVerdict:
         return AudioVerdict("unknown", distinct)
     if ENGLISH not in distinct:
         return AudioVerdict("missing_english", distinct)
-    if len(distinct) < 2:
-        return AudioVerdict("single_language", distinct)
     return AudioVerdict("compliant", distinct)
 
 

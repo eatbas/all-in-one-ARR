@@ -105,7 +105,7 @@ DEFAULT_DELETARR_SETTINGS: dict[str, Any] = {
 }
 
 
-# Languagarr: audits Sonarr anime episode files for English dual audio and
+# Languagarr: audits Sonarr anime episode files for an English audio track and
 # queues bounded replacement searches. ``enabled`` gates the scheduled search
 # worker only; scans and reviewed actions are always available from the page.
 DEFAULT_LANGUAGARR_SETTINGS: dict[str, Any] = {

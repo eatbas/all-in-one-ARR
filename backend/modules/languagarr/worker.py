@@ -91,7 +91,7 @@ async def process_rows(
     record_languagarr_searches(succeeded=searched, failed=failed)
     ctx.db.add_activity(
         "Languagarr searches sent",
-        f"Sent {searched} English dual-audio replacement search(es)"
+        f"Sent {searched} English-audio replacement search(es)"
         + (f"; {failed} failed" if failed else "")
         + (f"; {resolved} already resolved" if resolved else "")
         + ".",

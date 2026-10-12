@@ -1161,7 +1161,7 @@ export type LanguagarrItem = {
     /**
      * Verdict
      */
-    verdict: 'compliant' | 'missing_english' | 'single_language' | 'unknown';
+    verdict: 'compliant' | 'missing_english' | 'unknown';
 };
 
 /**
@@ -1326,10 +1326,6 @@ export type LanguagarrScanSummary = {
      * Series Scanned
      */
     series_scanned: number;
-    /**
-     * Single Language
-     */
-    single_language: number;
     /**
      * Unknown
      */
