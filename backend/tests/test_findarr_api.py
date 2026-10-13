@@ -20,6 +20,10 @@ def test_settings_are_available_without_module_callbacks(db) -> None:
     body = build_client(make_ctx(db=db)).get("/api/findarr/settings").json()
     assert body["enabled"] is False
     assert set(body["apps"]) == {"sonarr", "radarr"}
+    # Search granularity is Sonarr-only; Radarr always searches whole movies.
+    assert body["apps"]["sonarr"]["missing_mode"] == "episodes"
+    assert "missing_mode" not in body["apps"]["radarr"]
+    assert "upgrade_mode" not in body["apps"]["radarr"]
 
 
 def test_status_unavailable_without_callback(db) -> None:
@@ -48,19 +52,19 @@ def test_status_history_run_reset_and_settings_callbacks(db) -> None:
             "last_run_at": None,
             "last_run_status": None,
             "last_run_detail": None,
-            "state": {"created_at": None, "reset_at": None, "reset_hours": 168},
+            "retry": {"base_hours": 168, "max_hours": 720, "next_due_at": None},
             "apps": {
                 "sonarr": {
                     "detail": "ok",
                     "version": "4.0.0",
                     "compatible": True,
-                    "processed": {"missing": 0, "upgrade": 0},
+                    "cooldown": {"missing": 0, "upgrade": 0},
                 },
                 "radarr": {
                     "detail": "ok",
                     "version": "6.0.0",
                     "compatible": True,
-                    "processed": {"missing": 0, "upgrade": 0},
+                    "cooldown": {"missing": 0, "upgrade": 0},
                 },
             },
             "hourly": {"limit": 20, "used": 0, "remaining": 20},
@@ -95,7 +99,12 @@ def test_status_history_run_reset_and_settings_callbacks(db) -> None:
     ctx.findarr_update_settings = update_settings
 
     client = build_client(ctx)
-    assert client.get("/api/findarr/status").status_code == 200
+    status_body = client.get("/api/findarr/status").json()
+    assert status_body["retry"] == {
+        "base_hours": 168,
+        "max_hours": 720,
+        "next_due_at": None,
+    }
     assert client.get("/api/findarr/history").json()[0]["mode"] == "system"
     assert (
         client.post("/api/findarr/run", json={"app": "sonarr"}).json()["detail"]

@@ -52,8 +52,6 @@ const settings = {
       upgrade_limit: 5,
       monitored_only: true,
       skip_future: true,
-      missing_mode: "episodes",
-      upgrade_mode: "episodes",
     },
   },
 } as const
@@ -64,13 +62,13 @@ const status = {
   last_run_at: null,
   last_run_status: null,
   last_run_detail: null,
-  state: { created_at: null, reset_at: null, reset_hours: 168 },
+  retry: { base_hours: 168, max_hours: 720, next_due_at: null },
   apps: {
     sonarr: {
       detail: "ok",
       version: "4.0.0",
       compatible: true,
-      processed: { missing: 0, upgrade: 0 },
+      cooldown: { missing: 0, upgrade: 0 },
       lifetime: { missing: 0, upgrade: 0 },
       wanted: { missing: 0, upgrade: 0 },
       activity: "Not run yet",
@@ -79,7 +77,7 @@ const status = {
       detail: "ok",
       version: "6.0.0",
       compatible: true,
-      processed: { missing: 0, upgrade: 0 },
+      cooldown: { missing: 0, upgrade: 0 },
       lifetime: { missing: 0, upgrade: 0 },
       wanted: { missing: 0, upgrade: 0 },
       activity: "Not run yet",

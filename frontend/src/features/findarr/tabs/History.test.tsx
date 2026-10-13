@@ -23,8 +23,8 @@ const ROWS: FindarrHistoryEntry[] = [
     mode: "missing",
     item_id: "34451",
     title: "Avatar: The Last Airbender (2024) - S01E06 - Masks",
-    status: "success",
-    detail: "Triggered Sonarr missing search",
+    status: "grabbed",
+    detail: "Sonarr grabbed 1 release(s)",
   },
   {
     id: 2,
@@ -113,12 +113,39 @@ describe("Findarr History tab", () => {
     expect(screen.getByText("Radarr - Default")).toBeInTheDocument()
   })
 
+  it("labels each row's result, falling back to the raw status", () => {
+    vi.mocked(useFindarrHistory).mockReturnValue(
+      queryResult<FindarrHistoryEntry[]>([
+        ...ROWS,
+        { ...ROWS[0], id: 4, status: "sent", detail: "pending" },
+        { ...ROWS[0], id: 5, status: "not_found", detail: "none" },
+        { ...ROWS[0], id: 6, status: "unknown", detail: "purged" },
+        { ...ROWS[2], id: 7, status: "skipped", detail: "queue full" },
+        { ...ROWS[0], id: 8, status: "mystery", detail: "?" },
+      ]),
+    )
+    render(<History />)
+    expect(screen.getByText("Result")).toBeInTheDocument()
+    for (const label of [
+      "Grabbed",
+      "Error",
+      "Success",
+      "Sent",
+      "Nothing found",
+      "Unknown",
+      "Skipped",
+      "mystery",
+    ]) {
+      expect(screen.getByText(label)).toBeInTheDocument()
+    }
+  })
+
   it("reveals the status and detail in the info tooltip", async () => {
     const user = userEvent.setup()
     render(<History />)
     await user.hover(
       screen.getByRole("button", {
-        name: "Details for Little Brother (2026): error",
+        name: "Details for Little Brother (2026): Error",
       }),
     )
     expect((await screen.findAllByText(/boom/)).length).toBeGreaterThan(0)

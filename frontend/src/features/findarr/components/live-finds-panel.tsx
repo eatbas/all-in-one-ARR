@@ -36,7 +36,7 @@ export function LiveFindsPanel({
   onReset,
   isResetting,
 }: LiveFindsPanelProps) {
-  const { hourly, state } = status
+  const { hourly, retry } = status
 
   return (
     <Card>
@@ -44,7 +44,7 @@ export function LiveFindsPanel({
         <CardTitle>Live Finds Executed</CardTitle>
         <div className="flex flex-wrap items-center gap-3">
           <span className="text-sm text-muted-foreground">
-            {`Next sweep ${formatCountdown(state.reset_at)}`}
+            {`Next retry ${formatCountdown(retry.next_due_at)}`}
           </span>
           <span className="text-sm text-muted-foreground">
             {`${hourly.limit}/${hourly.remaining} Left`}
@@ -55,7 +55,7 @@ export function LiveFindsPanel({
           </Button>
           <FindarrResetDialog
             triggerLabel="Reset"
-            description="This allows Findarr to consider previously processed Sonarr and Radarr items again. It does not delete media or change Arr libraries."
+            description="This clears every item's retry delay and backoff, so Findarr may search any wanted Sonarr or Radarr item again on its next run. It does not delete media or change Arr libraries."
             onConfirm={onReset}
             disabled={isResetting}
           />

@@ -8,6 +8,10 @@ from core.clients.servarr import ServarrClient, ServarrClientError
 from core.clients.servarr import parse_version as parse_version
 from modules.findarr.models import SearchUnit
 
+# Movie ids per `/api/v3/moviefile` request; 100 ids keep the URL well under
+# common proxy limits while reading a large library in a handful of calls.
+_MOVIE_FILE_BATCH = 100
+
 
 class FindarrClientError(ServarrClientError):
     """Raised when a Sonarr/Radarr API request cannot be completed."""
@@ -91,6 +95,78 @@ class FindarrArrClient(ServarrClient):
             page += 1
         return records
 
-    async def trigger_search(self, unit: SearchUnit) -> None:
-        """Trigger the Sonarr/Radarr search command for one grouped unit."""
-        await self._request("POST", "/api/v3/command", json=_command_payload(unit))
+    async def trigger_search(self, unit: SearchUnit) -> int | None:
+        """Trigger the search command for one grouped unit; return its command id.
+
+        The id lets a later run ask the Arr what the search actually did. It is
+        ``None`` when the Arr's response carries no usable id.
+        """
+        data = await self._request(
+            "POST", "/api/v3/command", json=_command_payload(unit)
+        )
+        command_id = data.get("id") if isinstance(data, dict) else None
+        return command_id if isinstance(command_id, int) else None
+
+    async def command(self, command_id: int) -> dict[str, Any] | None:
+        """Return `/api/v3/command/{id}`, or ``None`` once the Arr has purged it."""
+        try:
+            data = await self._request("GET", f"/api/v3/command/{command_id}")
+        except FindarrClientError as exc:
+            if exc.status_code == 404:
+                return None
+            raise
+        if not isinstance(data, dict):
+            raise FindarrClientError(f"{self.app} returned an invalid command payload")
+        return data
+
+    async def grabs_since(self, since_iso: str) -> list[dict[str, Any]]:
+        """Return `grabbed` history events since ``since_iso``.
+
+        Sonarr records are requested with their ``episode`` embedded so a
+        season search can be matched on season number.
+        """
+        params: dict[str, Any] = {"date": since_iso, "eventType": "grabbed"}
+        if self.app == "sonarr":
+            params["includeEpisode"] = "true"
+        return self._as_dicts(
+            await self._request("GET", "/api/v3/history/since", params=params)
+        )
+
+    async def quality_profiles(self) -> list[dict[str, Any]]:
+        """Return `/api/v3/qualityprofile`: cutoffs and custom-format cutoff scores."""
+        return self._as_dicts(await self._request("GET", "/api/v3/qualityprofile"))
+
+    async def episodes_with_files(self, series_id: int) -> list[dict[str, Any]]:
+        """Return a series' episodes (Sonarr) with each embedded ``episodeFile``."""
+        return self._as_dicts(
+            await self._request(
+                "GET",
+                "/api/v3/episode",
+                params={"seriesId": series_id, "includeEpisodeFile": "true"},
+            )
+        )
+
+    async def movies(self) -> list[dict[str, Any]]:
+        """Return `/api/v3/movie` (Radarr): every movie with its profile id."""
+        return self._as_dicts(await self._request("GET", "/api/v3/movie"))
+
+    async def movie_files(self, movie_ids: list[int]) -> list[dict[str, Any]]:
+        """Return Radarr movie files (with ``customFormatScore``) for ``movie_ids``.
+
+        `/api/v3/movie` embeds files without their custom-format score, so the
+        files are read from `/api/v3/moviefile`, which accepts repeated
+        ``movieId`` parameters; ids are sent in batches to keep URLs short.
+        """
+        files: list[dict[str, Any]] = []
+        for start in range(0, len(movie_ids), _MOVIE_FILE_BATCH):
+            batch = movie_ids[start : start + _MOVIE_FILE_BATCH]
+            files.extend(
+                self._as_dicts(
+                    await self._request(
+                        "GET",
+                        "/api/v3/moviefile",
+                        params=[("movieId", movie_id) for movie_id in batch],
+                    )
+                )
+            )
+        return files

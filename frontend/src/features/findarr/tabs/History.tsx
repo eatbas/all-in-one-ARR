@@ -86,6 +86,9 @@ export function History() {
                 Operation
               </TableHead>
               <TableHead className="text-xs uppercase tracking-wider">
+                Result
+              </TableHead>
+              <TableHead className="text-xs uppercase tracking-wider">
                 ID number
               </TableHead>
               <TableHead className="text-xs uppercase tracking-wider">
@@ -100,7 +103,7 @@ export function History() {
             {visible.length === 0 ? (
               <TableRow>
                 <TableCell
-                  colSpan={5}
+                  colSpan={6}
                   className="text-center text-sm text-muted-foreground"
                 >
                   No entries match your filters.

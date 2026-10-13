@@ -59,6 +59,11 @@ findarr_searches_total = Counter(
     "Findarr search commands by app, mode, and outcome",
     ("app", "mode", "status"),
 )
+findarr_search_outcomes_total = Counter(
+    "aio_arr_findarr_search_outcomes_total",
+    "Resolved Findarr search outcomes reported by Sonarr/Radarr",
+    ("app", "mode", "outcome"),
+)
 findarr_hourly_capacity_remaining = Gauge(
     "aio_arr_findarr_hourly_capacity_remaining",
     "Remaining Findarr search capacity in the current hour",
@@ -144,6 +149,8 @@ def initialise_metrics() -> None:
         for mode in ("missing", "upgrade"):
             for status in ("success", "error"):
                 findarr_searches_total.labels(app, mode, status)
+            for outcome in ("grabbed", "not_found", "failed", "unknown"):
+                findarr_search_outcomes_total.labels(app, mode, outcome)
     for library in ("movies", "tv"):
         deletarr_freed_bytes_total.labels(library)
         for status in ("success", "failed"):
@@ -200,6 +207,11 @@ def record_findarr_run(*, app: str, status: str) -> None:
 def record_findarr_search(*, app: str, mode: str, status: str) -> None:
     """Record one attempted Findarr search command."""
     findarr_searches_total.labels(app, mode, status).inc()
+
+
+def record_findarr_outcome(*, app: str, mode: str, outcome: str) -> None:
+    """Record the resolved outcome of one Findarr search command."""
+    findarr_search_outcomes_total.labels(app, mode, outcome).inc()
 
 
 def update_findarr_capacity(remaining: int) -> None:

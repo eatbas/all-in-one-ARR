@@ -41,6 +41,14 @@ const SEARCH_MODE_OPTIONS: { value: FindarrSearchMode; label: string }[] = [
   { value: "shows", label: "Shows" },
 ]
 
+/** Render a whole number of hours as days when it divides evenly (720 → "30 days"). */
+function formatHours(hours: number): string {
+  if (hours >= 48 && hours % 24 === 0) {
+    return `${hours / 24} days`
+  }
+  return `${hours} ${hours === 1 ? "hour" : "hours"}`
+}
+
 function NumberInput({
   id,
   label,
@@ -220,11 +228,11 @@ export function Settings() {
 
       <Card>
         <CardHeader>
-          <CardTitle>Stateful management</CardTitle>
+          <CardTitle>Retry backoff</CardTitle>
           <CardAction>
             <FindarrResetDialog
               triggerLabel="Emergency reset"
-              description="This clears all processed media ids so Findarr re-considers every Sonarr and Radarr item and restarts the reset window. It never deletes media or changes Arr libraries."
+              description="This clears every item's retry delay and backoff, so Findarr may search any wanted Sonarr or Radarr item again on its next run. It never deletes media or changes Arr libraries."
               onConfirm={() => resetState.mutate()}
               disabled={resetState.isPending}
             />
@@ -232,28 +240,26 @@ export function Settings() {
         </CardHeader>
         <CardContent className="grid gap-5 lg:grid-cols-3">
           <div className="text-sm">
-            <p className="font-medium">Initial state created</p>
+            <p className="font-medium">Next retry due</p>
             <p className="text-muted-foreground">
-              {status?.state.created_at
-                ? formatTimestamp(status.state.created_at)
-                : "Not created yet"}
+              {status?.retry.next_due_at
+                ? formatTimestamp(status.retry.next_due_at)
+                : "Nothing waiting"}
             </p>
           </div>
           <div className="text-sm">
-            <p className="font-medium">State reset date</p>
+            <p className="font-medium">Longest delay</p>
             <p className="text-muted-foreground">
-              {status?.state.reset_at
-                ? formatTimestamp(status.state.reset_at)
-                : "—"}
+              {status ? formatHours(status.retry.max_hours) : "—"}
             </p>
           </div>
           <NumberInput
             id="findarr-state-reset-hours"
-            label="State reset (hours)"
+            label="Retry delay (hours)"
             value={settings.state_reset_hours}
             min={1}
             max={8760}
-            helpText="Hours before Findarr clears processed media ids so items can be searched again."
+            helpText="Hours to wait before searching an item again. Each search that finds nothing doubles the wait, up to 30 days; a grab resets it."
             onChange={(value) => update({ state_reset_hours: value })}
           />
         </CardContent>
@@ -324,7 +330,7 @@ export function Settings() {
                   id={`${app}-upgrade-limit`}
                   label="Upgrades per cycle"
                   value={appSettings.upgrade_limit}
-                  helpText="Maximum quality-upgrade searches for this app in one Findarr cycle."
+                  helpText="Maximum upgrade searches for this app in one Findarr cycle: items below the quality cutoff or below the profile's custom-format cutoff score."
                   onChange={(value) => updateApp(app, { upgrade_limit: value })}
                 />
                 {app === "sonarr" && (
@@ -332,19 +338,19 @@ export function Settings() {
                     <ModeSelect
                       id="sonarr-missing-mode"
                       label="Missing search mode"
-                      value={appSettings.missing_mode}
+                      value={settings.apps.sonarr.missing_mode}
                       helpText="How to search missing Sonarr content (Seasons recommended for torrent users)."
                       onChange={(mode) =>
-                        updateApp(app, { missing_mode: mode })
+                        update({ apps: { sonarr: { missing_mode: mode } } })
                       }
                     />
                     <ModeSelect
                       id="sonarr-upgrade-mode"
                       label="Upgrade mode"
-                      value={appSettings.upgrade_mode}
+                      value={settings.apps.sonarr.upgrade_mode}
                       helpText="How to search Sonarr upgrades (Seasons/Shows upgrade whole seasons or series at once)."
                       onChange={(mode) =>
-                        updateApp(app, { upgrade_mode: mode })
+                        update({ apps: { sonarr: { upgrade_mode: mode } } })
                       }
                     />
                   </>

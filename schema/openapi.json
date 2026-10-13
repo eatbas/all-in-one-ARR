@@ -972,6 +972,7 @@
         "type": "object"
       },
       "FindarrAppSettings": {
+        "description": "Per-app settings shared by Sonarr and Radarr.",
         "properties": {
           "enabled": {
             "title": "Enabled",
@@ -980,10 +981,6 @@
           "missing_limit": {
             "title": "Missing Limit",
             "type": "integer"
-          },
-          "missing_mode": {
-            "title": "Missing Mode",
-            "type": "string"
           },
           "monitored_only": {
             "title": "Monitored Only",
@@ -996,10 +993,6 @@
           "upgrade_limit": {
             "title": "Upgrade Limit",
             "type": "integer"
-          },
-          "upgrade_mode": {
-            "title": "Upgrade Mode",
-            "type": "string"
           }
         },
         "required": [
@@ -1007,9 +1000,7 @@
           "missing_limit",
           "upgrade_limit",
           "monitored_only",
-          "skip_future",
-          "missing_mode",
-          "upgrade_mode"
+          "skip_future"
         ],
         "title": "FindarrAppSettings",
         "type": "object"
@@ -1097,6 +1088,23 @@
         "title": "FindarrAppSettingsUpdate",
         "type": "object"
       },
+      "FindarrAppsSettings": {
+        "description": "Per-app settings; Radarr always searches whole movies, so has no modes.",
+        "properties": {
+          "radarr": {
+            "$ref": "#/components/schemas/FindarrAppSettings"
+          },
+          "sonarr": {
+            "$ref": "#/components/schemas/FindarrSonarrSettings"
+          }
+        },
+        "required": [
+          "sonarr",
+          "radarr"
+        ],
+        "title": "FindarrAppsSettings",
+        "type": "object"
+      },
       "FindarrCountResponse": {
         "description": "Result of a Findarr mutation reporting how many rows it removed.\n\nShared by the processed-state reset and the history clear; both report a\nstatus string and a removed-row count.",
         "properties": {
@@ -1117,6 +1125,7 @@
         "type": "object"
       },
       "FindarrHistoryEntry": {
+        "description": "One History row.\n\n``status`` for a search is ``sent`` until the Arr's result is read back,\nthen ``grabbed``, ``not_found``, ``error`` or ``unknown``; system rows use\n``success``, ``error`` or ``skipped``.",
         "properties": {
           "app": {
             "title": "App",
@@ -1221,6 +1230,37 @@
         "title": "FindarrModeResult",
         "type": "object"
       },
+      "FindarrRetryState": {
+        "description": "The retry backoff: base and longest delay, and the next unit falling due.",
+        "properties": {
+          "base_hours": {
+            "title": "Base Hours",
+            "type": "integer"
+          },
+          "max_hours": {
+            "title": "Max Hours",
+            "type": "integer"
+          },
+          "next_due_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Due At"
+          }
+        },
+        "required": [
+          "base_hours",
+          "max_hours",
+          "next_due_at"
+        ],
+        "title": "FindarrRetryState",
+        "type": "object"
+      },
       "FindarrRunRequest": {
         "properties": {
           "app": {
@@ -1276,11 +1316,7 @@
       "FindarrSettings": {
         "properties": {
           "apps": {
-            "additionalProperties": {
-              "$ref": "#/components/schemas/FindarrAppSettings"
-            },
-            "title": "Apps",
-            "type": "object"
+            "$ref": "#/components/schemas/FindarrAppsSettings"
           },
           "command_sleep_seconds": {
             "title": "Command Sleep Seconds",
@@ -1405,6 +1441,50 @@
         "title": "FindarrSettingsUpdate",
         "type": "object"
       },
+      "FindarrSonarrSettings": {
+        "description": "Sonarr settings: adds the episode/season/show search granularity.",
+        "properties": {
+          "enabled": {
+            "title": "Enabled",
+            "type": "boolean"
+          },
+          "missing_limit": {
+            "title": "Missing Limit",
+            "type": "integer"
+          },
+          "missing_mode": {
+            "title": "Missing Mode",
+            "type": "string"
+          },
+          "monitored_only": {
+            "title": "Monitored Only",
+            "type": "boolean"
+          },
+          "skip_future": {
+            "title": "Skip Future",
+            "type": "boolean"
+          },
+          "upgrade_limit": {
+            "title": "Upgrade Limit",
+            "type": "integer"
+          },
+          "upgrade_mode": {
+            "title": "Upgrade Mode",
+            "type": "string"
+          }
+        },
+        "required": [
+          "enabled",
+          "missing_limit",
+          "upgrade_limit",
+          "monitored_only",
+          "skip_future",
+          "missing_mode",
+          "upgrade_mode"
+        ],
+        "title": "FindarrSonarrSettings",
+        "type": "object"
+      },
       "FindarrStatusResponse": {
         "properties": {
           "apps": {
@@ -1452,17 +1532,15 @@
             ],
             "title": "Last Run Status"
           },
+          "retry": {
+            "$ref": "#/components/schemas/FindarrRetryState"
+          },
           "running": {
             "title": "Running",
             "type": "boolean"
           },
           "settings": {
             "$ref": "#/components/schemas/FindarrSettings"
-          },
-          "state": {
-            "additionalProperties": true,
-            "title": "State",
-            "type": "object"
           }
         },
         "required": [
@@ -1471,7 +1549,7 @@
           "last_run_at",
           "last_run_status",
           "last_run_detail",
-          "state",
+          "retry",
           "apps",
           "hourly"
         ],

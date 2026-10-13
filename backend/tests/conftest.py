@@ -134,8 +134,6 @@ class StubSettingsStore:
                     "upgrade_limit": 5,
                     "monitored_only": True,
                     "skip_future": True,
-                    "missing_mode": "episodes",
-                    "upgrade_mode": "episodes",
                 },
             },
         }

@@ -34,16 +34,40 @@ CREATE TABLE IF NOT EXISTS list_state (
     last_synced_at TEXT NOT NULL
 );
 
+-- Findarr per-unit retry state. ``attempts`` counts consecutive searches that
+-- found nothing; ``next_eligible_at`` is when the unit may be searched again
+-- (NULL only for rows written before the backoff existed: eligible at once).
 CREATE TABLE IF NOT EXISTS findarr_processed (
     app TEXT NOT NULL CHECK(app IN ('sonarr','radarr')),
     mode TEXT NOT NULL CHECK(mode IN ('missing','upgrade')),
     item_id TEXT NOT NULL,
     title TEXT,
     processed_at TEXT NOT NULL,
+    attempts INTEGER NOT NULL DEFAULT 0,
+    next_eligible_at TEXT,
     PRIMARY KEY (app, mode, item_id)
 );
 CREATE INDEX IF NOT EXISTS idx_findarr_processed_at
     ON findarr_processed(processed_at);
+
+-- One row per Findarr search command sent to an Arr. Drives the hourly cap
+-- (independent of the clearable history log) and the follow-up lookup of each
+-- command's outcome; ``history_id`` links back to the History row to update.
+CREATE TABLE IF NOT EXISTS findarr_searches (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    ts TEXT NOT NULL,
+    app TEXT NOT NULL CHECK(app IN ('sonarr','radarr')),
+    mode TEXT NOT NULL CHECK(mode IN ('missing','upgrade')),
+    item_id TEXT NOT NULL,
+    command_id INTEGER,
+    history_id INTEGER,
+    outcome TEXT NOT NULL
+        CHECK(outcome IN ('pending','grabbed','not_found','failed','unknown'))
+);
+CREATE INDEX IF NOT EXISTS idx_findarr_searches_ts
+    ON findarr_searches(ts);
+CREATE INDEX IF NOT EXISTS idx_findarr_searches_pending
+    ON findarr_searches(app, outcome);
 
 CREATE TABLE IF NOT EXISTS findarr_history (
     id INTEGER PRIMARY KEY AUTOINCREMENT,

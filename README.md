@@ -414,8 +414,14 @@ commands for the already-configured **Sonarr** and **Radarr** connections:
 - **Supported versions** — Sonarr `4+` and Radarr `6+`. Findarr checks
   `/api/v3/system/status` before sending search commands and reports older
   connected versions as unsupported.
-- **Search modes** — missing media and quality-cutoff upgrades for Sonarr and
-  Radarr.
+- **Search modes** — missing media and upgrades for Sonarr and Radarr. The
+  upgrade candidates are the Arr's *Cutoff Unmet* list **plus** every monitored
+  file whose custom-format score is below its quality profile's
+  `cutoffFormatScore`: the Arr's own list compares quality only, so a file that
+  meets the quality cutoff but scores too low (for example a missing English
+  audio track) would otherwise never be searched. Finding those reads each
+  monitored Sonarr series' episodes (one request per series) and Radarr's movie
+  files (one request per 100 movies) on every run that has upgrade capacity.
 - **Sonarr search granularity** — the **Missing search mode** and **Upgrade
   mode** selectors choose how Sonarr content is searched: **Episodes** (one
   `EpisodeSearch` per episode), **Seasons** (one `SeasonSearch` per season —
@@ -430,34 +436,40 @@ commands for the already-configured **Sonarr** and **Radarr** connections:
   hourly command cap, monitored-only filtering, skip-future filtering, an
   optional queue-size guard, and a **sleep duration** (seconds to wait between
   successive Arr search commands, `0` to disable) bound the side effects.
-- **State and history** — processed items are recorded so Findarr does not
-  repeatedly search the same item, and provides an explicit reset control for
-  processed state. The **History** tab lists recent Findarr actions —
-  resolving full Sonarr series titles (for example `Avatar: The Last Airbender
-  (2024) - S01E06 - Masks`) rather than "Unknown series" — with the operation,
-  item id, instance, and how long ago, plus an instance filter, a search box, a
-  row-count selector, and a **Clear** control that empties the history log
-  (distinct from the processed-state reset; neither touches Arr libraries). Each
-  history row captures its title at search time, so rows written before a title
-  fix are **not** relabelled retroactively, and items already in processed state
-  are skipped (no fresh row). To refresh titles after upgrading, reset processed
-  state and run again, then optionally clear the old history.
-- **Stateful management** — processed-media ids are cleared automatically after
-  the **State reset (hours)** window (default `168` = 7 days) so items become
-  eligible again ("re-look where we left off and renew"); the Settings tab shows
-  the **Initial state created** time and the derived **State reset date**, and an
-  **Emergency reset** clears the state immediately and restarts the window.
-  Resets only clear Findarr's own bookkeeping — media and Arr libraries are never
-  touched.
-- **Status visibility** — once the wanted list is exhausted, Findarr correctly
-  goes quiet until the reset window elapses, so the Status cards are built to
-  make that legible rather than look broken. Each card's headline is the
-  **all-time** searches/upgrades tally, which is reset-proof and never collapses
-  to `0`; a **this window** sub-line shows how much of the last run's wanted set
-  has been searched; a plain-language **activity** line states what the last run
-  did (*Searched N*, *Caught up*, *Nothing wanted*, *Throttled*, or a connection
-  error); and the panel header shows a **Next sweep** countdown to the reset.
-  These figures reflect the most recent run, not a live Arr query.
+- **Search results** — sending a command only means the Arr *accepted* it, so a
+  History row starts as **Sent**. On the next run Findarr reads each command back
+  from the Arr and records what it did: **Grabbed** (a release was sent to the
+  download client), **Nothing found**, **Error** (the command failed), or
+  **Unknown** (the Arr no longer holds the command). Because the Arr drops a
+  command's completion message once it is persisted, the result is read from the
+  Arr's `grabbed` history events for the searched items during the command's run.
+- **Retry backoff** — a searched item waits the **Retry delay (hours)** (default
+  `168` = 7 days) before it can be searched again. Each consecutive search that
+  finds nothing doubles its wait (1×, 2×, 4× … up to 30 days); a grab resets it.
+  Fresh, never-searched items are picked before items whose delay has passed, and
+  an item that leaves the wanted list loses its backoff, so it starts afresh if it
+  returns. The Settings tab shows the **Next retry due** time and the **Longest
+  delay**; an **Emergency reset** clears every delay at once. Resets only clear
+  Findarr's own bookkeeping — media and Arr libraries are never touched.
+- **History** — the **History** tab lists recent Findarr actions — resolving
+  full Sonarr series titles (for example `Avatar: The Last Airbender (2024) -
+  S01E06 - Masks`) rather than "Unknown series" — with the operation, the
+  **Result**, item id, instance, and how long ago, plus an instance filter, a
+  search box, a row-count selector, and a **Clear** control that empties the
+  history log. Clearing history does not reset the retry backoff and does not
+  lift the hourly cap: the cap counts a separate search log. Each history row
+  captures its title at search time, so rows written before a title fix are
+  **not** relabelled retroactively.
+- **Status visibility** — once every wanted item is waiting out its retry delay,
+  Findarr correctly goes quiet, so the Status cards are built to make that
+  legible rather than look broken. Each card's headline is the **all-time**
+  searches/upgrades tally, which is reset-proof and never collapses to `0`; a
+  sub-line shows how many items the last run found wanted and how many are
+  **waiting to retry**; a plain-language **activity** line states what the last
+  run did (*Searched N*, *Caught up*, *Nothing wanted*, *Throttled*, or a
+  connection error); and the panel header shows a **Next retry** countdown to
+  the next item falling due. These figures reflect the most recent run, not a
+  live Arr query.
 
 Connections are not configured on this page; configure **Sonarr** and
 **Radarr** in **Settings** first.
@@ -543,10 +555,12 @@ audio track**. Configure **Sonarr** in **Settings** first.
   non-compliant, series still in scope), deleted **through Sonarr's API** and its
   episodes searched immediately. Sonarr deletes permanently unless its Recycle Bin
   is configured, and an episode stays missing if no compliant release exists.
-- **Why not Findarr?** — Sonarr's *Cutoff Unmet* list (which Findarr's upgrade
-  mode reads) considers quality only, never custom-format scores, so
-  language-driven upgrades must be searched per episode. Findarr's *missing* mode
-  still searches episodes whose file Languagarr deleted.
+- **Findarr overlap** — Findarr's upgrade mode also searches files below their
+  profile's custom-format cutoff score, which includes many non-compliant anime
+  files, so both may search the same episode (each with its own retry delay).
+  Languagarr is still needed for files whose score already meets the cutoff,
+  which no Arr search will replace; Findarr's *missing* mode searches episodes
+  whose file Languagarr deleted.
 - **Prevention** — Languagarr fixes what is already downloaded; reject new
   non-compliant releases with Sonarr custom formats (for example via Recyclarr),
   scoring non-English "DUAL" groups and foreign-dub markers below the profile's

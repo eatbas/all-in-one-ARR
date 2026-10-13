@@ -509,22 +509,32 @@ export function deleteDeletarrItems(
 /**
  * Sonarr search granularity. `episodes` searches each episode, `seasons`
  * issues one season-pack search per season, and `shows` searches a whole
- * series at once. Radarr (movies) ignores this.
+ * series at once. Radarr always searches whole movies, so has no mode.
  */
 export type FindarrSearchMode = "episodes" | "seasons" | "shows"
 
-/** Per-app Findarr settings for Sonarr or Radarr. */
+/** Per-app Findarr settings shared by Sonarr and Radarr. */
 export interface FindarrAppSettings {
   enabled: boolean
   missing_limit: number
   upgrade_limit: number
   monitored_only: boolean
   skip_future: boolean
+}
+
+/** Sonarr settings: the shared ones plus the search granularity per mode. */
+export interface FindarrSonarrSettings extends FindarrAppSettings {
   missing_mode: FindarrSearchMode
   upgrade_mode: FindarrSearchMode
 }
 
 export type FindarrAppName = "sonarr" | "radarr"
+
+/** Per-app settings keyed by app; only Sonarr carries search modes. */
+export interface FindarrAppsSettings {
+  sonarr: FindarrSonarrSettings
+  radarr: FindarrAppSettings
+}
 
 /** Full Findarr settings returned by the backend. */
 export interface FindarrSettings {
@@ -533,8 +543,9 @@ export interface FindarrSettings {
   hourly_cap: number
   queue_limit: number
   command_sleep_seconds: number
+  /** Base retry delay in hours; doubled after each search that finds nothing. */
   state_reset_hours: number
-  apps: Record<FindarrAppName, FindarrAppSettings>
+  apps: FindarrAppsSettings
 }
 
 /** Partial Findarr settings update. */
@@ -545,23 +556,30 @@ export interface FindarrSettingsUpdate {
   queue_limit?: number
   command_sleep_seconds?: number
   state_reset_hours?: number
-  apps?: Partial<Record<FindarrAppName, Partial<FindarrAppSettings>>>
+  apps?: {
+    sonarr?: Partial<FindarrSonarrSettings>
+    radarr?: Partial<FindarrAppSettings>
+  }
 }
 
-/** The Findarr stateful-management window, mirroring the backend `state` block. */
-export interface FindarrStateWindow {
-  created_at: string | null
-  reset_at: string | null
-  reset_hours: number
+/**
+ * The Findarr retry backoff, mirroring the backend `retry` block: the base and
+ * longest delay between searches of the same item, and when the next waiting
+ * item falls due (`null` when nothing is waiting).
+ */
+export interface FindarrRetryState {
+  base_hours: number
+  max_hours: number
+  next_due_at: string | null
 }
 
 /**
  * Status for one Findarr-managed app, mirroring the backend
  * `GET /api/findarr/status` response.
  *
- * - `processed` counts the current reset window (wiped on reset).
+ * - `cooldown` counts wanted items waiting for their retry delay.
  * - `lifetime` is the reset-proof all-time tally that drives the headline so it
- *   never collapses to 0 once a window is exhausted.
+ *   never collapses to 0 once every item is waiting.
  * - `wanted` is how many items the last run scanned per mode ("as of last run",
  *   not a live figure).
  * - `activity` is a short summary of what the last run did, so an idle 0 is
@@ -571,7 +589,7 @@ export interface FindarrAppStatus {
   detail: string
   version: string | null
   compatible: boolean
-  processed: {
+  cooldown: {
     missing: number
     upgrade: number
   }
@@ -593,7 +611,7 @@ export interface FindarrStatus {
   last_run_at: string | null
   last_run_status: string | null
   last_run_detail: string | null
-  state: FindarrStateWindow
+  retry: FindarrRetryState
   apps: Record<FindarrAppName, FindarrAppStatus>
   hourly: {
     limit: number
@@ -621,6 +639,14 @@ export interface FindarrRunResult {
   results: FindarrModeResult[]
 }
 
+/**
+ * Status of a Findarr history row. A search is `sent` until a later run reads
+ * the Arr's result back (`grabbed`, `not_found`, `error` or `unknown`); system
+ * rows use `success`, `error` or `skipped`.
+ */
+export type FindarrHistoryStatus =
+  "sent" | "grabbed" | "not_found" | "unknown" | "success" | "error" | "skipped"
+
 /** One Findarr history row. */
 export interface FindarrHistoryEntry {
   id: number
@@ -629,6 +655,7 @@ export interface FindarrHistoryEntry {
   mode: "missing" | "upgrade" | "system"
   item_id: string | null
   title: string | null
+  /** One of {@link FindarrHistoryStatus}; kept a string so unknown values render. */
   status: string
   detail: string
 }

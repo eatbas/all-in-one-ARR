@@ -16,7 +16,19 @@ def test_findarr_defaults_are_seeded_and_masked(tmp_path) -> None:
     assert set(settings["apps"]) == {"sonarr", "radarr"}
     assert settings["apps"]["sonarr"]["missing_mode"] == "episodes"
     assert settings["apps"]["sonarr"]["upgrade_mode"] == "episodes"
+    # Radarr always searches whole movies, so it carries no search modes.
+    assert "missing_mode" not in settings["apps"]["radarr"]
     assert store.masked()["findarr"]["hourly_cap"] == 20
+
+
+def test_findarr_drops_radarr_search_modes_from_older_settings(tmp_path) -> None:
+    store = SettingsStore(str(tmp_path / "settings.json"))
+    store.load_or_seed(client_id="c", client_secret="s")
+    updated = store.update_findarr_settings(
+        {"apps": {"radarr": {"missing_mode": "seasons", "upgrade_mode": "shows"}}}
+    )
+    assert "missing_mode" not in updated["apps"]["radarr"]
+    assert "upgrade_mode" not in updated["apps"]["radarr"]
 
 
 def test_findarr_updates_are_normalised_and_persisted(tmp_path) -> None:

@@ -20,23 +20,22 @@ interface FindarrAppCardProps {
 }
 
 /**
- * Current-window progress as two non-ratio facts: how many have been searched
- * (cumulative this window) and how many of the last run's wanted set are still
- * left. Avoiding a "searched/wanted" ratio means it can never read backwards
- * when the wanted list shrinks faster than items are searched.
+ * Backlog as two non-ratio facts: how many items the last run found wanted, and
+ * how many are waiting out their retry delay (each search that finds nothing
+ * doubles an item's wait). No ratio, so it never reads backwards when the
+ * wanted list shrinks between runs.
  */
-function windowLabel(searched: number, wanted: number): string {
-  const remaining = Math.max(0, wanted - searched)
-  return wanted > 0
-    ? `${searched} searched · ${remaining} left this window`
-    : `${searched} searched this window`
+function backlogLabel(wanted: number, waiting: number): string {
+  return waiting > 0
+    ? `${wanted} wanted · ${waiting} waiting to retry`
+    : `${wanted} wanted`
 }
 
 /**
  * One redesigned Sonarr/Radarr tile for the Findarr Status tab: a glowing
  * official logo on a dark badge, an Active/Paused pill (synced to the app's
  * Findarr enable state), an API-usage pill, the all-time searches/upgrades
- * counters (with a "this window" sub-line), a plain-language last-run activity
+ * counters (with a wanted/waiting sub-line), a plain-language last-run activity
  * line, and a per-app Run button. The headline numbers are the reset-proof
  * lifetime tallies so a caught-up app never collapses to a bare 0. The card
  * surface follows the app theme; the brand accents carry light/dark variants so
@@ -51,7 +50,7 @@ export function FindarrAppCard({
   isRunning,
 }: FindarrAppCardProps) {
   const brand = APP_BRAND[app]
-  const { processed, lifetime, wanted, activity } = status
+  const { cooldown, lifetime, wanted, activity } = status
 
   return (
     <section
@@ -104,9 +103,9 @@ export function FindarrAppCard({
           </p>
           <p
             className="mt-0.5 text-[11px] text-muted-foreground tabular-nums"
-            aria-label={`Searches ${windowLabel(processed.missing, wanted.missing)}`}
+            aria-label={`Searches ${backlogLabel(wanted.missing, cooldown.missing)}`}
           >
-            {windowLabel(processed.missing, wanted.missing)}
+            {backlogLabel(wanted.missing, cooldown.missing)}
           </p>
         </div>
         <div>
@@ -120,9 +119,9 @@ export function FindarrAppCard({
           </p>
           <p
             className="mt-0.5 text-[11px] text-muted-foreground tabular-nums"
-            aria-label={`Upgrades ${windowLabel(processed.upgrade, wanted.upgrade)}`}
+            aria-label={`Upgrades ${backlogLabel(wanted.upgrade, cooldown.upgrade)}`}
           >
-            {windowLabel(processed.upgrade, wanted.upgrade)}
+            {backlogLabel(wanted.upgrade, cooldown.upgrade)}
           </p>
         </div>
       </div>

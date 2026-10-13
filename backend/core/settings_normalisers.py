@@ -83,14 +83,14 @@ DEFAULT_FINDARR_SETTINGS: dict[str, Any] = {
             "missing_mode": "episodes",
             "upgrade_mode": "episodes",
         },
+        # Radarr has no season/show concept: it always searches whole movies,
+        # so it carries no search-mode settings.
         "radarr": {
             "enabled": True,
             "missing_limit": 5,
             "upgrade_limit": 5,
             "monitored_only": True,
             "skip_future": True,
-            "missing_mode": "episodes",
-            "upgrade_mode": "episodes",
         },
     },
 }
@@ -254,7 +254,12 @@ def _normalise_findarr_sleep_seconds(value: Any) -> int:
 
 
 def _normalise_findarr_reset_hours(value: Any) -> int:
-    """Return a bounded stateful-reset window in hours, defaulting to 168."""
+    """Return the bounded base retry delay in hours, defaulting to 168.
+
+    Persisted as ``state_reset_hours``: it is the wait before a searched item may
+    be searched again, which Findarr's backoff doubles after each search that
+    finds nothing.
+    """
     return bounded_int(
         value,
         default=168,
@@ -274,7 +279,7 @@ def normalise_findarr_settings(raw: dict[str, Any] | None = None) -> dict[str, A
     for app_name, app_defaults in defaults["apps"].items():
         raw_app_value = apps.get(app_name)
         raw_app = raw_app_value if isinstance(raw_app_value, dict) else {}
-        normalised_apps[app_name] = {
+        normalised_app: dict[str, Any] = {
             "enabled": bool(raw_app.get("enabled", app_defaults["enabled"])),
             "missing_limit": _normalise_findarr_limit(
                 raw_app.get("missing_limit", app_defaults["missing_limit"]),
@@ -290,13 +295,15 @@ def normalise_findarr_settings(raw: dict[str, Any] | None = None) -> dict[str, A
             "skip_future": bool(
                 raw_app.get("skip_future", app_defaults["skip_future"])
             ),
-            "missing_mode": _normalise_findarr_search_mode(
-                raw_app.get("missing_mode", app_defaults["missing_mode"])
-            ),
-            "upgrade_mode": _normalise_findarr_search_mode(
-                raw_app.get("upgrade_mode", app_defaults["upgrade_mode"])
-            ),
         }
+        # Only apps whose defaults declare search modes (Sonarr) keep them; a
+        # stale Radarr mode from an older settings file is dropped here.
+        for mode_key in ("missing_mode", "upgrade_mode"):
+            if mode_key in app_defaults:
+                normalised_app[mode_key] = _normalise_findarr_search_mode(
+                    raw_app.get(mode_key, app_defaults[mode_key])
+                )
+        normalised_apps[app_name] = normalised_app
 
     normalised = {
         "enabled": bool(raw.get("enabled", defaults["enabled"])),

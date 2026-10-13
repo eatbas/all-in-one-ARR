@@ -50,8 +50,6 @@ const BASE_STATUS: FindarrStatus = {
         upgrade_limit: 5,
         monitored_only: true,
         skip_future: true,
-        missing_mode: "episodes",
-        upgrade_mode: "episodes",
       },
     },
   },
@@ -59,17 +57,17 @@ const BASE_STATUS: FindarrStatus = {
   last_run_at: "2026-06-26T20:00:00Z",
   last_run_status: "completed",
   last_run_detail: "Processed 0 Findarr item(s)",
-  state: {
-    created_at: "2026-06-26T20:00:00Z",
-    reset_at: "2026-07-03T20:00:00Z",
-    reset_hours: 168,
+  retry: {
+    base_hours: 168,
+    max_hours: 720,
+    next_due_at: "2026-07-03T20:00:00Z",
   },
   apps: {
     sonarr: {
       detail: "Connected to Sonarr 4.0.1",
       version: "4.0.1",
       compatible: true,
-      processed: { missing: 1, upgrade: 2 },
+      cooldown: { missing: 1, upgrade: 2 },
       lifetime: { missing: 10, upgrade: 20 },
       wanted: { missing: 12, upgrade: 8 },
       activity: "Searched 3 item(s) on the last run",
@@ -78,10 +76,10 @@ const BASE_STATUS: FindarrStatus = {
       detail: "Connected to Radarr 6.0.0",
       version: "6.0.0",
       compatible: true,
-      processed: { missing: 3, upgrade: 4 },
+      cooldown: { missing: 3, upgrade: 4 },
       lifetime: { missing: 30, upgrade: 40 },
       wanted: { missing: 5, upgrade: 6 },
-      activity: "Caught up — every wanted item is already searched this window",
+      activity: "Caught up — every wanted item is waiting for its retry delay",
     },
   },
   hourly: { limit: 20, used: 5, remaining: 15 },
@@ -121,9 +119,9 @@ describe("Findarr Status tab", () => {
     expect(screen.getByText(/Last run:/)).toBeInTheDocument()
     expect(screen.getByText("Live Finds Executed")).toBeInTheDocument()
     expect(screen.getByText("20/15 Left")).toBeInTheDocument()
-    // The reset-window countdown is surfaced; the dynamic suffix depends on the
+    // The next-retry countdown is surfaced; the dynamic suffix depends on the
     // wall clock, so assert only the stable label.
-    expect(screen.getByText(/Next sweep/)).toBeInTheDocument()
+    expect(screen.getByText(/Next retry/)).toBeInTheDocument()
   })
 
   it("renders each app card with its logo, pills, and counters", () => {
@@ -145,12 +143,12 @@ describe("Findarr Status tab", () => {
     expect(
       sonarr.getByText("Upgrades Triggered").closest("div"),
     ).toHaveTextContent("20")
-    // The "this window" sub-line and the last-run activity explain a 0.
+    // The wanted/waiting sub-line and the last-run activity explain a 0.
     expect(
-      sonarr.getByText("1 searched · 11 left this window"),
+      sonarr.getByText("12 wanted · 1 waiting to retry"),
     ).toBeInTheDocument()
     expect(
-      sonarr.getByText("2 searched · 6 left this window"),
+      sonarr.getByText("8 wanted · 2 waiting to retry"),
     ).toBeInTheDocument()
     expect(
       sonarr.getByText("Searched 3 item(s) on the last run"),
@@ -170,15 +168,15 @@ describe("Findarr Status tab", () => {
       radarr.getByText("Upgrades Triggered").closest("div"),
     ).toHaveTextContent("40")
     expect(
-      radarr.getByText("3 searched · 2 left this window"),
+      radarr.getByText("5 wanted · 3 waiting to retry"),
     ).toBeInTheDocument()
     expect(
-      radarr.getByText("4 searched · 2 left this window"),
+      radarr.getByText("6 wanted · 4 waiting to retry"),
     ).toBeInTheDocument()
     expect(radarr.getByText(/Caught up/)).toBeInTheDocument()
   })
 
-  it("drops the wanted total from the sub-line before anything is scanned", () => {
+  it("drops the waiting clause from the sub-line when nothing is waiting", () => {
     vi.mocked(useFindarrStatus).mockReturnValue(
       queryResult({
         ...BASE_STATUS,
@@ -186,7 +184,7 @@ describe("Findarr Status tab", () => {
           ...BASE_STATUS.apps,
           sonarr: {
             ...BASE_STATUS.apps.sonarr,
-            processed: { missing: 0, upgrade: 0 },
+            cooldown: { missing: 0, upgrade: 0 },
             wanted: { missing: 0, upgrade: 0 },
             activity: "Not run yet",
           },
@@ -195,8 +193,8 @@ describe("Findarr Status tab", () => {
     )
     render(<Status />)
     const sonarr = within(screen.getByRole("region", { name: "Sonarr" }))
-    // wanted === 0 → the "left" clause is dropped, leaving a bare "0 searched".
-    expect(sonarr.getAllByText("0 searched this window")).toHaveLength(2)
+    // Nothing waiting → the "waiting to retry" clause is dropped.
+    expect(sonarr.getAllByText("0 wanted")).toHaveLength(2)
     expect(sonarr.getByText("Not run yet")).toBeInTheDocument()
   })
 

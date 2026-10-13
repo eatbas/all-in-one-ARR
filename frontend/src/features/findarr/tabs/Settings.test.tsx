@@ -54,8 +54,6 @@ const SETTINGS: FindarrSettings = {
       upgrade_limit: 5,
       monitored_only: true,
       skip_future: true,
-      missing_mode: "episodes",
-      upgrade_mode: "episodes",
     },
   },
 }
@@ -66,17 +64,17 @@ const STATUS: FindarrStatus = {
   last_run_at: null,
   last_run_status: null,
   last_run_detail: null,
-  state: {
-    created_at: "2026-06-26T20:00:00Z",
-    reset_at: "2026-07-03T20:00:00Z",
-    reset_hours: 168,
+  retry: {
+    base_hours: 168,
+    max_hours: 720,
+    next_due_at: "2026-07-03T20:00:00Z",
   },
   apps: {
     sonarr: {
       detail: "ok",
       version: "4.0.1",
       compatible: true,
-      processed: { missing: 0, upgrade: 0 },
+      cooldown: { missing: 0, upgrade: 0 },
       lifetime: { missing: 0, upgrade: 0 },
       wanted: { missing: 0, upgrade: 0 },
       activity: "Not run yet",
@@ -85,7 +83,7 @@ const STATUS: FindarrStatus = {
       detail: "ok",
       version: "6.0.0",
       compatible: true,
-      processed: { missing: 0, upgrade: 0 },
+      cooldown: { missing: 0, upgrade: 0 },
       lifetime: { missing: 0, upgrade: 0 },
       wanted: { missing: 0, upgrade: 0 },
       activity: "Not run yet",
@@ -218,23 +216,41 @@ describe("Findarr Settings tab", () => {
     })
   })
 
-  it("shows the stateful-management window and edits the reset hours", () => {
+  it("shows the retry backoff and edits the retry delay", () => {
     render(<Settings />)
-    expect(screen.getByText("Initial state created")).toBeInTheDocument()
-    expect(screen.getByText("State reset date")).toBeInTheDocument()
-    expect(screen.queryByText("Not created yet")).not.toBeInTheDocument()
-    fireEvent.change(screen.getByLabelText("State reset (hours)"), {
+    expect(screen.getByText("Retry backoff")).toBeInTheDocument()
+    expect(screen.getByText("Next retry due")).toBeInTheDocument()
+    expect(screen.queryByText("Nothing waiting")).not.toBeInTheDocument()
+    // 720 hours divides into whole days.
+    expect(screen.getByText("30 days")).toBeInTheDocument()
+    fireEvent.change(screen.getByLabelText("Retry delay (hours)"), {
       target: { value: "72" },
     })
     expect(updateMutate).toHaveBeenCalledWith({ state_reset_hours: 72 })
   })
 
-  it("shows placeholders when no state window exists yet", () => {
+  it.each([
+    [1, "1 hour"],
+    [36, "36 hours"],
+    [48, "2 days"],
+  ])("formats a longest delay of %i hours as %s", (maxHours, label) => {
+    vi.mocked(useFindarrStatus).mockReturnValue(
+      queryResult<FindarrStatus>({
+        ...STATUS,
+        retry: { base_hours: 1, max_hours: maxHours, next_due_at: null },
+      }),
+    )
+    render(<Settings />)
+    expect(screen.getByText(label)).toBeInTheDocument()
+    expect(screen.getByText("Nothing waiting")).toBeInTheDocument()
+  })
+
+  it("shows placeholders before the status arrives", () => {
     vi.mocked(useFindarrStatus).mockReturnValue(
       queryResult<FindarrStatus>(undefined),
     )
     render(<Settings />)
-    expect(screen.getByText("Not created yet")).toBeInTheDocument()
+    expect(screen.getByText("Nothing waiting")).toBeInTheDocument()
     expect(screen.getByText("—")).toBeInTheDocument()
   })
 

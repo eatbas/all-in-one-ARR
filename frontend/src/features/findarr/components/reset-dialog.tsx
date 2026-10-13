@@ -26,10 +26,9 @@ interface FindarrResetDialogProps {
 }
 
 /**
- * Shared confirmation dialog for clearing Findarr processed state. Used by the
- * Status tab ("Reset") and the Settings tab stateful-management card
- * ("Emergency reset"); both clear processed-media ids only and never touch media
- * or Arr libraries.
+ * Shared confirmation dialog for clearing Findarr's retry state. Used by the
+ * Status tab ("Reset") and the Settings tab retry-backoff card ("Emergency
+ * reset"); both clear retry delays only and never touch media or Arr libraries.
  */
 export function FindarrResetDialog({
   triggerLabel,
@@ -47,7 +46,7 @@ export function FindarrResetDialog({
       </AlertDialogTrigger>
       <AlertDialogContent>
         <AlertDialogHeader>
-          <AlertDialogTitle>Reset Findarr processed state?</AlertDialogTitle>
+          <AlertDialogTitle>Reset Findarr retry state?</AlertDialogTitle>
           <AlertDialogDescription>{description}</AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>

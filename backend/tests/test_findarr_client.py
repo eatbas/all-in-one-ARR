@@ -295,3 +295,100 @@ async def test_trigger_search_accepts_empty_response() -> None:
     await FindarrArrClient(
         app="sonarr", base_url="http://sonarr", api_key="k"
     ).trigger_search(_unit("EpisodeSearch", episode_ids=(1,)))
+
+
+@respx.mock
+async def test_trigger_search_returns_the_command_id() -> None:
+    respx.post("http://sonarr/api/v3/command").mock(
+        side_effect=[
+            httpx.Response(201, json={"id": 4242, "name": "EpisodeSearch"}),
+            httpx.Response(201, json={"id": "not-an-int"}),
+        ]
+    )
+    client = FindarrArrClient(app="sonarr", base_url="http://sonarr", api_key="k")
+    unit = _unit("EpisodeSearch", episode_ids=(1,))
+    assert await client.trigger_search(unit) == 4242
+    assert await client.trigger_search(unit) is None
+
+
+@respx.mock
+async def test_command_returns_resource_none_when_purged_and_raises_otherwise() -> None:
+    respx.get("http://sonarr/api/v3/command/1").mock(
+        return_value=httpx.Response(200, json={"id": 1, "status": "completed"})
+    )
+    respx.get("http://sonarr/api/v3/command/2").mock(return_value=httpx.Response(404))
+    respx.get("http://sonarr/api/v3/command/3").mock(return_value=httpx.Response(500))
+    respx.get("http://sonarr/api/v3/command/4").mock(
+        return_value=httpx.Response(200, json=[])
+    )
+    client = FindarrArrClient(app="sonarr", base_url="http://sonarr", api_key="k")
+    assert (await client.command(1)) == {"id": 1, "status": "completed"}
+    assert await client.command(2) is None
+    with pytest.raises(FindarrClientError) as server_error:
+        await client.command(3)
+    assert server_error.value.status_code == 500
+    with pytest.raises(FindarrClientError, match="invalid command payload"):
+        await client.command(4)
+
+
+@respx.mock
+async def test_transport_errors_carry_no_status_code() -> None:
+    respx.get("http://sonarr/api/v3/command/1").mock(
+        side_effect=httpx.ConnectError("refused")
+    )
+    client = FindarrArrClient(app="sonarr", base_url="http://sonarr", api_key="k")
+    with pytest.raises(FindarrClientError) as transport_error:
+        await client.command(1)
+    assert transport_error.value.status_code is None
+
+
+@respx.mock
+async def test_custom_format_endpoints() -> None:
+    respx.get("http://sonarr/api/v3/qualityprofile").mock(
+        return_value=httpx.Response(200, json=[{"id": 9}, "junk"])
+    )
+    episodes = respx.get("http://sonarr/api/v3/episode").mock(
+        return_value=httpx.Response(200, json=[{"id": 1}])
+    )
+    sonarr = FindarrArrClient(app="sonarr", base_url="http://sonarr", api_key="k")
+    assert await sonarr.quality_profiles() == [{"id": 9}]
+    assert await sonarr.episodes_with_files(7) == [{"id": 1}]
+    assert episodes.calls.last.request.url.params["seriesId"] == "7"
+    assert episodes.calls.last.request.url.params["includeEpisodeFile"] == "true"
+
+    respx.get("http://radarr/api/v3/movie").mock(
+        return_value=httpx.Response(200, json=[{"id": 1}])
+    )
+    files = respx.get("http://radarr/api/v3/moviefile").mock(
+        return_value=httpx.Response(200, json=[{"movieId": 1}])
+    )
+    radarr = FindarrArrClient(app="radarr", base_url="http://radarr", api_key="k")
+    assert await radarr.movies() == [{"id": 1}]
+    movie_ids = list(range(1, 151))
+    assert await radarr.movie_files(movie_ids) == [{"movieId": 1}, {"movieId": 1}]
+    # 150 ids are read in two batches, each as repeated movieId parameters.
+    assert files.call_count == 2
+    first_batch = files.calls[0].request.url.params.get_list("movieId")
+    assert first_batch == [str(movie_id) for movie_id in range(1, 101)]
+    assert files.calls[1].request.url.params.get_list("movieId")[0] == "101"
+    assert await radarr.movie_files([]) == []
+
+
+@respx.mock
+async def test_grabs_since_reads_grabbed_history_with_episodes_for_sonarr() -> None:
+    sonarr_route = respx.get("http://sonarr/api/v3/history/since").mock(
+        return_value=httpx.Response(200, json=[{"episodeId": 1}, "junk"])
+    )
+    sonarr = FindarrArrClient(app="sonarr", base_url="http://sonarr", api_key="k")
+    assert await sonarr.grabs_since("2026-10-13T00:00:00+00:00") == [{"episodeId": 1}]
+    params = sonarr_route.calls.last.request.url.params
+    assert params["date"] == "2026-10-13T00:00:00+00:00"
+    assert params["eventType"] == "grabbed"
+    assert params["includeEpisode"] == "true"
+
+    radarr_route = respx.get("http://radarr/api/v3/history/since").mock(
+        return_value=httpx.Response(200, json=[{"movieId": 2}])
+    )
+    radarr = FindarrArrClient(app="radarr", base_url="http://radarr", api_key="k")
+    assert await radarr.grabs_since("2026-10-13T00:00:00+00:00") == [{"movieId": 2}]
+    assert "includeEpisode" not in radarr_route.calls.last.request.url.params

@@ -582,6 +582,8 @@ export type DeletarrVideoRef = {
 
 /**
  * FindarrAppSettings
+ *
+ * Per-app settings shared by Sonarr and Radarr.
  */
 export type FindarrAppSettings = {
     /**
@@ -592,10 +594,6 @@ export type FindarrAppSettings = {
      * Missing Limit
      */
     missing_limit: number;
-    /**
-     * Missing Mode
-     */
-    missing_mode: string;
     /**
      * Monitored Only
      */
@@ -608,10 +606,6 @@ export type FindarrAppSettings = {
      * Upgrade Limit
      */
     upgrade_limit: number;
-    /**
-     * Upgrade Mode
-     */
-    upgrade_mode: string;
 };
 
 /**
@@ -649,6 +643,16 @@ export type FindarrAppSettingsUpdate = {
 };
 
 /**
+ * FindarrAppsSettings
+ *
+ * Per-app settings; Radarr always searches whole movies, so has no modes.
+ */
+export type FindarrAppsSettings = {
+    radarr: FindarrAppSettings;
+    sonarr: FindarrSonarrSettings;
+};
+
+/**
  * FindarrCountResponse
  *
  * Result of a Findarr mutation reporting how many rows it removed.
@@ -669,6 +673,12 @@ export type FindarrCountResponse = {
 
 /**
  * FindarrHistoryEntry
+ *
+ * One History row.
+ *
+ * ``status`` for a search is ``sent`` until the Arr's result is read back,
+ * then ``grabbed``, ``not_found``, ``error`` or ``unknown``; system rows use
+ * ``success``, ``error`` or ``skipped``.
  */
 export type FindarrHistoryEntry = {
     /**
@@ -740,6 +750,26 @@ export type FindarrModeResult = {
 };
 
 /**
+ * FindarrRetryState
+ *
+ * The retry backoff: base and longest delay, and the next unit falling due.
+ */
+export type FindarrRetryState = {
+    /**
+     * Base Hours
+     */
+    base_hours: number;
+    /**
+     * Max Hours
+     */
+    max_hours: number;
+    /**
+     * Next Due At
+     */
+    next_due_at: string | null;
+};
+
+/**
  * FindarrRunRequest
  */
 export type FindarrRunRequest = {
@@ -775,12 +805,7 @@ export type FindarrRunResponse = {
  * FindarrSettings
  */
 export type FindarrSettings = {
-    /**
-     * Apps
-     */
-    apps: {
-        [key: string]: FindarrAppSettings;
-    };
+    apps: FindarrAppsSettings;
     /**
      * Command Sleep Seconds
      */
@@ -844,6 +869,42 @@ export type FindarrSettingsUpdate = {
 };
 
 /**
+ * FindarrSonarrSettings
+ *
+ * Sonarr settings: adds the episode/season/show search granularity.
+ */
+export type FindarrSonarrSettings = {
+    /**
+     * Enabled
+     */
+    enabled: boolean;
+    /**
+     * Missing Limit
+     */
+    missing_limit: number;
+    /**
+     * Missing Mode
+     */
+    missing_mode: string;
+    /**
+     * Monitored Only
+     */
+    monitored_only: boolean;
+    /**
+     * Skip Future
+     */
+    skip_future: boolean;
+    /**
+     * Upgrade Limit
+     */
+    upgrade_limit: number;
+    /**
+     * Upgrade Mode
+     */
+    upgrade_mode: string;
+};
+
+/**
  * FindarrStatusResponse
  */
 export type FindarrStatusResponse = {
@@ -871,17 +932,12 @@ export type FindarrStatusResponse = {
      * Last Run Status
      */
     last_run_status: string | null;
+    retry: FindarrRetryState;
     /**
      * Running
      */
     running: boolean;
     settings: FindarrSettings;
-    /**
-     * State
-     */
-    state: {
-        [key: string]: unknown;
-    };
 };
 
 /**

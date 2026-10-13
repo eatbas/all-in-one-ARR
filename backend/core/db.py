@@ -17,6 +17,7 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
+from core.db_findarr import FindarrMixin
 from core.db_languagarr import LanguagarrQueueMixin
 from core.db_schema import INIT_SQL
 from core.logging import get_logger
@@ -33,7 +34,7 @@ OMDB_USAGE_RETENTION_DAYS = 30
 ITEM_STATUSES = ("synced", "requested", "available", "removed")
 
 
-class Database(LanguagarrQueueMixin):
+class Database(FindarrMixin, LanguagarrQueueMixin):
     """Thin, thread-safe wrapper around a SQLite connection."""
 
     def __init__(self, path: str) -> None:
@@ -57,6 +58,7 @@ class Database(LanguagarrQueueMixin):
             self._conn.executescript(INIT_SQL)
             self._migrate_items_columns()
             self._migrate_languagarr_columns()
+            self._migrate_findarr_columns()
             self._purge_failure_null_ratings_once()
             self._conn.commit()
 
@@ -97,6 +99,29 @@ class Database(LanguagarrQueueMixin):
         if "series_slug" not in columns:
             self._conn.execute(
                 "ALTER TABLE languagarr_queue ADD COLUMN series_slug TEXT"
+            )
+
+    def _migrate_findarr_columns(self) -> None:
+        """Add the Findarr backoff columns to ``findarr_processed`` tables from v1.9.3.
+
+        Additive and idempotent. Existing rows get ``attempts = 0`` and a NULL
+        ``next_eligible_at``, which the engine treats as eligible immediately —
+        the same as the old fixed window expiring.
+        """
+        columns = {
+            row["name"]
+            for row in self._conn.execute(
+                "PRAGMA table_info(findarr_processed)"
+            ).fetchall()
+        }
+        if "attempts" not in columns:
+            self._conn.execute(
+                "ALTER TABLE findarr_processed "
+                "ADD COLUMN attempts INTEGER NOT NULL DEFAULT 0"
+            )
+        if "next_eligible_at" not in columns:
+            self._conn.execute(
+                "ALTER TABLE findarr_processed ADD COLUMN next_eligible_at TEXT"
             )
 
     def _purge_failure_null_ratings_once(self) -> None:
@@ -402,156 +427,6 @@ class Database(LanguagarrQueueMixin):
             state_cursor = self._conn.execute("DELETE FROM list_state")
             self._conn.commit()
             return items_cursor.rowcount + state_cursor.rowcount
-
-    # ---- Findarr ----
-
-    def findarr_is_processed(self, *, app: str, mode: str, item_id: str) -> bool:
-        """Return whether Findarr has already processed an item for an app/mode."""
-        row = self._conn.execute(
-            "SELECT 1 FROM findarr_processed WHERE app=? AND mode=? AND item_id=?",
-            (app, mode, item_id),
-        ).fetchone()
-        return row is not None
-
-    def findarr_mark_processed(
-        self, *, app: str, mode: str, item_id: str, title: str | None
-    ) -> None:
-        """Record that Findarr processed an item for an app/mode."""
-        with self._lock:
-            self._conn.execute(
-                """
-                INSERT INTO findarr_processed (app, mode, item_id, title, processed_at)
-                VALUES (?, ?, ?, ?, ?)
-                ON CONFLICT(app, mode, item_id) DO UPDATE SET
-                    title=excluded.title,
-                    processed_at=excluded.processed_at
-                """,
-                (app, mode, item_id, title, utcnow_iso()),
-            )
-            self._conn.commit()
-
-    def findarr_add_history(
-        self,
-        *,
-        app: str,
-        mode: str,
-        item_id: str | None,
-        title: str | None,
-        status: str,
-        detail: str,
-    ) -> None:
-        """Append a Findarr history entry."""
-        with self._lock:
-            self._conn.execute(
-                """
-                INSERT INTO findarr_history (ts, app, mode, item_id, title, status, detail)
-                VALUES (?, ?, ?, ?, ?, ?, ?)
-                """,
-                (utcnow_iso(), app, mode, item_id, title, status, detail),
-            )
-            self._conn.commit()
-
-    def findarr_recent_history(self, limit: int = 100) -> list[dict[str, Any]]:
-        """Return recent Findarr history entries, newest first."""
-        rows = self._conn.execute(
-            "SELECT id, ts, app, mode, item_id, title, status, detail "
-            "FROM findarr_history ORDER BY id DESC LIMIT ?",
-            (limit,),
-        ).fetchall()
-        return [dict(row) for row in rows]
-
-    def findarr_clear_history(self) -> int:
-        """Delete every Findarr history row and return the count removed.
-
-        Clears only the audit log (``findarr_history``); processed-state
-        bookkeeping (``findarr_processed``) is untouched — that is the separate
-        concern of :meth:`findarr_reset_state`.
-        """
-        with self._lock:
-            cursor = self._conn.execute("DELETE FROM findarr_history")
-            self._conn.commit()
-            return cursor.rowcount
-
-    def findarr_counts(self) -> dict[str, dict[str, int]]:
-        """Return processed counts by app and mode."""
-        counts = {
-            "sonarr": {"missing": 0, "upgrade": 0},
-            "radarr": {"missing": 0, "upgrade": 0},
-        }
-        rows = self._conn.execute(
-            "SELECT app, mode, COUNT(*) AS n FROM findarr_processed GROUP BY app, mode"
-        ).fetchall()
-        for row in rows:
-            counts[row["app"]][row["mode"]] = row["n"]
-        return counts
-
-    def findarr_success_count_since(self, cutoff_iso: str) -> int:
-        """Return successful Findarr item actions since ``cutoff_iso``."""
-        row = self._conn.execute(
-            "SELECT COUNT(*) AS n FROM findarr_history "
-            "WHERE ts >= ? AND status='success' AND mode IN ('missing','upgrade')",
-            (cutoff_iso,),
-        ).fetchone()
-        return int(row["n"])
-
-    def findarr_set_run_state(self, key: str, value: str) -> None:
-        """Persist one Findarr run-state value."""
-        with self._lock:
-            self._conn.execute(
-                "INSERT INTO findarr_run_state (key, value) VALUES (?, ?) "
-                "ON CONFLICT(key) DO UPDATE SET value=excluded.value",
-                (key, value),
-            )
-            self._conn.commit()
-
-    def findarr_run_state(self) -> dict[str, str]:
-        """Return all persisted Findarr run-state values."""
-        rows = self._conn.execute("SELECT key, value FROM findarr_run_state").fetchall()
-        return {row["key"]: row["value"] for row in rows}
-
-    def findarr_reset_state(self) -> int:
-        """Clear Findarr processed state and return the number of rows removed.
-
-        Clears only the dedup bookkeeping (``findarr_processed``). The all-time
-        search tallies in ``findarr_totals`` are deliberately left untouched so
-        the headline "searches triggered" figure survives a window reset.
-        """
-        with self._lock:
-            cursor = self._conn.execute("DELETE FROM findarr_processed")
-            self._conn.commit()
-            return cursor.rowcount
-
-    def findarr_increment_total(self, *, app: str, mode: str) -> None:
-        """Increment the all-time Findarr search tally for an app/mode.
-
-        Kept in a separate table from ``findarr_processed`` so the tally is a
-        monotonic, reset-proof count of triggered searches rather than part of
-        the dedup state that :meth:`findarr_reset_state` and the automatic
-        window reset wipe.
-        """
-        with self._lock:
-            self._conn.execute(
-                """
-                INSERT INTO findarr_totals (app, mode, count)
-                VALUES (?, ?, 1)
-                ON CONFLICT(app, mode) DO UPDATE SET count = count + 1
-                """,
-                (app, mode),
-            )
-            self._conn.commit()
-
-    def findarr_totals(self) -> dict[str, dict[str, int]]:
-        """Return all-time triggered counts by app and mode (reset-proof)."""
-        totals = {
-            "sonarr": {"missing": 0, "upgrade": 0},
-            "radarr": {"missing": 0, "upgrade": 0},
-        }
-        rows = self._conn.execute(
-            "SELECT app, mode, count FROM findarr_totals"
-        ).fetchall()
-        for row in rows:
-            totals[row["app"]][row["mode"]] = row["count"]
-        return totals
 
     # ---- trending ----
 

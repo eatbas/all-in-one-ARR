@@ -28,7 +28,16 @@ _MINIMUM_VERSIONS: dict[str, tuple[int, int, int]] = {
 
 
 class ServarrClientError(RuntimeError):
-    """Base error for a Sonarr/Radarr API request that cannot be completed."""
+    """Base error for a Sonarr/Radarr API request that cannot be completed.
+
+    ``status_code`` carries the HTTP status when the Arr answered with an error
+    response (e.g. 404 for a command it no longer holds), and is ``None`` for
+    transport failures and invalid payloads.
+    """
+
+    def __init__(self, message: str, *, status_code: int | None = None) -> None:
+        super().__init__(message)
+        self.status_code = status_code
 
 
 @dataclass(frozen=True)
@@ -107,7 +116,14 @@ class ServarrClient:
             )
             response.raise_for_status()
         except httpx.HTTPError as exc:
-            raise self.error_class(f"{self.app} API request failed: {exc}") from exc
+            status_code = (
+                exc.response.status_code
+                if isinstance(exc, httpx.HTTPStatusError)
+                else None
+            )
+            raise self.error_class(
+                f"{self.app} API request failed: {exc}", status_code=status_code
+            ) from exc
         if not response.content:
             return None
         try:

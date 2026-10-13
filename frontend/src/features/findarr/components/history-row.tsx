@@ -8,7 +8,10 @@ import {
 } from "@/shared/components/ui/tooltip"
 import { formatRelativeTime } from "@/shared/lib/format"
 import { cn } from "@/shared/lib/utils"
-import { processedInformation } from "@/features/findarr/components/history-format"
+import {
+  historyStatusMeta,
+  processedInformation,
+} from "@/features/findarr/components/history-format"
 import type { FindarrAppName, FindarrHistoryEntry } from "@/shared/lib/api"
 
 /** Single Sonarr/Radarr connection per app, so each maps to a "Default" instance. */
@@ -46,9 +49,10 @@ interface HistoryRowProps {
   entry: FindarrHistoryEntry
 }
 
-/** One Findarr history row rendered across the five reference columns. */
+/** One Findarr history row rendered across the six reference columns. */
 export function HistoryRow({ entry }: HistoryRowProps) {
   const meta = operationMeta(entry.mode)
+  const result = historyStatusMeta(entry.status)
   const information = processedInformation(entry)
   return (
     <TableRow>
@@ -58,7 +62,7 @@ export function HistoryRow({ entry }: HistoryRowProps) {
             <TooltipTrigger asChild>
               <button
                 type="button"
-                aria-label={`Details for ${information}: ${entry.status}`}
+                aria-label={`Details for ${information}: ${result.label}`}
                 className={cn(
                   "inline-flex size-5 shrink-0 items-center justify-center rounded-full transition-colors",
                   entry.status === "error"
@@ -70,7 +74,7 @@ export function HistoryRow({ entry }: HistoryRowProps) {
               </button>
             </TooltipTrigger>
             <TooltipContent sideOffset={6} className="max-w-xs text-pretty">
-              <span className="font-medium capitalize">{entry.status}</span>
+              <span className="font-medium">{result.label}</span>
               {/* System rows have no title, so their detail is already the cell
                   text — only append it to the tooltip when a title is shown. */}
               {entry.title === null ? "" : ` — ${entry.detail}`}
@@ -92,6 +96,16 @@ export function HistoryRow({ entry }: HistoryRowProps) {
           )}
         >
           {meta.label}
+        </span>
+      </TableCell>
+      <TableCell>
+        <span
+          className={cn(
+            "inline-flex items-center whitespace-nowrap rounded-full px-2.5 py-0.5 text-xs font-medium",
+            result.className,
+          )}
+        >
+          {result.label}
         </span>
       </TableCell>
       <TableCell className="tabular-nums">{entry.item_id ?? "—"}</TableCell>

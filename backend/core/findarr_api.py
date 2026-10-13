@@ -15,13 +15,27 @@ if TYPE_CHECKING:  # pragma: no cover
 
 
 class FindarrAppSettings(BaseModel):
+    """Per-app settings shared by Sonarr and Radarr."""
+
     enabled: bool
     missing_limit: int
     upgrade_limit: int
     monitored_only: bool
     skip_future: bool
+
+
+class FindarrSonarrSettings(FindarrAppSettings):
+    """Sonarr settings: adds the episode/season/show search granularity."""
+
     missing_mode: str
     upgrade_mode: str
+
+
+class FindarrAppsSettings(BaseModel):
+    """Per-app settings; Radarr always searches whole movies, so has no modes."""
+
+    sonarr: FindarrSonarrSettings
+    radarr: FindarrAppSettings
 
 
 class FindarrSettings(BaseModel):
@@ -30,8 +44,10 @@ class FindarrSettings(BaseModel):
     hourly_cap: int
     queue_limit: int
     command_sleep_seconds: int
+    # Base retry delay in hours (kept under its original name for settings and
+    # API compatibility); the backoff doubles it after each fruitless search.
     state_reset_hours: int
-    apps: dict[str, FindarrAppSettings]
+    apps: FindarrAppsSettings
 
 
 class FindarrAppSettingsUpdate(BaseModel):
@@ -76,6 +92,13 @@ class FindarrRunRequest(BaseModel):
 
 
 class FindarrHistoryEntry(BaseModel):
+    """One History row.
+
+    ``status`` for a search is ``sent`` until the Arr's result is read back,
+    then ``grabbed``, ``not_found``, ``error`` or ``unknown``; system rows use
+    ``success``, ``error`` or ``skipped``.
+    """
+
     id: int
     ts: str
     app: str
@@ -86,13 +109,21 @@ class FindarrHistoryEntry(BaseModel):
     detail: str
 
 
+class FindarrRetryState(BaseModel):
+    """The retry backoff: base and longest delay, and the next unit falling due."""
+
+    base_hours: int
+    max_hours: int
+    next_due_at: str | None
+
+
 class FindarrStatusResponse(BaseModel):
     settings: FindarrSettings
     running: bool
     last_run_at: str | None
     last_run_status: str | None
     last_run_detail: str | None
-    state: dict
+    retry: FindarrRetryState
     apps: dict
     hourly: dict[str, int]
 
