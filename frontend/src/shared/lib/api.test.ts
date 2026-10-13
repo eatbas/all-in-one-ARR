@@ -34,6 +34,7 @@ import {
   seerMediaUrl,
   normaliseServiceUrl,
   isLikelyInternalUrl,
+  browserServiceUrl,
   posterUrl,
   removeAvailable,
   removeItem,
@@ -232,6 +233,35 @@ describe("isLikelyInternalUrl", () => {
     expect(isLikelyInternalUrl("")).toBe(false)
     expect(isLikelyInternalUrl("not a url")).toBe(false)
     expect(isLikelyInternalUrl("ftp://host")).toBe(false)
+  })
+})
+
+describe("browserServiceUrl", () => {
+  it("swaps internal hostnames for the browser's host, keeping port and path", () => {
+    expect(browserServiceUrl("http://sonarr:8989", "192.168.0.2")).toBe(
+      "http://192.168.0.2:8989",
+    )
+    expect(browserServiceUrl("http://localhost:5055/", "nas.lan")).toBe(
+      "http://nas.lan:5055",
+    )
+    expect(browserServiceUrl("127.0.0.1:8080/qbt", "192.168.0.2")).toBe(
+      "http://192.168.0.2:8080/qbt",
+    )
+  })
+
+  it("leaves externally reachable URLs untouched", () => {
+    expect(browserServiceUrl("http://192.168.0.2:8989/", "localhost")).toBe(
+      "http://192.168.0.2:8989",
+    )
+    expect(browserServiceUrl("https://seer.example.com", "localhost")).toBe(
+      "https://seer.example.com",
+    )
+  })
+
+  it("returns undefined for missing or malformed input", () => {
+    expect(browserServiceUrl(undefined, "192.168.0.2")).toBeUndefined()
+    expect(browserServiceUrl("", "192.168.0.2")).toBeUndefined()
+    expect(browserServiceUrl("ftp://host", "192.168.0.2")).toBeUndefined()
   })
 })
 

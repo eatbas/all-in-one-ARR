@@ -320,6 +320,48 @@ export function isLikelyInternalUrl(url: string): boolean {
   }
 }
 
+/**
+ * Rewrite a service URL so another computer on the network can open it.
+ *
+ * URLs that look Docker-internal (`http://sonarr:8989`, `http://localhost:8989`)
+ * resolve only on the server, so their hostname is swapped for the one the
+ * browser used to reach this app, keeping the scheme, port, and path. This
+ * assumes the service publishes the same port on the host, which is the usual
+ * compose setup. Other URLs are returned normalised; malformed input yields
+ * `undefined` so callers can hide the link.
+ *
+ * @param url - Stored service base URL.
+ * @param browserHostname - Hostname the app was opened from; defaults to the
+ *   current page's hostname.
+ */
+export function browserServiceUrl(
+  url: string | undefined,
+  browserHostname: string = window.location.hostname,
+): string | undefined {
+  if (!url) {
+    return undefined
+  }
+  let normalised: string
+  try {
+    normalised = normaliseServiceUrl(url)
+  } catch {
+    return undefined
+  }
+  if (!normalised) {
+    return undefined
+  }
+  if (!isLikelyInternalUrl(normalised) || !browserHostname) {
+    return normalised
+  }
+  try {
+    const parsed = new URL(normalised)
+    parsed.hostname = browserHostname
+    return parsed.toString().replace(/\/+$/, "")
+  } catch {
+    return undefined
+  }
+}
+
 export function getActivity(): Promise<ActivityEntry[]> {
   return request<ActivityEntry[]>("/api/activity")
 }

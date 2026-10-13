@@ -364,6 +364,30 @@ describe("Dashboard", () => {
     )
   })
 
+  it("points Docker-internal service URLs at the host the browser used", () => {
+    vi.mocked(useServiceSettings).mockReturnValue(
+      queryResult<ServicesSettings>(
+        {
+          ...emptyServiceSettings,
+          sonarr: { url: "http://sonarr:8989", api_key_set: true },
+          radarr: { url: "http://localhost:7878", api_key_set: true },
+        },
+        false,
+      ),
+    )
+
+    render(<Dashboard />)
+    const { hostname } = window.location
+    expect(screen.getByRole("link", { name: /Open Sonarr/ })).toHaveAttribute(
+      "href",
+      `http://${hostname}:8989`,
+    )
+    expect(screen.getByRole("link", { name: /Open Radarr/ })).toHaveAttribute(
+      "href",
+      `http://${hostname}:7878`,
+    )
+  })
+
   it("links Trakt and API-key-only services to their public sites", () => {
     render(<Dashboard />)
     expect(screen.getByRole("link", { name: /Open Trakt/ })).toHaveAttribute(

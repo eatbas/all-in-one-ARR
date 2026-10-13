@@ -18,7 +18,10 @@ import {
 import { cn } from "@/shared/lib/utils"
 import { IntegrationStatusCard } from "@/features/dashboard/components/integration-status-card"
 import { SERVICE_TABS } from "@/shared/lib/services"
-import type { ServicesStatusResponse } from "@/shared/lib/api"
+import {
+  browserServiceUrl,
+  type ServicesStatusResponse,
+} from "@/shared/lib/api"
 import {
   useActivity,
   useCheckServiceStatuses,
@@ -122,7 +125,7 @@ export function Dashboard() {
               status={services[tab.name]}
               url={
                 tab.fields.includes("url")
-                  ? serviceSettings?.[tab.name]?.url
+                  ? browserServiceUrl(serviceSettings?.[tab.name]?.url)
                   : tab.homepage
               }
             />
