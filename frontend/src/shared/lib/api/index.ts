@@ -353,13 +353,10 @@ export function browserServiceUrl(
   if (!isLikelyInternalUrl(normalised) || !browserHostname) {
     return normalised
   }
-  try {
-    const parsed = new URL(normalised)
-    parsed.hostname = browserHostname
-    return parsed.toString().replace(/\/+$/, "")
-  } catch {
-    return undefined
-  }
+  // `isLikelyInternalUrl` only accepts URLs that parse, so this cannot throw.
+  const parsed = new URL(normalised)
+  parsed.hostname = browserHostname
+  return parsed.toString().replace(/\/+$/, "")
 }
 
 export function getActivity(): Promise<ActivityEntry[]> {

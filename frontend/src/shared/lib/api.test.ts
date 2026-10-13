@@ -261,6 +261,7 @@ describe("browserServiceUrl", () => {
   it("returns undefined for missing or malformed input", () => {
     expect(browserServiceUrl(undefined, "192.168.0.2")).toBeUndefined()
     expect(browserServiceUrl("", "192.168.0.2")).toBeUndefined()
+    expect(browserServiceUrl("   ", "192.168.0.2")).toBeUndefined()
     expect(browserServiceUrl("ftp://host", "192.168.0.2")).toBeUndefined()
   })
 })

@@ -4,7 +4,6 @@ import { ChevronDownIcon, TvIcon } from "lucide-react"
 import { SonarrSeriesLink } from "@/features/languagarr/components/sonarr-series-link"
 import {
   ACTION_LABELS,
-  isActionable,
   QUEUE_LABELS,
   VERDICT_LABELS,
   type SeriesGroup as SeriesGroupData,
@@ -40,11 +39,9 @@ export function SeriesGroup({
   sonarrUrl,
 }: SeriesGroupProps) {
   const [isOpen, setIsOpen] = useState(true)
-  const ids = group.items
-    .filter(isActionable)
-    .map((item) => item.episode_file_id)
+  const ids = group.items.map((item) => item.episode_file_id)
   const selectedCount = ids.filter((id) => selected.has(id)).length
-  const allSelected = ids.length > 0 && selectedCount === ids.length
+  const allSelected = selectedCount === ids.length
 
   return (
     <Collapsible open={isOpen} onOpenChange={setIsOpen} asChild>
@@ -64,7 +61,6 @@ export function SeriesGroup({
                 }
               }}
               onChange={(event) => onSelect(ids, event.target.checked)}
-              disabled={ids.length === 0}
               aria-label={`Select all files in ${group.title}`}
             />
             <TvIcon className="size-4 shrink-0 text-muted-foreground" />
@@ -114,7 +110,6 @@ export function SeriesGroup({
                       onChange={(event) =>
                         onSelect([item.episode_file_id], event.target.checked)
                       }
-                      disabled={!isActionable(item)}
                       aria-label={`Select ${group.title} ${item.episode_label}`}
                     />
                   </TableCell>
@@ -140,24 +135,15 @@ export function SeriesGroup({
                     {item.custom_format_score} / {item.cutoff_format_score}
                   </TableCell>
                   <TableCell>
-                    {isActionable(item) ? (
-                      <Badge
-                        variant={
-                          item.recommended_action === "delete_and_search"
-                            ? "destructive"
-                            : "secondary"
-                        }
-                      >
-                        {ACTION_LABELS[item.recommended_action]}
-                      </Badge>
-                    ) : (
-                      <Badge
-                        variant="outline"
-                        title="Every episode in this file is unmonitored, so Languagarr will not search or delete it."
-                      >
-                        Not searchable (unmonitored)
-                      </Badge>
-                    )}
+                    <Badge
+                      variant={
+                        item.recommended_action === "delete_and_search"
+                          ? "destructive"
+                          : "secondary"
+                      }
+                    >
+                      {ACTION_LABELS[item.recommended_action]}
+                    </Badge>
                   </TableCell>
                   <TableCell>{QUEUE_LABELS[item.queue_status]}</TableCell>
                 </TableRow>

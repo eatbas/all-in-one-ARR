@@ -515,6 +515,8 @@ audio track**. Configure **Sonarr** in **Settings** first.
   (on by default) skips unmonitored series and never searches unmonitored
   episodes: Sonarr runs API-triggered searches as manual ones, which bypass its
   own monitored check and would otherwise replace files you deliberately froze.
+  A file whose episodes are all unmonitored (or that has no linked episode) is
+  left out of the scan results entirely.
 - **Review** — **Scan** lists the offending files grouped by series, with the
   audio tracks, Sonarr's custom-format score against the profile cutoff, and the
   recommended fix. Results live in memory (re-scan after a restart); the queue
@@ -530,8 +532,7 @@ audio track**. Configure **Sonarr** in **Settings** first.
   file, its series and (with monitored-only) its episodes are re-read from Sonarr;
   a row whose file was replaced, removed or is now compliant, whose series left the
   configured profiles or was unmonitored, or whose episodes were all unmonitored
-  drops out of the queue instead of spending an indexer search. Files whose
-  episodes are all unmonitored are shown as *Not searchable* and cannot be selected. A searched file is
+  drops out of the queue instead of spending an indexer search. A searched file is
   not re-queued until `retry_after_hours` (default 168) has passed; a search Sonarr
   rejected (failed) can be queued again immediately. **Run a batch now**
   processes one batch on demand; **Scan and queue automatically** makes each

@@ -4,10 +4,7 @@ import { ListPlusIcon, RefreshCwIcon } from "lucide-react"
 import { DeleteDialog } from "@/features/languagarr/components/delete-dialog"
 import { SeriesGroup } from "@/features/languagarr/components/series-group"
 import { useSonarrLinkBase } from "@/features/languagarr/sonarr-link"
-import {
-  groupBySeries,
-  isActionable,
-} from "@/features/languagarr/review-groups"
+import { groupBySeries } from "@/features/languagarr/review-groups"
 import { StatBlock } from "@/shared/components/stat-block"
 import { Button } from "@/shared/components/ui/button"
 import {
@@ -43,15 +40,15 @@ function Results({ items, unknown, isBusy }: ResultsProps) {
   const enqueue = useEnqueueLanguagarr()
   const deleteFiles = useDeleteLanguagarr()
   const sonarrUrl = useSonarrLinkBase()
-  const actionableIds = useMemo(
-    () => items.filter(isActionable).map((item) => item.episode_file_id),
+  const itemIds = useMemo(
+    () => items.map((item) => item.episode_file_id),
     [items],
   )
   const selectedItems = items.filter((item) =>
     selected.has(item.episode_file_id),
   )
   const allSelected =
-    actionableIds.length > 0 && selectedItems.length === actionableIds.length
+    itemIds.length > 0 && selectedItems.length === itemIds.length
   const disabled = isBusy || enqueue.isPending || deleteFiles.isPending
 
   function updateSelection(ids: number[], checked: boolean) {
@@ -83,8 +80,8 @@ function Results({ items, unknown, isBusy }: ResultsProps) {
         <Button
           type="button"
           variant="outline"
-          disabled={disabled || actionableIds.length === 0}
-          onClick={() => updateSelection(actionableIds, !allSelected)}
+          disabled={disabled || itemIds.length === 0}
+          onClick={() => updateSelection(itemIds, !allSelected)}
         >
           {allSelected ? "Clear selection" : "Select all"}
         </Button>

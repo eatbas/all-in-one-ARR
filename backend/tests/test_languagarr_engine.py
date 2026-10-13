@@ -8,6 +8,7 @@ guarded flows are exercised together.
 from __future__ import annotations
 
 import json
+from dataclasses import replace
 from typing import Any
 from unittest.mock import AsyncMock
 
@@ -249,7 +250,8 @@ async def test_scan_flags_only_non_compliant_in_scope_files(db, sonarr) -> None:
     payload = await service.scan()
 
     items = {item["episode_file_id"]: item for item in payload["results"]}
-    assert sorted(items) == [101, 102, 104, 106]
+    # 106 has no linked episode, so nothing could act on it.
+    assert sorted(items) == [101, 102, 104]
     assert [item["episode_file_id"] for item in payload["unknown"]] == [105]
     assert items[101]["verdict"] == "missing_english"
     assert items[101]["recommended_action"] == "search"
@@ -261,15 +263,13 @@ async def test_scan_flags_only_non_compliant_in_scope_files(db, sonarr) -> None:
     assert items[104]["episode_label"] == "S01E04-E05"
     assert items[104]["recommended_action"] == "delete_and_search"
     assert items[104]["release_group"] is None
-    assert items[106]["episode_ids"] == []
-    assert items[106]["episode_label"] == "Episode"
     assert items[101]["queue_status"] == "none"
 
     scan = payload["scan"]
     assert scan["series_scanned"] == 1
     assert scan["files_scanned"] == 6
-    assert scan["non_compliant"] == 4
-    assert scan["missing_english"] == 4
+    assert scan["non_compliant"] == 3
+    assert scan["missing_english"] == 3
     assert scan["unknown"] == 1
     assert scan["profiles_in_scope"] == ["Anime"]
     assert scan["last_scan_at"]
@@ -311,6 +311,7 @@ async def test_scan_handles_missing_season_and_media_info_shapes(db, sonarr) -> 
     odd["mediaInfo"] = "not-a-dict"
     odd["languages"] = None
     sonarr.files[1] = [odd]
+    sonarr.episodes[1] = [_episode(1107, 7, 107)]
     # A series without a usable profile id is never in scope.
     sonarr.series.append({"id": 4, "title": "No profile", "qualityProfileId": None})
     service = _service(db)
@@ -318,6 +319,7 @@ async def test_scan_handles_missing_season_and_media_info_shapes(db, sonarr) -> 
     assert payload["results"] == []
     unknown = payload["unknown"][0]
     assert unknown["season_number"] is None
+    assert unknown["episode_label"] == "Episode"
     assert unknown["audio_languages"] == ""
     assert unknown["sonarr_languages"] == []
     assert not any("seriesId=4" in url for url in sonarr.urls)
@@ -374,11 +376,11 @@ async def test_monitored_only_skips_unmonitored_series_and_episodes(db, sonarr) 
     items = {item["episode_file_id"]: item for item in payload["results"]}
     assert 301 not in items
     assert payload["scan"]["series_scanned"] == 1
-    assert items[101]["episode_ids"] == []
-    assert items[101]["episode_label"] == "S01E01"
+    # File 101's only episode is unmonitored, so it is left out entirely.
+    assert 101 not in items
     result = await service.enqueue([101])
     assert result["errors"] == [
-        {"episode_file_id": 101, "error": NO_SEARCHABLE_EPISODES}
+        {"episode_file_id": 101, "error": "Not in scan results"}
     ]
 
     everything = _service(db, monitored_only=False)
@@ -448,7 +450,7 @@ async def test_enqueue_validates_and_joins_queue_status(db, sonarr) -> None:
     assert result["queued"] == 2
     assert result["skipped"] == 0
     assert result["errors"] == [
-        {"episode_file_id": 106, "error": NO_SEARCHABLE_EPISODES},
+        {"episode_file_id": 106, "error": "Not in scan results"},
         {"episode_file_id": 555, "error": "Not in scan results"},
     ]
     assert (await service.enqueue([101]))["skipped"] == 1
@@ -737,13 +739,30 @@ async def test_delete_guards_never_delete(db, sonarr) -> None:
         101: "File changed since scan",
         102: "No longer non-compliant",
         104: "Series no longer in scope",
-        106: NO_SEARCHABLE_EPISODES,
+        106: "Not in scan results",
         555: "Not in scan results",
     }
     assert result["deleted"] == 0
     assert result["failed"] == 5
     assert sonarr.calls_to("DELETE", "/api/v3/episodefile") == []
     assert sonarr.calls_to("POST", "/api/v3/command") == []
+
+
+async def test_delete_refuses_a_file_without_searchable_episodes(db, sonarr) -> None:
+    # The scan never yields such a file; the guard still holds if state ever does.
+    service = _service(db)
+    await service.scan()
+    service._state.results = [
+        replace(item, episode_ids=()) if item.episode_file_id == 104 else item
+        for item in service._state.results
+    ]
+
+    result = await service.delete_and_search([104])
+
+    assert result["errors"] == [
+        {"episode_file_id": 104, "error": NO_SEARCHABLE_EPISODES}
+    ]
+    assert sonarr.calls_to("DELETE", "/api/v3/episodefile") == []
 
 
 async def test_delete_guards_missing_file_and_recheck_errors(db, sonarr) -> None:

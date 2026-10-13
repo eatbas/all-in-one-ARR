@@ -9,15 +9,6 @@ export interface SeriesGroup {
   items: LanguagarrItem[]
 }
 
-/**
- * Whether a file can be queued or deleted. A file whose episodes are all
- * unmonitored (or unlinked) has no searchable episodes, so the backend rejects
- * every action on it; the UI must not offer one.
- */
-export function isActionable(item: LanguagarrItem): boolean {
-  return item.episode_ids.length > 0
-}
-
 /** Group scan results by series, keeping the backend's series/episode order. */
 export function groupBySeries(items: LanguagarrItem[]): SeriesGroup[] {
   const groups = new Map<number, SeriesGroup>()

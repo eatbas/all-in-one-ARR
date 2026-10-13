@@ -496,45 +496,9 @@ describe("Languagarr review", () => {
     )
   })
 
-  it("marks files without searchable episodes as not actionable", async () => {
-    const user = userEvent.setup()
+  it("disables Select all when only unknown-audio files remain", () => {
     vi.mocked(useLanguagarrResults).mockReturnValue(
-      queryResult({
-        ...RESULTS,
-        results: [
-          item(1),
-          item(7, { series_id: 3, series_title: "Frozen", episode_ids: [] }),
-        ],
-      }),
-    )
-    render(<Languagarr />)
-
-    const frozen = screen.getByRole("region", { name: "Frozen" })
-    expect(
-      within(frozen).getByText("Not searchable (unmonitored)"),
-    ).toBeInTheDocument()
-    expect(
-      within(frozen).getByRole("checkbox", { name: "Select Frozen S01E07" }),
-    ).toBeDisabled()
-    expect(
-      within(frozen).getByRole("checkbox", {
-        name: "Select all files in Frozen",
-      }),
-    ).toBeDisabled()
-
-    // Select all only takes actionable files and reports them all selected.
-    await user.click(screen.getByRole("button", { name: "Select all" }))
-    expect(
-      screen.getByRole("button", { name: "Queue search (1)" }),
-    ).toBeEnabled()
-    expect(
-      screen.getByRole("button", { name: "Clear selection" }),
-    ).toBeInTheDocument()
-  })
-
-  it("disables Select all when nothing is actionable", () => {
-    vi.mocked(useLanguagarrResults).mockReturnValue(
-      queryResult({ ...RESULTS, results: [item(7, { episode_ids: [] })] }),
+      queryResult({ ...RESULTS, results: [], unknown: [item(7)] }),
     )
     render(<Languagarr />)
     expect(screen.getByRole("button", { name: "Select all" })).toBeDisabled()

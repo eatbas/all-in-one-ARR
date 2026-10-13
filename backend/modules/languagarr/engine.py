@@ -13,7 +13,9 @@ the files without an English audio track. Fixing them is two-tier:
 
 With ``monitored_only`` (the default) unmonitored series are skipped and
 unmonitored episodes are never searched: Sonarr runs API-triggered searches as
-user-invoked, which would otherwise bypass its own monitored check.
+user-invoked, which would otherwise bypass its own monitored check. A file with
+no searchable episode (all unmonitored, or none linked) is left out of the scan
+results altogether, since nothing could be done about it.
 """
 
 from __future__ import annotations
@@ -94,10 +96,11 @@ def _audit_file(
     cutoff_format_score: int,
     monitored_only: bool,
 ) -> AuditItem | None:
-    """Return an :class:`AuditItem` for a non-compliant file, else ``None``.
+    """Return an :class:`AuditItem` for an actionable non-compliant file.
 
     The label covers every episode in the file; ``episode_ids`` (what a search
-    targets) keeps only monitored episodes when ``monitored_only`` is set.
+    targets) keeps only monitored episodes when ``monitored_only`` is set. A
+    compliant file, or one with no searchable episode, yields ``None``.
     """
     verdict, audio = file_audio_verdict(episode_file)
     if verdict.compliant:
@@ -111,6 +114,8 @@ def _audit_file(
         for episode in ordered
         if not monitored_only or bool(episode.get("monitored", True))
     ]
+    if not searchable:
+        return None
     season_raw = episode_file.get("seasonNumber")
     season = coerce_int(season_raw, 0) if season_raw is not None else None
     score = coerce_int(episode_file.get("customFormatScore"), 0)
@@ -354,11 +359,6 @@ class LanguagarrService:
                     {"episode_file_id": file_id, "error": "Not in scan results"}
                 )
                 continue
-            if not item.episode_ids:
-                errors.append(
-                    {"episode_file_id": file_id, "error": NO_SEARCHABLE_EPISODES}
-                )
-                continue
             entries.append(_queue_entry(item))
         queued, skipped = self._ctx.db.languagarr_enqueue(
             entries, retry_before_iso=self._retry_before_iso()
@@ -402,7 +402,7 @@ class LanguagarrService:
             searchable = [
                 item.episode_file_id
                 for item in self._state.results
-                if item.recommended_action == "search" and item.episode_ids
+                if item.recommended_action == "search"
             ]
             await self.enqueue(searchable[:MAX_ENQUEUE_PER_REQUEST])
         return await self._process_pending()
@@ -513,6 +513,8 @@ class LanguagarrService:
 
         Sonarr is re-read immediately before the delete so a file replaced,
         fixed, moved, re-profiled or unmonitored since the scan is never removed.
+        The scan never yields a file without searchable episodes; the guard
+        still refuses one so a delete can never be left without its search.
         """
         if not item.episode_ids:
             return NO_SEARCHABLE_EPISODES
