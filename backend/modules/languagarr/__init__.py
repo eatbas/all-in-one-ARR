@@ -1,4 +1,4 @@
-"""Languagarr module: keep an English audio track on Sonarr anime episode files."""
+"""Languagarr module: keep a target-language audio track on Sonarr anime files."""
 
 from __future__ import annotations
 
@@ -53,6 +53,7 @@ async def setup(scheduler: SchedulerService, app: FastAPI, ctx: AppContext) -> N
     ctx.languagarr_status = service.status
     ctx.languagarr_scan = service.scan
     ctx.languagarr_results = service.results
+    ctx.languagarr_profiles = service.quality_profiles
     ctx.languagarr_enqueue = service.enqueue
     ctx.languagarr_delete = service.delete_and_search
     ctx.languagarr_queue = service.queue

@@ -113,3 +113,42 @@ def test_store_seeds_updates_persists_and_migrates(tmp_path) -> None:
     assert reopened.languagarr_settings() == DEFAULT_LANGUAGARR_SETTINGS
     assert "languagarr" in json.loads(path.read_text())
     assert "languagarr" in reopened.masked()
+
+
+@pytest.mark.parametrize(
+    ("value", "expected"),
+    [
+        (["eng"], ["eng"]),
+        (["deu", "ger", "German", "tur"], ["ger", "tur"]),
+        (["klingon", 3, None, "jpn"], ["jpn"]),
+        ([], ["eng"]),
+        (["klingon"], ["eng"]),
+        ("eng", ["eng"]),
+        (None, ["eng"]),
+        (
+            [
+                "eng",
+                "jpn",
+                "tur",
+                "ger",
+                "fre",
+                "spa",
+                "ita",
+                "por",
+                "rus",
+                "kor",
+                "chi",
+            ],
+            ["eng", "jpn", "tur", "ger", "fre", "spa", "ita", "por", "rus", "kor"],
+        ),
+    ],
+)
+def test_target_languages_are_canonical_and_never_empty(
+    value: object, expected: list[str]
+) -> None:
+    assert (
+        normalise_languagarr_settings({"target_audio_languages": value})[
+            "target_audio_languages"
+        ]
+        == expected
+    )

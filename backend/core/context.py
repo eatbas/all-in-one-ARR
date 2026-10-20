@@ -168,6 +168,9 @@ class AppContext:
     languagarr_status: Callable[[], Awaitable[dict]] | None = field(default=None)
     languagarr_scan: Callable[[], Awaitable[dict]] | None = field(default=None)
     languagarr_results: Callable[[], Awaitable[dict]] | None = field(default=None)
+    languagarr_profiles: Callable[[], Awaitable[list[dict]]] | None = field(
+        default=None
+    )
     languagarr_enqueue: Callable[[list[int]], Awaitable[dict]] | None = field(
         default=None
     )

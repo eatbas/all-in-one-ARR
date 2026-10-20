@@ -1,7 +1,8 @@
 """Languagarr engine: audit anime audio, queue replacement searches, guarded delete.
 
 The audit reads each in-scope Sonarr episode file's real audio tracks and keeps
-the files without an English audio track. Fixing them is two-tier:
+the files without a track in any of the target audio languages (a setting,
+English by default). Fixing them is two-tier:
 
 * **Search** (default, never destructive): the file's episodes are queued and the
   scheduled worker sends bounded Sonarr ``EpisodeSearch`` commands. Sonarr replaces
@@ -30,6 +31,7 @@ from core.app_metrics import (
     record_languagarr_scan,
     record_languagarr_searches,
 )
+from core.audio_languages import describe_languages
 from core.coerce import coerce_int
 from core.logging import get_logger
 from modules.languagarr.audio import file_audio_verdict
@@ -95,6 +97,7 @@ def _audit_file(
     episodes: list[dict[str, Any]],
     cutoff_format_score: int,
     monitored_only: bool,
+    target_languages: tuple[str, ...],
 ) -> AuditItem | None:
     """Return an :class:`AuditItem` for an actionable non-compliant file.
 
@@ -102,7 +105,7 @@ def _audit_file(
     targets) keeps only monitored episodes when ``monitored_only`` is set. A
     compliant file, or one with no searchable episode, yields ``None``.
     """
-    verdict, audio = file_audio_verdict(episode_file)
+    verdict, audio = file_audio_verdict(episode_file, target_languages)
     if verdict.compliant:
         return None
     ordered = sorted(
@@ -174,6 +177,25 @@ class LanguagarrService:
             "queue": self._ctx.db.languagarr_queue_counts(),
         }
 
+    async def quality_profiles(self) -> list[dict[str, Any]]:
+        """Return Sonarr's quality profiles as ``{id, name}``, sorted by name.
+
+        Feeds the Settings checklist, so the scope is picked from profiles Sonarr
+        actually has rather than typed by hand. Profiles without a name are
+        dropped: the scope is stored by name.
+        """
+        client = client_for(self._ctx)
+        try:
+            profiles = await client.quality_profiles()
+        finally:
+            await client.aclose()
+        options = [
+            {"id": coerce_int(profile.get("id"), 0), "name": name}
+            for profile in profiles
+            if isinstance(name := profile.get("name"), str) and name.strip()
+        ]
+        return sorted(options, key=lambda option: option["name"].casefold())
+
     async def results(self) -> dict[str, Any]:
         """Return the latest scan results joined with live queue status."""
         queue = self._ctx.db.languagarr_queue_status_map()
@@ -235,7 +257,8 @@ class LanguagarrService:
         )
         record_languagarr_scan(status="success", verdict_counts=state.verdict_counts())
         detail = (
-            f"{len(state.results)} anime file(s) without English audio, "
+            f"{len(state.results)} anime file(s) without "
+            f"{describe_languages(state.target_languages)} audio, "
             f"{len(state.unknown)} with unknown audio, across "
             f"{state.series_scanned} series."
         )
@@ -247,6 +270,8 @@ class LanguagarrService:
 
     async def _scope(self, client: LanguagarrSonarrClient) -> Scope:
         """Resolve configured profile names to their ids and cutoff scores.
+
+        The scope also carries the monitoring rule and the target languages.
 
         A configured name Sonarr does not know is an error rather than being
         skipped, so a typo can never silently widen or empty the scope.
@@ -268,7 +293,12 @@ class LanguagarrService:
             )
             for name in names
         }
-        return Scope(cutoffs, names, bool(settings["monitored_only"]))
+        return Scope(
+            cutoffs,
+            names,
+            bool(settings["monitored_only"]),
+            tuple(settings["target_audio_languages"]),
+        )
 
     async def _audit(self, client: LanguagarrSonarrClient, state: ScanState) -> None:
         compatibility = await client.compatibility()
@@ -303,6 +333,7 @@ class LanguagarrService:
                         episodes=by_file.get(coerce_int(episode_file.get("id"), 0), []),
                         cutoff_format_score=cutoff,
                         monitored_only=scope.monitored_only,
+                        target_languages=scope.languages,
                     )
                 )
                 is not None
@@ -333,6 +364,7 @@ class LanguagarrService:
         state.results = [item for item in flagged if item.verdict != "unknown"]
         state.unknown = [item for item in flagged if item.verdict == "unknown"]
         state.profiles_in_scope = scope.names
+        state.target_languages = list(scope.languages)
         state.series_scanned = len(series_list)
         state.files_scanned = files_scanned
         state.last_scan_at = _now_iso()
@@ -366,7 +398,9 @@ class LanguagarrService:
         if queued:
             self._ctx.db.add_activity(
                 "Languagarr searches queued",
-                f"Queued {queued} anime file(s) for an English-audio replacement search.",
+                f"Queued {queued} anime file(s) for a replacement search for "
+                f"{describe_languages(self.settings()['target_audio_languages'])} "
+                "audio.",
             )
         return {"queued": queued, "skipped": skipped, "errors": errors}
 
@@ -524,7 +558,7 @@ class LanguagarrService:
                 return "File no longer exists"
             if str(fresh.get("path") or "") != item.path:
                 return "File changed since scan"
-            verdict, _ = file_audio_verdict(fresh)
+            verdict, _ = file_audio_verdict(fresh, scope.languages)
             if verdict.compliant or verdict.status == "unknown":
                 return "No longer non-compliant"
             series = await client.series_by_id(item.series_id)

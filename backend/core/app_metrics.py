@@ -97,7 +97,7 @@ languagarr_scans_total = Counter(
 )
 languagarr_noncompliant_files = Gauge(
     "aio_arr_languagarr_noncompliant_files",
-    "Anime episode files without an English audio track, by verdict",
+    "Anime episode files without a target-language audio track, by verdict",
     ("verdict",),
 )
 languagarr_searches_total = Counter(
@@ -163,7 +163,7 @@ def initialise_metrics() -> None:
         languagarr_scans_total.labels(status)
         languagarr_searches_total.labels(status)
         languagarr_deletes_total.labels(status)
-    for verdict in ("missing_english", "unknown"):
+    for verdict in ("missing_language", "unknown"):
         languagarr_noncompliant_files.labels(verdict).set(0)
 
 

@@ -1,4 +1,4 @@
-"""Dashboard JSON API for Languagarr (anime English-audio enforcement)."""
+"""Dashboard JSON API for Languagarr (anime target-language audio enforcement)."""
 
 from __future__ import annotations
 
@@ -7,11 +7,13 @@ from typing import TYPE_CHECKING, Annotated, Literal
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field, field_validator
 
+from core.audio_languages import AUDIO_LANGUAGES, canonical_language, is_known_language
 from core.clients.servarr import ServarrClientError
 from core.context import SyncAlreadyRunning
 from core.settings_normalisers import (
     LANGUAGARR_INTERVAL_MAX,
     LANGUAGARR_INTERVAL_MIN,
+    LANGUAGARR_LANGUAGES_MAX,
     LANGUAGARR_PROFILE_NAMES_MAX,
     LANGUAGARR_RETRY_HOURS_MAX,
     LANGUAGARR_RETRY_HOURS_MIN,
@@ -23,7 +25,7 @@ from core.settings_normalisers import (
 if TYPE_CHECKING:  # pragma: no cover
     from core.context import AppContext
 
-AudioVerdictLiteral = Literal["compliant", "missing_english", "unknown"]
+AudioVerdictLiteral = Literal["compliant", "missing_language", "unknown"]
 QueueStatusLiteral = Literal["none", "pending", "searched", "failed"]
 QueueRowStatusLiteral = Literal["pending", "searched", "failed"]
 
@@ -36,6 +38,8 @@ class LanguagarrSettings(BaseModel):
     auto_queue: bool
     monitored_only: bool
     quality_profile_names: list[str]
+    # Canonical audio-language codes; a file passes with at least one of them.
+    target_audio_languages: list[str]
     sonarr_link_url: str
 
 
@@ -71,8 +75,23 @@ class LanguagarrSettingsUpdate(BaseModel):
         ]
         | None
     ) = None
+    target_audio_languages: (
+        Annotated[list[str], Field(min_length=1, max_length=LANGUAGARR_LANGUAGES_MAX)]
+        | None
+    ) = None
     # Empty clears the override (links then use the Sonarr service URL).
     sonarr_link_url: Annotated[str, Field(max_length=2048)] | None = None
+
+    @field_validator("target_audio_languages")
+    @classmethod
+    def _known_languages(cls, value: list[str] | None) -> list[str] | None:
+        """Reject a language outside the catalogue with a 422; fold to canonical."""
+        if value is None:
+            return None
+        unknown = [code for code in value if not is_known_language(code)]
+        if unknown:
+            raise ValueError(f"Unknown audio language: {', '.join(unknown)}")
+        return [canonical_language(code) for code in value]
 
     @field_validator("sonarr_link_url")
     @classmethod
@@ -81,16 +100,31 @@ class LanguagarrSettingsUpdate(BaseModel):
         return None if value is None else normalise_service_url(value)
 
 
+class LanguagarrAudioLanguage(BaseModel):
+    """A selectable target audio language: canonical code and display name."""
+
+    code: str
+    name: str
+
+
+class LanguagarrQualityProfile(BaseModel):
+    """A Sonarr quality profile offered in the scope checklist."""
+
+    id: int
+    name: str
+
+
 class LanguagarrScanSummary(BaseModel):
     is_scanning: bool
     last_scan_at: str | None
     last_error: str | None
     profiles_in_scope: list[str]
+    target_languages: list[str]
     series_scanned: int
     files_scanned: int
     non_compliant: int
     unknown: int
-    missing_english: int
+    missing_language: int
 
 
 class LanguagarrQueueCounts(BaseModel):
@@ -218,6 +252,23 @@ def create_languagarr_router(ctx: AppContext) -> APIRouter:
         if ctx.languagarr_status is None:
             raise _unavailable()
         return await ctx.languagarr_status()
+
+    @router.get("/languages", response_model=list[LanguagarrAudioLanguage])
+    async def get_languages() -> list[dict]:
+        # Static catalogue: available even before the module is set up.
+        return [
+            {"code": language.code, "name": language.name}
+            for language in AUDIO_LANGUAGES
+        ]
+
+    @router.get("/profiles", response_model=list[LanguagarrQualityProfile])
+    async def get_profiles() -> list[dict]:
+        if ctx.languagarr_profiles is None:
+            raise _unavailable()
+        try:
+            return await ctx.languagarr_profiles()
+        except ServarrClientError as exc:
+            raise HTTPException(status_code=502, detail=str(exc)) from exc
 
     @router.get("/results", response_model=LanguagarrResults)
     async def get_results() -> dict:

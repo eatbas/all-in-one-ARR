@@ -1,11 +1,19 @@
 import { act, renderHook, waitFor } from "@testing-library/react"
 import { beforeEach, describe, expect, it, vi } from "vitest"
 
-vi.mock("@/shared/lib/api", () => ({
+vi.mock("@/shared/lib/api", async () => ({
+  // The real prose helper, so the scan toast text is asserted for real.
+  describeLanguages: (
+    await vi.importActual<typeof import("@/shared/lib/api/languagarr")>(
+      "@/shared/lib/api/languagarr",
+    )
+  ).describeLanguages,
   getLanguagarrStatus: vi.fn(),
   getLanguagarrSettings: vi.fn(),
   getLanguagarrResults: vi.fn(),
   getLanguagarrQueue: vi.fn(),
+  getLanguagarrProfiles: vi.fn(),
+  getLanguagarrLanguages: vi.fn(),
   updateLanguagarrSettings: vi.fn(),
   scanLanguagarr: vi.fn(),
   enqueueLanguagarr: vi.fn(),
@@ -26,6 +34,8 @@ import {
   useClearLanguagarrPending,
   useDeleteLanguagarr,
   useEnqueueLanguagarr,
+  useLanguagarrLanguages,
+  useLanguagarrProfiles,
   useLanguagarrQueue,
   useLanguagarrResults,
   useLanguagarrSettings,
@@ -45,7 +55,8 @@ const SCAN = {
   files_scanned: 2,
   non_compliant: 4,
   unknown: 0,
-  missing_english: 4,
+  missing_language: 4,
+  target_languages: ["eng"],
 }
 const RESULTS: LanguagarrResults = { scan: SCAN, results: [], unknown: [] }
 const STATUS = { running: false } as unknown as LanguagarrStatus
@@ -60,6 +71,12 @@ beforeEach(() => {
     counts: { pending: 0, searched: 0, failed: 0 },
     rows: [],
   })
+  vi.mocked(api.getLanguagarrLanguages).mockResolvedValue([
+    { code: "eng", name: "English" },
+  ])
+  vi.mocked(api.getLanguagarrProfiles).mockResolvedValue([
+    { id: 7, name: "Anime" },
+  ])
 })
 
 describe("Languagarr queries", () => {
@@ -68,6 +85,8 @@ describe("Languagarr queries", () => {
     ["settings", useLanguagarrSettings, api.getLanguagarrSettings],
     ["results", useLanguagarrResults, api.getLanguagarrResults],
     ["queue", useLanguagarrQueue, api.getLanguagarrQueue],
+    ["profiles", useLanguagarrProfiles, api.getLanguagarrProfiles],
+    ["languages", useLanguagarrLanguages, api.getLanguagarrLanguages],
   ] as const)("fetches the %s", async (_name, hook, fetcher) => {
     const { wrapper } = setup()
     const { result } = renderHook(() => hook(), { wrapper })
@@ -80,6 +99,9 @@ describe("Languagarr mutations", () => {
   it("scan stores the results, toasts and invalidates", async () => {
     vi.mocked(api.scanLanguagarr).mockResolvedValue(RESULTS)
     const { queryClient, wrapper } = setup()
+    queryClient.setQueryData(queryKeys.languagarrLanguages, [
+      { code: "eng", name: "English" },
+    ])
     const invalidate = vi.spyOn(queryClient, "invalidateQueries")
     const { result } = renderHook(() => useScanLanguagarr(), { wrapper })
 

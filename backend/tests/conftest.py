@@ -339,6 +339,9 @@ class StubSettingsStore:
             "quality_profile_names": list(
                 self._languagarr_settings["quality_profile_names"]
             ),
+            "target_audio_languages": list(
+                self._languagarr_settings["target_audio_languages"]
+            ),
         }
 
     def languagarr_interval_minutes(self) -> int:

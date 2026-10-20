@@ -1,13 +1,13 @@
 import { useState } from "react"
 import { ChevronDownIcon, TvIcon } from "lucide-react"
 
-import { SonarrSeriesLink } from "@/features/languagarr/components/sonarr-series-link"
 import {
   ACTION_LABELS,
   QUEUE_LABELS,
   VERDICT_LABELS,
   type SeriesGroup as SeriesGroupData,
 } from "@/features/languagarr/review-groups"
+import { sonarrSeriesUrl } from "@/shared/lib/api"
 import { Badge } from "@/shared/components/ui/badge"
 import {
   Collapsible,
@@ -64,17 +64,27 @@ export function SeriesGroup({
               aria-label={`Select all files in ${group.title}`}
             />
             <TvIcon className="size-4 shrink-0 text-muted-foreground" />
-            <span className="truncate text-sm font-semibold">
-              {group.title}
-            </span>
-            <Badge variant="secondary">{group.items.length} file(s)</Badge>
           </label>
+          <div className="flex min-w-0 flex-1 items-center gap-2">
+            {sonarrUrl && group.slug ? (
+              <a
+                href={sonarrSeriesUrl(sonarrUrl, group.slug)}
+                target="_blank"
+                rel="noreferrer noopener"
+                title={`Open ${group.title} in Sonarr`}
+                aria-label={`Open ${group.title} in Sonarr`}
+                className="truncate text-sm font-semibold hover:underline"
+              >
+                {group.title}
+              </a>
+            ) : (
+              <span className="truncate text-sm font-semibold">
+                {group.title}
+              </span>
+            )}
+            <Badge variant="secondary">{group.items.length} file(s)</Badge>
+          </div>
           <div className="flex items-center gap-1">
-            <SonarrSeriesLink
-              baseUrl={sonarrUrl}
-              slug={group.slug}
-              title={group.title}
-            />
             <CollapsibleTrigger
               className="rounded-md p-1 hover:bg-accent"
               aria-label={`${isOpen ? "Collapse" : "Expand"} ${group.title}`}

@@ -1,8 +1,10 @@
 import type {
+  LanguagarrAudioLanguage as GeneratedLanguagarrAudioLanguage,
   LanguagarrClearResult,
   LanguagarrDeleteResult as GeneratedLanguagarrDeleteResult,
   LanguagarrEnqueueResult as GeneratedLanguagarrEnqueueResult,
   LanguagarrItem as GeneratedLanguagarrItem,
+  LanguagarrQualityProfile as GeneratedLanguagarrQualityProfile,
   LanguagarrQueue as GeneratedLanguagarrQueue,
   LanguagarrQueueRow as GeneratedLanguagarrQueueRow,
   LanguagarrResults as GeneratedLanguagarrResults,
@@ -23,10 +25,16 @@ export type LanguagarrSettingsUpdate = GeneratedLanguagarrSettingsUpdate
 /** Counts and metadata of the latest anime audio scan. */
 export type LanguagarrScanSummary = GeneratedLanguagarrScanSummary
 
+/** A selectable target audio language (`GET /api/languagarr/languages`). */
+export type LanguagarrAudioLanguage = GeneratedLanguagarrAudioLanguage
+
+/** A Sonarr quality profile offered in the scope checklist. */
+export type LanguagarrQualityProfile = GeneratedLanguagarrQualityProfile
+
 /** Settings, scan summary and queue counts (`GET /api/languagarr/status`). */
 export type LanguagarrStatus = GeneratedLanguagarrStatus
 
-/** One anime episode file without an English audio track. */
+/** One anime episode file without an audio track in a target language. */
 export type LanguagarrItem = GeneratedLanguagarrItem
 
 /** Latest scan results joined with live queue status. */
@@ -52,6 +60,18 @@ export type LanguagarrClearPendingResult = LanguagarrClearResult
 
 /** Most files the backend accepts in one delete-and-search request. */
 export const LANGUAGARR_MAX_DELETE = 25
+
+/**
+ * Most quality profiles a scope may hold; mirrors the backend's
+ * LANGUAGARR_PROFILE_NAMES_MAX, which the settings API enforces (422).
+ */
+export const LANGUAGARR_MAX_PROFILES = 20
+
+/**
+ * Most target audio languages a scope may hold; mirrors the backend's
+ * LANGUAGARR_LANGUAGES_MAX, which the settings API enforces (422).
+ */
+export const LANGUAGARR_MAX_LANGUAGES = 10
 
 /** Most files the backend accepts in one enqueue request. */
 export const LANGUAGARR_MAX_ENQUEUE = 500
@@ -81,6 +101,34 @@ export function updateLanguagarrSettings(
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
   })
+}
+
+/**
+ * Join target languages as prose ("English", "English or Turkish", "English,
+ * Turkish or German"), naming each code from the catalogue and falling back to
+ * the upper-cased code while the catalogue is not loaded.
+ */
+export function describeLanguages(
+  codes: readonly string[],
+  catalogue: readonly LanguagarrAudioLanguage[] | undefined,
+): string {
+  const names = codes.map(
+    (code) =>
+      catalogue?.find((language) => language.code === code)?.name ??
+      code.toUpperCase(),
+  )
+  if (names.length <= 1) return names.join("")
+  return `${names.slice(0, -1).join(", ")} or ${names[names.length - 1]}`
+}
+
+/** The selectable audio languages (`GET /api/languagarr/languages`). */
+export function getLanguagarrLanguages(): Promise<LanguagarrAudioLanguage[]> {
+  return request<LanguagarrAudioLanguage[]>("/api/languagarr/languages")
+}
+
+/** Sonarr's quality profiles, sorted by name (`GET /api/languagarr/profiles`). */
+export function getLanguagarrProfiles(): Promise<LanguagarrQualityProfile[]> {
+  return request<LanguagarrQualityProfile[]>("/api/languagarr/profiles")
 }
 
 export function getLanguagarrResults(): Promise<LanguagarrResults> {

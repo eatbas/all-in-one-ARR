@@ -241,7 +241,7 @@ async def test_scan_flags_only_non_compliant_in_scope_files(db, sonarr) -> None:
                 "series_id": 1,
                 "title": "stale",
                 "episode_ids": [1],
-                "reason": "missing_english",
+                "reason": "missing_language",
             }
         ],
         retry_before_iso="0",
@@ -253,12 +253,12 @@ async def test_scan_flags_only_non_compliant_in_scope_files(db, sonarr) -> None:
     # 106 has no linked episode, so nothing could act on it.
     assert sorted(items) == [101, 102, 104]
     assert [item["episode_file_id"] for item in payload["unknown"]] == [105]
-    assert items[101]["verdict"] == "missing_english"
+    assert items[101]["verdict"] == "missing_language"
     assert items[101]["recommended_action"] == "search"
     assert items[101]["release_group"] == "Anitsu"
     assert items[101]["sonarr_languages"] == ["Japanese"]
     assert items[101]["series_slug"] == "show"
-    assert items[102]["verdict"] == "missing_english"
+    assert items[102]["verdict"] == "missing_language"
     assert items[104]["episode_ids"] == [1004, 1005]
     assert items[104]["episode_label"] == "S01E04-E05"
     assert items[104]["recommended_action"] == "delete_and_search"
@@ -269,7 +269,7 @@ async def test_scan_flags_only_non_compliant_in_scope_files(db, sonarr) -> None:
     assert scan["series_scanned"] == 1
     assert scan["files_scanned"] == 6
     assert scan["non_compliant"] == 3
-    assert scan["missing_english"] == 3
+    assert scan["missing_language"] == 3
     assert scan["unknown"] == 1
     assert scan["profiles_in_scope"] == ["Anime"]
     assert scan["last_scan_at"]
@@ -295,7 +295,7 @@ async def test_scan_reports_singular_prune_message(db, sonarr) -> None:
                 "series_id": 1,
                 "title": "stale",
                 "episode_ids": [1],
-                "reason": "missing_english",
+                "reason": "missing_language",
             }
         ],
         retry_before_iso="0",
@@ -344,7 +344,7 @@ async def test_scan_backfills_series_slugs_on_queued_rows(db, sonarr) -> None:
                 "series_id": 1,
                 "title": "Show - S01E01",
                 "episode_ids": [1001],
-                "reason": "missing_english",
+                "reason": "missing_language",
             }
         ],
         retry_before_iso="0",
@@ -859,3 +859,43 @@ async def test_setup_registers_callables_and_reschedules_on_interval_change(
     await languagarr_job()
     assert sonarr.calls == []
     assert languagarr_module._SERVICE is not None
+
+
+# ---- quality profiles ----
+
+
+async def test_quality_profiles_lists_named_profiles_sorted(db, sonarr) -> None:
+    sonarr.profiles = [
+        {"id": 9, "name": "anime 4K"},
+        {"id": 4, "name": "HD Bluray + WEB"},
+        {"id": 7, "name": "Anime"},
+        {"id": 8, "name": "  "},
+        {"id": 3},
+    ]
+    service = _service(db)
+    assert await service.quality_profiles() == [
+        {"id": 7, "name": "Anime"},
+        {"id": 9, "name": "anime 4K"},
+        {"id": 4, "name": "HD Bluray + WEB"},
+    ]
+
+
+async def test_scan_checks_against_the_configured_target_languages(db, sonarr) -> None:
+    service = _service(db, target_audio_languages=["ger", "por"])
+    payload = await service.scan()
+    flagged = sorted(item["episode_file_id"] for item in payload["results"])
+    # 101 (jpn/por) and 102 (ger) now pass; 103 (jpn/eng) and 104 (jpn) do not.
+    assert flagged == [103, 104]
+    assert payload["scan"]["target_languages"] == ["ger", "por"]
+    detail = service._ctx.db.recent_activity(1)[0]["detail"]
+    assert detail.startswith("2 anime file(s) without German or Portuguese audio")
+
+
+async def test_queue_and_worker_activity_name_the_target_languages(db, sonarr) -> None:
+    service = _service(db, target_audio_languages=["tur"])
+    await service.scan()
+    await service.enqueue([101])
+    await service.run_now()
+    details = [row["detail"] for row in service._ctx.db.recent_activity(5)]
+    assert any("replacement search for Turkish audio" in d for d in details)
+    assert any("replacement search(es) for Turkish audio" in d for d in details)

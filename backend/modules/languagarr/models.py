@@ -22,7 +22,7 @@ def series_slug(series: dict[str, Any]) -> str | None:
 
 @dataclass(frozen=True)
 class AuditItem:
-    """One Sonarr episode file without an English audio track.
+    """One Sonarr episode file without an audio track in a target language.
 
     ``recommended_action`` is ``search`` when the file's custom-format score is
     below the profile's cutoff score: Sonarr will then treat a better release as
@@ -82,11 +82,13 @@ class AuditItem:
 
 @dataclass(frozen=True)
 class Scope:
-    """Resolved scope: ``{profile_id: cutoffFormatScore}`` plus monitoring rule."""
+    """Resolved scope: ``{profile_id: cutoffFormatScore}``, the monitoring rule,
+    and the canonical target audio-language codes a file must carry one of."""
 
     cutoffs: dict[int, int]
     names: list[str]
     monitored_only: bool
+    languages: tuple[str, ...]
 
     def includes(self, series: dict[str, Any]) -> bool:
         """Whether ``series`` is on an in-scope profile (and monitored if required)."""
@@ -109,13 +111,15 @@ class ScanState:
     last_scan_at: str | None = None
     last_error: str | None = None
     profiles_in_scope: list[str] = field(default_factory=list)
+    # Target languages the latest scan checked against (canonical codes).
+    target_languages: list[str] = field(default_factory=list)
     series_scanned: int = 0
     files_scanned: int = 0
 
     def verdict_counts(self) -> dict[str, int]:
         """Return file counts per non-compliant verdict, including ``unknown``."""
         counts = {
-            "missing_english": 0,
+            "missing_language": 0,
             "unknown": len(self.unknown),
         }
         for item in self.results:
@@ -130,9 +134,10 @@ class ScanState:
             "last_scan_at": self.last_scan_at,
             "last_error": self.last_error,
             "profiles_in_scope": list(self.profiles_in_scope),
+            "target_languages": list(self.target_languages),
             "series_scanned": self.series_scanned,
             "files_scanned": self.files_scanned,
             "non_compliant": len(self.results),
             "unknown": len(self.unknown),
-            "missing_english": by_verdict["missing_english"],
+            "missing_language": by_verdict["missing_language"],
         }

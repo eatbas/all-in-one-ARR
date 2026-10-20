@@ -13,7 +13,7 @@ def _entry(file_id: int, **overrides) -> dict:
         "series_id": 1,
         "title": f"Show - S01E{file_id:02d}",
         "episode_ids": [file_id * 10],
-        "reason": "missing_english",
+        "reason": "missing_language",
     }
     entry.update(overrides)
     return entry
@@ -133,6 +133,8 @@ def test_init_db_adds_series_slug_to_a_legacy_queue(tmp_path) -> None:
     database.init_db()  # the migration is idempotent
     [row] = database.languagarr_queue_rows()
     assert row["series_slug"] is None
+    # The verdict was renamed when the target language became configurable.
+    assert row["reason"] == "missing_language"
     database.languagarr_set_series_slugs({7: "show"})
     assert database.languagarr_queue_rows()[0]["series_slug"] == "show"
     database.close()

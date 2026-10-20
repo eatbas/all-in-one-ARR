@@ -7,6 +7,8 @@ vi.mock("@/shared/lib/queries", () => ({
   useLanguagarrResults: vi.fn(),
   useLanguagarrSettings: vi.fn(),
   useLanguagarrQueue: vi.fn(),
+  useLanguagarrProfiles: vi.fn(),
+  useLanguagarrLanguages: vi.fn(),
   useScanLanguagarr: vi.fn(),
   useEnqueueLanguagarr: vi.fn(),
   useDeleteLanguagarr: vi.fn(),
@@ -19,7 +21,9 @@ vi.mock("@/shared/lib/queries", () => ({
 import { Languagarr } from "@/features/languagarr/Languagarr"
 import { LANGUAGARR_TAB_STORAGE_KEY } from "@/features/languagarr/languagarr-tab"
 import type {
+  LanguagarrAudioLanguage,
   LanguagarrItem,
+  LanguagarrQualityProfile,
   LanguagarrQueue,
   LanguagarrResults,
   LanguagarrScanSummary,
@@ -31,6 +35,8 @@ import {
   useClearLanguagarrPending,
   useDeleteLanguagarr,
   useEnqueueLanguagarr,
+  useLanguagarrLanguages,
+  useLanguagarrProfiles,
   useLanguagarrQueue,
   useLanguagarrResults,
   useLanguagarrSettings,
@@ -50,8 +56,23 @@ const SETTINGS: LanguagarrSettings = {
   auto_queue: false,
   monitored_only: true,
   quality_profile_names: ["Anime"],
+  target_audio_languages: ["eng"],
   sonarr_link_url: "http://192.168.0.2:8989",
 }
+
+/** A slice of the language catalogue, in the backend's order. */
+const LANGUAGES: LanguagarrAudioLanguage[] = [
+  { code: "eng", name: "English" },
+  { code: "jpn", name: "Japanese" },
+  { code: "tur", name: "Turkish" },
+]
+
+/** Sonarr's profiles as the scope checklist receives them (sorted by name). */
+const PROFILES: LanguagarrQualityProfile[] = [
+  { id: 7, name: "Anime" },
+  { id: 9, name: "Anime 4K" },
+  { id: 4, name: "HD Bluray + WEB" },
+]
 
 /** Service settings whose Sonarr URL is `sonarrUrl`. */
 function services(sonarrUrl: string): ServicesSettings {
@@ -63,11 +84,12 @@ const SCAN: LanguagarrScanSummary = {
   last_scan_at: "2026-10-12T18:00:00Z",
   last_error: null,
   profiles_in_scope: ["Anime"],
+  target_languages: ["eng"],
   series_scanned: 2,
   files_scanned: 10,
   non_compliant: 3,
   unknown: 1,
-  missing_english: 3,
+  missing_language: 3,
 }
 
 function item(
@@ -85,7 +107,7 @@ function item(
     relative_path: `Season 01/file-${id}.mkv`,
     audio_languages: "jpn/por",
     sonarr_languages: ["Japanese", "Portuguese"],
-    verdict: "missing_english",
+    verdict: "missing_language",
     release_group: "Anipakku",
     custom_format_score: -18000,
     cutoff_format_score: 10000,
@@ -106,7 +128,7 @@ const RESULTS: LanguagarrResults = {
       series_title: "My Hero Academia",
       series_slug: null,
       audio_languages: "jpn/jpn",
-      verdict: "missing_english",
+      verdict: "missing_language",
       release_group: null,
       custom_format_score: 12000,
       recommended_action: "delete_and_search",
@@ -137,7 +159,7 @@ const QUEUE: LanguagarrQueue = {
       series_slug: "log-horizon",
       title: "Log Horizon - S01E02",
       episode_ids: [20],
-      reason: "missing_english",
+      reason: "missing_language",
       status: "pending",
       queued_at: "2026-10-12T18:00:00Z",
       searched_at: null,
@@ -150,7 +172,7 @@ const QUEUE: LanguagarrQueue = {
       series_slug: null,
       title: "Log Horizon - S01E04",
       episode_ids: [40],
-      reason: "missing_english",
+      reason: "missing_language",
       status: "searched",
       queued_at: "2026-10-12T17:00:00Z",
       searched_at: "2026-10-12T17:30:00Z",
@@ -186,6 +208,8 @@ beforeEach(() => {
   vi.mocked(useLanguagarrResults).mockReturnValue(queryResult(RESULTS))
   vi.mocked(useLanguagarrSettings).mockReturnValue(queryResult(SETTINGS))
   vi.mocked(useLanguagarrQueue).mockReturnValue(queryResult(QUEUE))
+  vi.mocked(useLanguagarrProfiles).mockReturnValue(queryResult(PROFILES))
+  vi.mocked(useLanguagarrLanguages).mockReturnValue(queryResult(LANGUAGES))
   vi.mocked(useScanLanguagarr).mockReturnValue(mutationResult(vi.fn()))
   vi.mocked(useEnqueueLanguagarr).mockReturnValue(mutationResult(vi.fn()))
   vi.mocked(useDeleteLanguagarr).mockReturnValue(mutationResult(vi.fn()))
@@ -290,22 +314,36 @@ describe("Languagarr review", () => {
     ).toHaveAttribute("href", "http://nas.lan:8989/series/log-horizon")
   })
 
-  it("hides the links when only a Docker-internal Sonarr URL is known", () => {
+  it("points a Docker-internal Sonarr URL at the host the browser used", () => {
     vi.mocked(useLanguagarrStatus).mockReturnValue(
       queryResult({
         ...STATUS,
         settings: { ...SETTINGS, sonarr_link_url: "" },
       }),
     )
-    const { rerender } = render(<Languagarr />)
-    expect(screen.queryByRole("link")).toBeNull()
-    expect(screen.getByText(/Set the Sonarr link URL/)).toBeInTheDocument()
+    render(<Languagarr />)
+    expect(
+      screen.getByRole("link", { name: "Open Log Horizon in Sonarr" }),
+    ).toHaveAttribute(
+      "href",
+      `http://${window.location.hostname}:8989/series/log-horizon`,
+    )
+    expect(screen.queryByText(/Set the Sonarr link URL/)).toBeNull()
+  })
 
+  it("hides the links when no Sonarr URL is known", () => {
+    vi.mocked(useLanguagarrStatus).mockReturnValue(
+      queryResult({
+        ...STATUS,
+        settings: { ...SETTINGS, sonarr_link_url: "" },
+      }),
+    )
     vi.mocked(useServiceSettings).mockReturnValue(
       queryResult<ServicesSettings>(undefined),
     )
-    rerender(<Languagarr />)
+    render(<Languagarr />)
     expect(screen.queryByRole("link")).toBeNull()
+    expect(screen.getByText(/Set the Sonarr link URL/)).toBeInTheDocument()
   })
 
   it("starts a scan and shows the scanning label and errors", async () => {
@@ -355,7 +393,7 @@ describe("Languagarr review", () => {
     )
     rerender(<Languagarr />)
     expect(
-      screen.getByText("Every scanned anime file has an English audio track."),
+      screen.getByText("Every scanned anime file has a English audio track."),
     ).toBeInTheDocument()
 
     vi.mocked(useLanguagarrResults).mockReturnValue(
@@ -635,9 +673,7 @@ describe("Languagarr settings", () => {
     const perRun = screen.getByLabelText("Searches per run")
     await user.clear(perRun)
     await user.type(perRun, "5")
-    const profiles = screen.getByLabelText("Sonarr quality profiles in scope")
-    await user.clear(profiles)
-    await user.type(profiles, "Anime, Anime 4K,")
+    await user.click(screen.getByRole("checkbox", { name: "Anime 4K" }))
     const linkUrl = screen.getByLabelText("Sonarr link URL")
     await user.clear(linkUrl)
     await user.type(linkUrl, "nas.lan:8989/")
@@ -680,9 +716,224 @@ describe("Languagarr settings", () => {
     await user.type(interval, "30")
     expect(screen.getByRole("button", { name: "Save" })).toBeEnabled()
 
-    const profiles = screen.getByLabelText("Sonarr quality profiles in scope")
-    await user.clear(profiles)
-    await user.type(profiles, " , ")
+    await user.click(screen.getByRole("checkbox", { name: "Anime" }))
+    expect(screen.getByRole("checkbox", { name: "Anime" })).not.toBeChecked()
     expect(screen.getByRole("button", { name: "Save" })).toBeDisabled()
+  })
+
+  it("lists Sonarr's profiles as a checklist with the scope checked", () => {
+    render(<Languagarr />)
+    const group = screen.getByRole("group", {
+      name: "Sonarr quality profiles in scope",
+    })
+    const boxes = within(group).getAllByRole("checkbox")
+    expect(boxes).toHaveLength(3)
+    expect(within(group).getByRole("checkbox", { name: "Anime" })).toBeChecked()
+    expect(
+      within(group).getByRole("checkbox", { name: "HD Bluray + WEB" }),
+    ).not.toBeChecked()
+  })
+
+  it("saves a reordered but identical scope as no change", async () => {
+    const user = userEvent.setup()
+    vi.mocked(useLanguagarrSettings).mockReturnValue(
+      queryResult({
+        ...SETTINGS,
+        quality_profile_names: ["Anime 4K", "Anime"],
+      }),
+    )
+    render(<Languagarr />)
+    const save = screen.getByRole("button", { name: "Save" })
+    await user.click(screen.getByRole("checkbox", { name: "Anime" }))
+    await user.click(screen.getByRole("checkbox", { name: "Anime" }))
+    // Re-checking appends "Anime" last; the set is unchanged, so nothing to save.
+    expect(save).toBeDisabled()
+  })
+
+  it("keeps a profile Sonarr no longer has visible so it can be unchecked", async () => {
+    const user = userEvent.setup()
+    const save = vi.fn()
+    vi.mocked(useUpdateLanguagarrSettings).mockReturnValue(mutationResult(save))
+    vi.mocked(useLanguagarrSettings).mockReturnValue(
+      queryResult({ ...SETTINGS, quality_profile_names: ["Anime", "Old"] }),
+    )
+    render(<Languagarr />)
+    expect(screen.getByText("(not in Sonarr)")).toBeInTheDocument()
+    await user.click(screen.getByRole("checkbox", { name: /Old/ }))
+    expect(screen.queryByText("(not in Sonarr)")).not.toBeInTheDocument()
+    await user.click(screen.getByRole("button", { name: "Save" }))
+    expect(save).toHaveBeenCalledWith({ quality_profile_names: ["Anime"] })
+  })
+
+  it.each([
+    [
+      "loading",
+      queryResult<LanguagarrQualityProfile[]>(undefined, true),
+      "Loading Sonarr quality profiles…",
+    ],
+    [
+      "a load error",
+      queryResult<LanguagarrQualityProfile[]>(undefined, false, {
+        error: new Error("sonarr down"),
+      }),
+      "Could not load Sonarr quality profiles: sonarr down",
+    ],
+    [
+      "no profiles",
+      queryResult<LanguagarrQualityProfile[]>([]),
+      "Sonarr reported no quality profiles.",
+    ],
+  ])("explains %s and still shows the saved scope", (_name, result, notice) => {
+    vi.mocked(useLanguagarrProfiles).mockReturnValue(result)
+    render(<Languagarr />)
+    expect(screen.getByText(notice)).toBeInTheDocument()
+    expect(screen.getByRole("checkbox", { name: /Anime/ })).toBeChecked()
+  })
+
+  it("hides the list when there is nothing to show", () => {
+    vi.mocked(useLanguagarrProfiles).mockReturnValue(
+      queryResult<LanguagarrQualityProfile[]>([]),
+    )
+    vi.mocked(useLanguagarrSettings).mockReturnValue(
+      queryResult({ ...SETTINGS, quality_profile_names: [] }),
+    )
+    render(<Languagarr />)
+    const group = screen.getByRole("group", {
+      name: "Sonarr quality profiles in scope",
+    })
+    expect(within(group).queryByRole("checkbox")).not.toBeInTheDocument()
+  })
+
+  it("stops further checks at the profile limit", () => {
+    const many = Array.from({ length: 21 }, (_, index) => ({
+      id: index,
+      name: `Profile ${String(index).padStart(2, "0")}`,
+    }))
+    vi.mocked(useLanguagarrProfiles).mockReturnValue(queryResult(many))
+    vi.mocked(useLanguagarrSettings).mockReturnValue(
+      queryResult({
+        ...SETTINGS,
+        quality_profile_names: many.slice(0, 20).map((profile) => profile.name),
+      }),
+    )
+    render(<Languagarr />)
+    expect(screen.getByRole("checkbox", { name: "Profile 20" })).toBeDisabled()
+    expect(screen.getByRole("checkbox", { name: "Profile 00" })).toBeEnabled()
+  })
+})
+
+describe("Languagarr target languages", () => {
+  it("labels the review with the languages of the last scan", () => {
+    vi.mocked(useLanguagarrResults).mockReturnValue(
+      queryResult({
+        ...RESULTS,
+        scan: { ...SCAN, target_languages: ["eng", "tur"] },
+      }),
+    )
+    render(<Languagarr />)
+    expect(
+      screen.getByText("Without English or Turkish audio"),
+    ).toBeInTheDocument()
+    expect(
+      screen.getByText(/passes when it has a English or Turkish audio track/),
+    ).toBeInTheDocument()
+  })
+
+  it("uses the configured languages before the first scan", () => {
+    const empty = { ...SCAN, last_scan_at: null, target_languages: [] }
+    vi.mocked(useLanguagarrResults).mockReturnValue(
+      queryResult({ scan: empty, results: [], unknown: [] }),
+    )
+    vi.mocked(useLanguagarrStatus).mockReturnValue(
+      queryResult({
+        ...STATUS,
+        scan: empty,
+        settings: { ...SETTINGS, target_audio_languages: ["tur"] },
+      }),
+    )
+    render(<Languagarr />)
+    expect(
+      screen.getByText(/without a Turkish audio\s+track/),
+    ).toBeInTheDocument()
+  })
+
+  it("falls back to upper-cased codes while the catalogue loads", () => {
+    vi.mocked(useLanguagarrLanguages).mockReturnValue(
+      queryResult<LanguagarrAudioLanguage[]>(undefined, true),
+    )
+    render(<Languagarr />)
+    expect(screen.getByText("Without ENG audio")).toBeInTheDocument()
+  })
+})
+
+describe("Languagarr language settings", () => {
+  beforeEach(() => {
+    localStorage.setItem(LANGUAGARR_TAB_STORAGE_KEY, "settings")
+  })
+
+  it("lists the catalogue and saves the checked languages", async () => {
+    const user = userEvent.setup()
+    const save = vi.fn()
+    vi.mocked(useUpdateLanguagarrSettings).mockReturnValue(mutationResult(save))
+    render(<Languagarr />)
+    const group = screen.getByRole("group", { name: "Target audio languages" })
+    expect(within(group).getAllByRole("checkbox")).toHaveLength(3)
+    expect(
+      within(group).getByRole("checkbox", { name: "English" }),
+    ).toBeChecked()
+
+    await user.click(within(group).getByRole("checkbox", { name: "Turkish" }))
+    await user.click(screen.getByRole("button", { name: "Save" }))
+    expect(save).toHaveBeenCalledWith({
+      target_audio_languages: ["eng", "tur"],
+    })
+  })
+
+  it("blocks saving with no language checked", async () => {
+    const user = userEvent.setup()
+    render(<Languagarr />)
+    const group = screen.getByRole("group", { name: "Target audio languages" })
+    await user.click(within(group).getByRole("checkbox", { name: "English" }))
+    expect(screen.getByRole("button", { name: "Save" })).toBeDisabled()
+  })
+
+  it.each([
+    [
+      "loading",
+      queryResult<LanguagarrAudioLanguage[]>(undefined, true),
+      "Loading languages…",
+    ],
+    [
+      "a load error",
+      queryResult<LanguagarrAudioLanguage[]>(undefined, false, {
+        error: new Error("offline"),
+      }),
+      "Could not load the language list: offline",
+    ],
+  ])(
+    "explains %s and keeps the saved choice visible",
+    (_name, result, notice) => {
+      vi.mocked(useLanguagarrLanguages).mockReturnValue(result)
+      render(<Languagarr />)
+      expect(screen.getByText(notice)).toBeInTheDocument()
+      expect(screen.getByRole("checkbox", { name: "ENG" })).toBeChecked()
+    },
+  )
+
+  it("stops further checks at the language limit", () => {
+    const catalogue = Array.from({ length: 11 }, (_, index) => ({
+      code: `l${String(index).padStart(2, "0")}`,
+      name: `Language ${String(index).padStart(2, "0")}`,
+    }))
+    vi.mocked(useLanguagarrLanguages).mockReturnValue(queryResult(catalogue))
+    vi.mocked(useLanguagarrSettings).mockReturnValue(
+      queryResult({
+        ...SETTINGS,
+        target_audio_languages: catalogue.slice(0, 10).map((item) => item.code),
+      }),
+    )
+    render(<Languagarr />)
+    expect(screen.getByRole("checkbox", { name: "Language 10" })).toBeDisabled()
+    expect(screen.getByRole("checkbox", { name: "Language 00" })).toBeEnabled()
   })
 })

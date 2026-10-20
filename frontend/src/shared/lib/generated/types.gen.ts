@@ -1073,6 +1073,22 @@ export type Item = {
 };
 
 /**
+ * LanguagarrAudioLanguage
+ *
+ * A selectable target audio language: canonical code and display name.
+ */
+export type LanguagarrAudioLanguage = {
+    /**
+     * Code
+     */
+    code: string;
+    /**
+     * Name
+     */
+    name: string;
+};
+
+/**
  * LanguagarrClearResult
  */
 export type LanguagarrClearResult = {
@@ -1221,7 +1237,7 @@ export type LanguagarrItem = {
     /**
      * Verdict
      */
-    verdict: 'compliant' | 'missing_english' | 'unknown';
+    verdict: 'compliant' | 'missing_language' | 'unknown';
 };
 
 /**
@@ -1236,6 +1252,22 @@ export type LanguagarrItemError = {
      * Error
      */
     error: string;
+};
+
+/**
+ * LanguagarrQualityProfile
+ *
+ * A Sonarr quality profile offered in the scope checklist.
+ */
+export type LanguagarrQualityProfile = {
+    /**
+     * Id
+     */
+    id: number;
+    /**
+     * Name
+     */
+    name: string;
 };
 
 /**
@@ -1375,9 +1407,9 @@ export type LanguagarrScanSummary = {
      */
     last_scan_at: string | null;
     /**
-     * Missing English
+     * Missing Language
      */
-    missing_english: number;
+    missing_language: number;
     /**
      * Non Compliant
      */
@@ -1390,6 +1422,10 @@ export type LanguagarrScanSummary = {
      * Series Scanned
      */
     series_scanned: number;
+    /**
+     * Target Languages
+     */
+    target_languages: Array<string>;
     /**
      * Unknown
      */
@@ -1432,6 +1468,10 @@ export type LanguagarrSettings = {
      * Sonarr Link Url
      */
     sonarr_link_url: string;
+    /**
+     * Target Audio Languages
+     */
+    target_audio_languages: Array<string>;
 };
 
 /**
@@ -1472,6 +1512,10 @@ export type LanguagarrSettingsUpdate = {
      * Sonarr Link Url
      */
     sonarr_link_url?: string | null;
+    /**
+     * Target Audio Languages
+     */
+    target_audio_languages?: Array<string> | null;
 };
 
 /**
@@ -2471,6 +2515,42 @@ export type PostEnqueueApiLanguagarrEnqueuePostResponses = {
 };
 
 export type PostEnqueueApiLanguagarrEnqueuePostResponse = PostEnqueueApiLanguagarrEnqueuePostResponses[keyof PostEnqueueApiLanguagarrEnqueuePostResponses];
+
+export type GetLanguagesApiLanguagarrLanguagesGetData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/languagarr/languages';
+};
+
+export type GetLanguagesApiLanguagarrLanguagesGetResponses = {
+    /**
+     * Response Get Languages Api Languagarr Languages Get
+     *
+     * Successful Response
+     */
+    200: Array<LanguagarrAudioLanguage>;
+};
+
+export type GetLanguagesApiLanguagarrLanguagesGetResponse = GetLanguagesApiLanguagarrLanguagesGetResponses[keyof GetLanguagesApiLanguagarrLanguagesGetResponses];
+
+export type GetProfilesApiLanguagarrProfilesGetData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/languagarr/profiles';
+};
+
+export type GetProfilesApiLanguagarrProfilesGetResponses = {
+    /**
+     * Response Get Profiles Api Languagarr Profiles Get
+     *
+     * Successful Response
+     */
+    200: Array<LanguagarrQualityProfile>;
+};
+
+export type GetProfilesApiLanguagarrProfilesGetResponse = GetProfilesApiLanguagarrProfilesGetResponses[keyof GetProfilesApiLanguagarrProfilesGetResponses];
 
 export type GetQueueApiLanguagarrQueueGetData = {
     body?: never;

@@ -67,7 +67,7 @@ export const NAV_ITEMS: ReadonlyArray<NavItem> = [
     title: "Languagarr",
     to: "/languagarr",
     icon: LanguagesIcon,
-    description: "Find anime without English audio and replace it",
+    description: "Find anime missing your audio language and replace it",
   },
   {
     title: "Settings",

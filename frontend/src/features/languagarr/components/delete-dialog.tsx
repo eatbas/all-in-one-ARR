@@ -21,6 +21,8 @@ interface DeleteDialogProps {
   disabled: boolean
   /** Invoked when the user confirms the delete. */
   onConfirm: () => void
+  /** Target languages as prose, e.g. "English or Turkish". */
+  languagesLabel: string
 }
 
 /**
@@ -32,6 +34,7 @@ export function DeleteDialog({
   items,
   disabled,
   onConfirm,
+  languagesLabel,
 }: DeleteDialogProps) {
   const tooMany = items.length > LANGUAGARR_MAX_DELETE
   return (
@@ -58,9 +61,9 @@ export function DeleteDialog({
           </AlertDialogTitle>
           <AlertDialogDescription>
             Sonarr deletes each file, then searches its episodes for a release
-            with English audio. Each file is re-checked first and skipped if it
-            changed since the scan. Deletion is permanent unless a Sonarr
-            Recycle Bin is configured, and an episode stays missing if no
+            with {languagesLabel} audio. Each file is re-checked first and
+            skipped if it changed since the scan. Deletion is permanent unless a
+            Sonarr Recycle Bin is configured, and an episode stays missing if no
             compliant release exists.
           </AlertDialogDescription>
         </AlertDialogHeader>

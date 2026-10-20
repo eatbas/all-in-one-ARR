@@ -1805,6 +1805,25 @@
         "title": "Item",
         "type": "object"
       },
+      "LanguagarrAudioLanguage": {
+        "description": "A selectable target audio language: canonical code and display name.",
+        "properties": {
+          "code": {
+            "title": "Code",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "code",
+          "name"
+        ],
+        "title": "LanguagarrAudioLanguage",
+        "type": "object"
+      },
       "LanguagarrClearResult": {
         "properties": {
           "removed": {
@@ -2038,7 +2057,7 @@
           "verdict": {
             "enum": [
               "compliant",
-              "missing_english",
+              "missing_language",
               "unknown"
             ],
             "title": "Verdict",
@@ -2083,6 +2102,25 @@
           "error"
         ],
         "title": "LanguagarrItemError",
+        "type": "object"
+      },
+      "LanguagarrQualityProfile": {
+        "description": "A Sonarr quality profile offered in the scope checklist.",
+        "properties": {
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name"
+        ],
+        "title": "LanguagarrQualityProfile",
         "type": "object"
       },
       "LanguagarrQueue": {
@@ -2308,8 +2346,8 @@
             ],
             "title": "Last Scan At"
           },
-          "missing_english": {
-            "title": "Missing English",
+          "missing_language": {
+            "title": "Missing Language",
             "type": "integer"
           },
           "non_compliant": {
@@ -2327,6 +2365,13 @@
             "title": "Series Scanned",
             "type": "integer"
           },
+          "target_languages": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Target Languages",
+            "type": "array"
+          },
           "unknown": {
             "title": "Unknown",
             "type": "integer"
@@ -2337,11 +2382,12 @@
           "last_scan_at",
           "last_error",
           "profiles_in_scope",
+          "target_languages",
           "series_scanned",
           "files_scanned",
           "non_compliant",
           "unknown",
-          "missing_english"
+          "missing_language"
         ],
         "title": "LanguagarrScanSummary",
         "type": "object"
@@ -2382,6 +2428,13 @@
           "sonarr_link_url": {
             "title": "Sonarr Link Url",
             "type": "string"
+          },
+          "target_audio_languages": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Target Audio Languages",
+            "type": "array"
           }
         },
         "required": [
@@ -2392,6 +2445,7 @@
           "auto_queue",
           "monitored_only",
           "quality_profile_names",
+          "target_audio_languages",
           "sonarr_link_url"
         ],
         "title": "LanguagarrSettings",
@@ -2499,6 +2553,22 @@
               }
             ],
             "title": "Sonarr Link Url"
+          },
+          "target_audio_languages": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "maxItems": 10,
+                "minItems": 1,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target Audio Languages"
           }
         },
         "title": "LanguagarrSettingsUpdate",
@@ -4168,6 +4238,56 @@
           }
         },
         "summary": "Post Enqueue",
+        "tags": [
+          "languagarr"
+        ]
+      }
+    },
+    "/api/languagarr/languages": {
+      "get": {
+        "operationId": "get_languages_api_languagarr_languages_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/LanguagarrAudioLanguage"
+                  },
+                  "title": "Response Get Languages Api Languagarr Languages Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Get Languages",
+        "tags": [
+          "languagarr"
+        ]
+      }
+    },
+    "/api/languagarr/profiles": {
+      "get": {
+        "operationId": "get_profiles_api_languagarr_profiles_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/LanguagarrQualityProfile"
+                  },
+                  "title": "Response Get Profiles Api Languagarr Profiles Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Get Profiles",
         "tags": [
           "languagarr"
         ]

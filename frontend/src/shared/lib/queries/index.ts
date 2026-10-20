@@ -87,6 +87,8 @@ export {
   useClearLanguagarrPending,
   useDeleteLanguagarr,
   useEnqueueLanguagarr,
+  useLanguagarrLanguages,
+  useLanguagarrProfiles,
   useLanguagarrQueue,
   useLanguagarrResults,
   useLanguagarrSettings,

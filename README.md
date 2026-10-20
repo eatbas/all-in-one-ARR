@@ -12,7 +12,8 @@ It also includes **Deletarr**, which scans mounted media folders for junk files
 and deletes only explicitly selected current scan results under the configured
 library roots.
 It also includes **Languagarr**, which audits the real audio tracks of Sonarr
-anime episode files, lists every file without an English audio track, and
+anime episode files, lists every file without a track in your target audio
+language(s) (English by default), and
 replaces them through bounded Sonarr searches or a reviewed
 delete-and-search (searches off by default).
 It uses **official REST APIs only** (no scraping).
@@ -69,7 +70,7 @@ backend/
     bandwidth_controllarr/  # pause SABnzbd while qBittorrent has active torrents
     findarr/              # bounded Sonarr/Radarr missing and upgrade searches
     deletarr/             # reviewed junk-file scans and validated deletion
-    languagarr/           # anime English-audio audit, search queue, reviewed delete
+    languagarr/           # anime audio-language audit, search queue, reviewed delete
   main.py            # entrypoint: `uvicorn main:app --app-dir backend`
   pyproject.toml     # packaging + pytest + coverage config
   tests/             # backend test suite (100% coverage)
@@ -512,18 +513,24 @@ reviewed junk candidates and deletes only what you explicitly confirm:
 
 ### Languagarr page
 
-The dashboard **Languagarr** page (left menu) keeps Sonarr anime on **an English
-audio track**. Configure **Sonarr** in **Settings** first.
+The dashboard **Languagarr** page (left menu) keeps Sonarr anime on **an audio
+track in your target language(s)**. Configure **Sonarr** in **Settings** first.
 
-- **Rule** — a file passes when Sonarr's `mediaInfo.audioLanguages` (read from
-  the file's real audio tracks, not Sonarr's language label) contains `eng`.
-  English-only dubs, Japanese + English dual audio and multi-audio files with
-  English all pass; Japanese-only, Japanese + Portuguese or German + Japanese
-  files fail. `und`/`zxx`/`mis`/`mul` are ignored. Files with no audio-language
-  data are listed as *Unknown audio* and never actioned.
-- **Scope** — series on the Sonarr quality profiles named in Settings (default
-  `Anime`), regardless of series type. A configured name Sonarr does not know
-  stops the scan instead of being skipped. **Monitored series and episodes only**
+- **Target languages** — checked in Settings (default **English**, at most 10).
+  A file passes when it has a track in **any** checked language: with English
+  and Turkish checked, `jpn/eng` and `jpn/tur` both pass, while `jpn` or
+  `jpn/ger` fail. Languagarr only decides which files need replacing; Sonarr
+  still picks the replacement release by its custom-format scores, so the
+  quality profile must favour the same languages.
+- **Rule** — the check reads Sonarr's `mediaInfo.audioLanguages` (the file's
+  real audio tracks, not Sonarr's language label). Alternative spellings of a
+  language count as the same one (`ger`/`deu`/`de`, `fre`/`fra`, `chi`/`zho`,
+  `en`/`english`). `und`/`zxx`/`mis`/`mul` are ignored. Files with no
+  audio-language data are listed as *Unknown audio* and never actioned.
+- **Scope** — series on the Sonarr quality profiles checked in Settings (default
+  `Anime`), regardless of series type. The checklist is read live from Sonarr; a
+  checked profile Sonarr no longer has stays listed as *not in Sonarr* so it can
+  be unchecked, because an unknown name stops the scan instead of being skipped. **Monitored series and episodes only**
   (on by default) skips unmonitored series and never searches unmonitored
   episodes: Sonarr runs API-triggered searches as manual ones, which bypass its
   own monitored check and would otherwise replace files you deliberately froze.
@@ -874,9 +881,15 @@ after both check jobs have passed.
   Arr-backed scans) is not a file the library manager now tracks.
 - `GET /api/languagarr/settings` / `PUT /api/languagarr/settings` – Languagarr
   settings `{ enabled, interval_minutes, searches_per_run, retry_after_hours,
-  auto_queue, monitored_only, quality_profile_names, sonarr_link_url }`;
+  auto_queue, monitored_only, quality_profile_names, target_audio_languages,
+  sonarr_link_url }`;
   out-of-range values or a non-`http(s)` link URL return `422`, and a changed
   interval reschedules the worker.
+- `GET /api/languagarr/languages` – the selectable target audio languages
+  `[{ code, name }]`; an unknown code in a settings update returns `422`.
+- `GET /api/languagarr/profiles` – Sonarr's quality profiles `[{ id, name }]`,
+  sorted by name, for the Settings scope checklist; `502` when Sonarr is
+  unreachable.
 - `GET /api/languagarr/status` – settings, running flag, latest scan summary and
   queue counts.
 - `GET /api/languagarr/results` – latest scan results (non-compliant and unknown

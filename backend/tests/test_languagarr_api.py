@@ -18,11 +18,12 @@ _SCAN = {
     "last_scan_at": "2026-10-12T00:00:00+00:00",
     "last_error": None,
     "profiles_in_scope": ["Anime"],
+    "target_languages": ["eng"],
     "series_scanned": 1,
     "files_scanned": 2,
     "non_compliant": 1,
     "unknown": 0,
-    "missing_english": 1,
+    "missing_language": 1,
 }
 _COUNTS = {"pending": 1, "searched": 0, "failed": 0}
 _ITEM = {
@@ -36,7 +37,7 @@ _ITEM = {
     "relative_path": "Season 01/file.mkv",
     "audio_languages": "jpn/por",
     "sonarr_languages": ["Japanese", "Portuguese"],
-    "verdict": "missing_english",
+    "verdict": "missing_language",
     "release_group": "Anitsu",
     "custom_format_score": -8000,
     "cutoff_format_score": 10000,
@@ -125,7 +126,7 @@ def test_callbacks_are_forwarded(db) -> None:
                     "series_slug": "show",
                     "title": "Show - S01E01",
                     "episode_ids": [1001],
-                    "reason": "missing_english",
+                    "reason": "missing_language",
                     "status": "pending",
                     "queued_at": "2026-10-12T00:00:00+00:00",
                     "searched_at": None,
@@ -228,6 +229,9 @@ def test_settings_update_rejects_out_of_range_values(db) -> None:
         {"searches_per_run": 101},
         {"retry_after_hours": 1},
         {"quality_profile_names": []},
+        {"target_audio_languages": []},
+        {"target_audio_languages": ["eng", "klingon"]},
+        {"target_audio_languages": [f"x{index}" for index in range(11)]},
         {"sonarr_link_url": "ftp://192.168.0.2:8989"},
         {"sonarr_link_url": "http://" + "a" * 2048},
     ):
@@ -277,3 +281,51 @@ def test_errors_map_to_http_statuses(db) -> None:
     response = client.post("/api/languagarr/run")
     assert response.status_code == 409
     assert response.json() == {"detail": "Languagarr is already running"}
+
+
+def test_profiles_route_lists_maps_errors_and_needs_the_module(db) -> None:
+    ctx = make_ctx(db=db)
+    client = build_client(ctx)
+    assert client.get("/api/languagarr/profiles").status_code == 503
+
+    ctx.languagarr_profiles = AsyncMock(return_value=[{"id": 7, "name": "Anime"}])
+    response = client.get("/api/languagarr/profiles")
+    assert response.status_code == 200
+    assert response.json() == [{"id": 7, "name": "Anime"}]
+
+    ctx.languagarr_profiles = AsyncMock(
+        side_effect=LanguagarrClientError("sonarr down")
+    )
+    response = client.get("/api/languagarr/profiles")
+    assert response.status_code == 502
+    assert response.json() == {"detail": "sonarr down"}
+
+
+def test_languages_route_lists_the_catalogue_without_the_module(db) -> None:
+    body = build_client(make_ctx(db=db)).get("/api/languagarr/languages").json()
+    assert body[0] == {"code": "eng", "name": "English"}
+    assert {"code": "tur", "name": "Turkish"} in body
+
+
+def test_settings_update_folds_language_spellings(db) -> None:
+    ctx = make_ctx(db=db)
+    ctx.languagarr_update_settings = AsyncMock(return_value=_status(ctx))
+    response = build_client(ctx).put(
+        "/api/languagarr/settings",
+        json={"target_audio_languages": ["English", "deu", "TR"]},
+    )
+    assert response.status_code == 200
+    ctx.languagarr_update_settings.assert_awaited_with(
+        {"target_audio_languages": ["eng", "ger", "tur"]}
+    )
+
+
+def test_settings_update_treats_null_languages_as_unchanged(db) -> None:
+    ctx = make_ctx(db=db)
+    ctx.languagarr_update_settings = AsyncMock(return_value=_status(ctx))
+    response = build_client(ctx).put(
+        "/api/languagarr/settings",
+        json={"target_audio_languages": None, "enabled": True},
+    )
+    assert response.status_code == 200
+    ctx.languagarr_update_settings.assert_awaited_with({"enabled": True})

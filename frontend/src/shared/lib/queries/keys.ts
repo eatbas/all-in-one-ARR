@@ -29,6 +29,8 @@ export const queryKeys = {
   languagarrSettings: ["languagarr", "settings"] as const,
   languagarrResults: ["languagarr", "results"] as const,
   languagarrQueue: ["languagarr", "queue"] as const,
+  languagarrProfiles: ["languagarr", "profiles"] as const,
+  languagarrLanguages: ["languagarr", "languages"] as const,
   trending: (query: TrendingQuery) =>
     ["trending", query.source, query.media, query.category] as const,
   trendingSearch: (query: TrendingSearchQuery) =>

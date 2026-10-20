@@ -10,7 +10,10 @@ import { toast } from "sonner"
 import {
   clearLanguagarrPending,
   deleteLanguagarr,
+  describeLanguages,
   enqueueLanguagarr,
+  getLanguagarrLanguages,
+  getLanguagarrProfiles,
   getLanguagarrQueue,
   getLanguagarrResults,
   getLanguagarrSettings,
@@ -18,9 +21,11 @@ import {
   runLanguagarr,
   scanLanguagarr,
   updateLanguagarrSettings,
+  type LanguagarrAudioLanguage,
   type LanguagarrClearPendingResult,
   type LanguagarrDeleteResult,
   type LanguagarrEnqueueResult,
+  type LanguagarrQualityProfile,
   type LanguagarrQueue,
   type LanguagarrResults,
   type LanguagarrRunResult,
@@ -44,6 +49,27 @@ export function useLanguagarrSettings(): UseQueryResult<LanguagarrSettings> {
   return useQuery({
     queryKey: queryKeys.languagarrSettings,
     queryFn: getLanguagarrSettings,
+  })
+}
+
+/** The selectable target audio languages; a static catalogue, fetched once. */
+export function useLanguagarrLanguages(): UseQueryResult<
+  LanguagarrAudioLanguage[]
+> {
+  return useQuery({
+    queryKey: queryKeys.languagarrLanguages,
+    queryFn: getLanguagarrLanguages,
+    staleTime: Infinity,
+  })
+}
+
+/** Sonarr's quality profiles for the Settings scope checklist. */
+export function useLanguagarrProfiles(): UseQueryResult<
+  LanguagarrQualityProfile[]
+> {
+  return useQuery({
+    queryKey: queryKeys.languagarrProfiles,
+    queryFn: getLanguagarrProfiles,
   })
 }
 
@@ -106,7 +132,12 @@ export function useScanLanguagarr(): UseMutationResult<
     onSuccess: (result) => {
       queryClient.setQueryData(queryKeys.languagarrResults, result)
       toast.success("Languagarr scan complete", {
-        description: `${result.scan.non_compliant} file(s) without English audio.`,
+        description: `${result.scan.non_compliant} file(s) without ${describeLanguages(
+          result.scan.target_languages,
+          queryClient.getQueryData<LanguagarrAudioLanguage[]>(
+            queryKeys.languagarrLanguages,
+          ),
+        )} audio.`,
       })
       invalidateLanguagarr(queryClient)
     },

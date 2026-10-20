@@ -85,10 +85,11 @@ class Database(FindarrMixin, LanguagarrQueueMixin):
                 )
 
     def _migrate_languagarr_columns(self) -> None:
-        """Add ``languagarr_queue.series_slug`` to queues created before v1.11.
+        """Bring ``languagarr_queue`` rows from older releases up to date.
 
-        Additive and idempotent; existing rows keep a NULL slug until the next
-        scan backfills it from Sonarr.
+        Adds ``series_slug`` to queues created before v1.11 (existing rows keep a
+        NULL slug until the next scan backfills it from Sonarr) and renames the
+        ``missing_english`` reason to ``missing_language``. Idempotent.
         """
         columns = {
             row["name"]
@@ -100,6 +101,12 @@ class Database(FindarrMixin, LanguagarrQueueMixin):
             self._conn.execute(
                 "ALTER TABLE languagarr_queue ADD COLUMN series_slug TEXT"
             )
+        # v1.9.5 made the target language configurable, renaming the verdict
+        # stored as the queue row's reason.
+        self._conn.execute(
+            "UPDATE languagarr_queue SET reason='missing_language' "
+            "WHERE reason='missing_english'"
+        )
 
     def _migrate_findarr_columns(self) -> None:
         """Add the Findarr backoff columns to ``findarr_processed`` tables from v1.9.3.

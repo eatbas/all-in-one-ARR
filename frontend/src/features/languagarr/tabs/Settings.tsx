@@ -11,6 +11,8 @@ import {
 } from "@/shared/components/ui/card"
 import { Input } from "@/shared/components/ui/input"
 import { Switch } from "@/shared/components/ui/switch"
+import { LanguageChecklist } from "@/features/languagarr/components/language-checklist"
+import { ProfileChecklist } from "@/features/languagarr/components/profile-checklist"
 import {
   normaliseServiceUrl,
   type LanguagarrSettings,
@@ -85,7 +87,8 @@ interface Drafts {
   interval_minutes: string
   searches_per_run: string
   retry_after_hours: string
-  profiles: string
+  profiles: string[]
+  languages: string[]
   sonarr_link_url: string
 }
 
@@ -98,11 +101,14 @@ function parseLinkUrl(value: string): string | null {
   }
 }
 
-function parseProfiles(value: string): string[] {
-  return value
-    .split(",")
-    .map((name) => name.trim())
-    .filter(Boolean)
+/** Whether two selections hold the same values, ignoring order. */
+function sameSelection(left: string[], right: string[]): boolean {
+  const sortedLeft = [...left].sort()
+  const sortedRight = [...right].sort()
+  return (
+    sortedLeft.length === sortedRight.length &&
+    sortedLeft.every((name, index) => name === sortedRight[index])
+  )
 }
 
 /** Return the changed fields, or `null` when a draft is invalid. */
@@ -123,10 +129,12 @@ function buildUpdate(
     }
     if (value !== settings[field.key]) update[field.key] = value
   }
-  const profiles = parseProfiles(drafts.profiles)
-  if (profiles.length === 0) return null
-  if (profiles.join("\n") !== settings.quality_profile_names.join("\n")) {
-    update.quality_profile_names = profiles
+  if (drafts.profiles.length === 0 || drafts.languages.length === 0) return null
+  if (!sameSelection(drafts.profiles, settings.quality_profile_names)) {
+    update.quality_profile_names = drafts.profiles
+  }
+  if (!sameSelection(drafts.languages, settings.target_audio_languages)) {
+    update.target_audio_languages = drafts.languages
   }
   const linkUrl = parseLinkUrl(drafts.sonarr_link_url)
   if (linkUrl === null) return null
@@ -149,7 +157,8 @@ function SettingsForm({ settings, onSave, isPending }: SettingsFormProps) {
     interval_minutes: String(settings.interval_minutes),
     searches_per_run: String(settings.searches_per_run),
     retry_after_hours: String(settings.retry_after_hours),
-    profiles: settings.quality_profile_names.join(", "),
+    profiles: settings.quality_profile_names,
+    languages: settings.target_audio_languages,
     sonarr_link_url: settings.sonarr_link_url,
   })
   const update = buildUpdate(drafts, settings)
@@ -163,7 +172,7 @@ function SettingsForm({ settings, onSave, isPending }: SettingsFormProps) {
           Languagarr settings
         </CardTitle>
         <CardDescription>
-          Scope and pacing of the English-audio replacement searches.
+          Scope, target languages and pacing of the replacement searches.
         </CardDescription>
       </CardHeader>
       <CardContent className="grid gap-5">
@@ -217,27 +226,20 @@ function SettingsForm({ settings, onSave, isPending }: SettingsFormProps) {
             <p className="text-xs text-muted-foreground">{field.help}</p>
           </div>
         ))}
-        <div className="grid gap-2">
-          <label htmlFor="languagarr-profiles" className="text-sm font-medium">
-            Sonarr quality profiles in scope
-          </label>
-          <Input
-            id="languagarr-profiles"
-            value={drafts.profiles}
-            onChange={(event) =>
-              setDrafts((current) => ({
-                ...current,
-                profiles: event.target.value,
-              }))
-            }
-            placeholder="Anime"
-            disabled={isPending}
-          />
-          <p className="text-xs text-muted-foreground">
-            Comma-separated profile names. A name Sonarr does not know stops the
-            scan instead of being skipped.
-          </p>
-        </div>
+        <LanguageChecklist
+          selected={drafts.languages}
+          onChange={(languages) =>
+            setDrafts((current) => ({ ...current, languages }))
+          }
+          disabled={isPending}
+        />
+        <ProfileChecklist
+          selected={drafts.profiles}
+          onChange={(profiles) =>
+            setDrafts((current) => ({ ...current, profiles }))
+          }
+          disabled={isPending}
+        />
         <div className="grid gap-2">
           <label
             htmlFor="languagarr-sonarr-link-url"
@@ -260,7 +262,8 @@ function SettingsForm({ settings, onSave, isPending }: SettingsFormProps) {
           <p className="text-xs text-muted-foreground">
             Address your browser uses to open Sonarr, for the series links on
             the Review and Queue tabs. Leave empty to use the Sonarr service
-            URL, unless that is a Docker hostname such as http://sonarr:8989.
+            URL; a Docker hostname such as http://sonarr:8989 is swapped for the
+            address you opened this app from, keeping the port.
           </p>
         </div>
         <div className="flex justify-end">

@@ -5,6 +5,11 @@ from __future__ import annotations
 import copy
 from typing import Any
 
+from core.audio_languages import (
+    DEFAULT_AUDIO_LANGUAGE,
+    canonical_language,
+    is_known_language,
+)
 from core.coerce import bounded_int, coerce_int
 from core.service_registry import ServiceDescriptor
 
@@ -65,6 +70,7 @@ LANGUAGARR_SEARCHES_PER_RUN_MAX = 100
 LANGUAGARR_RETRY_HOURS_MIN = 24
 LANGUAGARR_RETRY_HOURS_MAX = 2160
 LANGUAGARR_PROFILE_NAMES_MAX = 20
+LANGUAGARR_LANGUAGES_MAX = 10
 
 DEFAULT_FINDARR_SETTINGS: dict[str, Any] = {
     "enabled": False,
@@ -105,8 +111,8 @@ DEFAULT_DELETARR_SETTINGS: dict[str, Any] = {
 }
 
 
-# Languagarr: audits Sonarr anime episode files for an English audio track and
-# queues bounded replacement searches. ``enabled`` gates the scheduled search
+# Languagarr: audits Sonarr anime episode files for an audio track in one of the
+# target languages (English by default) and queues bounded replacement searches. ``enabled`` gates the scheduled search
 # worker only; scans and reviewed actions are always available from the page.
 DEFAULT_LANGUAGARR_SETTINGS: dict[str, Any] = {
     "enabled": False,
@@ -119,6 +125,9 @@ DEFAULT_LANGUAGARR_SETTINGS: dict[str, Any] = {
     # and would otherwise replace files the user deliberately froze.
     "monitored_only": True,
     "quality_profile_names": ["Anime"],
+    # Canonical audio-language codes (core.audio_languages); a file passes when
+    # it carries at least one of them.
+    "target_audio_languages": [DEFAULT_AUDIO_LANGUAGE],
     # Browser-facing Sonarr address for the series links. Empty falls back to
     # the Sonarr service URL, which is often a Docker hostname the browser
     # cannot resolve (``http://sonarr:8989``).
@@ -374,6 +383,27 @@ def _normalise_languagarr_profile_names(value: Any) -> list[str]:
     return names[:LANGUAGARR_PROFILE_NAMES_MAX] or default
 
 
+def _normalise_languagarr_languages(value: Any) -> list[str]:
+    """Return a non-empty, de-duplicated list of canonical target language codes.
+
+    Each entry is folded to its canonical code (``deu`` becomes ``ger``); codes
+    outside the catalogue are dropped. Order is preserved. Anything that leaves
+    no language falls back to the default (``["eng"]``), so a corrupt store never
+    makes every file look non-compliant.
+    """
+    default = list(DEFAULT_LANGUAGARR_SETTINGS["target_audio_languages"])
+    if not isinstance(value, list):
+        return default
+    codes: list[str] = []
+    for entry in value:
+        if not isinstance(entry, str) or not is_known_language(entry):
+            continue
+        code = canonical_language(entry)
+        if code not in codes:
+            codes.append(code)
+    return codes[:LANGUAGARR_LANGUAGES_MAX] or default
+
+
 def _normalise_link_url(value: Any) -> str:
     """Return a normalised ``http(s)`` link URL, or ``""`` for anything invalid."""
     if not isinstance(value, str):
@@ -412,6 +442,9 @@ def normalise_languagarr_settings(raw: dict[str, Any] | None = None) -> dict[str
         "monitored_only": bool(raw.get("monitored_only", defaults["monitored_only"])),
         "quality_profile_names": _normalise_languagarr_profile_names(
             raw.get("quality_profile_names", defaults["quality_profile_names"])
+        ),
+        "target_audio_languages": _normalise_languagarr_languages(
+            raw.get("target_audio_languages", defaults["target_audio_languages"])
         ),
         "sonarr_link_url": _normalise_link_url(raw.get("sonarr_link_url")),
     }

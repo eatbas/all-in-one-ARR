@@ -3,7 +3,10 @@ import { afterEach, describe, expect, it, vi } from "vitest"
 import {
   clearLanguagarrPending,
   deleteLanguagarr,
+  describeLanguages,
   enqueueLanguagarr,
+  getLanguagarrLanguages,
+  getLanguagarrProfiles,
   getLanguagarrQueue,
   getLanguagarrResults,
   getLanguagarrSettings,
@@ -40,12 +43,36 @@ describe("sonarrSeriesUrl", () => {
   })
 })
 
+describe("describeLanguages", () => {
+  const catalogue = [
+    { code: "eng", name: "English" },
+    { code: "tur", name: "Turkish" },
+    { code: "ger", name: "German" },
+  ]
+
+  it.each([
+    [[], ""],
+    [["eng"], "English"],
+    [["eng", "tur"], "English or Turkish"],
+    [["eng", "tur", "ger"], "English, Turkish or German"],
+    [["eng", "nep"], "English or NEP"],
+  ])("joins %j as %s", (codes, prose) => {
+    expect(describeLanguages(codes, catalogue)).toBe(prose)
+  })
+
+  it("upper-cases codes without a catalogue", () => {
+    expect(describeLanguages(["eng"], undefined)).toBe("ENG")
+  })
+})
+
 describe("Languagarr API", () => {
   it.each([
     ["status", getLanguagarrStatus, "/api/languagarr/status"],
     ["settings", getLanguagarrSettings, "/api/languagarr/settings"],
     ["results", getLanguagarrResults, "/api/languagarr/results"],
     ["queue", getLanguagarrQueue, "/api/languagarr/queue"],
+    ["profiles", getLanguagarrProfiles, "/api/languagarr/profiles"],
+    ["languages", getLanguagarrLanguages, "/api/languagarr/languages"],
   ])("GETs the %s", async (_name, call, url) => {
     const fetchSpy = mockFetch({ ok: true })
     await expect(call()).resolves.toEqual({ ok: true })

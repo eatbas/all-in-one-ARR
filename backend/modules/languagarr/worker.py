@@ -13,6 +13,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any
 
 from core.app_metrics import record_languagarr_searches
+from core.audio_languages import describe_languages
 from core.coerce import coerce_int
 from modules.languagarr.audio import file_audio_verdict
 from modules.languagarr.client import LanguagarrClientError, LanguagarrSonarrClient
@@ -48,7 +49,7 @@ async def searchable_episode_ids(
     fresh = await client.episode_file(file_id)
     if fresh is None:
         return []
-    verdict, _ = file_audio_verdict(fresh)
+    verdict, _ = file_audio_verdict(fresh, scope.languages)
     if verdict.compliant:
         return []
     series = await client.series_by_id(int(row["series_id"]))
@@ -91,7 +92,8 @@ async def process_rows(
     record_languagarr_searches(succeeded=searched, failed=failed)
     ctx.db.add_activity(
         "Languagarr searches sent",
-        f"Sent {searched} English-audio replacement search(es)"
+        f"Sent {searched} replacement search(es) for "
+        f"{describe_languages(scope.languages)} audio"
         + (f"; {failed} failed" if failed else "")
         + (f"; {resolved} already resolved" if resolved else "")
         + ".",

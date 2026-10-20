@@ -5,6 +5,7 @@ import { DeleteDialog } from "@/features/languagarr/components/delete-dialog"
 import { SeriesGroup } from "@/features/languagarr/components/series-group"
 import { useSonarrLinkBase } from "@/features/languagarr/sonarr-link"
 import { groupBySeries } from "@/features/languagarr/review-groups"
+import { useLanguagesLabel } from "@/features/languagarr/target-languages"
 import { StatBlock } from "@/shared/components/stat-block"
 import { Button } from "@/shared/components/ui/button"
 import {
@@ -28,13 +29,15 @@ interface ResultsProps {
   items: LanguagarrItem[]
   unknown: LanguagarrItem[]
   isBusy: boolean
+  /** Target languages as prose, e.g. "English or Turkish". */
+  languagesLabel: string
 }
 
 /**
  * Selection and actions for one scan's results. The parent keys this component
  * by the scan timestamp, so a new scan always starts with an empty selection.
  */
-function Results({ items, unknown, isBusy }: ResultsProps) {
+function Results({ items, unknown, isBusy, languagesLabel }: ResultsProps) {
   const [selected, setSelected] = useState<ReadonlySet<number>>(new Set())
   const groups = useMemo(() => groupBySeries(items), [items])
   const enqueue = useEnqueueLanguagarr()
@@ -69,7 +72,7 @@ function Results({ items, unknown, isBusy }: ResultsProps) {
   if (items.length === 0 && unknown.length === 0) {
     return (
       <p className="text-sm text-muted-foreground">
-        Every scanned anime file has an English audio track.
+        Every scanned anime file has a {languagesLabel} audio track.
       </p>
     )
   }
@@ -101,6 +104,7 @@ function Results({ items, unknown, isBusy }: ResultsProps) {
         <DeleteDialog
           items={selectedItems}
           disabled={disabled}
+          languagesLabel={languagesLabel}
           onConfirm={() =>
             deleteFiles.mutate(
               selectedItems.map((item) => item.episode_file_id),
@@ -154,11 +158,17 @@ function Results({ items, unknown, isBusy }: ResultsProps) {
   )
 }
 
-function ScanStats({ scan }: { scan: LanguagarrScanSummary | undefined }) {
+function ScanStats({
+  scan,
+  languagesLabel,
+}: {
+  scan: LanguagarrScanSummary | undefined
+  languagesLabel: string
+}) {
   return (
     <section className="grid gap-3 md:grid-cols-4">
       <StatBlock
-        label="Without English audio"
+        label={`Without ${languagesLabel} audio`}
         value={scan?.non_compliant ?? 0}
       />
       <StatBlock label="Unknown audio" value={scan?.unknown ?? 0} />
@@ -186,18 +196,25 @@ export function Review() {
   const profiles = summary?.profiles_in_scope.length
     ? summary.profiles_in_scope
     : (statusQuery.data?.settings.quality_profile_names ?? [])
+  // The last scan's languages describe its results; before any scan, the
+  // configured ones describe what the next scan will check.
+  const languagesLabel = useLanguagesLabel(
+    summary?.target_languages.length
+      ? summary.target_languages
+      : (statusQuery.data?.settings.target_audio_languages ?? ["eng"]),
+  )
 
   return (
     <div className="flex flex-col gap-4">
-      <ScanStats scan={summary} />
+      <ScanStats scan={summary} languagesLabel={languagesLabel} />
       <Card>
         <CardHeader>
           <CardTitle>Anime audio audit</CardTitle>
           <CardDescription>
             Checks the real audio tracks of every episode file on the{" "}
             {profiles.join(", ") || "configured"} quality profile(s). A file
-            passes when it has an English audio track; English-only and
-            dual-audio files are both fine.
+            passes when it has a {languagesLabel} audio track; single-language
+            and dual-audio files are both fine.
           </CardDescription>
         </CardHeader>
         <CardContent className="flex flex-col gap-4">
@@ -224,7 +241,7 @@ export function Review() {
         <p className="text-sm text-muted-foreground">Loading results…</p>
       ) : !resultsQuery.data.scan.last_scan_at ? (
         <p className="text-sm text-muted-foreground">
-          Run a scan to list anime files without an English audio track.
+          Run a scan to list anime files without a {languagesLabel} audio track.
         </p>
       ) : (
         <Results
@@ -232,6 +249,7 @@ export function Review() {
           items={resultsQuery.data.results}
           unknown={resultsQuery.data.unknown}
           isBusy={busy}
+          languagesLabel={languagesLabel}
         />
       )}
     </div>
