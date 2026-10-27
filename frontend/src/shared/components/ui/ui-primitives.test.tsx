@@ -4,7 +4,10 @@
  */
 import { render, screen } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
-import { describe, expect, it } from "vitest"
+import type * as Recharts from "recharts"
+import type { TooltipPayload } from "recharts"
+import { Line, LineChart } from "recharts"
+import { describe, expect, it, vi } from "vitest"
 
 import { Badge } from "@/shared/components/ui/badge"
 import { Button } from "@/shared/components/ui/button"
@@ -70,6 +73,18 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/shared/components/ui/alert-dialog"
+import {
+  ChartContainer,
+  ChartTooltipContent,
+  type ChartConfig,
+} from "@/shared/components/ui/chart"
+
+// `vi.mock` is hoisted above the imports, so the helper is loaded inside it.
+vi.mock("recharts", async (importOriginal) => {
+  const { withFixedResponsiveContainer } =
+    await import("@/shared/test/recharts")
+  return withFixedResponsiveContainer(await importOriginal<typeof Recharts>())
+})
 
 describe("Button asChild", () => {
   it("renders a slotted child instead of a button", () => {
@@ -283,5 +298,146 @@ describe("Slider", () => {
       "aria-valuenow",
       "5",
     )
+  })
+})
+
+describe("Chart", () => {
+  const config = {
+    missing: { label: "Missing", color: "var(--chart-1)" },
+    files: {
+      label: "With files",
+      theme: { light: "#111111", dark: "#eeeeee" },
+    },
+    plain: { label: "No colour" },
+    lightOnly: { label: "Light only", theme: { light: "#222222", dark: "" } },
+  } satisfies ChartConfig
+
+  it("injects colour variables for the light and dark selectors", () => {
+    const { container } = render(
+      <ChartContainer id="library" config={config}>
+        <LineChart data={[{ day: "1 Oct", missing: 3 }]}>
+          <Line dataKey="missing" />
+        </LineChart>
+      </ChartContainer>,
+    )
+
+    const chart = container.querySelector('[data-slot="chart"]')
+    expect(chart).toHaveAttribute("data-chart", "chart-library")
+    const css = container.querySelector("style")?.innerHTML ?? ""
+    expect(css).toContain(" [data-chart=chart-library] {")
+    expect(css).toContain(".dark [data-chart=chart-library] {")
+    expect(css).toContain("--color-missing: var(--chart-1);")
+    expect(css).toContain("--color-files: #111111;")
+    expect(css).toContain("--color-files: #eeeeee;")
+    expect(css).not.toContain("--color-plain")
+    expect(css.match(/--color-lightOnly: #222222;/g)).toHaveLength(1)
+    expect(container.querySelector(".recharts-surface")).toBeInTheDocument()
+  })
+
+  it("omits the style element when no series has a colour", () => {
+    const { container } = render(
+      <ChartContainer config={{ plain: { label: "Plain" } }}>
+        <LineChart data={[]} />
+      </ChartContainer>,
+    )
+
+    expect(container.querySelector("style")).toBeNull()
+    expect(
+      container
+        .querySelector('[data-slot="chart"]')
+        ?.getAttribute("data-chart"),
+    ).toMatch(/^chart-/)
+  })
+
+  const payload: TooltipPayload = [
+    {
+      dataKey: "missing",
+      name: "missing",
+      value: 1234,
+      color: "red",
+      graphicalItemId: "line-missing",
+    },
+    {
+      name: "unconfigured",
+      value: 7,
+      color: "blue",
+      graphicalItemId: "line-2",
+    },
+    { value: "n/a", color: "green", graphicalItemId: "line-3" },
+    {
+      dataKey: "hidden",
+      name: "hidden",
+      value: 1,
+      type: "none",
+      graphicalItemId: "line-hidden",
+    },
+  ]
+
+  function renderTooltip(
+    props: React.ComponentProps<typeof ChartTooltipContent>,
+  ) {
+    return render(
+      <ChartContainer config={config}>
+        <ChartTooltipContent {...props} />
+      </ChartContainer>,
+    )
+  }
+
+  it("renders nothing while the tooltip is inactive or empty", () => {
+    const { container, unmount } = renderTooltip({
+      active: false,
+      payload,
+      label: "1 Oct",
+      className: "test-tooltip",
+    })
+    expect(container.querySelector(".test-tooltip")).toBeNull()
+    unmount()
+
+    const empty = renderTooltip({
+      active: true,
+      payload: [],
+      label: "1 Oct",
+      className: "test-tooltip",
+    })
+    expect(empty.container.querySelector(".test-tooltip")).toBeNull()
+  })
+
+  it("renders the label and each series with default number formatting", () => {
+    renderTooltip({ active: true, payload, label: "1 Oct" })
+
+    expect(screen.getByText("1 Oct")).toBeInTheDocument()
+    expect(screen.getByText("Missing")).toBeInTheDocument()
+    expect(screen.getByText((1234).toLocaleString())).toBeInTheDocument()
+    expect(screen.getByText("unconfigured")).toBeInTheDocument()
+    expect(screen.getByText("7")).toBeInTheDocument()
+    expect(screen.queryByText("n/a")).not.toBeInTheDocument()
+    expect(screen.queryByText("hidden")).not.toBeInTheDocument()
+  })
+
+  it("applies the label and value formatters", () => {
+    renderTooltip({
+      active: true,
+      payload,
+      label: "2026-10-01",
+      labelFormatter: (label) => `Day ${String(label)}`,
+      valueFormatter: (value, key) => `${key}=${value}`,
+    })
+
+    expect(screen.getByText("Day 2026-10-01")).toBeInTheDocument()
+    expect(screen.getByText("missing=1234")).toBeInTheDocument()
+    expect(screen.getByText("unconfigured=7")).toBeInTheDocument()
+  })
+
+  it("hides the label on request", () => {
+    renderTooltip({ active: true, payload, label: "1 Oct", hideLabel: true })
+    expect(screen.queryByText("1 Oct")).not.toBeInTheDocument()
+  })
+
+  it("throws when tooltip content is used outside a chart container", () => {
+    const consoleError = vi.spyOn(console, "error").mockImplementation(() => {})
+    expect(() =>
+      render(<ChartTooltipContent active payload={payload} />),
+    ).toThrow("useChart must be used within a <ChartContainer />")
+    consoleError.mockRestore()
   })
 })

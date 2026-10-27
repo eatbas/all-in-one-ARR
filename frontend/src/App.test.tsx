@@ -7,6 +7,8 @@ import { beforeEach, describe, expect, it, vi } from "vitest"
 vi.mock("@/shared/lib/queries", () => ({
   useStatus: vi.fn(() => ({ data: undefined })),
   useActivity: vi.fn(() => ({ data: [], isLoading: false })),
+  useDashboardSummary: vi.fn(() => ({ data: undefined, isLoading: true })),
+  useDashboardHistory: vi.fn(() => ({ data: undefined, isLoading: true })),
   useLists: vi.fn(() => ({ data: [], isLoading: false })),
   useListItems: vi.fn(() => ({ data: [], isLoading: false })),
   useRemoveItem: vi.fn(() => ({ mutate: vi.fn(), isPending: false })),

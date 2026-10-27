@@ -1,4 +1,5 @@
 import type {
+  DashboardRange,
   DeletarrLibraryType,
   TrendingQuery,
   TrendingSearchQuery,
@@ -18,6 +19,11 @@ export const queryKeys = {
   generalSettings: ["general", "settings"] as const,
   database: ["database", "stats"] as const,
   bandwidthStatus: ["bandwidth", "status"] as const,
+  dashboardSummary: ["dashboard", "summary"] as const,
+  /** Prefix of every range's history entry, to invalidate them together. */
+  dashboardHistoryAll: ["dashboard", "history"] as const,
+  dashboardHistory: (days: DashboardRange) =>
+    ["dashboard", "history", days] as const,
   deletarrStatus: ["deletarr", "status"] as const,
   deletarrSettings: ["deletarr", "settings"] as const,
   deletarrResults: (type: DeletarrLibraryType) =>

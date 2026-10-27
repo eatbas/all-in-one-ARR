@@ -31,7 +31,7 @@ export const NAV_ITEMS: ReadonlyArray<NavItem> = [
     title: "Dashboard",
     to: "/",
     icon: LayoutDashboardIcon,
-    description: "Overview of sync counts and recent activity",
+    description: "Statistics, trends and health for every app",
   },
   {
     title: "Trending",

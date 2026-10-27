@@ -623,3 +623,75 @@ def json_body(route):
     import json
 
     return json.loads(route.calls.last.request.content)
+
+
+@respx.mock
+async def test_request_counts_returns_every_bucket() -> None:
+    payload = {
+        "total": 12,
+        "movie": 7,
+        "tv": 5,
+        "pending": 2,
+        "approved": 3,
+        "declined": 1,
+        "processing": 4,
+        "available": 2,
+    }
+    route = respx.get(f"{_BASE}/api/v1/request/count").mock(
+        return_value=httpx.Response(200, json=payload)
+    )
+    client = make_client()
+    assert await client.request_counts() == payload
+    assert route.calls.last.request.headers["X-Api-Key"] == "key"
+
+
+@respx.mock
+async def test_request_counts_missing_keys_default_to_zero() -> None:
+    respx.get(f"{_BASE}/api/v1/request/count").mock(
+        return_value=httpx.Response(200, json={"total": 3, "pending": "bad"})
+    )
+    client = make_client()
+    counts = await client.request_counts()
+    assert counts["total"] == 3
+    assert counts["pending"] == 0
+    assert counts["available"] == 0
+
+
+@respx.mock
+async def test_request_counts_non_200_raises_seer_error() -> None:
+    respx.get(f"{_BASE}/api/v1/request/count").mock(return_value=httpx.Response(403))
+    client = make_client()
+    with pytest.raises(SeerError, match="403") as excinfo:
+        await client.request_counts()
+    assert not isinstance(excinfo.value, SeerUnavailableError)
+    assert "key" not in str(excinfo.value)
+
+
+@respx.mock
+async def test_request_counts_connect_failure_raises_unavailable() -> None:
+    respx.get(f"{_BASE}/api/v1/request/count").mock(
+        side_effect=httpx.ConnectError("refused")
+    )
+    client = make_client()
+    with pytest.raises(SeerUnavailableError):
+        await client.request_counts()
+
+
+@respx.mock
+async def test_request_counts_non_json_raises_seer_error() -> None:
+    respx.get(f"{_BASE}/api/v1/request/count").mock(
+        return_value=httpx.Response(200, text="<html>login</html>")
+    )
+    client = make_client()
+    with pytest.raises(SeerError, match="non-JSON"):
+        await client.request_counts()
+
+
+@respx.mock
+async def test_request_counts_non_object_raises_seer_error() -> None:
+    respx.get(f"{_BASE}/api/v1/request/count").mock(
+        return_value=httpx.Response(200, json=[1, 2])
+    )
+    client = make_client()
+    with pytest.raises(SeerError, match="invalid payload"):
+        await client.request_counts()

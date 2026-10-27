@@ -448,6 +448,340 @@
         "title": "Counts",
         "type": "object"
       },
+      "DashboardDisk": {
+        "description": "Free and total space of one Sonarr/Radarr mount.",
+        "properties": {
+          "app": {
+            "enum": [
+              "sonarr",
+              "radarr"
+            ],
+            "title": "App",
+            "type": "string"
+          },
+          "free_bytes": {
+            "title": "Free Bytes",
+            "type": "integer"
+          },
+          "label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Label"
+          },
+          "path": {
+            "title": "Path",
+            "type": "string"
+          },
+          "total_bytes": {
+            "title": "Total Bytes",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "app",
+          "path",
+          "label",
+          "free_bytes",
+          "total_bytes"
+        ],
+        "title": "DashboardDisk",
+        "type": "object"
+      },
+      "DashboardHistory": {
+        "description": "Daily-snapshot trends for the requested range.\n\n``latest_snapshot_at`` is the snapshot version these trends reflect; it\nmatches ``DashboardSummary.latest_snapshot_at`` until a newer snapshot lands.",
+        "properties": {
+          "days": {
+            "enum": [
+              7,
+              30,
+              90
+            ],
+            "title": "Days",
+            "type": "integer"
+          },
+          "end_day": {
+            "title": "End Day",
+            "type": "string"
+          },
+          "latest_snapshot_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Latest Snapshot At"
+          },
+          "series": {
+            "items": {
+              "$ref": "#/components/schemas/DashboardHistorySeries"
+            },
+            "title": "Series",
+            "type": "array"
+          },
+          "start_day": {
+            "title": "Start Day",
+            "type": "string"
+          }
+        },
+        "required": [
+          "days",
+          "start_day",
+          "end_day",
+          "latest_snapshot_at",
+          "series"
+        ],
+        "title": "DashboardHistory",
+        "type": "object"
+      },
+      "DashboardHistoryPoint": {
+        "description": "One day's value: as stored for a gauge, the day's increase for a counter.",
+        "properties": {
+          "day": {
+            "title": "Day",
+            "type": "string"
+          },
+          "value": {
+            "title": "Value",
+            "type": "number"
+          }
+        },
+        "required": [
+          "day",
+          "value"
+        ],
+        "title": "DashboardHistoryPoint",
+        "type": "object"
+      },
+      "DashboardHistorySeries": {
+        "description": "One metric's daily points, oldest first.",
+        "properties": {
+          "key": {
+            "title": "Key",
+            "type": "string"
+          },
+          "kind": {
+            "enum": [
+              "gauge",
+              "counter"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "points": {
+            "items": {
+              "$ref": "#/components/schemas/DashboardHistoryPoint"
+            },
+            "title": "Points",
+            "type": "array"
+          },
+          "unit": {
+            "enum": [
+              "count",
+              "bytes",
+              "mbps"
+            ],
+            "title": "Unit",
+            "type": "string"
+          }
+        },
+        "required": [
+          "key",
+          "label",
+          "unit",
+          "kind",
+          "points"
+        ],
+        "title": "DashboardHistorySeries",
+        "type": "object"
+      },
+      "DashboardMetric": {
+        "description": "One labelled figure; ``value`` is ``None`` when it is unavailable.",
+        "properties": {
+          "key": {
+            "title": "Key",
+            "type": "string"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "unit": {
+            "enum": [
+              "count",
+              "bytes",
+              "mbps"
+            ],
+            "title": "Unit",
+            "type": "string"
+          },
+          "value": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Value"
+          }
+        },
+        "required": [
+          "key",
+          "label",
+          "unit",
+          "value"
+        ],
+        "title": "DashboardMetric",
+        "type": "object"
+      },
+      "DashboardSource": {
+        "description": "One module or upstream service card.\n\n``stale_since`` is set for an ``offline`` source whose ``metrics`` come from\nits newest daily snapshot; ``updated_at`` is when the source's own data last\nrefreshed, where it has such a time.",
+        "properties": {
+          "detail": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Detail"
+          },
+          "key": {
+            "title": "Key",
+            "type": "string"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "link": {
+            "title": "Link",
+            "type": "string"
+          },
+          "metrics": {
+            "items": {
+              "$ref": "#/components/schemas/DashboardMetric"
+            },
+            "title": "Metrics",
+            "type": "array"
+          },
+          "stale_since": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Stale Since"
+          },
+          "state": {
+            "enum": [
+              "ok",
+              "offline",
+              "not_configured",
+              "disabled"
+            ],
+            "title": "State",
+            "type": "string"
+          },
+          "updated_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Updated At"
+          }
+        },
+        "required": [
+          "key",
+          "label",
+          "state",
+          "detail",
+          "stale_since",
+          "updated_at",
+          "link",
+          "metrics"
+        ],
+        "title": "DashboardSource",
+        "type": "object"
+      },
+      "DashboardSummary": {
+        "description": "The live dashboard summary.\n\n``latest_snapshot_at`` is when the newest daily snapshot was written\n(``None`` before the first); it changes whenever the history does.",
+        "properties": {
+          "disks": {
+            "items": {
+              "$ref": "#/components/schemas/DashboardDisk"
+            },
+            "title": "Disks",
+            "type": "array"
+          },
+          "generated_at": {
+            "title": "Generated At",
+            "type": "string"
+          },
+          "kpis": {
+            "items": {
+              "$ref": "#/components/schemas/DashboardMetric"
+            },
+            "title": "Kpis",
+            "type": "array"
+          },
+          "latest_snapshot_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Latest Snapshot At"
+          },
+          "refresh_seconds": {
+            "title": "Refresh Seconds",
+            "type": "integer"
+          },
+          "sources": {
+            "items": {
+              "$ref": "#/components/schemas/DashboardSource"
+            },
+            "title": "Sources",
+            "type": "array"
+          }
+        },
+        "required": [
+          "generated_at",
+          "refresh_seconds",
+          "latest_snapshot_at",
+          "kpis",
+          "sources",
+          "disks"
+        ],
+        "title": "DashboardSummary",
+        "type": "object"
+      },
       "DatabaseStatsResponse": {
         "properties": {
           "activity_count": {
@@ -3628,6 +3962,77 @@
           }
         },
         "summary": "Get Status"
+      }
+    },
+    "/api/dashboard/history": {
+      "get": {
+        "description": "Return daily-snapshot trends for the last 7, 30 or 90 days.",
+        "operationId": "get_history_api_dashboard_history_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "days",
+            "required": false,
+            "schema": {
+              "default": 30,
+              "enum": [
+                7,
+                30,
+                90
+              ],
+              "title": "Days",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DashboardHistory"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "503": {
+            "description": "Dashboard is not ready"
+          }
+        },
+        "summary": "Get History"
+      }
+    },
+    "/api/dashboard/summary": {
+      "get": {
+        "description": "Return cached live statistics with a state for every source.",
+        "operationId": "get_summary_api_dashboard_summary_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DashboardSummary"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "503": {
+            "description": "Dashboard is not ready"
+          }
+        },
+        "summary": "Get Summary"
       }
     },
     "/api/deletarr/delete": {

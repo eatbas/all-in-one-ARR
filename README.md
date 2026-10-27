@@ -16,6 +16,10 @@ anime episode files, lists every file without a track in your target audio
 language(s) (English by default), and
 replaces them through bounded Sonarr searches or a reviewed
 delete-and-search (searches off by default).
+Its **Dashboard** is a read-only statistics page for every app it manages —
+the modules plus Sonarr, Radarr, Seer, SABnzbd and qBittorrent — with headline
+figures, one card per app, disk space, 7/30/90-day trends from daily snapshots,
+and the recent activity feed.
 It uses **official REST APIs only** (no scraping).
 
 This is the plugin **core** plus five modules, **`list_syncarr`**,
@@ -313,6 +317,39 @@ Open the URL, sign in, and enter the code. The token is saved to
 `TOKEN_STORE_PATH` (inside the `data/` volume) and refreshed automatically, so
 you will not need to re-authorise on restart. The dashboard header shows
 **Connected** once it succeeds.
+
+### Dashboard statistics
+
+The Dashboard (`/`) keeps the **Integrations** health grid at the top, then shows
+headline figures, one statistics card per module or app, disk space per
+Sonarr/Radarr mount, trend charts and the recent activity feed. It is read-only:
+"Check now" for the integrations is its only control.
+
+- **Live summary.** `GET /api/dashboard/summary` aggregates every source
+  concurrently and the page polls it every 60 s while the tab is visible. Each
+  source has its own cache lifetime — 900 s for Sonarr and Radarr, whose library
+  endpoints scale with library size, and 55 s for everything else — its own lock,
+  so concurrent requests share one upstream round, and an 8 s timeout.
+- **Per-source states.** A card is *Not configured* when the service has no URL or
+  API key (List-Syncarr: no tracked lists or Trakt not connected) and links to
+  Settings; *Disabled* when its module is off; and *Offline* when the upstream call
+  fails or times out. An offline card shows the values of its newest daily
+  snapshot with a "stale since" time, the rest of the page keeps working, and the
+  failure is cached for the same lifetime so a dead service is not retried on
+  every poll.
+- **Daily snapshots.** A `dashboard_snapshot` job stores every snapshot metric at
+  **23:55 local time** (the container's `TZ`) under that day's date, and a
+  catch-up snapshot runs at start-up when today has none yet. Re-running on the
+  same day overwrites that day's values. Rows older than **365 days** are pruned.
+  Only sources that answered normally are stored, so a stale value is never saved
+  as a new day. Download speeds and active-download counts are live-only and never
+  snapshotted.
+- **Trends.** `GET /api/dashboard/history?days=7|30|90` returns one series per
+  snapshot metric. Findarr's all-time search totals are returned as per-day
+  increases (a day whose previous day is missing has no point); every other metric
+  is plotted as stored. Days without a snapshot are left as gaps in the charts. On
+  a fresh install the charts say they are collecting data until the first snapshot
+  exists.
 
 ### Settings page (recommended)
 
@@ -789,8 +826,11 @@ npm run test:cov   # the same run with the 100% coverage gate
 
 Coverage spans the typed API client, the TanStack Query hooks, the theme
 provider, the layout and topbar, the feature pages (Dashboard, the List-Syncarr
-tabs — Lists and Items — and Settings), the route table, and the vendored
-UI primitives. The single carve-out is `src/main.tsx` (the DOM bootstrap),
+tabs — Lists and Items — and Settings), the Dashboard's components (integrations,
+headline figures, source cards, disk space, trend charts and the activity feed),
+the route table, and the vendored UI primitives, including the Recharts-based
+`chart` primitive (tests render charts through a fixed-size `ResponsiveContainer`
+from `src/shared/test/recharts.tsx`). The single carve-out is `src/main.tsx` (the DOM bootstrap),
 excluded from the coverage denominator as the direct analogue of the backend's
 excluded `if __name__ == "__main__"` block.
 
@@ -825,6 +865,15 @@ after both check jobs have passed.
   Trending pages share this one cache; a scheduled job evicts posters not served
   within `POSTER_CACHE_TTL_DAYS` and caps the cache at `POSTER_CACHE_MAX_MB`.
 - `GET /api/activity` – recent meaningful app activity and sync outcomes from the last 15 days (a concise, human-friendly feed, not every read-only API call).
+- `GET /api/dashboard/summary` – cached live dashboard statistics: headline
+  figures (`kpis`), one entry per module or app (`sources`, each with a `state` of
+  `ok`, `offline`, `not_configured` or `disabled`, labelled metrics, and
+  `stale_since` when an offline source falls back to its last snapshot) and
+  Sonarr/Radarr disk space (`disks`). Never fails because one upstream is down;
+  `503` only when the dashboard service is not ready.
+- `GET /api/dashboard/history?days=7|30|90` – daily-snapshot trends (default 30
+  days): one series per snapshot metric with its `kind` (`gauge` as stored,
+  `counter` as per-day increases). Any other `days` value returns `422`.
 - `POST /api/sync` – trigger an immediate sync and wait for it to complete; returns `409` if a sync is already running.
 - `GET /api/settings/trakt` – Trakt settings; the client id and URL/hint are
   returned in clear, the client secret is reduced to `client_secret_set`, and

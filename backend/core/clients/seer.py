@@ -11,6 +11,7 @@ from typing import Any
 
 import httpx
 
+from core.coerce import coerce_int
 from core.logging import get_logger, log_action
 
 # Seer media availability states.
@@ -24,6 +25,18 @@ AVAILABLE = 5
 # take 20+ seconds per call, so the connect phase gets a tight explicit budget
 # while slow-but-alive responses keep the generous overall timeout.
 _DEFAULT_TIMEOUT = httpx.Timeout(30.0, connect=5.0)
+
+# Status buckets returned by ``GET /api/v1/request/count``.
+REQUEST_COUNT_KEYS = (
+    "total",
+    "movie",
+    "tv",
+    "pending",
+    "approved",
+    "declined",
+    "processing",
+    "available",
+)
 
 # httpx errors meaning the connection itself failed — Seer was never reached.
 _CONNECT_FAILURES = (httpx.ConnectError, httpx.ConnectTimeout)
@@ -334,6 +347,30 @@ class SeerClient:
             "seer_request_deleted",
             request_id=request_id,
         )
+
+    async def request_counts(self) -> dict[str, int]:
+        """Return request counts by status from ``/api/v1/request/count``.
+
+        The keys are :data:`REQUEST_COUNT_KEYS` (Overseerr, Jellyseerr and Seer
+        share the endpoint); a key the response omits counts as 0. Raises
+        :class:`SeerUnavailableError` when Seer cannot be reached and
+        :class:`SeerError` on any other failure or non-200 status.
+        """
+        try:
+            response = await self._client.get(
+                f"{self._base_url}/api/v1/request/count", headers=self._headers
+            )
+        except httpx.HTTPError as exc:
+            raise _request_failed("Seer request count failed", exc) from exc
+        if response.status_code != 200:
+            raise SeerError(f"Seer request count returned {response.status_code}")
+        try:
+            data = response.json()
+        except ValueError as exc:
+            raise SeerError("Seer request count returned a non-JSON response") from exc
+        if not isinstance(data, dict):
+            raise SeerError("Seer request count returned an invalid payload")
+        return {key: coerce_int(data.get(key), 0) for key in REQUEST_COUNT_KEYS}
 
     async def test_connection(self) -> dict[str, Any]:
         """Validate the base URL + API key against ``/api/v1/auth/me``.

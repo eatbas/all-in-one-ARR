@@ -17,6 +17,7 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
+from core.db_dashboard import DashboardSnapshotMixin
 from core.db_findarr import FindarrMixin
 from core.db_languagarr import LanguagarrQueueMixin
 from core.db_schema import INIT_SQL
@@ -34,7 +35,7 @@ OMDB_USAGE_RETENTION_DAYS = 30
 ITEM_STATUSES = ("synced", "requested", "available", "removed")
 
 
-class Database(FindarrMixin, LanguagarrQueueMixin):
+class Database(FindarrMixin, LanguagarrQueueMixin, DashboardSnapshotMixin):
     """Thin, thread-safe wrapper around a SQLite connection."""
 
     def __init__(self, path: str) -> None:

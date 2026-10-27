@@ -266,6 +266,212 @@ export type Counts = {
 };
 
 /**
+ * DashboardDisk
+ *
+ * Free and total space of one Sonarr/Radarr mount.
+ */
+export type DashboardDisk = {
+    /**
+     * App
+     */
+    app: 'sonarr' | 'radarr';
+    /**
+     * Free Bytes
+     */
+    free_bytes: number;
+    /**
+     * Label
+     */
+    label: string | null;
+    /**
+     * Path
+     */
+    path: string;
+    /**
+     * Total Bytes
+     */
+    total_bytes: number;
+};
+
+/**
+ * DashboardHistory
+ *
+ * Daily-snapshot trends for the requested range.
+ *
+ * ``latest_snapshot_at`` is the snapshot version these trends reflect; it
+ * matches ``DashboardSummary.latest_snapshot_at`` until a newer snapshot lands.
+ */
+export type DashboardHistory = {
+    /**
+     * Days
+     */
+    days: 7 | 30 | 90;
+    /**
+     * End Day
+     */
+    end_day: string;
+    /**
+     * Latest Snapshot At
+     */
+    latest_snapshot_at: string | null;
+    /**
+     * Series
+     */
+    series: Array<DashboardHistorySeries>;
+    /**
+     * Start Day
+     */
+    start_day: string;
+};
+
+/**
+ * DashboardHistoryPoint
+ *
+ * One day's value: as stored for a gauge, the day's increase for a counter.
+ */
+export type DashboardHistoryPoint = {
+    /**
+     * Day
+     */
+    day: string;
+    /**
+     * Value
+     */
+    value: number;
+};
+
+/**
+ * DashboardHistorySeries
+ *
+ * One metric's daily points, oldest first.
+ */
+export type DashboardHistorySeries = {
+    /**
+     * Key
+     */
+    key: string;
+    /**
+     * Kind
+     */
+    kind: 'gauge' | 'counter';
+    /**
+     * Label
+     */
+    label: string;
+    /**
+     * Points
+     */
+    points: Array<DashboardHistoryPoint>;
+    /**
+     * Unit
+     */
+    unit: 'count' | 'bytes' | 'mbps';
+};
+
+/**
+ * DashboardMetric
+ *
+ * One labelled figure; ``value`` is ``None`` when it is unavailable.
+ */
+export type DashboardMetric = {
+    /**
+     * Key
+     */
+    key: string;
+    /**
+     * Label
+     */
+    label: string;
+    /**
+     * Unit
+     */
+    unit: 'count' | 'bytes' | 'mbps';
+    /**
+     * Value
+     */
+    value: number | null;
+};
+
+/**
+ * DashboardSource
+ *
+ * One module or upstream service card.
+ *
+ * ``stale_since`` is set for an ``offline`` source whose ``metrics`` come from
+ * its newest daily snapshot; ``updated_at`` is when the source's own data last
+ * refreshed, where it has such a time.
+ */
+export type DashboardSource = {
+    /**
+     * Detail
+     */
+    detail: string | null;
+    /**
+     * Key
+     */
+    key: string;
+    /**
+     * Label
+     */
+    label: string;
+    /**
+     * Link
+     */
+    link: string;
+    /**
+     * Metrics
+     */
+    metrics: Array<DashboardMetric>;
+    /**
+     * Stale Since
+     */
+    stale_since: string | null;
+    /**
+     * State
+     */
+    state: 'ok' | 'offline' | 'not_configured' | 'disabled';
+    /**
+     * Updated At
+     */
+    updated_at: string | null;
+};
+
+/**
+ * DashboardSummary
+ *
+ * The live dashboard summary.
+ *
+ * ``latest_snapshot_at`` is when the newest daily snapshot was written
+ * (``None`` before the first); it changes whenever the history does.
+ */
+export type DashboardSummary = {
+    /**
+     * Disks
+     */
+    disks: Array<DashboardDisk>;
+    /**
+     * Generated At
+     */
+    generated_at: string;
+    /**
+     * Kpis
+     */
+    kpis: Array<DashboardMetric>;
+    /**
+     * Latest Snapshot At
+     */
+    latest_snapshot_at: string | null;
+    /**
+     * Refresh Seconds
+     */
+    refresh_seconds: number;
+    /**
+     * Sources
+     */
+    sources: Array<DashboardSource>;
+};
+
+/**
  * DatabaseStatsResponse
  */
 export type DatabaseStatsResponse = {
@@ -2112,6 +2318,63 @@ export type GetStatusApiBandwidthStatusGetResponses = {
 };
 
 export type GetStatusApiBandwidthStatusGetResponse = GetStatusApiBandwidthStatusGetResponses[keyof GetStatusApiBandwidthStatusGetResponses];
+
+export type GetHistoryApiDashboardHistoryGetData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * Days
+         */
+        days?: 7 | 30 | 90;
+    };
+    url: '/api/dashboard/history';
+};
+
+export type GetHistoryApiDashboardHistoryGetErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+    /**
+     * Dashboard is not ready
+     */
+    503: unknown;
+};
+
+export type GetHistoryApiDashboardHistoryGetError = GetHistoryApiDashboardHistoryGetErrors[keyof GetHistoryApiDashboardHistoryGetErrors];
+
+export type GetHistoryApiDashboardHistoryGetResponses = {
+    /**
+     * Successful Response
+     */
+    200: DashboardHistory;
+};
+
+export type GetHistoryApiDashboardHistoryGetResponse = GetHistoryApiDashboardHistoryGetResponses[keyof GetHistoryApiDashboardHistoryGetResponses];
+
+export type GetSummaryApiDashboardSummaryGetData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/dashboard/summary';
+};
+
+export type GetSummaryApiDashboardSummaryGetErrors = {
+    /**
+     * Dashboard is not ready
+     */
+    503: unknown;
+};
+
+export type GetSummaryApiDashboardSummaryGetResponses = {
+    /**
+     * Successful Response
+     */
+    200: DashboardSummary;
+};
+
+export type GetSummaryApiDashboardSummaryGetResponse = GetSummaryApiDashboardSummaryGetResponses[keyof GetSummaryApiDashboardSummaryGetResponses];
 
 export type PostDeleteApiDeletarrDeletePostData = {
     body: DeletarrDeleteRequest;

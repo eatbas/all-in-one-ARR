@@ -21,6 +21,7 @@ from core.clients.seer import SeerClient
 from core.clients.tmdb import TmdbClient
 from core.clients.trakt import TraktClient
 from core.config import Settings
+from core.dashboard import DashboardService
 from core.db import Database
 from core.posters import PosterCache
 from core.scheduler import SchedulerService
@@ -109,6 +110,9 @@ class AppContext:
     settings_store: SettingsStore
     status_checker: StatusChecker = field(default_factory=lambda: None)  # type: ignore[assignment]
     poster_cache: PosterCache | None = field(default=None)
+    # Cached dashboard statistics and the daily snapshot; set by build_context
+    # (mirrors status_checker). When None, the dashboard routes answer 503.
+    dashboard: DashboardService | None = field(default=None)
     # AniList/MAL -> TMDB/TVDB/IMDb id mapping for the anilist trending source;
     # set by build_context (mirrors poster_cache). When None, anilist rows are
     # served unenriched.

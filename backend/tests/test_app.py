@@ -2,12 +2,16 @@
 
 from __future__ import annotations
 
+import asyncio
+import logging
+import time
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from fastapi.testclient import TestClient
 
 from core import app as app_mod
+from core import dashboard_sources, dashboard_sync
 from core.app import (
     _maybe_start_device_auth,
     _mount_frontend,
@@ -16,6 +20,7 @@ from core.app import (
     create_app,
 )
 from core.config import Settings
+from core.dashboard import DashboardService
 from core.db import Database
 from tests.conftest import StubSeer, StubSettingsStore, StubTrakt, make_ctx
 
@@ -33,14 +38,17 @@ def _env(monkeypatch):
         monkeypatch.setenv(key, value)
 
 
-def _stub_ctx(authenticated: bool) -> object:
+def _stub_ctx(authenticated: bool, *, dashboard: bool = False) -> object:
     database = Database(":memory:")
     database.init_db()
-    return make_ctx(
+    ctx = make_ctx(
         db=database,
         trakt=StubTrakt(authenticated=authenticated),
         seer=StubSeer(),
     )
+    if dashboard:
+        ctx.dashboard = DashboardService(ctx)
+    return ctx
 
 
 async def test_build_context_real(tmp_path) -> None:
@@ -68,6 +76,8 @@ async def test_build_context_real(tmp_path) -> None:
         # The AniList client and the anime id map back the anilist source.
         assert ctx.anilist is not None
         assert ctx.anime_ids is not None
+        # The dashboard statistics service is held on the context.
+        assert isinstance(ctx.dashboard, DashboardService)
     finally:
         # Release every resource the real context opened (clients + DB).
         for client in (
@@ -89,12 +99,20 @@ async def test_build_context_real(tmp_path) -> None:
 def test_lifespan_authenticated_placeholder_frontend(
     _env, monkeypatch, tmp_path
 ) -> None:
-    ctx = _stub_ctx(authenticated=True)
+    ctx = _stub_ctx(authenticated=True, dashboard=True)
+    # No sources: the boot snapshot and summary run without any upstream call.
+    monkeypatch.setattr(dashboard_sources, "SOURCES", ())
     monkeypatch.setattr(app_mod, "build_context", lambda settings: ctx)
     monkeypatch.setattr(app_mod, "FRONTEND_DIST", tmp_path / "missing")
 
     with TestClient(create_app()) as client:
         assert client.get("/health").json() == {"status": "ok"}
+        # Dashboard router is reachable and its daily snapshot is scheduled.
+        assert client.get("/api/dashboard/summary").status_code == 200
+        cron_ids = [
+            call.kwargs["id"] for call in ctx.scheduler.add_cron.await_args_list
+        ]
+        assert "dashboard_snapshot" in cron_ids
         assert client.get("/status").json()["synced"] == 0
         assert client.get("/api/status").status_code == 200
         # Prometheus metrics are mounted before the SPA catch-all.
@@ -126,6 +144,51 @@ def test_lifespan_authenticated_placeholder_frontend(
     ctx.qbittorrent.aclose.assert_awaited()
 
 
+def test_lifespan_stops_boot_snapshot_before_closing_resources(
+    _env, monkeypatch, tmp_path, caplog
+) -> None:
+    ctx = _stub_ctx(authenticated=True, dashboard=True)
+    events: list[str] = []
+
+    async def hanging_collector(_ctx: object) -> object:
+        events.append("collecting")
+        try:
+            await asyncio.Event().wait()
+        except asyncio.CancelledError:
+            events.append("cancelled")
+            raise
+        raise AssertionError("unreachable")  # pragma: no cover
+
+    spec = dashboard_sources.SourceSpec(
+        "seer", "Seer", hanging_collector, 55, "/settings"
+    )
+    monkeypatch.setattr(dashboard_sources, "SOURCES", (spec,))
+    close_db = ctx.db.close
+
+    def recording_close() -> None:
+        events.append("db closed")
+        close_db()
+
+    monkeypatch.setattr(ctx.db, "close", recording_close)
+    monkeypatch.setattr(app_mod, "build_context", lambda settings: ctx)
+    monkeypatch.setattr(app_mod, "FRONTEND_DIST", tmp_path / "missing")
+
+    with caplog.at_level(logging.ERROR), TestClient(create_app()) as client:
+        assert client.get("/health").status_code == 200
+        # The boot snapshot runs on the app's loop thread; wait until it collects.
+        deadline = time.monotonic() + 5
+        while "collecting" not in events and time.monotonic() < deadline:
+            time.sleep(0.01)
+        assert events == ["collecting"]
+
+    # Shutdown cancelled the snapshot before the database closed, so it never
+    # wrote to (or failed on) a closed connection.
+    assert events == ["collecting", "cancelled", "db closed"]
+    assert "dashboard boot snapshot raised an exception" not in caplog.text
+    assert not dashboard_sync._SNAPSHOT_TASKS
+    assert dashboard_sync._dashboard_sync.ctx is None
+
+
 def test_openapi_includes_frontend_api_routes(_env, monkeypatch, tmp_path) -> None:
     ctx = _stub_ctx(authenticated=True)
     monkeypatch.setattr(app_mod, "build_context", lambda settings: ctx)
@@ -153,6 +216,8 @@ def test_openapi_includes_frontend_api_routes(_env, monkeypatch, tmp_path) -> No
         "/api/trending",
         "/api/trending/rating",
         "/api/trending/add",
+        "/api/dashboard/summary",
+        "/api/dashboard/history",
     ):
         assert path in schema["paths"]
 

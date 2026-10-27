@@ -146,4 +146,17 @@ CREATE TABLE IF NOT EXISTS languagarr_queue (
 
 CREATE INDEX IF NOT EXISTS idx_languagarr_queue_status
     ON languagarr_queue(status, queued_at);
+
+-- Dashboard daily statistics: one value per metric per local day, kept for
+-- DASHBOARD_SNAPSHOT_RETENTION_DAYS (core.db_dashboard).
+CREATE TABLE IF NOT EXISTS dashboard_snapshots (
+    day TEXT NOT NULL,
+    metric TEXT NOT NULL,
+    value REAL NOT NULL,
+    recorded_at TEXT NOT NULL,
+    PRIMARY KEY (day, metric)
+);
+
+CREATE INDEX IF NOT EXISTS idx_dashboard_snapshots_metric_day
+    ON dashboard_snapshots(metric, day);
 """

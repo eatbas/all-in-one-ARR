@@ -70,6 +70,10 @@ import {
 import { queryKeys } from "@/shared/lib/queries/keys"
 export { queryKeys } from "@/shared/lib/queries/keys"
 export {
+  useDashboardHistory,
+  useDashboardSummary,
+} from "@/shared/lib/queries/dashboard"
+export {
   useBandwidthStatus,
   useSetBandwidthClientPaused,
   useUpdateBandwidthSettings,

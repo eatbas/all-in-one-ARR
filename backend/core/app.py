@@ -35,6 +35,9 @@ from core.clients.tmdb import TmdbClient
 from core.clients.trakt import TraktClient
 from core.config import Settings
 from core.context import AppContext
+from core.dashboard import DashboardService
+from core.dashboard_api import create_dashboard_router
+from core.dashboard_sync import start_dashboard_snapshots, stop_dashboard_snapshots
 from core.db import Database
 from core.deletarr_api import create_deletarr_router
 from core.findarr_api import create_findarr_router
@@ -135,6 +138,7 @@ def build_context(settings: Settings) -> AppContext:
         settings_store=settings_store,
     )
     ctx.status_checker = StatusChecker(ctx)
+    ctx.dashboard = DashboardService(ctx)
     ctx.poster_cache = PosterCache(
         cache_dir=settings.POSTER_CACHE_PATH, tmdb=tmdb, omdb=omdb
     )
@@ -281,10 +285,14 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
     await start_anime_ids_refresh(ctx)
 
+    await start_dashboard_snapshots(ctx)
+
     try:
         yield
     finally:
         cancel_device_auth(ctx)
+        # Before any client or the database closes: a boot snapshot may still run.
+        await stop_dashboard_snapshots()
         await ctx.status_checker.stop()
         await ctx.scheduler.stop()
         await ctx.trakt.aclose()
@@ -329,6 +337,7 @@ def create_app() -> FastAPI:
     app.include_router(create_deletarr_router(ctx))
     app.include_router(create_languagarr_router(ctx))
     app.include_router(create_trending_router(ctx))
+    app.include_router(create_dashboard_router(ctx))
     app.include_router(ctx.webhooks.router)
 
     # Prometheus metrics are mounted before the SPA catch-all so they are
