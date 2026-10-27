@@ -53,7 +53,9 @@ globalThis.IntersectionObserver =
 // the test env, so a bare `localStorage.clear()` throws on `undefined`. Install
 // deterministic in-memory Storage for both so the suite behaves the same on
 // every Node version; tests still `clear()` per `beforeEach` and may stub them
-// locally (restored by `vi.unstubAllGlobals()`).
+// locally (restored by `vi.unstubAllGlobals()`). Vitest 5 copies the jsdom
+// globals as getter-only accessors, so plain assignment throws; define each one
+// as a configurable, writable data property instead.
 class MemoryStorage {
   private store = new Map<string, string>()
   get length(): number {
@@ -75,8 +77,16 @@ class MemoryStorage {
     this.store.set(key, String(value))
   }
 }
-globalThis.localStorage = new MemoryStorage() as unknown as Storage
-globalThis.sessionStorage = new MemoryStorage() as unknown as Storage
+/** Replace a Web Storage global with a fresh in-memory `MemoryStorage`. */
+function installMemoryStorage(name: "localStorage" | "sessionStorage"): void {
+  Object.defineProperty(globalThis, name, {
+    configurable: true,
+    writable: true,
+    value: new MemoryStorage() as unknown as Storage,
+  })
+}
+installMemoryStorage("localStorage")
+installMemoryStorage("sessionStorage")
 
 // jsdom either omits or throws for these element APIs that Radix touches when a
 // menu/dropdown opens; replace them with no-ops so interactions can proceed.
