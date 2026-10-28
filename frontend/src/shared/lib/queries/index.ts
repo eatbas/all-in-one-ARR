@@ -79,6 +79,16 @@ export {
   useUpdateBandwidthSettings,
 } from "@/shared/lib/queries/bandwidth"
 export {
+  useCleanarrHistory,
+  useCleanarrQueue,
+  useCleanarrSettings,
+  useCleanarrStatus,
+  useClearCleanarrStrikes,
+  useIgnoreCleanarrDownload,
+  useRunCleanarr,
+  useUpdateCleanarrSettings,
+} from "@/shared/lib/queries/cleanarr"
+export {
   useClearFindarrHistory,
   useFindarrHistory,
   useFindarrSettings,

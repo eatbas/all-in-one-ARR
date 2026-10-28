@@ -647,6 +647,15 @@ describe("request error and empty-body handling", () => {
     const error = await getStatus().catch((caught: unknown) => caught)
     expect((error as ApiError).message).toContain("/api/status")
     expect((error as ApiError).message).toContain("422")
+    // The parsed array is kept so a caller can describe the invalid fields.
+    expect((error as ApiError).detail).toEqual([{ msg: "bad" }])
+  })
+
+  it("keeps no detail when the error body is not JSON", async () => {
+    mockFetch(new Response("<html>oops</html>", { status: 500 }))
+
+    const error = await getStatus().catch((caught: unknown) => caught)
+    expect((error as ApiError).detail).toBeUndefined()
   })
 
   it("resolves to undefined when the response body is empty", async () => {

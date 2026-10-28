@@ -2,6 +2,7 @@ import { Navigate, Route, Routes } from "react-router-dom"
 
 import { AppShell } from "@/shared/layout/AppShell"
 import { BandwidthControllarr } from "@/features/bandwidth-controllarr/BandwidthControllarr"
+import { Cleanarr } from "@/features/cleanarr/Cleanarr"
 import { Dashboard } from "@/features/dashboard/Dashboard"
 import { Deletarr } from "@/features/deletarr/Deletarr"
 import { Findarr } from "@/features/findarr/Findarr"
@@ -23,6 +24,7 @@ export default function App() {
           element={<BandwidthControllarr />}
         />
         <Route path="/findarr" element={<Findarr />} />
+        <Route path="/cleanarr" element={<Cleanarr />} />
         <Route path="/deletarr" element={<Deletarr />} />
         <Route path="/languagarr" element={<Languagarr />} />
         <Route path="/settings" element={<Settings />} />

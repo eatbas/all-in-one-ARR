@@ -1,4 +1,5 @@
 import {
+  BrushCleaningIcon,
   GaugeIcon,
   LanguagesIcon,
   LayoutDashboardIcon,
@@ -56,6 +57,12 @@ export const NAV_ITEMS: ReadonlyArray<NavItem> = [
     to: "/findarr",
     icon: SearchIcon,
     description: "Search missing and upgradeable Sonarr/Radarr media",
+  },
+  {
+    title: "Cleanarr",
+    to: "/cleanarr",
+    icon: BrushCleaningIcon,
+    description: "Clear stuck and failed downloads from Sonarr/Radarr queues",
   },
   {
     title: "Deletarr",

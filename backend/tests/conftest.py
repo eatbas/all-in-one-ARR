@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import copy
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
@@ -10,7 +11,11 @@ import pytest
 from core.context import AppContext
 from core.db import Database
 from core.service_registry import BY_NAME, SERVICES, empty_values, masked_entry
-from core.settings_normalisers import normalise_languagarr_settings
+from core.settings_modules import with_ignored_download
+from core.settings_normalisers import (
+    normalise_cleanarr_settings,
+    normalise_languagarr_settings,
+)
 from core.settings_store import TrackedList
 from core.status_checker import StatusChecker
 from core.webhooks import WebhookRegistry
@@ -67,6 +72,17 @@ class StubTrakt:
         return self._authenticated
 
 
+def _deep_merge(base: dict[str, Any], updates: dict[str, Any]) -> dict[str, Any]:
+    """Return ``base`` with the non-``None`` values of ``updates`` merged recursively."""
+    merged = copy.deepcopy(base)
+    for key, value in updates.items():
+        if isinstance(value, dict) and isinstance(merged.get(key), dict):
+            merged[key] = _deep_merge(merged[key], value)
+        elif value is not None:
+            merged[key] = value
+    return merged
+
+
 class StubSettingsStore:
     """Minimal stand-in for :class:`SettingsStore` for module unit tests."""
 
@@ -92,6 +108,7 @@ class StubSettingsStore:
         deletarr_tv_path: str = "/media/tv",
         deletarr_use_arr_source: bool = False,
         languagarr_settings: dict[str, Any] | None = None,
+        cleanarr_settings: dict[str, Any] | None = None,
     ) -> None:
         # Defaults to True (unlike the real store, which seeds False) so the
         # availability-removal tests exercise the enabled path without having to opt
@@ -111,6 +128,7 @@ class StubSettingsStore:
             "use_arr_source": deletarr_use_arr_source,
         }
         self._languagarr_settings = normalise_languagarr_settings(languagarr_settings)
+        self._cleanarr_settings = normalise_cleanarr_settings(cleanarr_settings)
         self._findarr_settings = {
             "enabled": False,
             "interval_minutes": 30,
@@ -354,6 +372,24 @@ class StubSettingsStore:
         )
         self._languagarr_settings = normalise_languagarr_settings(merged)
         return self.languagarr_settings()
+
+    def cleanarr_settings(self) -> dict[str, Any]:
+        return copy.deepcopy(self._cleanarr_settings)
+
+    def cleanarr_interval_minutes(self) -> int:
+        return int(self._cleanarr_settings["interval_minutes"])
+
+    def update_cleanarr_settings(self, updates: dict[str, Any]) -> dict[str, Any]:
+        self._cleanarr_settings = normalise_cleanarr_settings(
+            _deep_merge(self._cleanarr_settings, updates)
+        )
+        return self.cleanarr_settings()
+
+    def cleanarr_add_ignored_download(self, download_id: str) -> dict[str, Any]:
+        self._cleanarr_settings = with_ignored_download(
+            self._cleanarr_settings, download_id
+        )
+        return self.cleanarr_settings()
 
     def masked_services(self) -> dict[str, dict[str, Any]]:
         return {

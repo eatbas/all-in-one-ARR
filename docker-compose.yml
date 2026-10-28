@@ -17,6 +17,9 @@ services:
       # read-write only when you intend to delete reviewed junk from the UI.
       # - /path/to/movies:/media/movies
       # - /path/to/tv:/media/tv
+      # Mount SABnzbd's completed folder read-write if you use Cleanarr's
+      # malware deletion or orphan quarantine (same filesystem as the quarantine).
+      # - /path/to/sabnzbd/complete:/downloads/complete
     restart: unless-stopped
     # To reach Radarr/Sonarr/Seer on the same Docker network, either set
     # the *arr URLs to host-reachable addresses, or attach this service to your

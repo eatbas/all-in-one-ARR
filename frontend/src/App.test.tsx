@@ -178,6 +178,10 @@ vi.mock("@/features/findarr/Findarr", () => ({
   Findarr: () => <div>Findarr route</div>,
 }))
 
+vi.mock("@/features/cleanarr/Cleanarr", () => ({
+  Cleanarr: () => <div>Cleanarr route</div>,
+}))
+
 vi.mock("@/features/dashboard/Dashboard", () => ({
   Dashboard: () => <div>Dashboard route</div>,
 }))
@@ -260,6 +264,11 @@ describe("App routing", () => {
   it("renders the Findarr page at /findarr", () => {
     renderAt("/findarr")
     expect(screen.getByText("Findarr route")).toBeInTheDocument()
+  })
+
+  it("renders the Cleanarr page at /cleanarr", () => {
+    renderAt("/cleanarr")
+    expect(screen.getByText("Cleanarr route")).toBeInTheDocument()
   })
 
   it("renders the Deletarr page at /deletarr", () => {

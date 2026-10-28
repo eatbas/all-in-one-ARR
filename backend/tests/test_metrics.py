@@ -5,13 +5,23 @@ from __future__ import annotations
 import pytest
 
 from core.app_metrics import (
+    cleanarr_file_actions_total,
+    cleanarr_health_warnings,
+    cleanarr_removals_total,
+    cleanarr_runs_total,
+    cleanarr_strikes_total,
     deletarr_deleted_items_total,
     deletarr_freed_bytes_total,
     deletarr_scan_results,
     findarr_hourly_capacity_remaining,
     findarr_runs_total,
     findarr_searches_total,
+    initialise_metrics,
     observe_scheduler_job,
+    record_cleanarr_file_actions,
+    record_cleanarr_removal,
+    record_cleanarr_run,
+    record_cleanarr_strike,
     record_deletarr_delete,
     record_deletarr_scan,
     record_findarr_run,
@@ -20,6 +30,7 @@ from core.app_metrics import (
     scheduler_job_runs_total,
     service_status,
     sync_runs_total,
+    update_cleanarr_health_warnings,
     update_findarr_capacity,
     update_service_metrics,
 )
@@ -104,3 +115,58 @@ def test_deletarr_metrics_update() -> None:
         == failed_before + 1
     )
     assert _counter_value(deletarr_freed_bytes_total, "movies") == freed_before + 2048
+
+
+def test_cleanarr_metrics_update() -> None:
+    run_before = _counter_value(cleanarr_runs_total, "completed")
+    strike_before = _counter_value(cleanarr_strikes_total, "sonarr", "failed_import")
+    live_before = _counter_value(
+        cleanarr_removals_total, "radarr", "failed_download", "live"
+    )
+    dry_before = _counter_value(
+        cleanarr_removals_total, "radarr", "failed_download", "dry_run"
+    )
+    quarantine_before = _counter_value(
+        cleanarr_file_actions_total, "quarantine", "dry_run"
+    )
+    purge_before = _counter_value(cleanarr_file_actions_total, "purge", "live")
+
+    record_cleanarr_run(status="completed")
+    record_cleanarr_strike(app="sonarr", reason="failed_import")
+    record_cleanarr_removal(app="radarr", reason="failed_download", dry_run=False)
+    record_cleanarr_removal(app="radarr", reason="failed_download", dry_run=True)
+    record_cleanarr_file_actions(action="quarantine", count=3, dry_run=True)
+    record_cleanarr_file_actions(action="purge", count=0, dry_run=False)
+    update_cleanarr_health_warnings(-2)
+    assert cleanarr_health_warnings._value.get() == 0
+    update_cleanarr_health_warnings(4)
+
+    assert _counter_value(cleanarr_runs_total, "completed") == run_before + 1
+    assert (
+        _counter_value(cleanarr_strikes_total, "sonarr", "failed_import")
+        == strike_before + 1
+    )
+    assert (
+        _counter_value(cleanarr_removals_total, "radarr", "failed_download", "live")
+        == live_before + 1
+    )
+    assert (
+        _counter_value(cleanarr_removals_total, "radarr", "failed_download", "dry_run")
+        == dry_before + 1
+    )
+    assert (
+        _counter_value(cleanarr_file_actions_total, "quarantine", "dry_run")
+        == quarantine_before + 3
+    )
+    assert _counter_value(cleanarr_file_actions_total, "purge", "live") == purge_before
+    assert cleanarr_health_warnings._value.get() == 4
+
+    # Re-initialising resets the gauge and keeps every closed label set.
+    initialise_metrics()
+    assert cleanarr_health_warnings._value.get() == 0
+    labels = {
+        sample.labels["action"]
+        for metric in cleanarr_file_actions_total.collect()
+        for sample in metric.samples
+    }
+    assert labels == {"malware_delete", "quarantine", "purge"}

@@ -244,6 +244,541 @@ export type BandwidthStatusResponse = {
 };
 
 /**
+ * CleanarrAppSettings
+ */
+export type CleanarrAppSettings = {
+    /**
+     * Enabled
+     */
+    enabled: boolean;
+};
+
+/**
+ * CleanarrAppSettingsUpdate
+ */
+export type CleanarrAppSettingsUpdate = {
+    /**
+     * Enabled
+     */
+    enabled?: boolean | null;
+};
+
+/**
+ * CleanarrAppsSettings
+ */
+export type CleanarrAppsSettings = {
+    radarr: CleanarrAppSettings;
+    sonarr: CleanarrAppSettings;
+};
+
+/**
+ * CleanarrAppsSettingsUpdate
+ */
+export type CleanarrAppsSettingsUpdate = {
+    radarr?: CleanarrAppSettingsUpdate | null;
+    sonarr?: CleanarrAppSettingsUpdate | null;
+};
+
+/**
+ * CleanarrConnection
+ */
+export type CleanarrConnection = {
+    /**
+     * App
+     */
+    app: 'sabnzbd' | 'sonarr' | 'radarr';
+    /**
+     * Detail
+     */
+    detail: string;
+    /**
+     * Ok
+     */
+    ok: boolean;
+};
+
+/**
+ * CleanarrCountResult
+ */
+export type CleanarrCountResult = {
+    /**
+     * Count
+     */
+    count: number;
+};
+
+/**
+ * CleanarrHealthWarning
+ */
+export type CleanarrHealthWarning = {
+    /**
+     * Code
+     */
+    code: string;
+    /**
+     * Detail
+     */
+    detail: string;
+    /**
+     * Level
+     */
+    level: 'warning' | 'info';
+    /**
+     * Source
+     */
+    source: string;
+};
+
+/**
+ * CleanarrHistoryEntry
+ */
+export type CleanarrHistoryEntry = {
+    /**
+     * Action
+     */
+    action: string;
+    /**
+     * App
+     */
+    app: 'sonarr' | 'radarr' | 'sabnzbd' | 'system';
+    /**
+     * Detail
+     */
+    detail: string;
+    /**
+     * Download Id
+     */
+    download_id: string | null;
+    /**
+     * Dry Run
+     */
+    dry_run: boolean;
+    /**
+     * Id
+     */
+    id: number;
+    /**
+     * Title
+     */
+    title: string | null;
+    /**
+     * Ts
+     */
+    ts: string;
+};
+
+/**
+ * CleanarrIgnoreRequest
+ */
+export type CleanarrIgnoreRequest = {
+    /**
+     * Download Id
+     */
+    download_id: string;
+};
+
+/**
+ * CleanarrIgnoreSettings
+ */
+export type CleanarrIgnoreSettings = {
+    /**
+     * Categories
+     */
+    categories: Array<string>;
+    /**
+     * Download Ids
+     */
+    download_ids: Array<string>;
+    /**
+     * Title Contains
+     */
+    title_contains: Array<string>;
+};
+
+/**
+ * CleanarrIgnoreSettingsUpdate
+ */
+export type CleanarrIgnoreSettingsUpdate = {
+    /**
+     * Categories
+     */
+    categories?: Array<string> | null;
+    /**
+     * Download Ids
+     */
+    download_ids?: Array<string> | null;
+    /**
+     * Title Contains
+     */
+    title_contains?: Array<string> | null;
+};
+
+/**
+ * CleanarrLastRun
+ */
+export type CleanarrLastRun = {
+    /**
+     * At
+     */
+    at: string;
+    /**
+     * Detail
+     */
+    detail: string;
+    /**
+     * Status
+     */
+    status: string;
+};
+
+/**
+ * CleanarrMalwareSettings
+ */
+export type CleanarrMalwareSettings = {
+    /**
+     * Enabled
+     */
+    enabled: boolean;
+    /**
+     * Extensions
+     */
+    extensions: Array<string>;
+};
+
+/**
+ * CleanarrMalwareSettingsUpdate
+ */
+export type CleanarrMalwareSettingsUpdate = {
+    /**
+     * Enabled
+     */
+    enabled?: boolean | null;
+    /**
+     * Extensions
+     */
+    extensions?: Array<string> | null;
+};
+
+/**
+ * CleanarrOrphanSettings
+ */
+export type CleanarrOrphanSettings = {
+    /**
+     * Enabled
+     */
+    enabled: boolean;
+    /**
+     * Min Age Hours
+     */
+    min_age_hours: number;
+    /**
+     * Quarantine Retention Days
+     */
+    quarantine_retention_days: number;
+};
+
+/**
+ * CleanarrOrphanSettingsUpdate
+ */
+export type CleanarrOrphanSettingsUpdate = {
+    /**
+     * Enabled
+     */
+    enabled?: boolean | null;
+    /**
+     * Min Age Hours
+     */
+    min_age_hours?: number | null;
+    /**
+     * Quarantine Retention Days
+     */
+    quarantine_retention_days?: number | null;
+};
+
+/**
+ * CleanarrPathSettings
+ */
+export type CleanarrPathSettings = {
+    /**
+     * Completed Root
+     */
+    completed_root: string;
+    /**
+     * Quarantine Dir
+     */
+    quarantine_dir: string;
+};
+
+/**
+ * CleanarrPathSettingsUpdate
+ *
+ * Absolute paths; the quarantine folder must end up under the completed one.
+ */
+export type CleanarrPathSettingsUpdate = {
+    /**
+     * Completed Root
+     */
+    completed_root?: string | null;
+    /**
+     * Quarantine Dir
+     */
+    quarantine_dir?: string | null;
+};
+
+/**
+ * CleanarrQueue
+ */
+export type CleanarrQueue = {
+    /**
+     * Dry Run
+     */
+    dry_run: boolean;
+    /**
+     * Errors
+     */
+    errors: {
+        [key: string]: string;
+    };
+    /**
+     * Held
+     */
+    held: {
+        [key: string]: string;
+    };
+    /**
+     * Items
+     */
+    items: Array<CleanarrQueueItem>;
+    /**
+     * Max Strikes
+     */
+    max_strikes: number;
+};
+
+/**
+ * CleanarrQueueItem
+ */
+export type CleanarrQueueItem = {
+    /**
+     * App
+     */
+    app: 'sonarr' | 'radarr';
+    /**
+     * Download Id
+     */
+    download_id: string;
+    /**
+     * Excluded
+     */
+    excluded: boolean;
+    /**
+     * Ignored
+     */
+    ignored: boolean;
+    /**
+     * Max Strikes
+     */
+    max_strikes: number;
+    /**
+     * Message
+     */
+    message: string;
+    /**
+     * Queue Id
+     */
+    queue_id: number | null;
+    /**
+     * Reason
+     */
+    reason: 'failed_import' | 'failed_download';
+    /**
+     * Strikes
+     */
+    strikes: number;
+    /**
+     * Title
+     */
+    title: string;
+    /**
+     * Would Remove
+     */
+    would_remove: boolean;
+};
+
+/**
+ * CleanarrQueueSettings
+ */
+export type CleanarrQueueSettings = {
+    /**
+     * Enabled
+     */
+    enabled: boolean;
+    /**
+     * Pattern Mode
+     */
+    pattern_mode: 'include' | 'exclude';
+    /**
+     * Patterns
+     */
+    patterns: Array<string>;
+};
+
+/**
+ * CleanarrQueueSettingsUpdate
+ */
+export type CleanarrQueueSettingsUpdate = {
+    /**
+     * Enabled
+     */
+    enabled?: boolean | null;
+    /**
+     * Pattern Mode
+     */
+    pattern_mode?: 'include' | 'exclude' | null;
+    /**
+     * Patterns
+     */
+    patterns?: Array<string> | null;
+};
+
+/**
+ * CleanarrRunResult
+ */
+export type CleanarrRunResult = {
+    /**
+     * Counts
+     */
+    counts: {
+        [key: string]: number;
+    };
+    /**
+     * Detail
+     */
+    detail: string;
+    /**
+     * Status
+     */
+    status: 'completed' | 'skipped';
+};
+
+/**
+ * CleanarrSettings
+ */
+export type CleanarrSettings = {
+    apps: CleanarrAppsSettings;
+    /**
+     * Dry Run
+     */
+    dry_run: boolean;
+    /**
+     * Enabled
+     */
+    enabled: boolean;
+    ignore: CleanarrIgnoreSettings;
+    /**
+     * Interval Minutes
+     */
+    interval_minutes: number;
+    malware: CleanarrMalwareSettings;
+    /**
+     * Max Removals Per Run
+     */
+    max_removals_per_run: number;
+    /**
+     * Max Strikes
+     */
+    max_strikes: number;
+    orphans: CleanarrOrphanSettings;
+    paths: CleanarrPathSettings;
+    queue: CleanarrQueueSettings;
+};
+
+/**
+ * CleanarrSettingsUpdate
+ *
+ * Partial settings update; bounds are the normaliser's, exposed in OpenAPI.
+ */
+export type CleanarrSettingsUpdate = {
+    apps?: CleanarrAppsSettingsUpdate | null;
+    /**
+     * Dry Run
+     */
+    dry_run?: boolean | null;
+    /**
+     * Enabled
+     */
+    enabled?: boolean | null;
+    ignore?: CleanarrIgnoreSettingsUpdate | null;
+    /**
+     * Interval Minutes
+     */
+    interval_minutes?: number | null;
+    malware?: CleanarrMalwareSettingsUpdate | null;
+    /**
+     * Max Removals Per Run
+     */
+    max_removals_per_run?: number | null;
+    /**
+     * Max Strikes
+     */
+    max_strikes?: number | null;
+    orphans?: CleanarrOrphanSettingsUpdate | null;
+    paths?: CleanarrPathSettingsUpdate | null;
+    queue?: CleanarrQueueSettingsUpdate | null;
+};
+
+/**
+ * CleanarrStatus
+ */
+export type CleanarrStatus = {
+    /**
+     * Connections
+     */
+    connections: Array<CleanarrConnection>;
+    /**
+     * Dry Run
+     */
+    dry_run: boolean;
+    /**
+     * Enabled
+     */
+    enabled: boolean;
+    /**
+     * Health
+     */
+    health: Array<CleanarrHealthWarning>;
+    last_run: CleanarrLastRun | null;
+    /**
+     * Running
+     */
+    running: boolean;
+    settings: CleanarrSettings;
+    strikes: CleanarrStrikeCounts;
+};
+
+/**
+ * CleanarrStrikeCounts
+ */
+export type CleanarrStrikeCounts = {
+    /**
+     * Failed Download
+     */
+    failed_download: number;
+    /**
+     * Failed Import
+     */
+    failed_import: number;
+    /**
+     * Radarr
+     */
+    radarr: number;
+    /**
+     * Sonarr
+     */
+    sonarr: number;
+};
+
+/**
  * Counts
  */
 export type Counts = {
@@ -2319,6 +2854,154 @@ export type GetStatusApiBandwidthStatusGetResponses = {
 
 export type GetStatusApiBandwidthStatusGetResponse = GetStatusApiBandwidthStatusGetResponses[keyof GetStatusApiBandwidthStatusGetResponses];
 
+export type GetHistoryApiCleanarrHistoryGetData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/cleanarr/history';
+};
+
+export type GetHistoryApiCleanarrHistoryGetResponses = {
+    /**
+     * Response Get History Api Cleanarr History Get
+     *
+     * Successful Response
+     */
+    200: Array<CleanarrHistoryEntry>;
+};
+
+export type GetHistoryApiCleanarrHistoryGetResponse = GetHistoryApiCleanarrHistoryGetResponses[keyof GetHistoryApiCleanarrHistoryGetResponses];
+
+export type PostIgnoreApiCleanarrIgnorePostData = {
+    body: CleanarrIgnoreRequest;
+    path?: never;
+    query?: never;
+    url: '/api/cleanarr/ignore';
+};
+
+export type PostIgnoreApiCleanarrIgnorePostErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type PostIgnoreApiCleanarrIgnorePostError = PostIgnoreApiCleanarrIgnorePostErrors[keyof PostIgnoreApiCleanarrIgnorePostErrors];
+
+export type PostIgnoreApiCleanarrIgnorePostResponses = {
+    /**
+     * Successful Response
+     */
+    200: CleanarrSettings;
+};
+
+export type PostIgnoreApiCleanarrIgnorePostResponse = PostIgnoreApiCleanarrIgnorePostResponses[keyof PostIgnoreApiCleanarrIgnorePostResponses];
+
+export type GetQueueApiCleanarrQueueGetData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/cleanarr/queue';
+};
+
+export type GetQueueApiCleanarrQueueGetResponses = {
+    /**
+     * Successful Response
+     */
+    200: CleanarrQueue;
+};
+
+export type GetQueueApiCleanarrQueueGetResponse = GetQueueApiCleanarrQueueGetResponses[keyof GetQueueApiCleanarrQueueGetResponses];
+
+export type PostRunApiCleanarrRunPostData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/cleanarr/run';
+};
+
+export type PostRunApiCleanarrRunPostResponses = {
+    /**
+     * Successful Response
+     */
+    200: CleanarrRunResult;
+};
+
+export type PostRunApiCleanarrRunPostResponse = PostRunApiCleanarrRunPostResponses[keyof PostRunApiCleanarrRunPostResponses];
+
+export type GetSettingsApiCleanarrSettingsGetData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/cleanarr/settings';
+};
+
+export type GetSettingsApiCleanarrSettingsGetResponses = {
+    /**
+     * Successful Response
+     */
+    200: CleanarrSettings;
+};
+
+export type GetSettingsApiCleanarrSettingsGetResponse = GetSettingsApiCleanarrSettingsGetResponses[keyof GetSettingsApiCleanarrSettingsGetResponses];
+
+export type PutSettingsApiCleanarrSettingsPutData = {
+    body: CleanarrSettingsUpdate;
+    path?: never;
+    query?: never;
+    url: '/api/cleanarr/settings';
+};
+
+export type PutSettingsApiCleanarrSettingsPutErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type PutSettingsApiCleanarrSettingsPutError = PutSettingsApiCleanarrSettingsPutErrors[keyof PutSettingsApiCleanarrSettingsPutErrors];
+
+export type PutSettingsApiCleanarrSettingsPutResponses = {
+    /**
+     * Successful Response
+     */
+    200: CleanarrStatus;
+};
+
+export type PutSettingsApiCleanarrSettingsPutResponse = PutSettingsApiCleanarrSettingsPutResponses[keyof PutSettingsApiCleanarrSettingsPutResponses];
+
+export type GetStatusApiCleanarrStatusGetData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/cleanarr/status';
+};
+
+export type GetStatusApiCleanarrStatusGetResponses = {
+    /**
+     * Successful Response
+     */
+    200: CleanarrStatus;
+};
+
+export type GetStatusApiCleanarrStatusGetResponse = GetStatusApiCleanarrStatusGetResponses[keyof GetStatusApiCleanarrStatusGetResponses];
+
+export type PostClearStrikesApiCleanarrStrikesClearPostData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/cleanarr/strikes/clear';
+};
+
+export type PostClearStrikesApiCleanarrStrikesClearPostResponses = {
+    /**
+     * Successful Response
+     */
+    200: CleanarrCountResult;
+};
+
+export type PostClearStrikesApiCleanarrStrikesClearPostResponse = PostClearStrikesApiCleanarrStrikesClearPostResponses[keyof PostClearStrikesApiCleanarrStrikesClearPostResponses];
+
 export type GetHistoryApiDashboardHistoryGetData = {
     body?: never;
     path?: never;
@@ -3592,6 +4275,22 @@ export type SpaEntryBandwidthControllarrGetResponses = {
 };
 
 export type SpaEntryBandwidthControllarrGetResponse = SpaEntryBandwidthControllarrGetResponses[keyof SpaEntryBandwidthControllarrGetResponses];
+
+export type SpaEntryCleanarrGetData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/cleanarr';
+};
+
+export type SpaEntryCleanarrGetResponses = {
+    /**
+     * Successful Response
+     */
+    200: string;
+};
+
+export type SpaEntryCleanarrGetResponse = SpaEntryCleanarrGetResponses[keyof SpaEntryCleanarrGetResponses];
 
 export type SpaEntryDeletarrGetData = {
     body?: never;

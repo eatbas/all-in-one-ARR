@@ -26,6 +26,7 @@ function renderAt(path: string) {
         <Route element={<AppShell />}>
           <Route path="/" element={<div>dashboard-page</div>} />
           <Route path="/list-syncarr" element={<div>list-syncarr-page</div>} />
+          <Route path="/cleanarr" element={<div>cleanarr-page</div>} />
           <Route path="/deletarr" element={<div>deletarr-page</div>} />
           <Route path="/languagarr" element={<div>languagarr-page</div>} />
         </Route>
@@ -106,6 +107,19 @@ describe("AppShell", () => {
       "aria-current",
       "page",
     )
+  })
+
+  it("lists Cleanarr directly after Findarr and marks it active", () => {
+    renderAt("/cleanarr")
+
+    expect(screen.getByText("cleanarr-page")).toBeInTheDocument()
+    const link = screen.getByRole("link", { name: /cleanarr/i })
+    expect(link).toHaveAttribute("href", "/cleanarr")
+    expect(link).toHaveAttribute("aria-current", "page")
+    const names = screen
+      .getAllByRole("link")
+      .map((item) => item.textContent?.trim())
+    expect(names.indexOf("Cleanarr")).toBe(names.indexOf("Findarr") + 1)
   })
 
   it("marks the Languagarr link active on its route", () => {

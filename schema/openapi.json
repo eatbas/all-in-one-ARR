@@ -420,6 +420,1020 @@
         "title": "BandwidthStatusResponse",
         "type": "object"
       },
+      "CleanarrAppSettings": {
+        "properties": {
+          "enabled": {
+            "title": "Enabled",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "enabled"
+        ],
+        "title": "CleanarrAppSettings",
+        "type": "object"
+      },
+      "CleanarrAppSettingsUpdate": {
+        "properties": {
+          "enabled": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Enabled"
+          }
+        },
+        "title": "CleanarrAppSettingsUpdate",
+        "type": "object"
+      },
+      "CleanarrAppsSettings": {
+        "properties": {
+          "radarr": {
+            "$ref": "#/components/schemas/CleanarrAppSettings"
+          },
+          "sonarr": {
+            "$ref": "#/components/schemas/CleanarrAppSettings"
+          }
+        },
+        "required": [
+          "sonarr",
+          "radarr"
+        ],
+        "title": "CleanarrAppsSettings",
+        "type": "object"
+      },
+      "CleanarrAppsSettingsUpdate": {
+        "properties": {
+          "radarr": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CleanarrAppSettingsUpdate"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "sonarr": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CleanarrAppSettingsUpdate"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "title": "CleanarrAppsSettingsUpdate",
+        "type": "object"
+      },
+      "CleanarrConnection": {
+        "properties": {
+          "app": {
+            "enum": [
+              "sabnzbd",
+              "sonarr",
+              "radarr"
+            ],
+            "title": "App",
+            "type": "string"
+          },
+          "detail": {
+            "title": "Detail",
+            "type": "string"
+          },
+          "ok": {
+            "title": "Ok",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "app",
+          "ok",
+          "detail"
+        ],
+        "title": "CleanarrConnection",
+        "type": "object"
+      },
+      "CleanarrCountResult": {
+        "properties": {
+          "count": {
+            "title": "Count",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "count"
+        ],
+        "title": "CleanarrCountResult",
+        "type": "object"
+      },
+      "CleanarrHealthWarning": {
+        "properties": {
+          "code": {
+            "title": "Code",
+            "type": "string"
+          },
+          "detail": {
+            "title": "Detail",
+            "type": "string"
+          },
+          "level": {
+            "enum": [
+              "warning",
+              "info"
+            ],
+            "title": "Level",
+            "type": "string"
+          },
+          "source": {
+            "title": "Source",
+            "type": "string"
+          }
+        },
+        "required": [
+          "source",
+          "code",
+          "detail",
+          "level"
+        ],
+        "title": "CleanarrHealthWarning",
+        "type": "object"
+      },
+      "CleanarrHistoryEntry": {
+        "properties": {
+          "action": {
+            "title": "Action",
+            "type": "string"
+          },
+          "app": {
+            "enum": [
+              "sonarr",
+              "radarr",
+              "sabnzbd",
+              "system"
+            ],
+            "title": "App",
+            "type": "string"
+          },
+          "detail": {
+            "title": "Detail",
+            "type": "string"
+          },
+          "download_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Download Id"
+          },
+          "dry_run": {
+            "title": "Dry Run",
+            "type": "boolean"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Title"
+          },
+          "ts": {
+            "title": "Ts",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "ts",
+          "app",
+          "action",
+          "download_id",
+          "title",
+          "detail",
+          "dry_run"
+        ],
+        "title": "CleanarrHistoryEntry",
+        "type": "object"
+      },
+      "CleanarrIgnoreRequest": {
+        "properties": {
+          "download_id": {
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Download Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "download_id"
+        ],
+        "title": "CleanarrIgnoreRequest",
+        "type": "object"
+      },
+      "CleanarrIgnoreSettings": {
+        "properties": {
+          "categories": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Categories",
+            "type": "array"
+          },
+          "download_ids": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Download Ids",
+            "type": "array"
+          },
+          "title_contains": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Title Contains",
+            "type": "array"
+          }
+        },
+        "required": [
+          "download_ids",
+          "categories",
+          "title_contains"
+        ],
+        "title": "CleanarrIgnoreSettings",
+        "type": "object"
+      },
+      "CleanarrIgnoreSettingsUpdate": {
+        "properties": {
+          "categories": {
+            "anyOf": [
+              {
+                "items": {
+                  "maxLength": 200,
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "maxItems": 500,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Categories"
+          },
+          "download_ids": {
+            "anyOf": [
+              {
+                "items": {
+                  "maxLength": 200,
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "maxItems": 500,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Download Ids"
+          },
+          "title_contains": {
+            "anyOf": [
+              {
+                "items": {
+                  "maxLength": 200,
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "maxItems": 500,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Title Contains"
+          }
+        },
+        "title": "CleanarrIgnoreSettingsUpdate",
+        "type": "object"
+      },
+      "CleanarrLastRun": {
+        "properties": {
+          "at": {
+            "title": "At",
+            "type": "string"
+          },
+          "detail": {
+            "title": "Detail",
+            "type": "string"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "at",
+          "status",
+          "detail"
+        ],
+        "title": "CleanarrLastRun",
+        "type": "object"
+      },
+      "CleanarrMalwareSettings": {
+        "properties": {
+          "enabled": {
+            "title": "Enabled",
+            "type": "boolean"
+          },
+          "extensions": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Extensions",
+            "type": "array"
+          }
+        },
+        "required": [
+          "enabled",
+          "extensions"
+        ],
+        "title": "CleanarrMalwareSettings",
+        "type": "object"
+      },
+      "CleanarrMalwareSettingsUpdate": {
+        "properties": {
+          "enabled": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Enabled"
+          },
+          "extensions": {
+            "anyOf": [
+              {
+                "items": {
+                  "pattern": "^\\.[a-z0-9]{1,10}$",
+                  "type": "string"
+                },
+                "maxItems": 100,
+                "minItems": 1,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Extensions"
+          }
+        },
+        "title": "CleanarrMalwareSettingsUpdate",
+        "type": "object"
+      },
+      "CleanarrOrphanSettings": {
+        "properties": {
+          "enabled": {
+            "title": "Enabled",
+            "type": "boolean"
+          },
+          "min_age_hours": {
+            "title": "Min Age Hours",
+            "type": "integer"
+          },
+          "quarantine_retention_days": {
+            "title": "Quarantine Retention Days",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "enabled",
+          "min_age_hours",
+          "quarantine_retention_days"
+        ],
+        "title": "CleanarrOrphanSettings",
+        "type": "object"
+      },
+      "CleanarrOrphanSettingsUpdate": {
+        "properties": {
+          "enabled": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Enabled"
+          },
+          "min_age_hours": {
+            "anyOf": [
+              {
+                "maximum": 720.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Min Age Hours"
+          },
+          "quarantine_retention_days": {
+            "anyOf": [
+              {
+                "maximum": 365.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Quarantine Retention Days"
+          }
+        },
+        "title": "CleanarrOrphanSettingsUpdate",
+        "type": "object"
+      },
+      "CleanarrPathSettings": {
+        "properties": {
+          "completed_root": {
+            "title": "Completed Root",
+            "type": "string"
+          },
+          "quarantine_dir": {
+            "title": "Quarantine Dir",
+            "type": "string"
+          }
+        },
+        "required": [
+          "completed_root",
+          "quarantine_dir"
+        ],
+        "title": "CleanarrPathSettings",
+        "type": "object"
+      },
+      "CleanarrPathSettingsUpdate": {
+        "description": "Absolute paths; the quarantine folder must end up under the completed one.",
+        "properties": {
+          "completed_root": {
+            "anyOf": [
+              {
+                "maxLength": 1024,
+                "minLength": 1,
+                "pattern": "^/",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Completed Root"
+          },
+          "quarantine_dir": {
+            "anyOf": [
+              {
+                "maxLength": 1024,
+                "minLength": 1,
+                "pattern": "^/",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Quarantine Dir"
+          }
+        },
+        "title": "CleanarrPathSettingsUpdate",
+        "type": "object"
+      },
+      "CleanarrQueue": {
+        "properties": {
+          "dry_run": {
+            "title": "Dry Run",
+            "type": "boolean"
+          },
+          "errors": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "title": "Errors",
+            "type": "object"
+          },
+          "held": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "title": "Held",
+            "type": "object"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/CleanarrQueueItem"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "max_strikes": {
+            "title": "Max Strikes",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "errors",
+          "held",
+          "max_strikes",
+          "dry_run"
+        ],
+        "title": "CleanarrQueue",
+        "type": "object"
+      },
+      "CleanarrQueueItem": {
+        "properties": {
+          "app": {
+            "enum": [
+              "sonarr",
+              "radarr"
+            ],
+            "title": "App",
+            "type": "string"
+          },
+          "download_id": {
+            "title": "Download Id",
+            "type": "string"
+          },
+          "excluded": {
+            "title": "Excluded",
+            "type": "boolean"
+          },
+          "ignored": {
+            "title": "Ignored",
+            "type": "boolean"
+          },
+          "max_strikes": {
+            "title": "Max Strikes",
+            "type": "integer"
+          },
+          "message": {
+            "title": "Message",
+            "type": "string"
+          },
+          "queue_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Queue Id"
+          },
+          "reason": {
+            "enum": [
+              "failed_import",
+              "failed_download"
+            ],
+            "title": "Reason",
+            "type": "string"
+          },
+          "strikes": {
+            "title": "Strikes",
+            "type": "integer"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "would_remove": {
+            "title": "Would Remove",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "app",
+          "queue_id",
+          "download_id",
+          "title",
+          "reason",
+          "message",
+          "strikes",
+          "max_strikes",
+          "would_remove",
+          "ignored",
+          "excluded"
+        ],
+        "title": "CleanarrQueueItem",
+        "type": "object"
+      },
+      "CleanarrQueueSettings": {
+        "properties": {
+          "enabled": {
+            "title": "Enabled",
+            "type": "boolean"
+          },
+          "pattern_mode": {
+            "enum": [
+              "include",
+              "exclude"
+            ],
+            "title": "Pattern Mode",
+            "type": "string"
+          },
+          "patterns": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Patterns",
+            "type": "array"
+          }
+        },
+        "required": [
+          "enabled",
+          "pattern_mode",
+          "patterns"
+        ],
+        "title": "CleanarrQueueSettings",
+        "type": "object"
+      },
+      "CleanarrQueueSettingsUpdate": {
+        "properties": {
+          "enabled": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Enabled"
+          },
+          "pattern_mode": {
+            "anyOf": [
+              {
+                "enum": [
+                  "include",
+                  "exclude"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pattern Mode"
+          },
+          "patterns": {
+            "anyOf": [
+              {
+                "items": {
+                  "maxLength": 200,
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "maxItems": 50,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Patterns"
+          }
+        },
+        "title": "CleanarrQueueSettingsUpdate",
+        "type": "object"
+      },
+      "CleanarrRunResult": {
+        "properties": {
+          "counts": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "title": "Counts",
+            "type": "object"
+          },
+          "detail": {
+            "title": "Detail",
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "completed",
+              "skipped"
+            ],
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "status",
+          "detail",
+          "counts"
+        ],
+        "title": "CleanarrRunResult",
+        "type": "object"
+      },
+      "CleanarrSettings": {
+        "properties": {
+          "apps": {
+            "$ref": "#/components/schemas/CleanarrAppsSettings"
+          },
+          "dry_run": {
+            "title": "Dry Run",
+            "type": "boolean"
+          },
+          "enabled": {
+            "title": "Enabled",
+            "type": "boolean"
+          },
+          "ignore": {
+            "$ref": "#/components/schemas/CleanarrIgnoreSettings"
+          },
+          "interval_minutes": {
+            "title": "Interval Minutes",
+            "type": "integer"
+          },
+          "malware": {
+            "$ref": "#/components/schemas/CleanarrMalwareSettings"
+          },
+          "max_removals_per_run": {
+            "title": "Max Removals Per Run",
+            "type": "integer"
+          },
+          "max_strikes": {
+            "title": "Max Strikes",
+            "type": "integer"
+          },
+          "orphans": {
+            "$ref": "#/components/schemas/CleanarrOrphanSettings"
+          },
+          "paths": {
+            "$ref": "#/components/schemas/CleanarrPathSettings"
+          },
+          "queue": {
+            "$ref": "#/components/schemas/CleanarrQueueSettings"
+          }
+        },
+        "required": [
+          "enabled",
+          "dry_run",
+          "interval_minutes",
+          "max_strikes",
+          "max_removals_per_run",
+          "queue",
+          "malware",
+          "orphans",
+          "paths",
+          "apps",
+          "ignore"
+        ],
+        "title": "CleanarrSettings",
+        "type": "object"
+      },
+      "CleanarrSettingsUpdate": {
+        "description": "Partial settings update; bounds are the normaliser's, exposed in OpenAPI.",
+        "properties": {
+          "apps": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CleanarrAppsSettingsUpdate"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "dry_run": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dry Run"
+          },
+          "enabled": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Enabled"
+          },
+          "ignore": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CleanarrIgnoreSettingsUpdate"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "interval_minutes": {
+            "anyOf": [
+              {
+                "maximum": 1440.0,
+                "minimum": 5.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Interval Minutes"
+          },
+          "malware": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CleanarrMalwareSettingsUpdate"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "max_removals_per_run": {
+            "anyOf": [
+              {
+                "maximum": 50.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Removals Per Run"
+          },
+          "max_strikes": {
+            "anyOf": [
+              {
+                "maximum": 20.0,
+                "minimum": 3.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Strikes"
+          },
+          "orphans": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CleanarrOrphanSettingsUpdate"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "paths": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CleanarrPathSettingsUpdate"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "queue": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CleanarrQueueSettingsUpdate"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "title": "CleanarrSettingsUpdate",
+        "type": "object"
+      },
+      "CleanarrStatus": {
+        "properties": {
+          "connections": {
+            "items": {
+              "$ref": "#/components/schemas/CleanarrConnection"
+            },
+            "title": "Connections",
+            "type": "array"
+          },
+          "dry_run": {
+            "title": "Dry Run",
+            "type": "boolean"
+          },
+          "enabled": {
+            "title": "Enabled",
+            "type": "boolean"
+          },
+          "health": {
+            "items": {
+              "$ref": "#/components/schemas/CleanarrHealthWarning"
+            },
+            "title": "Health",
+            "type": "array"
+          },
+          "last_run": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CleanarrLastRun"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "running": {
+            "title": "Running",
+            "type": "boolean"
+          },
+          "settings": {
+            "$ref": "#/components/schemas/CleanarrSettings"
+          },
+          "strikes": {
+            "$ref": "#/components/schemas/CleanarrStrikeCounts"
+          }
+        },
+        "required": [
+          "settings",
+          "enabled",
+          "dry_run",
+          "running",
+          "last_run",
+          "connections",
+          "health",
+          "strikes"
+        ],
+        "title": "CleanarrStatus",
+        "type": "object"
+      },
+      "CleanarrStrikeCounts": {
+        "properties": {
+          "failed_download": {
+            "title": "Failed Download",
+            "type": "integer"
+          },
+          "failed_import": {
+            "title": "Failed Import",
+            "type": "integer"
+          },
+          "radarr": {
+            "title": "Radarr",
+            "type": "integer"
+          },
+          "sonarr": {
+            "title": "Sonarr",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "sonarr",
+          "radarr",
+          "failed_import",
+          "failed_download"
+        ],
+        "title": "CleanarrStrikeCounts",
+        "type": "object"
+      },
       "Counts": {
         "properties": {
           "available": {
@@ -3964,6 +4978,216 @@
         "summary": "Get Status"
       }
     },
+    "/api/cleanarr/history": {
+      "get": {
+        "operationId": "get_history_api_cleanarr_history_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/CleanarrHistoryEntry"
+                  },
+                  "title": "Response Get History Api Cleanarr History Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Get History",
+        "tags": [
+          "cleanarr"
+        ]
+      }
+    },
+    "/api/cleanarr/ignore": {
+      "post": {
+        "operationId": "post_ignore_api_cleanarr_ignore_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CleanarrIgnoreRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CleanarrSettings"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Post Ignore",
+        "tags": [
+          "cleanarr"
+        ]
+      }
+    },
+    "/api/cleanarr/queue": {
+      "get": {
+        "operationId": "get_queue_api_cleanarr_queue_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CleanarrQueue"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Get Queue",
+        "tags": [
+          "cleanarr"
+        ]
+      }
+    },
+    "/api/cleanarr/run": {
+      "post": {
+        "operationId": "post_run_api_cleanarr_run_post",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CleanarrRunResult"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Post Run",
+        "tags": [
+          "cleanarr"
+        ]
+      }
+    },
+    "/api/cleanarr/settings": {
+      "get": {
+        "operationId": "get_settings_api_cleanarr_settings_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CleanarrSettings"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Get Settings",
+        "tags": [
+          "cleanarr"
+        ]
+      },
+      "put": {
+        "operationId": "put_settings_api_cleanarr_settings_put",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CleanarrSettingsUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CleanarrStatus"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Put Settings",
+        "tags": [
+          "cleanarr"
+        ]
+      }
+    },
+    "/api/cleanarr/status": {
+      "get": {
+        "operationId": "get_status_api_cleanarr_status_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CleanarrStatus"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Get Status",
+        "tags": [
+          "cleanarr"
+        ]
+      }
+    },
+    "/api/cleanarr/strikes/clear": {
+      "post": {
+        "operationId": "post_clear_strikes_api_cleanarr_strikes_clear_post",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CleanarrCountResult"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Post Clear Strikes",
+        "tags": [
+          "cleanarr"
+        ]
+      }
+    },
     "/api/dashboard/history": {
       "get": {
         "description": "Return daily-snapshot trends for the last 7, 30 or 90 days.",
@@ -5810,6 +7034,24 @@
     "/bandwidth-controllarr": {
       "get": {
         "operationId": "_spa_entry_bandwidth_controllarr_get",
+        "responses": {
+          "200": {
+            "content": {
+              "text/html": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": " Spa Entry"
+      }
+    },
+    "/cleanarr": {
+      "get": {
+        "operationId": "_spa_entry_cleanarr_get",
         "responses": {
           "200": {
             "content": {

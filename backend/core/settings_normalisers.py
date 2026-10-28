@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import copy
+import posixpath
+import re
 from typing import Any
 
 from core.audio_languages import (
@@ -447,4 +449,261 @@ def normalise_languagarr_settings(raw: dict[str, Any] | None = None) -> dict[str
             raw.get("target_audio_languages", defaults["target_audio_languages"])
         ),
         "sonarr_link_url": _normalise_link_url(raw.get("sonarr_link_url")),
+    }
+
+
+# Cleanarr bounds. The API rejects out-of-range input (HTTP 422); the normaliser
+# below clamps or falls back for anything already persisted.
+CLEANARR_INTERVAL_MIN = 5
+CLEANARR_INTERVAL_MAX = 1440
+CLEANARR_MAX_STRIKES_MIN = 3
+CLEANARR_MAX_STRIKES_MAX = 20
+CLEANARR_REMOVALS_PER_RUN_MIN = 1
+CLEANARR_REMOVALS_PER_RUN_MAX = 50
+CLEANARR_MIN_AGE_HOURS_MIN = 1
+CLEANARR_MIN_AGE_HOURS_MAX = 720
+CLEANARR_RETENTION_DAYS_MIN = 1
+CLEANARR_RETENTION_DAYS_MAX = 365
+CLEANARR_PATTERNS_MAX = 50
+CLEANARR_PATTERN_LENGTH_MAX = 200
+CLEANARR_EXTENSIONS_MAX = 100
+CLEANARR_IGNORE_MAX = 500
+CLEANARR_IGNORE_LENGTH_MAX = 200
+CLEANARR_PATH_LENGTH_MAX = 1024
+CLEANARR_EXTENSION_PATTERN = r"^\.[a-z0-9]{1,10}$"
+VALID_CLEANARR_PATTERN_MODES: frozenset[str] = frozenset({"include", "exclude"})
+CLEANARR_QUARANTINE_DIRNAME = "_cleanarr_quarantine"
+
+# Cleanarr: strikes and removes stuck Sonarr/Radarr usenet queue items, warns
+# about risky SABnzbd and Arr settings, deletes blocked-extension files from
+# completed jobs and quarantines orphaned completed entries. It ships disabled
+# and in dry-run; the file passes are opt-in on top of that.
+DEFAULT_CLEANARR_SETTINGS: dict[str, Any] = {
+    "enabled": False,
+    "dry_run": True,
+    "interval_minutes": 10,
+    "max_strikes": 3,
+    "max_removals_per_run": 10,
+    "queue": {
+        "enabled": True,
+        # In exclude mode a failed import is struck unless one of these
+        # case-insensitive substrings appears in its status messages or title.
+        "pattern_mode": "exclude",
+        "patterns": [
+            "matched to series by ID",
+            "matched to movie by ID",
+            "Unable to determine if file is a sample",
+        ],
+    },
+    "malware": {
+        "enabled": False,
+        "extensions": [
+            ".exe",
+            ".scr",
+            ".bat",
+            ".cmd",
+            ".com",
+            ".pif",
+            ".lnk",
+            ".vbs",
+            ".vbe",
+            ".js",
+            ".jse",
+            ".wsf",
+            ".jar",
+            ".msi",
+            ".ps1",
+            ".hta",
+            ".cpl",
+            ".reg",
+        ],
+    },
+    "orphans": {
+        "enabled": False,
+        "min_age_hours": 24,
+        "quarantine_retention_days": 14,
+    },
+    "paths": {
+        "completed_root": "/downloads/complete",
+        "quarantine_dir": f"/downloads/complete/{CLEANARR_QUARANTINE_DIRNAME}",
+    },
+    "apps": {"sonarr": {"enabled": True}, "radarr": {"enabled": True}},
+    "ignore": {"download_ids": [], "categories": [], "title_contains": []},
+}
+
+
+def _section(raw: dict[str, Any], key: str) -> dict[str, Any]:
+    """Return ``raw[key]`` when it is a dict, else an empty dict."""
+    value = raw.get(key)
+    return value if isinstance(value, dict) else {}
+
+
+def _normalise_string_list(value: Any, *, max_items: int, max_length: int) -> list[str]:
+    """Return stripped, case-insensitively de-duplicated strings in input order.
+
+    Non-string and blank entries, and entries longer than ``max_length``, are
+    dropped; the result is capped at ``max_items``.
+    """
+    if not isinstance(value, list):
+        return []
+    seen: set[str] = set()
+    result: list[str] = []
+    for entry in value:
+        if not isinstance(entry, str):
+            continue
+        text = entry.strip()
+        folded = text.casefold()
+        if not text or len(text) > max_length or folded in seen:
+            continue
+        seen.add(folded)
+        result.append(text)
+    return result[:max_items]
+
+
+def _normalise_cleanarr_patterns(value: Any) -> list[str]:
+    """Return the failed-import patterns; a non-list falls back to the seeds."""
+    if not isinstance(value, list):
+        return list(DEFAULT_CLEANARR_SETTINGS["queue"]["patterns"])
+    return _normalise_string_list(
+        value, max_items=CLEANARR_PATTERNS_MAX, max_length=CLEANARR_PATTERN_LENGTH_MAX
+    )
+
+
+def _normalise_cleanarr_extensions(value: Any) -> list[str]:
+    """Return lower-case ``.ext`` entries, falling back to the defaults when empty.
+
+    A missing leading dot is added; anything not matching
+    :data:`CLEANARR_EXTENSION_PATTERN` is dropped, so a corrupt store never
+    disables the malware blocker silently.
+    """
+    default = list(DEFAULT_CLEANARR_SETTINGS["malware"]["extensions"])
+    if not isinstance(value, list):
+        return default
+    result: list[str] = []
+    for entry in value:
+        if not isinstance(entry, str):
+            continue
+        text = entry.strip().lower()
+        extension = text if text.startswith(".") else f".{text}"
+        if re.fullmatch(CLEANARR_EXTENSION_PATTERN, extension) and (
+            extension not in result
+        ):
+            result.append(extension)
+    return result[:CLEANARR_EXTENSIONS_MAX] or default
+
+
+def _normalise_cleanarr_ignore(raw: dict[str, Any]) -> dict[str, list[str]]:
+    """Return the three bounded ignore lists (download IDs, categories, titles)."""
+    return {
+        key: _normalise_string_list(
+            raw.get(key),
+            max_items=CLEANARR_IGNORE_MAX,
+            max_length=CLEANARR_IGNORE_LENGTH_MAX,
+        )
+        for key in ("download_ids", "categories", "title_contains")
+    }
+
+
+def _normalise_absolute_path(value: Any, *, default: str) -> str:
+    """Return a normalised absolute POSIX path, or ``default`` when invalid."""
+    if not isinstance(value, str):
+        return default
+    text = value.strip()
+    if not text.startswith("/") or len(text) > CLEANARR_PATH_LENGTH_MAX:
+        return default
+    normalised = posixpath.normpath(text)
+    # normpath keeps a leading "//" (POSIX allows it to be special); fold it.
+    return "/" + normalised.lstrip("/")
+
+
+def _normalise_cleanarr_paths(raw: dict[str, Any]) -> dict[str, str]:
+    """Return the completed and quarantine paths.
+
+    The quarantine folder must sit strictly under the completed folder, so a
+    quarantine move is a same-filesystem rename; otherwise it falls back to
+    ``<completed_root>/_cleanarr_quarantine``.
+    """
+    defaults = DEFAULT_CLEANARR_SETTINGS["paths"]
+    completed_root = _normalise_absolute_path(
+        raw.get("completed_root"), default=defaults["completed_root"]
+    )
+    fallback = posixpath.join(completed_root, CLEANARR_QUARANTINE_DIRNAME)
+    quarantine_dir = _normalise_absolute_path(
+        raw.get("quarantine_dir"), default=fallback
+    )
+    if not is_strictly_under(quarantine_dir, completed_root):
+        quarantine_dir = fallback
+    return {"completed_root": completed_root, "quarantine_dir": quarantine_dir}
+
+
+def is_strictly_under(path: str, root: str) -> bool:
+    """Return whether POSIX ``path`` lies strictly below ``root`` (both absolute)."""
+    prefix = root if root.endswith("/") else f"{root}/"
+    return path != root and path.startswith(prefix)
+
+
+def normalise_cleanarr_settings(raw: dict[str, Any] | None = None) -> dict[str, Any]:
+    """Merge and validate persisted Cleanarr settings with safe defaults."""
+    raw = raw or {}
+    defaults = DEFAULT_CLEANARR_SETTINGS
+    queue = _section(raw, "queue")
+    malware = _section(raw, "malware")
+    orphans = _section(raw, "orphans")
+    apps = _section(raw, "apps")
+    pattern_mode = queue.get("pattern_mode")
+    return {
+        "enabled": bool(raw.get("enabled", defaults["enabled"])),
+        "dry_run": bool(raw.get("dry_run", defaults["dry_run"])),
+        "interval_minutes": bounded_int(
+            raw.get("interval_minutes"),
+            default=defaults["interval_minutes"],
+            minimum=CLEANARR_INTERVAL_MIN,
+            maximum=CLEANARR_INTERVAL_MAX,
+        ),
+        "max_strikes": bounded_int(
+            raw.get("max_strikes"),
+            default=defaults["max_strikes"],
+            minimum=CLEANARR_MAX_STRIKES_MIN,
+            maximum=CLEANARR_MAX_STRIKES_MAX,
+        ),
+        "max_removals_per_run": bounded_int(
+            raw.get("max_removals_per_run"),
+            default=defaults["max_removals_per_run"],
+            minimum=CLEANARR_REMOVALS_PER_RUN_MIN,
+            maximum=CLEANARR_REMOVALS_PER_RUN_MAX,
+        ),
+        "queue": {
+            "enabled": bool(queue.get("enabled", defaults["queue"]["enabled"])),
+            "pattern_mode": pattern_mode
+            if pattern_mode in VALID_CLEANARR_PATTERN_MODES
+            else defaults["queue"]["pattern_mode"],
+            "patterns": _normalise_cleanarr_patterns(
+                queue.get("patterns", defaults["queue"]["patterns"])
+            ),
+        },
+        "malware": {
+            "enabled": bool(malware.get("enabled", defaults["malware"]["enabled"])),
+            "extensions": _normalise_cleanarr_extensions(malware.get("extensions")),
+        },
+        "orphans": {
+            "enabled": bool(orphans.get("enabled", defaults["orphans"]["enabled"])),
+            "min_age_hours": bounded_int(
+                orphans.get("min_age_hours"),
+                default=defaults["orphans"]["min_age_hours"],
+                minimum=CLEANARR_MIN_AGE_HOURS_MIN,
+                maximum=CLEANARR_MIN_AGE_HOURS_MAX,
+            ),
+            "quarantine_retention_days": bounded_int(
+                orphans.get("quarantine_retention_days"),
+                default=defaults["orphans"]["quarantine_retention_days"],
+                minimum=CLEANARR_RETENTION_DAYS_MIN,
+                maximum=CLEANARR_RETENTION_DAYS_MAX,
+            ),
+        },
+        "paths": _normalise_cleanarr_paths(_section(raw, "paths")),
+        "apps": {
+            name: {"enabled": bool(_section(apps, name).get("enabled", True))}
+            for name in ("sonarr", "radarr")
+        },
+        "ignore": _normalise_cleanarr_ignore(_section(raw, "ignore")),
     }

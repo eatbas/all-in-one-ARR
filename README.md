@@ -22,8 +22,9 @@ figures, one card per app, disk space, 7/30/90-day trends from daily snapshots,
 and the recent activity feed.
 It uses **official REST APIs only** (no scraping).
 
-This is the plugin **core** plus five modules, **`list_syncarr`**,
-**`bandwidth_controllarr`**, **`findarr`**, **`deletarr`**, and **`languagarr`**. Future modules
+This is the plugin **core** plus six modules, **`list_syncarr`**,
+**`bandwidth_controllarr`**, **`findarr`**, **`cleanarr`**, **`deletarr`**, and
+**`languagarr`**. Future modules
 drop into `backend/modules/` and auto-load — see [Adding a module](#adding-a-module).
 
 ## How it works
@@ -73,6 +74,7 @@ backend/
     list_syncarr/         # poll/request, availability-driven removal, reconcile
     bandwidth_controllarr/  # pause SABnzbd while qBittorrent has active torrents
     findarr/              # bounded Sonarr/Radarr missing and upgrade searches
+    cleanarr/             # strike/remove stuck usenet downloads, SABnzbd tidying
     deletarr/             # reviewed junk-file scans and validated deletion
     languagarr/           # anime audio-language audit, search queue, reviewed delete
   main.py            # entrypoint: `uvicorn main:app --app-dir backend`
@@ -196,6 +198,13 @@ docker compose -f docker-compose.yml -f docker-compose.build.yml up --build
 
 Every tag is a multi-arch manifest covering `linux/amd64` and `linux/arm64`, so
 the same reference runs on x86-64 NAS boxes, ARM boards, and Apple Silicon.
+
+### Cleanarr download mounts
+
+If you use **Cleanarr**'s malware deletion or orphan quarantine, mount
+SABnzbd's completed folder read-write at the configured completed folder
+(default `/downloads/complete`). The quarantine folder must be inside it, on the
+same filesystem. Queue cleaning and the health checks need no mount.
 
 ### Deletarr media mounts
 
@@ -511,6 +520,125 @@ commands for the already-configured **Sonarr** and **Radarr** connections:
 
 Connections are not configured on this page; configure **Sonarr** and
 **Radarr** in **Settings** first.
+
+### Cleanarr page
+
+The dashboard **Cleanarr** page (left menu, after Findarr) clears stuck and
+failed **usenet** downloads from the Sonarr and Radarr queues and tidies
+SABnzbd's completed folder. Its behaviour is modelled on
+[Cleanuparr](https://github.com/Cleanuparr/Cleanuparr) (GPL-3.0) for a SABnzbd +
+Sonarr + Radarr setup; it is a clean reimplementation and reuses no Cleanuparr
+code.
+
+- **Safe defaults** — Cleanarr is **disabled** and in **dry run** out of the
+  box. In dry run it counts strikes and records in History what it *would*
+  remove, delete or quarantine, but changes nothing. Malware deletion and orphan
+  quarantine are **off** until you turn them on; queue cleaning is on under the
+  main switch.
+- **Strikes** — each run (every 10 minutes by default) gives one strike to every
+  usenet download stuck in a **failed import** (`importBlocked`,
+  `importFailed`, or `importPending` with a warning) or a **failed download**
+  (its SABnzbd job failed, or the Arr marks it failed). A download is counted
+  once per run however many queue records it has (Sonarr lists a season pack
+  once per episode). A download that recovers or leaves the queue loses its
+  strikes. If Sonarr or Radarr cannot be reached (or is not Sonarr 4+ /
+  Radarr 6+), that app is skipped and its strikes are left unchanged. If
+  SABnzbd's history cannot be read, existing failed-download strikes are frozen
+  (neither added to, reclassified, cleared nor removed), and while a
+  download's SABnzbd category is unknown, category ignore entries keep its
+  strikes frozen rather than treating it as not ignored. A queue record
+  without a usable ID cannot be removed, but its state and title still count
+  for its download (an importing or ignored record protects it); when no
+  failing record of a download has a usable ID, its strikes are frozen too.
+  A download whose folder a record without a download ID points at is frozen
+  as well, even while its own records look healthy, and while such a record
+  points at any folder, a struck download missing from the queue keeps its
+  strikes (that record may be all that is left of it). When a record can be
+  tied to neither a download nor a folder (including an output path such as
+  `/` that names no folder), or a queue read stops short, none of that app's
+  strikes change in that run (nothing is added, cleared or removed) and the
+  malware blocker is skipped. Each such hold is shown as a `queue_held`
+  health warning and on the Queue tab.
+- **Removal** — at **Max strikes** (default `3`, range 3–20) Cleanarr removes
+  the item with
+  `DELETE /api/v3/queue/{id}?removeFromClient=true&blocklist=true&skipRedownload=false`,
+  so the Arr deletes the SABnzbd job, blocklists the release and searches again.
+  At most **Removal cap** items (default `10`, range 1–50) are removed per run
+  across both apps, oldest first; the rest keep their strikes for the next run.
+  In dry run, downloads already reported as *Would remove* do not count towards
+  the cap, so every download at the threshold is reported once. A `404` means
+  the item was already gone. Any other error is logged and the strike is kept.
+- **Import patterns** — failed imports are matched case-insensitively against
+  plain-text patterns (not regular expressions) in the import messages and the
+  title. In **Exclude** mode (default) a match exempts the item; the seeded
+  patterns are `matched to series by ID`, `matched to movie by ID` and
+  `Unable to determine if file is a sample`. In **Include** mode only matching
+  items are struck.
+- **Health checks** — read-only warnings when SABnzbd's unwanted-extension or
+  encrypted-RAR action is not *Abort*, when its unwanted list lacks `.exe`,
+  `.scr` or `.lnk`, and when an Arr has completed-download handling,
+  redownload-failed or the SABnzbd client's remove-failed setting off. A
+  setting that cannot be read is shown as *unknown*. Cleanarr never changes
+  these settings.
+- **Malware blocker** (opt-in) — deletes files with a blocked extension (the 18
+  defaults are `.exe .scr .bat .cmd .com .pif .lnk .vbs .vbe .js .jse .wsf .jar
+  .msi .ps1 .hta .cpl .reg`) from **completed** SABnzbd jobs that are still in a
+  Sonarr/Radarr queue and not being imported. Media files are never touched.
+  Every queue record of a download (one per episode) shares one job folder, so
+  the download is judged as a whole: if any record is importing or ignored, the
+  folder is left alone, even when that record has no usable ID. A download
+  whose folder (its job folder or a record's output folder) a record without a
+  download ID points at is never scanned, and the pass is
+  skipped when a record can be tied to neither a download nor a folder, or when
+  a queue read stops short.
+- **Orphan quarantine** (opt-in) — moves entries in SABnzbd's completed folder
+  that neither SABnzbd (queue or history) nor an Arr queue refers to, once they
+  are older than **Minimum age** (default 24 hours), into the quarantine folder.
+  Quarantined entries are named `<UTC time>__<original name>` and purged after
+  **Keep in quarantine** (default 14 days). A queue or history record that
+  Cleanarr cannot act on (for example one without a usable ID or download ID)
+  still counts as a reference to its folder. The pass is skipped whenever any of those reads
+  fails, when a record's folder cannot be read, or when SABnzbd's history is
+  longer than the 20,000 jobs Cleanarr reads, so an outage or a truncated
+  history never makes a folder look orphaned.
+- **Ignore list** — download IDs, SABnzbd categories and title text that
+  Cleanarr never strikes, removes, deletes, quarantines or purges. Orphans are
+  matched by their name and by the categories of the category folder they sit
+  in; quarantined entries by the name they had before the move and the category
+  folder Cleanarr recorded when it moved them, so a category added to the list
+  during retention still protects them. An expired entry with no recorded
+  category folder (for example one placed there by hand) is kept while
+  category entries exist, and the Status tab says so. The Queue tab's
+  **Ignore** button adds a download ID; it is refused while a run is in
+  progress and when the list already holds 500 download IDs.
+- **Paths** — the **Completed folder** is where SABnzbd's completed folder is
+  mounted in the aio-arr container; Cleanarr maps SABnzbd's own paths onto it.
+  Mount it **read-write**, and keep the **Quarantine folder** inside it on the
+  **same filesystem**: entries are moved with a rename and never copied between
+  filesystems (a cross-device move is reported, not retried). Symlinks are never
+  followed: a job, quarantine folder or any folder between it and the completed
+  folder that is a symlink is refused, even when it points inside the completed
+  folder. Without a resolvable mount, or with a symlinked quarantine folder, the
+  file passes are skipped and the Status tab says why.
+- **Tabs** — **Status** (switch, dry-run banner, connections, Run now, Clear
+  strikes, strike counts and health checks), **Queue** (stuck items with their
+  strikes and what the next run does), **History** (removals and file actions,
+  kept for 30 days) and **Settings**.
+
+#### Migrating from Cleanuparr
+
+1. Enable Cleanarr with **dry run on** and let it run alongside Cleanuparr for a
+   few days. Compare Cleanarr's *Would remove* History with Cleanuparr's strikes
+   and removals.
+2. Disable Cleanuparr's **Queue Cleaner**, **Malware Blocker** and orphan
+   handling.
+3. Turn Cleanarr's **dry run** off in **Cleanarr → Settings**.
+
+> **Never run both live at once.** Two cleaners acting on the same queue race
+> each other: one may remove an item the other is still striking.
+
+Connections are not configured on this page; configure **Sonarr**, **Radarr**
+and **SABnzbd** in **Settings** first.
 
 ### Deletarr page
 
@@ -914,6 +1042,26 @@ after both check jobs have passed.
   persists the change, reschedules the control loop on interval change, applies
   or clears the SABnzbd speed limit on limiter change, and returns the updated
   state. `sab_limit_mbps` accepts decimals within 0.1–1024 MB/s.
+- `GET /api/cleanarr/settings` / `PUT /api/cleanarr/settings` – Cleanarr settings
+  `{ enabled, dry_run, interval_minutes, max_strikes, max_removals_per_run, queue,
+  malware, orphans, paths, apps, ignore }`; nested sections merge field by field.
+  Out-of-range values, an invalid extension, a relative path or a quarantine
+  folder outside the completed folder return `422`, and a changed interval
+  reschedules the job. `PUT` returns the status.
+- `GET /api/cleanarr/status` – settings, running flag, last run, per-app
+  connections, health warnings and strike counts.
+- `GET /api/cleanarr/queue` – one row per stuck usenet download joined with its
+  strikes (`reason`, `strikes`, `would_remove`, `ignored`, `excluded`), plus
+  per-app `errors` and `held` maps (`held` explains why the queue read freezes
+  downloads). Reads Sonarr, Radarr and SABnzbd live.
+- `GET /api/cleanarr/history` – removals, file actions and dry-run reports,
+  newest first (kept for 30 days).
+- `POST /api/cleanarr/run` – run once now. `409` while a run is in progress;
+  `{ status: "skipped" }` while Cleanarr is disabled.
+- `POST /api/cleanarr/strikes/clear` – delete every strike; `409` during a run.
+- `POST /api/cleanarr/ignore` – add `{ download_id }` (1–200 printable
+  characters) to the ignore list and drop its strikes. `409` while a run is in
+  progress; `422` when the ignore list is full (500 download IDs).
 - `GET /api/deletarr/settings` – current Deletarr movies/TV library roots and the
   `use_arr_source` flag.
 - `PUT /api/deletarr/settings` – update `{ movies_path?, tv_path?, use_arr_source? }`,
@@ -960,8 +1108,9 @@ after both check jobs have passed.
   Bandwidth-Controllarr gauges are preserved (`bw_qbit_*`, `bw_sab_*`,
   `bw_check_status`), and application-wide `aio_arr_*` metrics cover sync runs,
   integration health, scheduled jobs, Findarr activity, Deletarr scans /
-  deletions, and Languagarr scans, non-compliant file counts, searches and
-  deletions.
+  deletions, Languagarr scans, non-compliant file counts, searches and
+  deletions, and Cleanarr runs, strikes, removals (`live`/`dry_run`), file
+  actions and health warnings (`aio_arr_cleanarr_*`).
 - `GET /api/trending?source=&media=&category=[&window=]` – normalised trending or
   popular items for the Trending page. `source` is `trakt|tmdb|seer`, `media` is
   `movie|show`, `category` is `trending|popular`, and `window` (`day|week`, TMDB

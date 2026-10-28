@@ -159,4 +159,52 @@ CREATE TABLE IF NOT EXISTS dashboard_snapshots (
 
 CREATE INDEX IF NOT EXISTS idx_dashboard_snapshots_metric_day
     ON dashboard_snapshots(metric, day);
+
+-- Cleanarr strike ledger: one row per struck Sonarr/Radarr queue download.
+-- ``would_remove_logged`` stops a dry run from logging the same would-remove
+-- entry on every run (core.db_cleanarr).
+CREATE TABLE IF NOT EXISTS cleanarr_strikes (
+    app TEXT NOT NULL CHECK(app IN ('sonarr','radarr')),
+    download_id TEXT NOT NULL,
+    queue_id INTEGER NOT NULL,
+    title TEXT NOT NULL,
+    reason TEXT NOT NULL CHECK(reason IN ('failed_import','failed_download')),
+    message TEXT NOT NULL DEFAULT '',
+    strikes INTEGER NOT NULL DEFAULT 0,
+    first_seen_at TEXT NOT NULL,
+    last_seen_at TEXT NOT NULL,
+    would_remove_logged INTEGER NOT NULL DEFAULT 0,
+    PRIMARY KEY (app, download_id)
+);
+
+-- Cleanarr audit log shown on the History tab; pruned after
+-- CLEANARR_HISTORY_RETENTION_DAYS (core.db_cleanarr).
+CREATE TABLE IF NOT EXISTS cleanarr_history (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    ts TEXT NOT NULL,
+    app TEXT NOT NULL CHECK(app IN ('sonarr','radarr','sabnzbd','system')),
+    action TEXT NOT NULL,
+    download_id TEXT,
+    title TEXT,
+    detail TEXT NOT NULL DEFAULT '',
+    dry_run INTEGER NOT NULL DEFAULT 0
+);
+CREATE INDEX IF NOT EXISTS idx_cleanarr_history_ts
+    ON cleanarr_history(ts);
+
+CREATE TABLE IF NOT EXISTS cleanarr_run_state (
+    key TEXT PRIMARY KEY,
+    value TEXT NOT NULL
+);
+
+-- Cleanarr quarantine provenance: the category folder (NULL for the completed
+-- folder itself) and category names of each quarantined entry, keyed by its
+-- quarantined name, so the ignore lists still protect it at purge time
+-- (core.db_cleanarr).
+CREATE TABLE IF NOT EXISTS cleanarr_quarantine (
+    name TEXT PRIMARY KEY,
+    container TEXT,
+    categories TEXT NOT NULL DEFAULT '[]',
+    quarantined_at TEXT NOT NULL
+);
 """

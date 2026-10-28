@@ -17,6 +17,7 @@ from core.clients.sabnzbd import (
     _timeleft_seconds,
     _unix_to_iso,
 )
+from core.sabnzbd_types import SabConfig, SabHistory, SabHistoryJob
 
 _BASE = "http://sab:8080"
 _API = f"{_BASE}/api"
@@ -883,3 +884,369 @@ async def test_get_stats_reports_observed_speed_limit() -> None:
 def test_speed_limit_mbps_rejects_absent_or_non_positive_values(raw) -> None:
     # An unknown limit must never be mistaken for a configured one.
     assert _speed_limit_mbps(raw) is None
+
+
+# ---- Cleanarr reads: history_jobs, queue_filenames, get_config ----
+
+
+def _history_slot(index: int, **overrides) -> dict:
+    slot = {
+        "nzo_id": f"SABnzbd_nzo_{index}",
+        "name": f"Job {index}",
+        "status": "Completed",
+        "category": "tv",
+        "storage": f"/data/complete/tv/Job {index}",
+    }
+    slot.update(overrides)
+    return slot
+
+
+@respx.mock
+async def test_history_jobs_pages_until_short_page() -> None:
+    route = respx.get(_API).mock(
+        side_effect=[
+            httpx.Response(
+                200,
+                json={"history": {"slots": [_history_slot(1), _history_slot(2)]}},
+            ),
+            httpx.Response(
+                200,
+                json={"history": {"slots": [_history_slot(3, nzo_id=" ")]}},
+            ),
+        ]
+    )
+    history = await SabnzbdClient(base_url=_BASE, api_key="k").history_jobs(page_size=2)
+    assert history is not None and history.complete is True
+    jobs = history.jobs
+    assert [job.nzo_id for job in jobs] == ["SABnzbd_nzo_1", "SABnzbd_nzo_2"]
+    assert jobs[0] == SabHistoryJob(
+        nzo_id="SABnzbd_nzo_1",
+        name="Job 1",
+        status="Completed",
+        category="tv",
+        storage="/data/complete/tv/Job 1",
+    )
+    first, second = (call.request.url.params for call in route.calls)
+    assert (first["mode"], first["start"], first["limit"]) == ("history", "0", "2")
+    assert first["archive"] == "1"
+    assert first["output"] == "json"
+    assert first["apikey"] == "k"
+    assert second["start"] == "2"
+    # The later slot without a usable nzo_id is no job, but its folder is
+    # still a reference.
+    assert history.unparsed_storage == ("/data/complete/tv/Job 3",)
+
+
+@respx.mock
+async def test_history_jobs_with_a_malformed_storage_is_incomplete() -> None:
+    respx.get(_API).mock(
+        side_effect=[
+            httpx.Response(
+                200,
+                json={
+                    "history": {
+                        "noofslots": "4",
+                        "slots": [_history_slot(1, storage=None), _history_slot(2)],
+                    }
+                },
+            ),
+            httpx.Response(
+                200,
+                json={
+                    "history": {
+                        "noofslots": "4",
+                        "slots": [
+                            _history_slot(3, nzo_id=None, storage=["/x"]),
+                            _history_slot(4, nzo_id=7),
+                        ],
+                    }
+                },
+            ),
+        ]
+    )
+    history = await SabnzbdClient(base_url=_BASE, api_key="k").history_jobs(page_size=2)
+    assert history is not None
+    assert [job.nzo_id for job in history.jobs] == ["SABnzbd_nzo_1", "SABnzbd_nzo_2"]
+    assert history.jobs[0].storage == ""
+    assert history.unparsed_storage == ("/data/complete/tv/Job 4",)
+    # Slot 3's folder cannot be known, so the history is no exhaustive
+    # reference set even though its end was reached.
+    assert history.complete is False
+
+
+@respx.mock
+async def test_history_jobs_stops_at_reported_total() -> None:
+    route = respx.get(_API).mock(
+        return_value=httpx.Response(
+            200,
+            json={
+                "history": {
+                    "noofslots": "2",
+                    "slots": [_history_slot(1), _history_slot(2)],
+                }
+            },
+        )
+    )
+    history = await SabnzbdClient(base_url=_BASE, api_key="k").history_jobs(page_size=2)
+    assert history is not None and len(history.jobs) == 2
+    assert history.complete is True
+    assert route.call_count == 1
+
+
+@respx.mock
+async def test_history_jobs_respects_max_jobs() -> None:
+    # SABnzbd ignoring the requested limit must not push the result past the
+    # cap, and stopping at the cap is never reported as the whole history.
+    route = respx.get(_API).mock(
+        return_value=httpx.Response(
+            200, json={"history": {"slots": [_history_slot(1), _history_slot(2)]}}
+        )
+    )
+    client = SabnzbdClient(base_url=_BASE, api_key="k")
+    history = await client.history_jobs(page_size=2, max_jobs=3)
+    assert history is not None and len(history.jobs) == 3
+    assert history.complete is False
+    assert [call.request.url.params["limit"] for call in route.calls] == ["2", "1"]
+    assert await client.history_jobs(max_jobs=0) == SabHistory(jobs=(), complete=False)
+
+
+@respx.mock
+async def test_history_jobs_below_the_reported_total_is_incomplete() -> None:
+    respx.get(_API).mock(
+        return_value=httpx.Response(
+            200,
+            json={"history": {"noofslots": "2", "slots": [_history_slot(1)]}},
+        )
+    )
+    history = await SabnzbdClient(base_url=_BASE, api_key="k").history_jobs(
+        page_size=1, max_jobs=1
+    )
+    assert history == SabHistory(
+        jobs=(
+            SabHistoryJob(
+                nzo_id="SABnzbd_nzo_1",
+                name="Job 1",
+                status="Completed",
+                category="tv",
+                storage="/data/complete/tv/Job 1",
+            ),
+        ),
+        complete=False,
+    )
+
+
+@respx.mock
+async def test_history_jobs_keeps_paging_short_pages_up_to_the_total() -> None:
+    # SABnzbd may return fewer slots than asked for; with a reported total a
+    # short page is not the end of the history.
+    route = respx.get(_API).mock(
+        side_effect=[
+            httpx.Response(
+                200, json={"history": {"noofslots": 3, "slots": [_history_slot(1)]}}
+            ),
+            httpx.Response(
+                200,
+                json={
+                    "history": {
+                        "noofslots": 3,
+                        "slots": [_history_slot(2), _history_slot(3)],
+                    }
+                },
+            ),
+        ]
+    )
+    history = await SabnzbdClient(base_url=_BASE, api_key="k").history_jobs(page_size=5)
+    assert history is not None and history.complete is True
+    assert len(history.jobs) == 3
+    assert [call.request.url.params["start"] for call in route.calls] == ["0", "1"]
+
+
+@respx.mock
+async def test_history_jobs_empty_page_short_of_the_total_is_incomplete() -> None:
+    respx.get(_API).mock(
+        side_effect=[
+            httpx.Response(
+                200, json={"history": {"noofslots": 5, "slots": [_history_slot(1)]}}
+            ),
+            httpx.Response(200, json={"history": {"noofslots": 5, "slots": []}}),
+        ]
+    )
+    history = await SabnzbdClient(base_url=_BASE, api_key="k").history_jobs(page_size=1)
+    assert history is not None and len(history.jobs) == 1
+    assert history.complete is False
+
+
+@respx.mock
+async def test_history_jobs_full_pages_without_a_total_stop_incomplete_at_the_cap() -> (
+    None
+):
+    respx.get(_API).mock(
+        return_value=httpx.Response(
+            200, json={"history": {"slots": [_history_slot(1), _history_slot(2)]}}
+        )
+    )
+    history = await SabnzbdClient(base_url=_BASE, api_key="k").history_jobs(
+        page_size=2, max_jobs=4
+    )
+    assert history is not None and len(history.jobs) == 4
+    assert history.complete is False
+
+
+@pytest.mark.parametrize(
+    "response",
+    [
+        httpx.Response(500),
+        httpx.Response(200, text="<html>login</html>"),
+        httpx.Response(200, json=["not", "a", "dict"]),
+        httpx.Response(200, json={"history": "nope"}),
+        httpx.Response(200, json={"history": {"slots": "nope"}}),
+        httpx.Response(200, json={"history": {"slots": ["nope"]}}),
+    ],
+)
+@respx.mock
+async def test_history_jobs_failures_return_none(response: httpx.Response) -> None:
+    respx.get(_API).mock(return_value=response)
+    assert await SabnzbdClient(base_url=_BASE, api_key="k").history_jobs() is None
+
+
+@respx.mock
+async def test_history_jobs_transport_error_returns_none() -> None:
+    respx.get(_API).mock(side_effect=httpx.ConnectError("down"))
+    assert await SabnzbdClient(base_url=_BASE, api_key="k").history_jobs() is None
+
+
+@respx.mock
+async def test_history_jobs_failure_on_a_later_page_returns_none() -> None:
+    respx.get(_API).mock(
+        side_effect=[
+            httpx.Response(200, json={"history": {"slots": [_history_slot(1)]}}),
+            httpx.Response(500),
+        ]
+    )
+    client = SabnzbdClient(base_url=_BASE, api_key="k")
+    assert await client.history_jobs(page_size=1) is None
+
+
+@respx.mock
+async def test_queue_filenames_success_and_failure() -> None:
+    respx.get(_API).mock(
+        side_effect=[
+            httpx.Response(
+                200,
+                json={
+                    "queue": {
+                        "slots": [{"filename": "Job A"}, {"filename": ""}, {"x": 1}]
+                    }
+                },
+            ),
+            httpx.Response(500),
+        ]
+    )
+    client = SabnzbdClient(base_url=_BASE, api_key="k")
+    assert await client.queue_filenames() == ["Job A"]
+    assert await client.queue_filenames() is None
+
+
+@respx.mock
+async def test_get_config_parses_misc_and_categories() -> None:
+    route = respx.get(_API).mock(
+        return_value=httpx.Response(
+            200,
+            json={
+                "config": {
+                    "misc": {
+                        "complete_dir": " /data/complete ",
+                        "unwanted_extensions": "exe, .SCR,,lnk,exe",
+                        "action_on_unwanted_extensions": "2",
+                        "pause_on_pwrar": 1,
+                    },
+                    "categories": [
+                        {"name": "*", "dir": ""},
+                        {"name": "tv", "dir": "tv"},
+                        {"name": "movies", "dir": "/data/complete/movies"},
+                        {"name": "dupe", "dir": "tv"},
+                        "junk",
+                    ],
+                }
+            },
+        )
+    )
+    config = await SabnzbdClient(base_url=_BASE, api_key="k").get_config()
+    assert config == SabConfig(
+        complete_dir="/data/complete",
+        unwanted_extensions=(".exe", ".scr", ".lnk"),
+        unwanted_action=2,
+        encrypted_rar_action=1,
+        category_dirs=("tv", "/data/complete/movies"),
+        category_folders=(
+            ("tv", "tv"),
+            ("movies", "/data/complete/movies"),
+            ("dupe", "tv"),
+        ),
+    )
+    assert route.calls.last.request.url.params["mode"] == "get_config"
+
+
+@respx.mock
+async def test_get_config_tolerates_lists_dicts_and_missing_sections() -> None:
+    respx.get(_API).mock(
+        side_effect=[
+            httpx.Response(
+                200,
+                json={
+                    "config": {
+                        "misc": {
+                            "unwanted_extensions": ["EXE", 3, ".js"],
+                            "action_on_unwanted_extensions": True,
+                            "pause_on_pwrar": "abort",
+                        },
+                        "categories": {"tv": {"dir": "tv"}},
+                    }
+                },
+            ),
+            httpx.Response(
+                200,
+                json={
+                    "config": {
+                        "misc": "nope",
+                        "categories": None,
+                    }
+                },
+            ),
+            httpx.Response(200, json={"config": {"misc": {"unwanted_extensions": 5}}}),
+        ]
+    )
+    client = SabnzbdClient(base_url=_BASE, api_key="k")
+    first = await client.get_config()
+    assert first == SabConfig(
+        complete_dir="",
+        unwanted_extensions=(".exe", ".js"),
+        unwanted_action=None,
+        encrypted_rar_action=None,
+        category_dirs=("tv",),
+        category_folders=(("", "tv"),),
+    )
+    empty = SabConfig(
+        complete_dir="",
+        unwanted_extensions=(),
+        unwanted_action=None,
+        encrypted_rar_action=None,
+        category_dirs=(),
+    )
+    assert await client.get_config() == empty
+    assert await client.get_config() == empty
+
+
+@pytest.mark.parametrize(
+    "response",
+    [
+        httpx.Response(401),
+        httpx.Response(200, text="not json"),
+        httpx.Response(200, json={"status": False, "error": "API Key Incorrect"}),
+        httpx.Response(200, json=[]),
+    ],
+)
+@respx.mock
+async def test_get_config_failures_return_none(response: httpx.Response) -> None:
+    respx.get(_API).mock(return_value=response)
+    assert await SabnzbdClient(base_url=_BASE, api_key="k").get_config() is None

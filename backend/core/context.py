@@ -188,3 +188,16 @@ class AppContext:
         default=None
     )
     languagarr_gate: SyncGate = field(default_factory=SyncGate)
+    # Cleanarr callables, set by the module during setup(); the core router calls
+    # these so queue cleaning and the file passes stay module-owned. The gate
+    # serialises scheduled and manual runs and the strike reset.
+    cleanarr_status: Callable[[], Awaitable[dict]] | None = field(default=None)
+    cleanarr_queue: Callable[[], Awaitable[dict]] | None = field(default=None)
+    cleanarr_history: Callable[[], Awaitable[list[dict]]] | None = field(default=None)
+    cleanarr_run_now: Callable[[], Awaitable[dict]] | None = field(default=None)
+    cleanarr_update_settings: Callable[[dict], Awaitable[dict]] | None = field(
+        default=None
+    )
+    cleanarr_clear_strikes: Callable[[], Awaitable[dict]] | None = field(default=None)
+    cleanarr_ignore: Callable[[str], Awaitable[dict]] | None = field(default=None)
+    cleanarr_gate: SyncGate = field(default_factory=SyncGate)

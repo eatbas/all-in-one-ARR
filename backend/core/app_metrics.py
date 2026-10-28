@@ -111,6 +111,38 @@ languagarr_deletes_total = Counter(
     ("status",),
 )
 
+cleanarr_runs_total = Counter(
+    "aio_arr_cleanarr_runs_total",
+    "Cleanarr runs by outcome",
+    ("status",),
+)
+cleanarr_strikes_total = Counter(
+    "aio_arr_cleanarr_strikes_total",
+    "Strikes Cleanarr gave stuck Sonarr/Radarr queue items, by reason",
+    ("app", "reason"),
+)
+cleanarr_removals_total = Counter(
+    "aio_arr_cleanarr_removals_total",
+    "Cleanarr queue removals (live) and would-be removals (dry run)",
+    ("app", "reason", "mode"),
+)
+cleanarr_file_actions_total = Counter(
+    "aio_arr_cleanarr_file_actions_total",
+    "Cleanarr malware deletions, quarantine moves and purges",
+    ("action", "mode"),
+)
+cleanarr_health_warnings = Gauge(
+    "aio_arr_cleanarr_health_warnings",
+    "Cleanarr health warnings from the last run",
+)
+
+# Closed Cleanarr label values, initialised so dashboards see zero series.
+CLEANARR_RUN_STATUSES = ("completed", "skipped", "error")
+CLEANARR_APPS = ("sonarr", "radarr")
+CLEANARR_REASONS = ("failed_import", "failed_download")
+CLEANARR_MODES = ("live", "dry_run")
+CLEANARR_FILE_ACTIONS = ("malware_delete", "quarantine", "purge")
+
 
 def initialise_metrics() -> None:
     """Initialise known low-cardinality metric label sets."""
@@ -135,6 +167,7 @@ def initialise_metrics() -> None:
         "bandwidth_control",
         "findarr_poll",
         "languagarr_poll",
+        "cleanarr_poll",
         "trending_sync",
         "poster_cache_churn",
     ):
@@ -165,6 +198,22 @@ def initialise_metrics() -> None:
         languagarr_deletes_total.labels(status)
     for verdict in ("missing_language", "unknown"):
         languagarr_noncompliant_files.labels(verdict).set(0)
+    _initialise_cleanarr_metrics()
+
+
+def _initialise_cleanarr_metrics() -> None:
+    """Initialise Cleanarr's closed label sets."""
+    for status in CLEANARR_RUN_STATUSES:
+        cleanarr_runs_total.labels(status)
+    for app in CLEANARR_APPS:
+        for reason in CLEANARR_REASONS:
+            cleanarr_strikes_total.labels(app, reason)
+            for mode in CLEANARR_MODES:
+                cleanarr_removals_total.labels(app, reason, mode)
+    for action in CLEANARR_FILE_ACTIONS:
+        for mode in CLEANARR_MODES:
+            cleanarr_file_actions_total.labels(action, mode)
+    cleanarr_health_warnings.set(0)
 
 
 def record_sync_run(*, trigger: str, status: str, duration_seconds: float) -> None:
@@ -263,6 +312,34 @@ def record_languagarr_deletes(*, deleted: int, failed: int) -> None:
         languagarr_deletes_total.labels("success").inc(deleted)
     if failed:
         languagarr_deletes_total.labels("error").inc(failed)
+
+
+def record_cleanarr_run(*, status: str) -> None:
+    """Record one Cleanarr run outcome."""
+    cleanarr_runs_total.labels(status).inc()
+
+
+def record_cleanarr_strike(*, app: str, reason: str) -> None:
+    """Record one strike given to a queue item."""
+    cleanarr_strikes_total.labels(app, reason).inc()
+
+
+def record_cleanarr_removal(*, app: str, reason: str, dry_run: bool) -> None:
+    """Record one queue removal, or one would-be removal in dry run."""
+    cleanarr_removals_total.labels(app, reason, "dry_run" if dry_run else "live").inc()
+
+
+def record_cleanarr_file_actions(*, action: str, count: int, dry_run: bool) -> None:
+    """Record ``count`` file actions of one kind (no-op for zero)."""
+    if count:
+        cleanarr_file_actions_total.labels(
+            action, "dry_run" if dry_run else "live"
+        ).inc(count)
+
+
+def update_cleanarr_health_warnings(count: int) -> None:
+    """Set the number of Cleanarr health warnings from the last run."""
+    cleanarr_health_warnings.set(max(0, count))
 
 
 initialise_metrics()

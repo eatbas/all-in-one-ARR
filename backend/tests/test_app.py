@@ -213,6 +213,8 @@ def test_openapi_includes_frontend_api_routes(_env, monkeypatch, tmp_path) -> No
         "/api/deletarr/status",
         "/api/deletarr/results",
         "/api/findarr/status",
+        "/api/cleanarr/status",
+        "/api/cleanarr/queue",
         "/api/trending",
         "/api/trending/rating",
         "/api/trending/add",
@@ -237,6 +239,7 @@ def test_lifespan_serves_built_frontend(_env, monkeypatch, tmp_path) -> None:
         assert "built spa" in client.get("/").text
         assert "built spa" in client.get("/findarr").text
         assert "built spa" in client.get("/deletarr").text
+        assert "built spa" in client.get("/cleanarr").text
         # The Trending page's SPA route is served so a hard refresh on /trending works.
         assert "built spa" in client.get("/trending").text
         assert client.get("/api/status").status_code == 200

@@ -15,6 +15,13 @@ import httpx
 
 from core.bandwidth_types import DOWNLOAD_HISTORY_LIMIT, QUEUE_ITEM_LIMIT
 from core.logging import get_logger
+from core.sabnzbd_types import (
+    SabConfig,
+    SabHistory,
+    SabHistoryJob,
+    parse_config,
+    parse_history_slots,
+)
 
 _BYTES_PER_MB = 1024 * 1024
 
@@ -205,6 +212,111 @@ class SabnzbdClient:
         ):
             return []
         return slots[:limit]
+
+    async def history_jobs(
+        self, *, page_size: int = 500, max_jobs: int = 20_000
+    ) -> SabHistory | None:
+        """Return at most ``max_jobs`` history jobs (paged), or ``None`` on failure.
+
+        Unlike :meth:`_history_slots`, a failure is ``None`` rather than ``[]`` so
+        Cleanarr never mistakes an unreachable SABnzbd for an empty history (which
+        would make every completed folder look orphaned).
+
+        With ``noofslots`` reported, paging continues until that many slots were
+        read (an empty page ends it early). Without it, a short page ends it.
+        The result is ``complete`` only when the end of the history was
+        reached and every slot's ``storage`` was readable; stopping at
+        ``max_jobs`` or short of ``noofslots`` is not. A slot that cannot
+        become a job still contributes its ``storage`` as a reference.
+        """
+        jobs: list[SabHistoryJob] = []
+        unparsed: list[str] = []
+        readable = True
+        reached_end = False
+        start = 0
+        while start < max_jobs:
+            limit = min(page_size, max_jobs - start)
+            page = await self._history_page(start=start, limit=limit)
+            if page is None:
+                return None
+            slots, total = page
+            slots = slots[:limit]
+            parsed = parse_history_slots(slots)
+            jobs.extend(parsed.jobs)
+            unparsed.extend(parsed.unparsed_storage)
+            readable = readable and parsed.complete
+            start += len(slots)
+            if total is not None and start >= total:
+                reached_end = True
+                break
+            if not slots or (total is None and len(slots) < limit):
+                reached_end = total is None
+                break
+        return SabHistory(
+            jobs=tuple(jobs),
+            complete=reached_end and readable,
+            unparsed_storage=tuple(unparsed),
+        )
+
+    async def _history_page(
+        self, *, start: int, limit: int
+    ) -> tuple[list[dict[str, Any]], float | None] | None:
+        """Return one validated history page and its ``noofslots``, or ``None``."""
+        history = await self._api_section(
+            "history",
+            {
+                "mode": "history",
+                "start": str(start),
+                "limit": str(limit),
+                "archive": "1",
+            },
+        )
+        if history is None:
+            return None
+        slots = history.get("slots")
+        if not isinstance(slots, list) or not all(
+            isinstance(slot, dict) for slot in slots
+        ):
+            return None
+        return slots, _float_from_text(history.get("noofslots"))
+
+    async def queue_filenames(self) -> list[str] | None:
+        """Return the job names of every queue slot, or ``None`` on failure."""
+        queue = await self._queue_payload(limit=0)
+        if queue is None:
+            return None
+        names = (_string_value(slot.get("filename")) for slot in queue["slots"])
+        return [name for name in names if name]
+
+    async def get_config(self) -> SabConfig | None:
+        """Return the parsed ``mode=get_config`` settings, or ``None`` on failure."""
+        data = await self._api_json({"mode": "get_config"})
+        return None if data is None else parse_config(data)
+
+    async def _api_section(
+        self, section: str, params: dict[str, str]
+    ) -> dict[str, Any] | None:
+        """Return ``body[section]`` of an API call when it is a dict, else ``None``."""
+        data = await self._api_json(params)
+        value = None if data is None else data.get(section)
+        return value if isinstance(value, dict) else None
+
+    async def _api_json(self, params: dict[str, str]) -> dict[str, Any] | None:
+        """Issue an authenticated API GET; return the JSON object or ``None``."""
+        try:
+            response = await self._client.get(
+                f"{self._base_url}/api",
+                params={**params, "output": "json", "apikey": self._api_key},
+            )
+        except httpx.HTTPError:
+            return None
+        if response.status_code != 200:
+            return None
+        try:
+            data = response.json()
+        except ValueError:
+            return None
+        return data if isinstance(data, dict) else None
 
     async def pause(self) -> bool:
         """Pause the SABnzbd queue. Returns ``True`` if the command succeeded."""

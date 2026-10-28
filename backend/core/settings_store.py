@@ -31,6 +31,7 @@ from core.service_registry import (
 from core.settings_modules import ModuleSettingsMixin
 from core.settings_normalisers import (
     DEFAULT_ANIME_IDS_REFRESH_DAYS,
+    DEFAULT_CLEANARR_SETTINGS,
     DEFAULT_DELETARR_SETTINGS,
     DEFAULT_FINDARR_SETTINGS,
     DEFAULT_LANGUAGARR_SETTINGS,
@@ -40,6 +41,7 @@ from core.settings_normalisers import (
     DEFAULT_TRENDING_SYNC_INTERVAL,
     normalise_anime_ids_refresh_days,
     normalise_bandwidth_interval,
+    normalise_cleanarr_settings,
     normalise_deletarr_settings,
     normalise_findarr_settings,
     normalise_interval,
@@ -105,6 +107,7 @@ class SettingsStore(ModuleSettingsMixin):
         self._findarr_settings = copy.deepcopy(DEFAULT_FINDARR_SETTINGS)
         self._deletarr_settings = copy.deepcopy(DEFAULT_DELETARR_SETTINGS)
         self._languagarr_settings = copy.deepcopy(DEFAULT_LANGUAGARR_SETTINGS)
+        self._cleanarr_settings = copy.deepcopy(DEFAULT_CLEANARR_SETTINGS)
         self._services: dict[str, dict[str, str]] = {
             desc.name: empty_values(desc) for desc in SERVICES
         }
@@ -181,6 +184,7 @@ class SettingsStore(ModuleSettingsMixin):
                     use_arr_source=deletarr_use_arr_source,
                 )
                 self._languagarr_settings = normalise_languagarr_settings()
+                self._cleanarr_settings = normalise_cleanarr_settings()
                 for desc in SERVICES:
                     self._services[desc.name] = service_seed(
                         desc, (services or {}).get(desc.name)
@@ -257,6 +261,8 @@ class SettingsStore(ModuleSettingsMixin):
         self._languagarr_settings = normalise_languagarr_settings(
             data.get("languagarr")
         )
+        migrated_cleanarr = "cleanarr" not in data
+        self._cleanarr_settings = normalise_cleanarr_settings(data.get("cleanarr"))
         # Migration: the flag was historically persisted as ``auto_remove_on_import``
         # (remove when Radarr/Sonarr imported the title). It now means "remove from
         # Trakt once Seer reports the item available". An existing store is read
@@ -319,6 +325,7 @@ class SettingsStore(ModuleSettingsMixin):
             or migrated_findarr
             or migrated_deletarr
             or migrated_languagarr
+            or migrated_cleanarr
         ):
             self._save_locked()
             self._log.info(
@@ -328,7 +335,8 @@ class SettingsStore(ModuleSettingsMixin):
                 "trending_key_migrated=%s "
                 "anime_ids_key_migrated=%s rating_ttl_key_migrated=%s "
                 "omdb_budget_key_migrated=%s findarr_keys_migrated=%s "
-                "deletarr_keys_migrated=%s languagarr_keys_migrated=%s)",
+                "deletarr_keys_migrated=%s languagarr_keys_migrated=%s "
+                "cleanarr_keys_migrated=%s)",
                 backfilled,
                 fields_backfilled,
                 migrated_auto_remove,
@@ -341,6 +349,7 @@ class SettingsStore(ModuleSettingsMixin):
                 migrated_findarr,
                 migrated_deletarr,
                 migrated_languagarr,
+                migrated_cleanarr,
             )
 
     def _save_locked(self) -> None:
@@ -363,6 +372,7 @@ class SettingsStore(ModuleSettingsMixin):
             "findarr": self._findarr_settings,
             "deletarr": self._deletarr_settings,
             "languagarr": self._languagarr_settings,
+            "cleanarr": self._cleanarr_settings,
             "lists": [item.to_dict() for item in self._lists],
             "services": self._services,
         }
@@ -691,6 +701,7 @@ class SettingsStore(ModuleSettingsMixin):
                 "findarr": copy.deepcopy(self._findarr_settings),
                 "deletarr": dict(self._deletarr_settings),
                 "languagarr": copy.deepcopy(self._languagarr_settings),
+                "cleanarr": copy.deepcopy(self._cleanarr_settings),
                 "lists": [item.to_dict() for item in self._lists],
                 "services": self.masked_services(),
             }

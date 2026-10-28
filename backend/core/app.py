@@ -25,6 +25,7 @@ from core.anime_ids_sync import start_anime_ids_refresh
 from core.api import create_api_router
 from core.app_metrics import observe_scheduler_job
 from core.bandwidth_api import create_bandwidth_router
+from core.cleanarr_api import create_cleanarr_router
 from core.clients.anilist import AnilistClient
 from core.clients.arr_client import ArrClient
 from core.clients.omdb import OmdbClient
@@ -239,6 +240,7 @@ def _mount_frontend(app: FastAPI) -> None:
         @app.get("/list-syncarr", response_class=HTMLResponse)
         @app.get("/bandwidth-controllarr", response_class=HTMLResponse)
         @app.get("/findarr", response_class=HTMLResponse)
+        @app.get("/cleanarr", response_class=HTMLResponse)
         @app.get("/deletarr", response_class=HTMLResponse)
         @app.get("/languagarr", response_class=HTMLResponse)
         @app.get("/settings", response_class=HTMLResponse)
@@ -336,6 +338,7 @@ def create_app() -> FastAPI:
     app.include_router(create_findarr_router(ctx))
     app.include_router(create_deletarr_router(ctx))
     app.include_router(create_languagarr_router(ctx))
+    app.include_router(create_cleanarr_router(ctx))
     app.include_router(create_trending_router(ctx))
     app.include_router(create_dashboard_router(ctx))
     app.include_router(ctx.webhooks.router)
