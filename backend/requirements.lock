@@ -4,7 +4,7 @@ annotated-doc==0.0.5
     # via fastapi
 annotated-types==0.8.0
     # via pydantic
-anyio==4.15.1
+anyio==4.16.0
     # via
     #   apscheduler
     #   httpx
@@ -48,11 +48,11 @@ iniconfig==2.3.1
     # via pytest
 librt==0.16.0 ; platform_python_implementation != 'PyPy'
     # via mypy
-mypy==2.4.0
+mypy==2.4.1
     # via aio-arr (backend/pyproject.toml)
 mypy-extensions==1.1.0
     # via mypy
-opentelemetry-api==1.45.1
+opentelemetry-api==1.45.2
     # via fastapi
 packaging==26.3
     # via pytest
@@ -64,23 +64,23 @@ pluggy==1.7.0
     #   pytest-cov
 prometheus-client==0.26.0
     # via aio-arr (backend/pyproject.toml)
-pydantic==2.14.1
+pydantic==2.14.2
     # via
     #   aio-arr (backend/pyproject.toml)
     #   fastapi
     #   pydantic-settings
-pydantic-core==2.50.1
+pydantic-core==2.50.2
     # via pydantic
-pydantic-settings==2.16.1
+pydantic-settings==2.16.2
     # via aio-arr (backend/pyproject.toml)
 pygments==2.21.0
     # via pytest
-pytest==9.1.1
+pytest==9.2.0
     # via
     #   aio-arr (backend/pyproject.toml)
     #   pytest-asyncio
     #   pytest-cov
-pytest-asyncio==1.4.0
+pytest-asyncio==1.4.1
     # via aio-arr (backend/pyproject.toml)
 pytest-cov==7.1.0
     # via aio-arr (backend/pyproject.toml)
@@ -92,7 +92,7 @@ pyyaml==6.0.3
     # via uvicorn
 respx==0.23.1
     # via aio-arr (backend/pyproject.toml)
-ruff==0.17.2
+ruff==0.17.3
     # via aio-arr (backend/pyproject.toml)
 starlette==1.10.0
     # via fastapi
@@ -113,7 +113,7 @@ typing-inspection==0.4.4
     #   fastapi
     #   pydantic
     #   pydantic-settings
-tzdata==2026.5 ; sys_platform == 'win32'
+tzdata==2026.6 ; sys_platform == 'win32'
     # via tzlocal
 tzlocal==5.4.5
     # via apscheduler
@@ -123,5 +123,5 @@ uvloop==0.23.0 ; platform_python_implementation != 'PyPy' and sys_platform != 'c
     # via uvicorn
 watchfiles==1.3.0
     # via uvicorn
-websockets==17.3
+websockets==17.4
     # via uvicorn
