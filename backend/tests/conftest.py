@@ -410,6 +410,7 @@ class StubSeer:
     ):
         self.get_status = AsyncMock(return_value=status)
         self.get_request_ids = AsyncMock(return_value=request_ids or [])
+        self.latest_request_declined = AsyncMock(return_value=False)
         self.create_request = AsyncMock(return_value=request_id)
         self.delete_request = AsyncMock(return_value=None)
         self.discover_trending = AsyncMock(return_value=[])

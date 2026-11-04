@@ -15,6 +15,8 @@ CREATE TABLE IF NOT EXISTS items (
         CHECK(status IN ('synced','requested','available','removed')),
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL,
+    request_attempts INTEGER NOT NULL DEFAULT 0,
+    next_request_at TEXT,
     PRIMARY KEY (trakt_id, list_id)
 );
 CREATE INDEX IF NOT EXISTS idx_items_tmdb ON items(tmdb);

@@ -20,11 +20,17 @@ logged and recorded once, and every remaining Seer interaction in the same cycle
 skipped — each would otherwise pay the full connect timeout and add its own failure
 entry. Item mirroring from Trakt still happens; statuses and requests simply catch
 up on the next sync.
+
+A request that does not leave a lasting Seer request (a refused call, a reply with no
+request id, or a title declined in Seer) stays ``synced`` and is deferred with an
+exponential back-off, so one unrequestable title is not re-sent on every poll. Status
+checks continue on each poll, and the back-off clears once Seer tracks the item.
 """
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from datetime import UTC, datetime, timedelta
+from typing import TYPE_CHECKING, Any
 
 from core.clients.seer import (
     AVAILABLE,
@@ -48,6 +54,13 @@ _log = get_logger("list_syncarr.sync")
 # item is at least partially available — an item is not dropped the instant it is
 # requested.
 _ALREADY_REQUESTED = frozenset({PENDING, PROCESSING})
+
+# Back-off between request attempts for an item Seer did not accept: starts at one
+# hour and doubles up to a week. The doubling limit keeps the exponent bounded; eight
+# doublings already exceed the cap.
+_REQUEST_RETRY_BASE = timedelta(hours=1)
+_REQUEST_RETRY_MAX = timedelta(days=7)
+_REQUEST_RETRY_MAX_DOUBLINGS = 8
 
 
 class _SeerOutage:
@@ -211,9 +224,39 @@ async def _process_item(
     if await _apply_seer_status(ctx, item, seer_status):
         # Seer already knows the item (available / partial / pending / processing);
         # its status was updated and removal applied — no new request to create.
+        if item["request_attempts"]:
+            ctx.db.clear_request_deferral(trakt_id=trakt_id, list_id=list_id)
+        return
+
+    await _request_item(ctx, item, seer_media_type, outage)
+
+
+async def _request_item(
+    ctx: AppContext, item: dict[str, Any], seer_media_type: str, outage: _SeerOutage
+) -> None:
+    """Create a Seer request for an item Seer does not track, unless deferred.
+
+    Only a reply carrying a request id counts as requested. An item Seer refused,
+    answered without an id, or that was declined there is deferred instead.
+    """
+    trakt_id = item["trakt_id"]
+    list_id = item["list_id"]
+    tmdb = item["tmdb"]
+    title = item["title"]
+    if _request_deferred(item):
         return
 
     try:
+        if await ctx.seer.latest_request_declined(
+            media_type=seer_media_type, tmdb_id=tmdb
+        ):
+            _defer_unrequested(
+                ctx,
+                item,
+                "Request skipped",
+                f'"{title}" was declined in Seer, so it was not requested again.',
+            )
+            return
         request_id = await ctx.seer.create_request(
             media_type=seer_media_type, tmdb_id=tmdb
         )
@@ -224,9 +267,22 @@ async def _process_item(
         _log.error("Seer request create failed for %s: %s", title, exc)
         ctx.db.add_activity(
             "List sync failed",
-            f'Could not request "{title}" in Seer; it will be retried on the next sync.',
+            f'Could not request "{title}" in Seer; it will be retried later.',
+        )
+        _defer_request(ctx, item)
+        return
+
+    if request_id is None:
+        _defer_unrequested(
+            ctx,
+            item,
+            "Request not created",
+            f'Seer did not create a request for "{title}"; it will be retried later.',
         )
         return
+
+    if item["request_attempts"]:
+        ctx.db.clear_request_deferral(trakt_id=trakt_id, list_id=list_id)
     ctx.db.set_request_id(trakt_id=trakt_id, list_id=list_id, request_id=request_id)
     ctx.db.set_status(trakt_id=trakt_id, list_id=list_id, status="requested")
     ctx.db.add_activity("Request created", f'Requested "{title}" in Seer.')
@@ -237,6 +293,48 @@ async def _process_item(
         title=title,
         request_id=request_id,
     )
+
+
+def _request_deferred(item: dict[str, Any]) -> bool:
+    """Return whether an item's request back-off has not yet elapsed."""
+    next_request_at = item["next_request_at"]
+    if next_request_at is None:
+        return False
+    return datetime.fromisoformat(next_request_at) > datetime.now(UTC)
+
+
+def _defer_request(ctx: AppContext, item: dict[str, Any]) -> None:
+    """Hold further request attempts, doubling the delay after each failed attempt.
+
+    The item returns to ``synced`` because no request exists for it in Seer.
+    """
+    doublings = min(item["request_attempts"], _REQUEST_RETRY_MAX_DOUBLINGS)
+    delay = min(_REQUEST_RETRY_BASE * 2**doublings, _REQUEST_RETRY_MAX)
+    next_request_at = datetime.now(UTC) + delay
+    ctx.db.defer_request(
+        trakt_id=item["trakt_id"],
+        list_id=item["list_id"],
+        next_request_at=next_request_at.isoformat(),
+    )
+    ctx.db.set_status(
+        trakt_id=item["trakt_id"], list_id=item["list_id"], status="synced"
+    )
+    log_action(
+        _log,
+        "request_deferred",
+        tmdb=item["tmdb"],
+        title=item["title"],
+        next_request_at=next_request_at.isoformat(),
+    )
+
+
+def _defer_unrequested(
+    ctx: AppContext, item: dict[str, Any], action: str, detail: str
+) -> None:
+    """Defer an item Seer holds no request for, recording only the first occurrence."""
+    if not item["request_attempts"]:
+        ctx.db.add_activity(action, detail)
+    _defer_request(ctx, item)
 
 
 async def _apply_seer_status(

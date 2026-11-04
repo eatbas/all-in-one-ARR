@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import UTC, datetime, timedelta
 from unittest.mock import AsyncMock
 
 from core.clients.seer import (
@@ -324,6 +325,140 @@ async def test_seer_request_error_recorded(db) -> None:
     assert any(a["action"] == "List sync failed" for a in db.recent_activity())
     assert any("Could not request" in a["detail"] for a in db.recent_activity())
     assert not any("returned 500" in a["detail"] for a in db.recent_activity())
+
+
+def _elapse_backoff(db) -> None:
+    """Move the item's back-off into the past while keeping its attempt count."""
+    item = db.get_item(trakt_id=1, list_id="watchlist")
+    with db._lock:
+        db._conn.execute(
+            "UPDATE items SET next_request_at=? WHERE trakt_id=1",
+            ((datetime.now(UTC) - timedelta(minutes=1)).isoformat(),),
+        )
+        db._conn.commit()
+    assert (
+        db.get_item(trakt_id=1, list_id="watchlist")["request_attempts"]
+        == (item["request_attempts"])
+    )
+
+
+def _backoff_remaining(db) -> timedelta:
+    item = db.get_item(trakt_id=1, list_id="watchlist")
+    return datetime.fromisoformat(item["next_request_at"]) - datetime.now(UTC)
+
+
+async def test_request_without_id_is_deferred_not_requested(db) -> None:
+    # Seer can answer success without a lasting request. The item must not claim to
+    # be requested, and later polls must not re-send it while the back-off runs.
+    seer = StubSeer(status=None, request_id=None)
+    ctx = make_ctx(db=db, trakt=StubTrakt(items=[_MOVIE]), seer=seer)
+    await poll_and_request(ctx)
+    await poll_and_request(ctx)
+    item = db.get_item(trakt_id=1, list_id="watchlist")
+    assert item["status"] == "synced"
+    assert item["seer_request_id"] is None
+    assert item["request_attempts"] == 1
+    seer.create_request.assert_awaited_once()
+    # Status checks continue so a later Seer change is still noticed.
+    assert seer.get_status.await_count == 2
+    activity = db.recent_activity()
+    assert len([a for a in activity if a["action"] == "Request not created"]) == 1
+    assert not any(a["action"] == "Request created" for a in activity)
+
+
+async def test_item_previously_marked_requested_without_id_recovers(db) -> None:
+    # A row the old code marked 'requested' with no id is corrected on upgrade.
+    db.upsert_item(**_MOVIE, list_id="watchlist")
+    db.set_status(trakt_id=1, list_id="watchlist", status="requested")
+    seer = StubSeer(status=None, request_id=None)
+    ctx = make_ctx(db=db, trakt=StubTrakt(items=[_MOVIE]), seer=seer)
+    await poll_and_request(ctx)
+    item = db.get_item(trakt_id=1, list_id="watchlist")
+    assert item["status"] == "synced"
+    assert item["next_request_at"] is not None
+
+
+async def test_request_retry_backoff_doubles_up_to_cap(db) -> None:
+    seer = StubSeer(status=None, request_id=None)
+    ctx = make_ctx(db=db, trakt=StubTrakt(items=[_MOVIE]), seer=seer)
+    expected_hours = [1, 2, 4, 8, 16, 32, 64, 128, 168, 168]
+    for attempt, hours in enumerate(expected_hours, start=1):
+        await poll_and_request(ctx)
+        assert seer.create_request.await_count == attempt
+        remaining = _backoff_remaining(db)
+        assert timedelta(hours=hours, minutes=-1) < remaining <= timedelta(hours=hours)
+        _elapse_backoff(db)
+    # Only the first failure reaches the activity feed.
+    activity = db.recent_activity()
+    assert len([a for a in activity if a["action"] == "Request not created"]) == 1
+
+
+async def test_request_succeeding_after_backoff_clears_deferral(db) -> None:
+    seer = StubSeer(status=None, request_id=None)
+    ctx = make_ctx(db=db, trakt=StubTrakt(items=[_MOVIE]), seer=seer)
+    await poll_and_request(ctx)
+    _elapse_backoff(db)
+    seer.create_request = AsyncMock(return_value=77)
+    await poll_and_request(ctx)
+    item = db.get_item(trakt_id=1, list_id="watchlist")
+    assert item["status"] == "requested"
+    assert item["seer_request_id"] == 77
+    assert item["request_attempts"] == 0
+    assert item["next_request_at"] is None
+
+
+async def test_seer_tracking_item_clears_deferral(db) -> None:
+    # A request made directly in Seer during the back-off is picked up by the status
+    # check on the next poll, without waiting for the back-off to elapse.
+    seer = StubSeer(status=None, request_id=None)
+    ctx = make_ctx(db=db, trakt=StubTrakt(items=[_MOVIE]), seer=seer)
+    await poll_and_request(ctx)
+    seer.get_status = AsyncMock(return_value=PENDING)
+    await poll_and_request(ctx)
+    item = db.get_item(trakt_id=1, list_id="watchlist")
+    assert item["status"] == "requested"
+    assert item["request_attempts"] == 0
+    assert item["next_request_at"] is None
+    seer.create_request.assert_awaited_once()
+
+
+async def test_declined_item_is_not_requested_again(db) -> None:
+    seer = StubSeer(status=None)
+    seer.latest_request_declined = AsyncMock(return_value=True)
+    ctx = make_ctx(db=db, trakt=StubTrakt(items=[_MOVIE]), seer=seer)
+    await poll_and_request(ctx)
+    await poll_and_request(ctx)
+    item = db.get_item(trakt_id=1, list_id="watchlist")
+    assert item["status"] == "synced"
+    assert item["request_attempts"] == 1
+    seer.create_request.assert_not_awaited()
+    # The decline lookup is itself held by the back-off.
+    seer.latest_request_declined.assert_awaited_once()
+    activity = db.recent_activity()
+    assert len([a for a in activity if a["action"] == "Request skipped"]) == 1
+
+
+async def test_seer_request_error_is_deferred(db) -> None:
+    seer = StubSeer(status=None)
+    seer.create_request = AsyncMock(side_effect=SeerError("returned 409"))
+    ctx = make_ctx(db=db, trakt=StubTrakt(items=[_MOVIE]), seer=seer)
+    await poll_and_request(ctx)
+    await poll_and_request(ctx)
+    seer.create_request.assert_awaited_once()
+    item = db.get_item(trakt_id=1, list_id="watchlist")
+    assert item["request_attempts"] == 1
+    assert item["status"] == "synced"
+
+
+async def test_seer_outage_does_not_defer_request(db) -> None:
+    # An unreachable Seer says nothing about the item, so it retries on the next sync.
+    seer = StubSeer(status=None)
+    seer.create_request = AsyncMock(side_effect=SeerUnavailableError("connect failed"))
+    ctx = make_ctx(db=db, trakt=StubTrakt(items=[_MOVIE]), seer=seer)
+    await poll_and_request(ctx)
+    item = db.get_item(trakt_id=1, list_id="watchlist")
+    assert item["request_attempts"] == 0
+    assert item["next_request_at"] is None
 
 
 async def test_list_read_failure_recorded(db) -> None:

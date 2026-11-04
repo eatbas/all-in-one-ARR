@@ -86,11 +86,28 @@ def test_init_db_migrates_legacy_jellyseerr_column(tmp_path) -> None:
     # The legacy request id is carried forward under the new column name.
     item = database.get_item(trakt_id=1, list_id="watchlist")
     assert item["seer_request_id"] == 77
+    # Existing rows gain the request back-off columns with no deferral.
+    assert item["request_attempts"] == 0
+    assert item["next_request_at"] is None
     # The migrated database is fully usable and the migration is idempotent.
     database.upsert_item(**_MOVIE)
     database.init_db()  # second run must be a harmless no-op
     assert database.get_item(trakt_id=1, list_id="watchlist")["seer_request_id"] == 77
     database.close()
+
+
+def test_request_deferral_counts_attempts_and_clears(db) -> None:
+    db.upsert_item(**_MOVIE)
+    key = {"trakt_id": _MOVIE["trakt_id"], "list_id": _MOVIE["list_id"]}
+    db.defer_request(**key, next_request_at="2026-11-03T20:00:00+00:00")
+    db.defer_request(**key, next_request_at="2026-11-03T22:00:00+00:00")
+    item = db.get_item(**key)
+    assert item["request_attempts"] == 2
+    assert item["next_request_at"] == "2026-11-03T22:00:00+00:00"
+    db.clear_request_deferral(**key)
+    item = db.get_item(**key)
+    assert item["request_attempts"] == 0
+    assert item["next_request_at"] is None
 
 
 def test_init_db_adds_seer_column_when_legacy_absent(tmp_path) -> None:

@@ -87,6 +87,14 @@ class Database(
                 self._conn.execute(
                     "UPDATE items SET seer_request_id = jellyseerr_request_id"
                 )
+        # Request back-off state: additive, so existing items start with no deferral.
+        if "request_attempts" not in columns:
+            self._conn.execute(
+                "ALTER TABLE items "
+                "ADD COLUMN request_attempts INTEGER NOT NULL DEFAULT 0"
+            )
+        if "next_request_at" not in columns:
+            self._conn.execute("ALTER TABLE items ADD COLUMN next_request_at TEXT")
 
     def _migrate_languagarr_columns(self) -> None:
         """Bring ``languagarr_queue`` rows from older releases up to date.
@@ -242,6 +250,28 @@ class Database(
                 "UPDATE items SET seer_request_id=?, updated_at=? "
                 "WHERE trakt_id=? AND list_id=?",
                 (request_id, utcnow_iso(), trakt_id, list_id),
+            )
+            self._conn.commit()
+
+    def defer_request(
+        self, *, trakt_id: int, list_id: str, next_request_at: str
+    ) -> None:
+        """Count a failed Seer request and hold further attempts until a set time."""
+        with self._lock:
+            self._conn.execute(
+                "UPDATE items SET request_attempts=request_attempts+1, "
+                "next_request_at=?, updated_at=? WHERE trakt_id=? AND list_id=?",
+                (next_request_at, utcnow_iso(), trakt_id, list_id),
+            )
+            self._conn.commit()
+
+    def clear_request_deferral(self, *, trakt_id: int, list_id: str) -> None:
+        """Reset an item's request back-off once Seer tracks the item."""
+        with self._lock:
+            self._conn.execute(
+                "UPDATE items SET request_attempts=0, next_request_at=NULL, "
+                "updated_at=? WHERE trakt_id=? AND list_id=?",
+                (utcnow_iso(), trakt_id, list_id),
             )
             self._conn.commit()
 

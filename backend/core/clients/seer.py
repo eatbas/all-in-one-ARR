@@ -21,6 +21,9 @@ PROCESSING = 3
 PARTIALLY_AVAILABLE = 4
 AVAILABLE = 5
 
+# Seer request state: a person or rule refused the request.
+REQUEST_DECLINED = 3
+
 # A dead or unreachable Seer host must fail fast: the OS-level connect retry can
 # take 20+ seconds per call, so the connect phase gets a tight explicit budget
 # while slow-but-alive responses keep the generous overall timeout.
@@ -136,6 +139,23 @@ class SeerClient:
             for request in (media_info.get("requests") or [])
             if request.get("id") is not None
         ]
+
+    async def latest_request_declined(self, *, media_type: str, tmdb_id: int) -> bool:
+        """Return whether the newest Seer request recorded for an item was declined.
+
+        A declined request leaves the media state unknown, so Seer would accept a
+        new request; callers use this to respect the refusal instead.
+        """
+        media_info = await self._media_info(media_type=media_type, tmdb_id=tmdb_id)
+        requests = [
+            request
+            for request in ((media_info or {}).get("requests") or [])
+            if request.get("id") is not None
+        ]
+        if not requests:
+            return False
+        latest = max(requests, key=lambda request: request["id"])
+        return latest.get("status") == REQUEST_DECLINED
 
     @staticmethod
     def _normalise_discover(
@@ -296,6 +316,9 @@ class SeerClient:
         """Create a Seer request.
 
         Returns the new request id, or ``None`` when the response carries no id.
+        ``None`` means no lasting request exists, even on a success status: Seer
+        answers 202 when no seasons can be requested, and 201 with the id stripped
+        when it deletes a request it could not send to Sonarr (no TVDB id).
         """
         body: dict[str, Any] = {"mediaType": media_type, "mediaId": tmdb_id}
         if media_type == "tv":
@@ -311,13 +334,16 @@ class SeerClient:
             raise SeerError(
                 f"Seer request returned {response.status_code} for {tmdb_id}"
             )
-        request_id = response.json().get("id") if response.content else None
+        payload = response.json() if response.content else {}
+        request_id = payload.get("id")
         log_action(
             self._log,
             "seer_request",
             media_type=media_type,
             tmdb=tmdb_id,
             request_id=request_id,
+            status=response.status_code,
+            message=payload.get("message"),
         )
         return request_id
 

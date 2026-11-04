@@ -32,7 +32,10 @@ drop into `backend/modules/` and auto-load — see [Adding a module](#adding-a-m
 1. Poll the configured Trakt list every `SYNC_INTERVAL_MIN` minutes and mirror
    each item into SQLite (storing **both** TMDB and TVDB ids).
 2. For each item not already handled, check Seer; if it is not already
-   requested/available, create a request.
+   requested/available, create a request. A title Seer does not keep a request for
+   (for example, one with no TVDB id) or has declined stays *Synced* and is retried
+   with an exponential back-off, from one hour up to one week, instead of on every
+   poll.
 3. (Your existing Seer → Radarr/Sonarr → download/import flow runs.)
 4. On a later poll, once Seer reports the item **available** — or **partially
    available** (some episodes downloaded) — and **if auto-remove is enabled**, remove

@@ -6,7 +6,13 @@ import httpx
 import pytest
 import respx
 
-from core.clients.seer import AVAILABLE, SeerClient, SeerError, SeerUnavailableError
+from core.clients.seer import (
+    AVAILABLE,
+    REQUEST_DECLINED,
+    SeerClient,
+    SeerError,
+    SeerUnavailableError,
+)
 
 _BASE = "http://js:5055"
 
@@ -120,6 +126,47 @@ async def test_get_request_ids_network_error_raises() -> None:
     client = make_client()
     with pytest.raises(SeerError):
         await client.get_request_ids(media_type="movie", tmdb_id=100)
+
+
+@pytest.mark.parametrize(
+    ("requests", "expected"),
+    [
+        ([{"id": 5, "status": REQUEST_DECLINED}], True),
+        # Only the newest request counts, whatever order Seer lists them in.
+        ([{"id": 9, "status": 4}, {"id": 5, "status": REQUEST_DECLINED}], False),
+        ([{"id": 5, "status": 4}, {"id": 9, "status": REQUEST_DECLINED}], True),
+        ([{"id": None, "status": REQUEST_DECLINED}], False),
+        ([], False),
+    ],
+)
+@respx.mock
+async def test_latest_request_declined(requests, expected) -> None:
+    respx.get(f"{_BASE}/api/v1/tv/200").mock(
+        return_value=httpx.Response(200, json={"mediaInfo": {"requests": requests}})
+    )
+    client = make_client()
+    assert (
+        await client.latest_request_declined(media_type="tv", tmdb_id=200) is expected
+    )
+
+
+@respx.mock
+async def test_latest_request_declined_false_without_media_info() -> None:
+    respx.get(f"{_BASE}/api/v1/tv/200").mock(return_value=httpx.Response(404))
+    client = make_client()
+    assert await client.latest_request_declined(media_type="tv", tmdb_id=200) is False
+
+
+@respx.mock
+async def test_create_request_without_id_returns_none() -> None:
+    # Seer answers 202 with only a message when no seasons can be requested.
+    respx.post(f"{_BASE}/api/v1/request").mock(
+        return_value=httpx.Response(
+            202, json={"message": "No seasons available to request"}
+        )
+    )
+    client = make_client()
+    assert await client.create_request(media_type="tv", tmdb_id=200) is None
 
 
 @respx.mock
