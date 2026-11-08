@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools>=68"]
+requires = ["setuptools==84.2.1"]
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -7,17 +7,17 @@ name = "aio-arr"
 version = "1.9.7"
 description = "All-in-One ARR: a plugin core with a list_syncarr module that keeps a Trakt list in sync with Seer and removes items from the Trakt list once they are available or partially available in Seer."
 requires-python = ">=3.14"
-license = { text = "MIT" }
+license = "MIT"
 authors = [{ name = "Eren Atbas" }]
 
 dependencies = [
-    "fastapi>=0.118,<1.0",
+    "fastapi>=0.162.2,<1.0",
     "uvicorn[standard]>=0.34,<1.0",
-    # Pinned to the tested pre-release floor: 4.0 has no stable/beta release yet, so
-    # document the exact known-good alpha rather than allowing an untested a5.
-    "apscheduler>=4.0.0a6,<5.0",
+    # Intentional alpha hold: no fixed 4.x release for GHSA-9cfw-f3f9-7mm7.
+    # Only in-memory/local scheduling is used; review any persistence change.
+    "apscheduler==4.0.0a6",
     "httpx>=0.28,<1.0",
-    "pydantic>=2.9,<3.0",
+    "pydantic>=2.14.3,<3.0",
     "pydantic-settings>=2.6,<3.0",
     "prometheus-client>=0.25,<1.0",
 ]
@@ -25,10 +25,10 @@ dependencies = [
 [project.optional-dependencies]
 dev = [
     "pytest>=9.0,<10.0",
-    "pytest-asyncio>=1.0,<2.0",
+    "pytest-asyncio>=1.4.1.post1,<2.0",
     "pytest-cov>=7.0,<8.0",
     "respx>=0.21,<1.0",
-    "ruff>=0.17,<0.18",
+    "ruff>=0.17.4,<0.18",
     "mypy>=2.1,<3.0",
 ]
 
@@ -44,6 +44,8 @@ packages = [
     "modules.bandwidth_controllarr",
     "modules.findarr",
     "modules.deletarr",
+    "modules.cleanarr",
+    "modules.languagarr",
 ]
 
 [tool.pytest.ini_options]

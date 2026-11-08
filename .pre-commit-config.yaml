@@ -3,10 +3,10 @@
 #
 # Ruff owns Python linting + formatting + import sorting (backend/); Prettier
 # owns frontend formatting. Keep the ruff `rev` in sync with the pinned version
-# in backend/pyproject.toml.
+# in backend/requirements.lock.
 repos:
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.17.3
+    rev: v0.17.4
     hooks:
       # Lint and auto-fix first, then format, so any fixes are re-formatted.
       - id: ruff-check

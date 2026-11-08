@@ -28,6 +28,7 @@ venv/
 htmlcov/
 coverage.xml
 *.egg-info/
+backend/build/
 .mypy_cache/
 .ruff_cache/
 

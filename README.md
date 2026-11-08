@@ -834,7 +834,7 @@ resolve as they do in Docker):
 
 ```bash
 python3.14 -m venv .venv && . .venv/bin/activate
-pip install -e "./backend[dev]"
+pip install -e "./backend[dev]" -c backend/requirements.lock
 uvicorn main:app --app-dir backend --reload --port 3223
 ```
 
@@ -857,6 +857,34 @@ uvicorn main:app --app-dir backend --port 3223
 ```
 
 The FastAPI app then serves `frontend/dist` at `/`.
+
+Dependency maintenance is assessed with Python **3.14.10**, Node **26.13.0**
+and its bundled npm **11.20.0**. Node **24.22.2** / npm **11.19.1** is also a
+compatible local check environment. Python remains on 3.14; npm 12 is a separate
+package-manager migration. TypeScript stays at **6.0.3** because
+`typescript-eslint@8.72.1` requires TypeScript `<6.1.0`.
+
+Install the lock generator in the virtual environment and regenerate the universal
+Python lock from the repository root with the assessed versions:
+
+```bash
+.venv/bin/python -m pip install pip==26.3 uv==0.13.7
+.venv/bin/uv pip compile --refresh backend/pyproject.toml --all-extras --universal --prerelease explicit \
+  --upgrade-package 'click==8.5.1' \
+  --upgrade-package 'coverage==7.17.2' \
+  --upgrade-package 'fastapi==0.162.2' \
+  --upgrade-package 'mypy-extensions==1.2.0' \
+  --upgrade-package 'pydantic==2.14.3' \
+  --upgrade-package 'pydantic-core==2.50.4' \
+  --upgrade-package 'pytest-asyncio==1.4.1.post1' \
+  --upgrade-package 'ruff==0.17.4' \
+  --upgrade-package 'typing-inspection==0.4.5' \
+  -o backend/requirements.lock
+```
+
+The output preserves other existing pins. Review all lock changes and install the
+backend with its lock constraint after regeneration. The isolated build backend
+is pinned separately in `backend/pyproject.toml`.
 
 ## Code quality
 
@@ -893,7 +921,7 @@ npm run test:types
 commit — see `.pre-commit-config.yaml`:
 
 ```bash
-pip install pre-commit
+pip install pre-commit==4.7.0
 pre-commit install
 ```
 
@@ -924,7 +952,7 @@ The Python backend has **100% test coverage**, enforced in
 `backend/pyproject.toml`:
 
 ```bash
-pip install -e "./backend[dev]"
+pip install -e "./backend[dev]" -c backend/requirements.lock
 cd backend && pytest   # runs with --cov-fail-under=100
 ```
 
@@ -1142,7 +1170,7 @@ after both check jobs have passed.
 
 ### Frontend: adding a menu or component
 
-- Add a shadcn component: `cd frontend && npx shadcn@latest add <component>`.
+- Add a shadcn component: `cd frontend && npx shadcn@4.23.0 add <component>`.
 - Add a menu/route: extend the nav config in
   `frontend/src/shared/layout/nav-config.tsx` and add a route in
   `frontend/src/App.tsx` (feature pages live under `frontend/src/features/<name>/`).
@@ -1166,8 +1194,15 @@ after both check jobs have passed.
   and applied live.
 - Single Uvicorn worker by design: the scheduler runs in-process and SQLite
   uses WAL with a process-level lock. Multi-worker deployment is out of scope.
-- APScheduler 4 is pre-release; all scheduler usage is isolated behind
-  `backend/core/scheduler.py` so a downgrade to 3.x is a one-file change.
+- APScheduler is deliberately held at **4.0.0a6**, an alpha affected by
+  [GHSA-9cfw-f3f9-7mm7](https://osv.dev/vulnerability/GHSA-9cfw-f3f9-7mm7)
+  (also PYSEC-2026-282). There is no published fixed 4.x release; stable 3.x
+  does not support the wrapper's API. The current default `MemoryDataStore`
+  and `LocalEventBroker` keep jobs/events in-process without deserialisation.
+  A scheduler regression test guards these defaults. Persistent/external
+  stores or serializers require a separate security review; this boundary
+  does not make the affected package patched. Scheduler integration remains
+  isolated behind `backend/core/scheduler.py`.
 - **Prometheus metrics:** `/metrics` exposes the legacy `bw_*` Bandwidth-
   Controllarr gauges plus `aio_arr_sync_*`, `aio_arr_service_*`,
   `aio_arr_scheduler_*`, `aio_arr_findarr_*`, and `aio_arr_deletarr_*` families.

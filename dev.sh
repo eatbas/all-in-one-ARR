@@ -88,12 +88,12 @@ if (
     sys.exit(1)
 PY
   echo "Backend dependencies are out of date — running pip install…"
-  "$VENV_PY" -m pip install -e "./backend[dev]"
+  "$VENV_PY" -m pip install -e "./backend[dev]" -c backend/requirements.lock
 fi
 
 if ! "$VENV_PY" -c "import prometheus_client, uvicorn" >/dev/null 2>&1; then
   echo "Error: backend dependencies are missing from .venv" >&2
-  echo "  \"$VENV_PY\" -m pip install -e \"./backend[dev]\"" >&2
+  echo "  \"$VENV_PY\" -m pip install -e \"./backend[dev]\" -c backend/requirements.lock" >&2
   exit 1
 fi
 

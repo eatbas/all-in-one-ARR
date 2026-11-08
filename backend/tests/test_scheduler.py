@@ -7,6 +7,8 @@ from unittest.mock import AsyncMock
 
 import pytest
 from apscheduler import AsyncScheduler, ScheduleLookupError
+from apscheduler.datastores.memory import MemoryDataStore
+from apscheduler.eventbrokers.local import LocalEventBroker
 from apscheduler.triggers.cron import CronTrigger
 from apscheduler.triggers.interval import IntervalTrigger
 
@@ -34,9 +36,13 @@ async def def_noop() -> None:
     return None
 
 
-def test_default_scheduler_is_async_scheduler() -> None:
+def test_default_scheduler_uses_only_memory_and_local_events() -> None:
+    # GHSA-9cfw-f3f9-7mm7 affects the held alpha's deserialisation paths.
+    # Persistent/external stores or serializers require a separate security review.
     service = SchedulerService()
     assert isinstance(service._scheduler, AsyncScheduler)
+    assert isinstance(service._scheduler.data_store, MemoryDataStore)
+    assert isinstance(service._scheduler.event_broker, LocalEventBroker)
 
 
 async def test_add_interval_uses_interval_trigger() -> None:
