@@ -20,15 +20,14 @@
 #
 # Flags:
 #   --dry-run       Show the computed version and planned actions; change nothing.
-#   --skip-checks   Skip the local ./scripts/check.sh pre-flight (Ruff lint + format,
-#                   mypy, Prettier, tests, build). CI re-runs the same gates on the
-#                   pushed tag, so they still gate the Docker publish.
 #   -y, --yes       Do not prompt for confirmation before committing/pushing.
 #   -h, --help      Show this help and exit.
 #
 # Environment:
 #   RELEASE_BRANCH  Branch a release must be cut from (default: main).
 #
+# Local lint/type/test/build checks are not run here; CI (.github/workflows/docker-publish.yml)
+# runs the full backend and frontend quality gates on the pushed tag before publishing.
 # If no `vX.Y.Z` tag exists yet, the first release establishes the baseline 1.0.0.
 set -euo pipefail
 
@@ -40,7 +39,6 @@ REMOTE="origin"
 
 level="patch"
 dry_run=false
-skip_checks=false
 assume_yes=false
 
 usage() {
@@ -55,8 +53,6 @@ Usage: scripts/release.sh [major|minor|patch] [flags]
 
 Flags:
   --dry-run       Show the computed version and planned actions; change nothing.
-  --skip-checks   Skip the local scripts/check.sh pre-flight (Ruff, mypy, Prettier,
-                  tests, build). CI re-runs these gates on the pushed tag.
   -y, --yes       Do not prompt for confirmation before committing/pushing.
   -h, --help      Show this help and exit.
 
@@ -75,7 +71,6 @@ for arg in "$@"; do
   case "$arg" in
     major|minor|patch) level="$arg" ;;
     --dry-run) dry_run=true ;;
-    --skip-checks) skip_checks=true ;;
     -y|--yes) assume_yes=true ;;
     -h|--help) usage; exit 0 ;;
     *) echo "release: unknown argument '$arg'" >&2; echo >&2; usage; exit 2 ;;
@@ -147,14 +142,6 @@ fi
 
 if ! git diff --quiet || ! git diff --cached --quiet; then
   die "working tree is not clean; commit or stash changes before releasing"
-fi
-
-# ---- Optional pre-flight checks --------------------------------------------
-if [[ "$skip_checks" == true ]]; then
-  echo "==> Skipping local checks (--skip-checks); CI still gates the publish"
-else
-  echo "==> Running local checks (scripts/check.sh); pass --skip-checks to skip"
-  ./scripts/check.sh
 fi
 
 # ---- Confirm ---------------------------------------------------------------

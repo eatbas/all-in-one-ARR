@@ -297,18 +297,12 @@ bash scripts/release.sh major    # 1.6.0 -> 2.0.0
 bash scripts/release.sh --dry-run minor   # preview only; changes nothing
 ```
 
-The release must be cut from a clean `main` (override with `RELEASE_BRANCH`). It
-runs `scripts/check.sh` first — the full quality gate (Ruff lint + format, mypy,
-Prettier, tests, and build) — and prompts before pushing (`-y` to skip).
-`--skip-checks` only bypasses this *local* pre-flight; CI re-runs the same gates on
-the pushed tag (before the image build), so a failing check still blocks the
-Docker publish. The local check reuses `.venv/bin/python` on POSIX or
-`.venv/Scripts/python.exe` on Windows. If `.venv` does not exist, it locates a
-Python 3.14+ interpreter using `python3.14`, `python3`, the Windows `py` launcher,
-or `python`; set `PYTHON_BIN` to an explicit interpreter path when needed. Each
-computer therefore keeps its own ignored `.venv` while using the same release
-command. Only `vX.Y.Z` tags trigger the publish, so the `v` prefix is required; a
-mistaken tag can be removed with
+The release must be cut from a clean `main` (override with `RELEASE_BRANCH`) and
+prompts before pushing (`-y` to skip). Local tests and linters are not run during
+`scripts/release.sh`; CI runs the full quality gate (Ruff lint + format, mypy,
+Prettier, tests, and build) on the pushed tag before building and publishing the
+Docker image, so a failing check blocks the release. Only `vX.Y.Z` tags trigger
+the publish, so the `v` prefix is required; a mistaken tag can be removed with
 `git tag -d vX.Y.Z && git push origin :refs/tags/vX.Y.Z`.
 
 To backfill a GitHub Release for an existing tag, run the **Build and publish
