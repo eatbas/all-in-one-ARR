@@ -60,7 +60,8 @@ updates:
   # ---- Backend Python packages (backend/pyproject.toml, PEP 621) ----
   # NOTE: Dependabot updates pyproject.toml only; it does NOT regenerate
   # backend/requirements.lock (compiled out-of-band via `uv pip compile`).
-  # See the plan's ## Risks for the lock-drift follow-up.
+  # README "Local development" has the regeneration command. A manifest-only
+  # pull request still needs that lock regenerated and reviewed.
   - package-ecosystem: "pip"
     directory: "/backend"
     schedule:

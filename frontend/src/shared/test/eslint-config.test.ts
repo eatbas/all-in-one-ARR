@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs"
 import { createRequire } from "node:module"
 import path from "node:path"
 import { ESLint } from "eslint"
-import { describe, expect, it } from "vitest"
+import { beforeAll, describe, expect, it } from "vitest"
 
 const frontendRoot = path.resolve(import.meta.dirname, "../../..")
 const requireFromFrontend = createRequire(
@@ -11,6 +11,13 @@ const requireFromFrontend = createRequire(
 
 /** Exercise the repository configuration through ESLint's real Node API. */
 describe("ESLint configuration", () => {
+  const eslint = new ESLint({ cwd: frontendRoot })
+
+  beforeAll(async () => {
+    // Load the real configuration and its plugins once as suite setup.
+    await eslint.calculateConfigForFile("src/features/example/nested/source.ts")
+  })
+
   it.each([
     "eslint",
     "@eslint/config-array",
@@ -25,7 +32,7 @@ describe("ESLint configuration", () => {
         "utf8",
       ),
     ) as { version: string }
-    expect(matcher.version).toBe("11.0.5")
+    expect(matcher.version).toBe("11.0.8")
   })
 
   it.each([
@@ -33,7 +40,6 @@ describe("ESLint configuration", () => {
     "src/features/example/nested/Component.tsx",
     "src/features/example/nested/Component.test.tsx",
   ])("applies TypeScript rules to %s", async (filePath: string) => {
-    const eslint = new ESLint({ cwd: frontendRoot })
     const config = await eslint.calculateConfigForFile(filePath)
     expect(config?.rules["@typescript-eslint/no-unused-vars"]).toBeDefined()
     expect(await eslint.isPathIgnored(filePath)).toBe(false)
@@ -42,7 +48,6 @@ describe("ESLint configuration", () => {
   it.each(["dist/nested/output.tsx", "coverage/nested/report.ts"])(
     "ignores generated output %s",
     async (filePath: string) => {
-      const eslint = new ESLint({ cwd: frontendRoot })
       expect(await eslint.isPathIgnored(filePath)).toBe(true)
       expect(
         await eslint.lintText("const unused = 1", {
@@ -62,7 +67,6 @@ describe("ESLint configuration", () => {
   ])(
     "rejects unused values in %s",
     async (filePath: string, source: string) => {
-      const eslint = new ESLint({ cwd: frontendRoot })
       const [result] = await eslint.lintText(source, { filePath })
       expect(result.fatalErrorCount).toBe(0)
       expect(result.messages).toEqual(
@@ -83,7 +87,6 @@ describe("ESLint configuration", () => {
       "export default function Component() { return <div /> }",
     ],
   ])("accepts valid source in %s", async (filePath: string, source: string) => {
-    const eslint = new ESLint({ cwd: frontendRoot })
     const [result] = await eslint.lintText(source, { filePath })
     expect(result.messages).toEqual([])
   })

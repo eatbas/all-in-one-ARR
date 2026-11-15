@@ -1,6 +1,7 @@
 dist
 coverage
 node_modules
+.vite
 
 # npm owns the lockfile format; keep Prettier out of it so npm operations and
 # releases (scripts/release.sh) never fight the CI `format:check` gate.

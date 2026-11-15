@@ -858,33 +858,43 @@ uvicorn main:app --app-dir backend --port 3223
 
 The FastAPI app then serves `frontend/dist` at `/`.
 
-Dependency maintenance is assessed with Python **3.14.10**, Node **26.13.0**
-and its bundled npm **11.20.0**. Node **24.22.2** / npm **11.19.1** is also a
-compatible local check environment. Python remains on 3.14; npm 12 is a separate
-package-manager migration. TypeScript stays at **6.0.3** because
-`typescript-eslint@8.72.1` requires TypeScript `<6.1.0`.
+Dependency maintenance is assessed with Python **3.14.10**, Node **26.13.1**
+and its bundled npm **11.20.0**. Node **24.22.3** / npm **11.19.1** is also a
+compatible local check environment. Python stays on 3.14.10; 3.15 is a separate
+interpreter migration. npm stays at the bundled 11.20.0; npm 12 is a separate
+package-manager migration because it blocks dependency lifecycle scripts unless
+they are explicitly allowed. TypeScript stays at **6.0.3** because
+`typescript-eslint@8.72.2` requires TypeScript `>=4.8.4 <6.1.0`. Dependabot
+therefore ignores TypeScript major and minor updates. APScheduler stays at
+**4.0.0a6**; see Notes & limitations below. Prettier is pinned exactly at
+**3.10.1**.
 
 Install the lock generator in the virtual environment and regenerate the universal
 Python lock from the repository root with the assessed versions:
 
 ```bash
-.venv/bin/python -m pip install pip==26.3 uv==0.13.7
+.venv/bin/python -m pip install pip==26.3 uv==0.13.8
 .venv/bin/uv pip compile --refresh backend/pyproject.toml --all-extras --universal --prerelease explicit \
+  --upgrade-package 'annotated-doc==0.0.6' \
   --upgrade-package 'click==8.5.1' \
-  --upgrade-package 'coverage==7.17.2' \
-  --upgrade-package 'fastapi==0.162.2' \
+  --upgrade-package 'coverage==7.17.3' \
+  --upgrade-package 'fastapi==0.163.1' \
   --upgrade-package 'mypy-extensions==1.2.0' \
   --upgrade-package 'pydantic==2.14.3' \
   --upgrade-package 'pydantic-core==2.50.4' \
-  --upgrade-package 'pytest-asyncio==1.4.1.post1' \
-  --upgrade-package 'ruff==0.17.4' \
+  --upgrade-package 'pydantic-settings==2.16.3' \
+  --upgrade-package 'pytest-asyncio==1.5.0' \
+  --upgrade-package 'ruff==0.17.5' \
   --upgrade-package 'typing-inspection==0.4.5' \
   -o backend/requirements.lock
 ```
 
-The output preserves other existing pins. Review all lock changes and install the
-backend with its lock constraint after regeneration. The isolated build backend
-is pinned separately in `backend/pyproject.toml`.
+The output preserves other existing pins, including Starlette 1.10.0 and AnyIO
+4.16.0. Review all lock changes and install the backend with its lock constraint
+after regeneration. The isolated build backend is pinned separately in
+`backend/pyproject.toml`. Dependabot's pip updates edit `backend/pyproject.toml`
+only; they do not regenerate this universal lock, so a manifest-only pull request
+still needs the command above and a review of the lock diff.
 
 ## Code quality
 

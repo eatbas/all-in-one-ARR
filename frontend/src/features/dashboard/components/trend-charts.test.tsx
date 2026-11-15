@@ -91,28 +91,29 @@ describe("TrendCharts", () => {
   it("defaults to 30 days and switches range with the toggle", async () => {
     const user = userEvent.setup()
     render(<TrendCharts latestSnapshotAt="2026-10-27T23:55:00+00:00" />)
+    const ranges = within(screen.getByRole("tablist"))
 
     // The summary's snapshot version is handed to the history hook.
     expect(useDashboardHistory).toHaveBeenLastCalledWith(
       30,
       "2026-10-27T23:55:00+00:00",
     )
-    expect(screen.getByRole("tab", { name: "30 days" })).toHaveAttribute(
+    expect(ranges.getByRole("tab", { name: "30 days" })).toHaveAttribute(
       "aria-selected",
       "true",
     )
 
-    await user.click(screen.getByRole("tab", { name: "7 days" }))
+    await user.click(ranges.getByRole("tab", { name: "7 days" }))
     expect(useDashboardHistory).toHaveBeenLastCalledWith(
       7,
       "2026-10-27T23:55:00+00:00",
     )
-    expect(screen.getByRole("tab", { name: "7 days" })).toHaveAttribute(
+    expect(ranges.getByRole("tab", { name: "7 days" })).toHaveAttribute(
       "aria-selected",
       "true",
     )
 
-    await user.click(screen.getByRole("tab", { name: "90 days" }))
+    await user.click(ranges.getByRole("tab", { name: "90 days" }))
     expect(useDashboardHistory).toHaveBeenLastCalledWith(
       90,
       "2026-10-27T23:55:00+00:00",

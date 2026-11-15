@@ -81,18 +81,18 @@ describe("Cleanarr Settings tab", () => {
     const user = userEvent.setup()
     render(<Settings />)
 
-    await user.click(screen.getByRole("switch", { name: "Enable Cleanarr" }))
-    await user.click(screen.getByRole("switch", { name: "Dry run" }))
-    await user.click(
-      screen.getByRole("switch", { name: "Enable queue cleaning" }),
-    )
-    await user.click(
-      screen.getByRole("switch", { name: "Enable malware blocker" }),
-    )
-    await user.click(
-      screen.getByRole("switch", { name: "Enable orphan quarantine" }),
-    )
-    await user.click(screen.getByRole("switch", { name: "Enable Radarr" }))
+    for (const label of [
+      "Enable Cleanarr",
+      "Dry run",
+      "Enable queue cleaning",
+      "Enable malware blocker",
+      "Enable orphan quarantine",
+      "Enable Radarr",
+    ]) {
+      const toggle = screen.getByLabelText(label)
+      expect(toggle).toHaveRole("switch")
+      await user.click(toggle)
+    }
     await user.click(screen.getByRole("combobox", { name: "Pattern mode" }))
     await user.click(
       screen.getByRole("option", {
@@ -107,7 +107,8 @@ describe("Cleanarr Settings tab", () => {
     await user.type(extensions, "EXE lnk")
     const quarantine = screen.getByLabelText("Quarantine folder")
     await user.clear(quarantine)
-    await user.type(quarantine, "/downloads/complete/q/")
+    await user.click(quarantine)
+    await user.paste("/downloads/complete/q/")
     await user.type(screen.getByLabelText("Title contains"), "Sample")
 
     await user.click(saveButton())
