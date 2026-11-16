@@ -485,3 +485,43 @@ async def test_get_download_activity_invalid_json_returns_empty() -> None:
     respx.get(_TORRENTS).mock(return_value=httpx.Response(200, text="not json"))
     result = await make_client().get_download_activity()
     assert result == {"queue": [], "queue_total": 0, "history": []}
+
+
+@respx.mock
+async def test_get_download_activity_strips_text_and_falls_back_for_non_strings() -> (
+    None
+):
+    respx.get(_TORRENTS).mock(
+        return_value=httpx.Response(
+            200,
+            json=[
+                # Unstripped, " Zulu" would sort before "Alpha"; the stripped
+                # name is the queue tie-breaker, so "Alpha" comes first.
+                {
+                    "hash": "  zulu-hash ",
+                    "name": " Zulu",
+                    "state": "downloading",
+                    "added_on": 5,
+                },
+                {
+                    "hash": 42,
+                    "name": "  Alpha  Movie ",
+                    "state": "downloading",
+                    "added_on": 5,
+                },
+                {"hash": None, "name": 7, "state": None, "completion_on": 100},
+            ],
+        )
+    )
+
+    result = await make_client().get_download_activity()
+
+    assert [(item["id"], item["name"], item["status"]) for item in result["queue"]] == [
+        # A non-string hash falls back to the stripped name; internal
+        # whitespace is kept.
+        ("Alpha  Movie", "Alpha  Movie", "downloading"),
+        ("zulu-hash", "Zulu", "downloading"),
+    ]
+    assert [
+        (item["id"], item["name"], item["status"]) for item in result["history"]
+    ] == [("", "Untitled torrent", "unknown")]

@@ -16,6 +16,7 @@ from typing import Any
 import httpx
 
 from core.bandwidth_types import DOWNLOAD_HISTORY_LIMIT, QUEUE_ITEM_LIMIT
+from core.coerce import stripped_text
 from core.logging import get_logger
 
 _ACTIVE_STATES = {
@@ -356,7 +357,7 @@ def _torrent_queue_sort_key(torrent: dict[str, Any]) -> tuple[int, float, str]:
     return (
         priority,
         _number_value(torrent.get("added_on")),
-        _string_value(torrent.get("name")),
+        stripped_text(torrent.get("name")),
     )
 
 
@@ -375,9 +376,9 @@ def _torrent_item(
     )
     return {
         "client": "qbittorrent",
-        "id": _string_value(torrent.get("hash")) or _string_value(torrent.get("name")),
-        "name": _string_value(torrent.get("name")) or "Untitled torrent",
-        "status": _string_value(torrent.get("state")) or "unknown",
+        "id": stripped_text(torrent.get("hash")) or stripped_text(torrent.get("name")),
+        "name": stripped_text(torrent.get("name")) or "Untitled torrent",
+        "status": stripped_text(torrent.get("state")) or "unknown",
         "progress": _progress_percent(torrent.get("progress")),
         "size_bytes": size_bytes,
         "size_label": _format_bytes(size_bytes) if size_bytes is not None else None,
@@ -386,11 +387,6 @@ def _torrent_item(
         "added_at": _unix_to_iso(torrent.get("added_on")),
         "completed_at": completed_at,
     }
-
-
-def _string_value(value: Any) -> str:
-    """Return a stripped string for display or identifiers."""
-    return value.strip() if isinstance(value, str) else ""
 
 
 def _number_value(value: Any) -> float:

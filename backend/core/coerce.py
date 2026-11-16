@@ -1,8 +1,9 @@
-"""Small, shared integer-coercion helpers for untrusted JSON and settings values.
+"""Small, shared coercion helpers for untrusted JSON and settings values.
 
-Servarr payloads and persisted settings arrive as loosely typed JSON, so several
-features need the same "parse an int or fall back" logic. Keeping it here gives
-one definition of the rules instead of a private copy per module.
+Servarr and download-client payloads and persisted settings arrive as loosely
+typed JSON, so several features need the same "parse an int or fall back" and
+"read a stripped string or fall back" logic. Keeping it here gives one
+definition of the rules instead of a private copy per module.
 """
 
 from __future__ import annotations
@@ -33,3 +34,13 @@ def bounded_int(value: Any, *, default: int, minimum: int, maximum: int) -> int:
     if parsed is None:
         return default
     return max(minimum, min(parsed, maximum))
+
+
+def stripped_text(value: object) -> str:
+    """Return ``value`` with surrounding whitespace stripped when it is a string.
+
+    Any other value (``None``, numbers, booleans, containers) yields ``""``; it
+    is never stringified, so a malformed field cannot pose as text. Internal
+    whitespace and letter case are preserved.
+    """
+    return value.strip() if isinstance(value, str) else ""

@@ -1250,3 +1250,289 @@ async def test_get_config_tolerates_lists_dicts_and_missing_sections() -> None:
 async def test_get_config_failures_return_none(response: httpx.Response) -> None:
     respx.get(_API).mock(return_value=response)
     assert await SabnzbdClient(base_url=_BASE, api_key="k").get_config() is None
+
+
+_QUEUE_PARAMS = {
+    "mode": "queue",
+    "output": "json",
+    "start": "0",
+    "limit": "0",
+    "apikey": "k",
+}
+
+
+def _history_params(limit: int) -> dict[str, str]:
+    return {
+        "mode": "history",
+        "output": "json",
+        "start": "0",
+        "limit": str(limit),
+        "archive": "1",
+        "apikey": "k",
+    }
+
+
+@respx.mock
+async def test_activity_requests_send_complete_parameters_once_each() -> None:
+    route = respx.get(_API).mock(
+        side_effect=[
+            httpx.Response(200, json={"queue": {"slots": []}}),
+            httpx.Response(200, json={"history": {"slots": []}}),
+        ]
+    )
+    client = SabnzbdClient(base_url=_BASE, api_key="k")
+    await client.get_download_activity(history_limit=3, queue_limit=2)
+    assert route.call_count == 2
+    queue_call, history_call = (dict(call.request.url.params) for call in route.calls)
+    assert queue_call == _QUEUE_PARAMS
+    assert history_call == _history_params(3)
+
+
+@respx.mock
+async def test_snapshot_negative_history_limit_requests_zero() -> None:
+    route = respx.get(_API).mock(
+        side_effect=[
+            httpx.Response(200, json={"queue": {"slots": []}}),
+            httpx.Response(200, json={"history": {"slots": [{"nzo_id": "a"}]}}),
+        ]
+    )
+    client = SabnzbdClient(base_url=_BASE, api_key="k")
+    result = await client.get_status_snapshot(history_limit=-4)
+    assert route.call_count == 2
+    queue_call, history_call = (dict(call.request.url.params) for call in route.calls)
+    assert queue_call == _QUEUE_PARAMS
+    assert history_call == _history_params(0)
+    assert result["activity"]["history"] == []
+
+
+@respx.mock
+async def test_get_stats_and_queue_filenames_send_one_complete_queue_request() -> None:
+    route = respx.get(_API).mock(
+        return_value=httpx.Response(200, json={"queue": {"slots": []}})
+    )
+    client = SabnzbdClient(base_url=_BASE, api_key="k")
+    await client.get_stats()
+    assert await client.queue_filenames() == []
+    assert route.call_count == 2
+    assert [dict(call.request.url.params) for call in route.calls] == [
+        _QUEUE_PARAMS,
+        _QUEUE_PARAMS,
+    ]
+
+
+@respx.mock
+async def test_valid_empty_queue_and_history_are_successful_reads() -> None:
+    respx.get(_API).mock(
+        side_effect=[
+            httpx.Response(200, json={"queue": {"slots": []}}),
+            httpx.Response(200, json={"history": {"slots": []}}),
+        ]
+    )
+    result = await SabnzbdClient(base_url=_BASE, api_key="k").get_status_snapshot()
+    # An empty queue is an online, idle SABnzbd — not the offline sentinel.
+    assert result["stats"] == {
+        "online": True,
+        "speed_mbps": 0.0,
+        "active_downloads": 0,
+        "queue_size": 0,
+        "paused": False,
+        "speed_limit_mbps": None,
+    }
+    assert result["activity"] == {"queue": [], "queue_total": 0, "history": []}
+
+
+@respx.mock
+async def test_queue_without_a_slots_list_is_a_failed_read() -> None:
+    respx.get(_API).mock(return_value=httpx.Response(200, json={"queue": {}}))
+    client = SabnzbdClient(base_url=_BASE, api_key="k")
+    assert (await client.get_stats())["online"] is False
+    assert await client.queue_filenames() is None
+
+
+@respx.mock
+async def test_history_slots_reject_malformed_slots_beyond_the_limit() -> None:
+    respx.get(_API).mock(
+        return_value=httpx.Response(
+            200, json={"history": {"slots": [{"nzo_id": "visible"}, "malformed"]}}
+        )
+    )
+    client = SabnzbdClient(base_url=_BASE, api_key="k")
+    # Every slot is validated before the visible slice is applied.
+    assert await client._history_slots(limit=1) == []
+
+
+@respx.mock
+async def test_history_slots_slice_to_the_limit_and_handle_empty_sections() -> None:
+    respx.get(_API).mock(
+        side_effect=[
+            httpx.Response(
+                200,
+                json={"history": {"slots": [{"nzo_id": "a"}, {"nzo_id": "b"}]}},
+            ),
+            httpx.Response(200, json={"history": {"slots": []}}),
+            httpx.Response(200, json={"history": {}}),
+        ]
+    )
+    client = SabnzbdClient(base_url=_BASE, api_key="k")
+    assert await client._history_slots(limit=1) == [{"nzo_id": "a"}]
+    assert await client._history_slots(limit=5) == []
+    assert await client._history_slots(limit=5) == []
+
+
+@pytest.mark.parametrize(
+    "queue_failure",
+    [
+        httpx.ConnectError("down"),
+        httpx.Response(500),
+        httpx.Response(200, text="not json"),
+        httpx.Response(200, json=["bad"]),
+        httpx.Response(200, json={"status": False, "error": "API Key Incorrect"}),
+        httpx.Response(200, json={"queue": "bad"}),
+        httpx.Response(200, json={"queue": {"slots": [{"nzo_id": "a"}, "bad"]}}),
+    ],
+)
+@respx.mock
+async def test_queue_failure_keeps_the_independent_history_request(
+    queue_failure: object,
+) -> None:
+    history = httpx.Response(
+        200, json={"history": {"slots": [{"nzo_id": "done", "name": "Done"}]}}
+    )
+    route = respx.get(_API).mock(side_effect=[queue_failure, history])
+    result = await SabnzbdClient(base_url=_BASE, api_key="k").get_download_activity()
+    assert route.call_count == 2
+    queue_call, history_call = (dict(call.request.url.params) for call in route.calls)
+    assert queue_call == _QUEUE_PARAMS
+    assert history_call == _history_params(10)
+    assert result["queue"] == []
+    assert result["queue_total"] == 0
+    assert [item["name"] for item in result["history"]] == ["Done"]
+
+
+@respx.mock
+async def test_activity_items_strip_text_and_fall_back_for_non_strings() -> None:
+    respx.get(_API).mock(
+        side_effect=[
+            httpx.Response(
+                200,
+                json={
+                    "queue": {
+                        "speed": "1 M",
+                        "slots": [
+                            {
+                                "nzo_id": "  q1 ",
+                                "filename": "  Padded  Show ",
+                                "status": " Downloading ",
+                                "size": " 1.0 GB ",
+                            },
+                            {"nzo_id": 9, "filename": " Fallback.Id "},
+                            {"nzo_id": None, "filename": 3, "status": 4},
+                        ],
+                    }
+                },
+            ),
+            httpx.Response(
+                200,
+                json={
+                    "history": {
+                        "slots": [
+                            {
+                                "nzo_id": 5,
+                                "name": None,
+                                "nzb_name": " Fallback.nzb ",
+                                "status": " Completed ",
+                            },
+                            {"nzo_id": "  h2 ", "name": " Done ", "status": 1},
+                        ]
+                    }
+                },
+            ),
+        ]
+    )
+    result = await SabnzbdClient(base_url=_BASE, api_key="k").get_download_activity()
+    queue = [
+        (item["id"], item["name"], item["status"], item["speed_mbps"])
+        for item in result["queue"]
+    ]
+    assert queue == [
+        # The stripped status still identifies the downloading slot.
+        ("q1", "Padded  Show", "Downloading", 1.0),
+        ("Fallback.Id", "Fallback.Id", "unknown", None),
+        ("", "Untitled NZB", "unknown", None),
+    ]
+    assert result["queue"][0]["size_label"] == "1.0 GB"
+    history = [
+        (item["id"], item["name"], item["status"], item["progress"])
+        for item in result["history"]
+    ]
+    assert history == [
+        ("", "Fallback.nzb", "Completed", 100),
+        ("h2", "Done", "unknown", None),
+    ]
+
+
+@respx.mock
+async def test_queue_filenames_strip_names_and_skip_non_strings() -> None:
+    respx.get(_API).mock(
+        return_value=httpx.Response(
+            200,
+            json={
+                "queue": {
+                    "slots": [
+                        {"filename": "  Job  B "},
+                        {"filename": 7},
+                        {"filename": "   "},
+                    ]
+                }
+            },
+        )
+    )
+    client = SabnzbdClient(base_url=_BASE, api_key="k")
+    assert await client.queue_filenames() == ["Job  B"]
+
+
+@respx.mock
+async def test_history_jobs_strip_fields_and_keep_malformed_storage_incomplete() -> (
+    None
+):
+    respx.get(_API).mock(
+        return_value=httpx.Response(
+            200,
+            json={
+                "history": {
+                    "noofslots": 2,
+                    "slots": [
+                        _history_slot(
+                            1,
+                            nzo_id="  id1 ",
+                            name=" Job  One ",
+                            status=5,
+                            category=None,
+                            storage=" /data/one ",
+                        ),
+                        _history_slot(2, storage=42),
+                    ],
+                }
+            },
+        )
+    )
+    history = await SabnzbdClient(base_url=_BASE, api_key="k").history_jobs()
+    assert history is not None
+    assert history.jobs == (
+        SabHistoryJob(
+            nzo_id="id1",
+            name="Job  One",
+            status="",
+            category="",
+            storage="/data/one",
+        ),
+        SabHistoryJob(
+            nzo_id="SABnzbd_nzo_2",
+            name="Job 2",
+            status="Completed",
+            category="tv",
+            storage="",
+        ),
+    )
+    # A non-string storage hides its folder, so the history is not exhaustive.
+    assert history.complete is False

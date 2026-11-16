@@ -14,6 +14,7 @@ from typing import Any
 import httpx
 
 from core.bandwidth_types import DOWNLOAD_HISTORY_LIMIT, QUEUE_ITEM_LIMIT
+from core.coerce import stripped_text
 from core.logging import get_logger
 from core.sabnzbd_types import (
     SabConfig,
@@ -148,29 +149,10 @@ class SabnzbdClient:
 
     async def _queue_payload(self, *, limit: int) -> dict[str, Any] | None:
         """Fetch and validate a SABnzbd queue payload."""
-        try:
-            response = await self._client.get(
-                f"{self._base_url}/api",
-                params={
-                    "mode": "queue",
-                    "output": "json",
-                    "start": "0",
-                    "limit": str(limit),
-                    "apikey": self._api_key,
-                },
-            )
-        except httpx.HTTPError:
-            return None
-        if response.status_code != 200:
-            return None
-        try:
-            data = response.json()
-        except ValueError:
-            return None
-        if not isinstance(data, dict):
-            return None
-        queue = data.get("queue")
-        if not isinstance(queue, dict):
+        queue = await self._api_section(
+            "queue", {"mode": "queue", "start": "0", "limit": str(limit)}
+        )
+        if queue is None:
             return None
         slots = queue.get("slots")
         if not isinstance(slots, list) or not all(
@@ -181,30 +163,11 @@ class SabnzbdClient:
 
     async def _history_slots(self, *, limit: int) -> list[dict[str, Any]]:
         """Fetch SABnzbd history slots, returning an empty list on failure."""
-        try:
-            response = await self._client.get(
-                f"{self._base_url}/api",
-                params={
-                    "mode": "history",
-                    "output": "json",
-                    "start": "0",
-                    "limit": str(limit),
-                    "archive": "1",
-                    "apikey": self._api_key,
-                },
-            )
-        except httpx.HTTPError:
-            return []
-        if response.status_code != 200:
-            return []
-        try:
-            data = response.json()
-        except ValueError:
-            return []
-        if not isinstance(data, dict):
-            return []
-        history = data.get("history")
-        if not isinstance(history, dict):
+        history = await self._api_section(
+            "history",
+            {"mode": "history", "start": "0", "limit": str(limit), "archive": "1"},
+        )
+        if history is None:
             return []
         slots = history.get("slots")
         if not isinstance(slots, list) or not all(
@@ -285,7 +248,7 @@ class SabnzbdClient:
         queue = await self._queue_payload(limit=0)
         if queue is None:
             return None
-        names = (_string_value(slot.get("filename")) for slot in queue["slots"])
+        names = (stripped_text(slot.get("filename")) for slot in queue["slots"])
         return [name for name in names if name]
 
     async def get_config(self) -> SabConfig | None:
@@ -466,7 +429,7 @@ def _queue_activity(
         (
             index
             for index, slot in enumerate(slots)
-            if _string_value(slot.get("status")) == "Downloading"
+            if stripped_text(slot.get("status")) == "Downloading"
         ),
         None,
     )
@@ -487,12 +450,12 @@ def _queue_item(slot: dict[str, Any], *, speed_mbps: float | None) -> dict[str, 
     size_bytes = _slot_size_bytes(slot)
     return {
         "client": "sabnzbd",
-        "id": _string_value(slot.get("nzo_id")) or _string_value(slot.get("filename")),
-        "name": _string_value(slot.get("filename")) or "Untitled NZB",
-        "status": _string_value(slot.get("status")) or "unknown",
+        "id": stripped_text(slot.get("nzo_id")) or stripped_text(slot.get("filename")),
+        "name": stripped_text(slot.get("filename")) or "Untitled NZB",
+        "status": stripped_text(slot.get("status")) or "unknown",
         "progress": _percent_value(slot.get("percentage")),
         "size_bytes": size_bytes,
-        "size_label": _string_value(slot.get("size")) or _format_bytes(size_bytes),
+        "size_label": stripped_text(slot.get("size")) or _format_bytes(size_bytes),
         "speed_mbps": speed_mbps,
         "eta_seconds": _timeleft_seconds(slot.get("timeleft")),
         "added_at": _unix_to_iso(slot.get("time_added")),
@@ -505,14 +468,14 @@ def _history_item(slot: dict[str, Any]) -> dict[str, Any]:
     size_bytes = _slot_size_bytes(slot)
     return {
         "client": "sabnzbd",
-        "id": _string_value(slot.get("nzo_id")) or _string_value(slot.get("name")),
-        "name": _string_value(slot.get("name"))
-        or _string_value(slot.get("nzb_name"))
+        "id": stripped_text(slot.get("nzo_id")) or stripped_text(slot.get("name")),
+        "name": stripped_text(slot.get("name"))
+        or stripped_text(slot.get("nzb_name"))
         or "Untitled NZB",
-        "status": _string_value(slot.get("status")) or "unknown",
-        "progress": 100 if _string_value(slot.get("status")) == "Completed" else None,
+        "status": stripped_text(slot.get("status")) or "unknown",
+        "progress": 100 if stripped_text(slot.get("status")) == "Completed" else None,
         "size_bytes": size_bytes,
-        "size_label": _string_value(slot.get("size")) or _format_bytes(size_bytes),
+        "size_label": stripped_text(slot.get("size")) or _format_bytes(size_bytes),
         "speed_mbps": None,
         "eta_seconds": None,
         "added_at": _unix_to_iso(slot.get("time_added")),
@@ -529,11 +492,6 @@ def _parse_sab_bool(value: Any) -> bool:
     if isinstance(value, str):
         return value.strip().lower() in {"true", "1", "yes"}
     return False
-
-
-def _string_value(value: Any) -> str:
-    """Return a stripped string for display or identifiers."""
-    return value.strip() if isinstance(value, str) else ""
 
 
 def _slot_size_bytes(slot: dict[str, Any]) -> int | None:

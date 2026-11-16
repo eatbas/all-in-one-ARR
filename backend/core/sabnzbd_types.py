@@ -27,6 +27,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
+from core.coerce import stripped_text
+
 
 @dataclass(frozen=True)
 class SabHistoryJob:
@@ -71,11 +73,6 @@ class SabConfig:
     category_folders: tuple[tuple[str, str], ...] = ()
 
 
-def _text(value: Any) -> str:
-    """Return a stripped string, or ``""`` for non-strings."""
-    return value.strip() if isinstance(value, str) else ""
-
-
 def _optional_int(value: Any) -> int | None:
     """Return an int from an int or numeric string; ``None`` otherwise."""
     if isinstance(value, bool):
@@ -97,7 +94,7 @@ def _extensions(value: Any) -> tuple[str, ...]:
         return ()
     result: list[str] = []
     for entry in entries:
-        text = _text(entry).lower()
+        text = stripped_text(entry).lower()
         if not text:
             continue
         extension = text if text.startswith(".") else f".{text}"
@@ -115,7 +112,7 @@ def _category_folders(value: Any) -> tuple[tuple[str, str], ...]:
     else:
         return ()
     pairs = (
-        (_text(category.get("name")), _text(category.get("dir")))
+        (stripped_text(category.get("name")), stripped_text(category.get("dir")))
         for category in categories
         if isinstance(category, dict)
     )
@@ -136,15 +133,15 @@ def history_slot_storage(slot: dict[str, Any]) -> str | None:
 
 def parse_history_job(slot: dict[str, Any]) -> SabHistoryJob | None:
     """Return a :class:`SabHistoryJob`, or ``None`` when the slot has no ``nzo_id``."""
-    nzo_id = _text(slot.get("nzo_id"))
+    nzo_id = stripped_text(slot.get("nzo_id"))
     if not nzo_id:
         return None
     return SabHistoryJob(
         nzo_id=nzo_id,
-        name=_text(slot.get("name")),
-        status=_text(slot.get("status")),
-        category=_text(slot.get("category")),
-        storage=_text(slot.get("storage")),
+        name=stripped_text(slot.get("name")),
+        status=stripped_text(slot.get("status")),
+        category=stripped_text(slot.get("category")),
+        storage=stripped_text(slot.get("storage")),
     )
 
 
@@ -182,7 +179,7 @@ def parse_config(data: Any) -> SabConfig | None:
     misc = misc if isinstance(misc, dict) else {}
     folders = _category_folders(config.get("categories"))
     return SabConfig(
-        complete_dir=_text(misc.get("complete_dir")),
+        complete_dir=stripped_text(misc.get("complete_dir")),
         unwanted_extensions=_extensions(misc.get("unwanted_extensions")),
         unwanted_action=_optional_int(misc.get("action_on_unwanted_extensions")),
         encrypted_rar_action=_optional_int(misc.get("pause_on_pwrar")),

@@ -35,6 +35,7 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
 from core.clients.servarr import ServarrClient, ServarrClientError
+from core.coerce import stripped_text
 from modules.cleanarr.models import ArrDownloadHandling, ArrQueue, QueueItem
 from modules.cleanarr.paths import folder_name
 
@@ -61,11 +62,6 @@ class CleanarrClientError(ServarrClientError):
     """Raised when a Sonarr/Radarr API request for Cleanarr cannot be completed."""
 
 
-def _text(value: Any) -> str:
-    """Return a stripped string, or ``""`` for anything else."""
-    return value.strip() if isinstance(value, str) else ""
-
-
 def _flatten_messages(value: Any) -> tuple[str, ...]:
     """Flatten ``statusMessages[{title, messages[]}]`` into one tuple of strings."""
     if not isinstance(value, list):
@@ -74,12 +70,12 @@ def _flatten_messages(value: Any) -> tuple[str, ...]:
     for entry in value:
         if not isinstance(entry, dict):
             continue
-        title = _text(entry.get("title"))
+        title = stripped_text(entry.get("title"))
         if title:
             flattened.append(title)
         messages = entry.get("messages")
         if isinstance(messages, list):
-            flattened.extend(text for text in map(_text, messages) if text)
+            flattened.extend(text for text in map(stripped_text, messages) if text)
     return tuple(flattened)
 
 
@@ -94,21 +90,21 @@ def _queue_item(app: str, record: dict[str, Any]) -> QueueItem | None:
     An unusable ``id`` only makes the item non-actionable (``queue_id``
     ``None``); its download protection fields are still read.
     """
-    download_id = _text(record.get("downloadId"))
+    download_id = stripped_text(record.get("downloadId"))
     if not download_id:
         return None
     return QueueItem(
         app=app,
         queue_id=_queue_id(record.get("id")),
         download_id=download_id,
-        protocol=_text(record.get("protocol")).lower(),
-        download_client=_text(record.get("downloadClient")),
-        title=_text(record.get("title")),
-        status=_text(record.get("status")),
-        tracked_status=_text(record.get("trackedDownloadStatus")).lower(),
-        tracked_state=_text(record.get("trackedDownloadState")),
+        protocol=stripped_text(record.get("protocol")).lower(),
+        download_client=stripped_text(record.get("downloadClient")),
+        title=stripped_text(record.get("title")),
+        status=stripped_text(record.get("status")),
+        tracked_status=stripped_text(record.get("trackedDownloadStatus")).lower(),
+        tracked_state=stripped_text(record.get("trackedDownloadState")),
         messages=_flatten_messages(record.get("statusMessages")),
-        output_path=_text(record.get("outputPath")),
+        output_path=stripped_text(record.get("outputPath")),
     )
 
 
@@ -239,7 +235,7 @@ class CleanarrArrClient(ServarrClient):
             for client in self._as_dicts(
                 await self._request("GET", "/api/v3/downloadclient")
             )
-            if _text(client.get("implementation")).lower() == "sabnzbd"
+            if stripped_text(client.get("implementation")).lower() == "sabnzbd"
         ]
         return ArrDownloadHandling(
             completed_handling=_optional_bool(

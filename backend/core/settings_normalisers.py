@@ -225,13 +225,11 @@ def normalise_omdb_daily_budget_per_key(value: Any) -> int:
     Out-of-range values clamp to the 100–1000 bounds (OMDb's free tier is
     1000/day per key); unparseable input falls back to the default.
     """
-    try:
-        parsed = int(value)
-    except TypeError, ValueError:
-        return DEFAULT_OMDB_DAILY_BUDGET_PER_KEY
-    return max(
-        OMDB_DAILY_BUDGET_PER_KEY_MIN,
-        min(parsed, OMDB_DAILY_BUDGET_PER_KEY_MAX),
+    return bounded_int(
+        value,
+        default=DEFAULT_OMDB_DAILY_BUDGET_PER_KEY,
+        minimum=OMDB_DAILY_BUDGET_PER_KEY_MIN,
+        maximum=OMDB_DAILY_BUDGET_PER_KEY_MAX,
     )
 
 
@@ -247,11 +245,7 @@ def _normalise_findarr_limit(value: Any, *, default: int) -> int:
 
 def _normalise_findarr_queue_limit(value: Any) -> int:
     """Return a Findarr queue limit, where ``-1`` means no queue guard."""
-    try:
-        parsed = int(value)
-    except TypeError, ValueError:
-        return -1
-    return -1 if parsed < 0 else min(parsed, _FINDARR_LIMIT_MAX)
+    return bounded_int(value, default=-1, minimum=-1, maximum=_FINDARR_LIMIT_MAX)
 
 
 def _normalise_findarr_search_mode(value: Any, *, default: str = "episodes") -> str:

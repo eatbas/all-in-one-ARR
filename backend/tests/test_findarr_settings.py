@@ -2,7 +2,64 @@
 
 from __future__ import annotations
 
+import pytest
+
+from core.settings_normalisers import normalise_findarr_settings
 from core.settings_store import SettingsStore
+
+
+@pytest.mark.parametrize(
+    ("raw", "expected"),
+    [
+        # Unparseable input (including NaN) disables the queue guard.
+        (None, -1),
+        ("bad", -1),
+        ("2.5", -1),
+        ([], -1),
+        ({}, -1),
+        (float("nan"), -1),
+        # Numeric strings and in-range values pass through unchanged.
+        ("50", 50),
+        (" 7 ", 7),
+        (0, 0),
+        (100, 100),
+        # Floats truncate towards zero before the clamp, so -0.5 becomes 0.
+        (2.9, 2),
+        (-0.5, 0),
+        (100.9, 100),
+        # Booleans are ints and convert like them.
+        (True, 1),
+        (False, 0),
+        # Every negative value is the -1 "no guard" sentinel; the cap is 100.
+        (-1, -1),
+        (-5, -1),
+        ("-3", -1),
+        (-1.5, -1),
+        (101, 100),
+        ("250", 100),
+    ],
+)
+def test_findarr_queue_limit_normalisation_matrix(raw: object, expected: int) -> None:
+    assert normalise_findarr_settings({"queue_limit": raw})["queue_limit"] == expected
+
+
+def test_findarr_queue_limit_infinity_is_not_swallowed() -> None:
+    # ``int(inf)`` raises OverflowError, which is deliberately not a fallback.
+    with pytest.raises(OverflowError):
+        normalise_findarr_settings({"queue_limit": float("inf")})
+
+
+def test_findarr_queue_limit_update_persists_and_reloads(tmp_path) -> None:
+    path = tmp_path / "settings.json"
+    store = SettingsStore(str(path))
+    store.load_or_seed(client_id="c", client_secret="s")
+    assert store.findarr_settings()["queue_limit"] == -1
+    assert store.update_findarr_settings({"queue_limit": "40"})["queue_limit"] == 40
+    assert store.update_findarr_settings({"queue_limit": 500})["queue_limit"] == 100
+
+    reopened = SettingsStore(str(path))
+    reopened.load_or_seed(client_id="x", client_secret="x")
+    assert reopened.findarr_settings()["queue_limit"] == 100
 
 
 def test_findarr_defaults_are_seeded_and_masked(tmp_path) -> None:

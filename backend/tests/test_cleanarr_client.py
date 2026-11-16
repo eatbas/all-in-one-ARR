@@ -330,3 +330,67 @@ async def test_download_handling_unknown_when_fields_are_missing() -> None:
         remove_failed=None,
         remove_completed=None,
     )
+
+
+@respx.mock
+async def test_read_queue_strips_text_fields_and_ignores_non_strings() -> None:
+    record = _record(
+        1,
+        downloadId="  nzo1 ",
+        protocol=" Usenet ",
+        downloadClient=" SABnzbd ",
+        title="  Release  One ",
+        status=5,
+        trackedDownloadStatus=" Warning ",
+        trackedDownloadState=None,
+        statusMessages=[{"title": "  A.mkv ", "messages": ["  one ", 3, "\t"]}],
+        outputPath=" /dl/One ",
+    )
+    respx.get(f"{_SONARR}/api/v3/queue").mock(
+        return_value=httpx.Response(200, json={"totalRecords": 1, "records": [record]})
+    )
+    queue = await _client().read_queue()
+    assert queue.items == (
+        QueueItem(
+            app="sonarr",
+            queue_id=1,
+            download_id="nzo1",
+            protocol="usenet",
+            download_client="SABnzbd",
+            title="Release  One",
+            status="",
+            tracked_status="warning",
+            tracked_state="",
+            messages=("A.mkv", "one"),
+            output_path="/dl/One",
+        ),
+    )
+    assert queue.references_complete is True
+    assert queue.downloads_complete is True
+
+
+@respx.mock
+async def test_download_handling_matches_padded_sab_implementation_only() -> None:
+    respx.get(f"{_SONARR}/api/v3/config/downloadclient").mock(
+        return_value=httpx.Response(200, json={})
+    )
+    respx.get(f"{_SONARR}/api/v3/downloadclient").mock(
+        return_value=httpx.Response(
+            200,
+            json=[
+                {
+                    "implementation": "  SABnzbd ",
+                    "removeFailedDownloads": True,
+                    "removeCompletedDownloads": False,
+                },
+                {"implementation": 42, "removeFailedDownloads": False},
+                {"implementation": None, "removeCompletedDownloads": True},
+            ],
+        )
+    )
+    assert await _client().download_handling() == ArrDownloadHandling(
+        completed_handling=None,
+        redownload_failed=None,
+        remove_failed=True,
+        remove_completed=False,
+    )

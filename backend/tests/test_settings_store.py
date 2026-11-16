@@ -6,7 +6,10 @@ import json
 
 import pytest
 
-from core.settings_normalisers import normalise_service_url
+from core.settings_normalisers import (
+    normalise_omdb_daily_budget_per_key,
+    normalise_service_url,
+)
 from core.settings_store import SettingsStore, TrackedList
 
 
@@ -867,14 +870,79 @@ def test_omdb_budget_seed_and_reload(tmp_path) -> None:
 def test_omdb_budget_clamps_to_bounds(tmp_path) -> None:
     # Out-of-range values clamp to the 100-1000 bounds; unparseable input
     # falls back to the default.
-    from core.settings_normalisers import normalise_omdb_daily_budget_per_key
-
     store = SettingsStore(str(tmp_path / "settings.json"))
     _seed(store)
     assert store.update_omdb_daily_budget_per_key(1500) == 1000
     assert store.update_omdb_daily_budget_per_key(1) == 100
     assert store.omdb_daily_budget_per_key() == 100
     assert normalise_omdb_daily_budget_per_key("abc") == 800
+
+
+@pytest.mark.parametrize(
+    ("raw", "expected"),
+    [
+        # Unparseable input (including NaN) falls back to the default.
+        (None, 800),
+        ("abc", 800),
+        ("550.7", 800),
+        ([], 800),
+        ({}, 800),
+        (float("nan"), 800),
+        # Numeric strings and in-range values pass through unchanged.
+        ("500", 500),
+        (" 650 ", 650),
+        (100, 100),
+        (1000, 1000),
+        # Floats truncate towards zero before the clamp.
+        (550.7, 550),
+        (99.9, 100),
+        (1000.9, 1000),
+        # Booleans are ints, so they convert and clamp to the minimum.
+        (True, 100),
+        (False, 100),
+        # Values outside the bounds clamp to them.
+        (99, 100),
+        (-5, 100),
+        ("-5", 100),
+        (1001, 1000),
+    ],
+)
+def test_omdb_budget_normalisation_matrix(raw: object, expected: int) -> None:
+    assert normalise_omdb_daily_budget_per_key(raw) == expected
+
+
+def test_omdb_budget_infinity_is_not_swallowed() -> None:
+    # ``int(inf)`` raises OverflowError, which is deliberately not a fallback.
+    with pytest.raises(OverflowError):
+        normalise_omdb_daily_budget_per_key(float("inf"))
+
+
+def test_omdb_budget_update_persists_normalised_value(tmp_path) -> None:
+    path = tmp_path / "settings.json"
+    store = SettingsStore(str(path))
+    _seed(store)
+    assert store.update_omdb_daily_budget_per_key(650) == 650
+    assert json.loads(path.read_text())["omdb_daily_budget_per_key"] == 650
+
+    reopened = SettingsStore(str(path))
+    reopened.load_or_seed(client_id="x", client_secret="x")
+    assert reopened.omdb_daily_budget_per_key() == 650
+
+
+def test_omdb_budget_out_of_range_seed_and_stored_value_clamp(tmp_path) -> None:
+    path = tmp_path / "settings.json"
+    store = SettingsStore(str(path))
+    store.load_or_seed(
+        client_id="cid", client_secret="sec", omdb_daily_budget_per_key=5000
+    )
+    assert store.omdb_daily_budget_per_key() == 1000
+
+    data = json.loads(path.read_text())
+    data["omdb_daily_budget_per_key"] = "bad"
+    path.write_text(json.dumps(data), encoding="utf-8")
+    reopened = SettingsStore(str(path))
+    reopened.load_or_seed(client_id="x", client_secret="x")
+    assert reopened.omdb_daily_budget_per_key() == 800
 
 
 def test_omdb_budget_in_masked(tmp_path) -> None:
