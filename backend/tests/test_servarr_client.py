@@ -30,6 +30,24 @@ async def test_shared_read_endpoints_filter_non_dict_entries() -> None:
     await client.aclose()
 
 
+async def test_episodes_and_tags_read_endpoints() -> None:
+    seen: list[str] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.append(request.url.path)
+        if request.url.path == "/api/v3/episode":
+            assert request.url.params["seriesId"] == "7"
+            return httpx.Response(200, json=[{"id": 70, "episodeFileId": 3}, 1])
+        assert request.url.path == "/api/v3/tag"
+        return httpx.Response(200, json=[{"id": 1, "label": "anime"}, "bad"])
+
+    client = _client(handler)
+    assert await client.episodes(7) == [{"id": 70, "episodeFileId": 3}]
+    assert await client.tags() == [{"id": 1, "label": "anime"}]
+    assert seen == ["/api/v3/episode", "/api/v3/tag"]
+    await client.aclose()
+
+
 async def test_compatibility_uses_default_feature_name_and_unknown_app_minimum() -> (
     None
 ):

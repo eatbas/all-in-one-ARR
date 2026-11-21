@@ -20,6 +20,7 @@ def test_service_names_and_order() -> None:
         "omdb",
         "sabnzbd",
         "qbittorrent",
+        "plex",
     )
     # BY_NAME indexes every descriptor by its name.
     assert set(BY_NAME) == set(SERVICE_NAMES)
@@ -33,6 +34,11 @@ def test_descriptor_field_shapes() -> None:
     assert BY_NAME["omdb"].default_url == "https://www.omdbapi.com"
     assert BY_NAME["qbittorrent"].fields == ("url", "api_key")
     assert BY_NAME["qbittorrent"].secret_fields == ("api_key",)
+    # Plex keeps its X-Plex-Token in the api_key slot, masked like any key.
+    assert BY_NAME["plex"].label == "Plex"
+    assert BY_NAME["plex"].fields == ("url", "api_key")
+    assert BY_NAME["plex"].secret_fields == ("api_key",)
+    assert BY_NAME["plex"].default_url == ""
 
 
 def test_empty_values_holds_exactly_the_declared_fields() -> None:

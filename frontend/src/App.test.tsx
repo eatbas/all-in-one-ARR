@@ -5,6 +5,8 @@ import { MemoryRouter } from "react-router-dom"
 import { beforeEach, describe, expect, it, vi } from "vitest"
 
 vi.mock("@/shared/lib/queries", () => ({
+  // The sidebar's Remindarr badge: hidden (no count) in routing tests.
+  useRemindarrBadgeCount: vi.fn(() => null),
   useStatus: vi.fn(() => ({ data: undefined })),
   useActivity: vi.fn(() => ({ data: [], isLoading: false })),
   useDashboardSummary: vi.fn(() => ({ data: undefined, isLoading: true })),
@@ -206,6 +208,10 @@ vi.mock("@/features/languagarr/Languagarr", () => ({
   Languagarr: () => <div>Languagarr route</div>,
 }))
 
+vi.mock("@/features/remindarr/Remindarr", () => ({
+  Remindarr: () => <div>Remindarr route</div>,
+}))
+
 vi.mock("@/features/settings/Settings", () => ({
   Settings: () => <div>Settings route</div>,
 }))
@@ -279,6 +285,11 @@ describe("App routing", () => {
   it("renders the Languagarr page at /languagarr", () => {
     renderAt("/languagarr")
     expect(screen.getByText("Languagarr route")).toBeInTheDocument()
+  })
+
+  it("renders the Remindarr page at /remindarr", () => {
+    renderAt("/remindarr")
+    expect(screen.getByText("Remindarr route")).toBeInTheDocument()
   })
 
   it("redirects unknown routes back to the dashboard", () => {

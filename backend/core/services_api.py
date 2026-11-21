@@ -28,7 +28,8 @@ if TYPE_CHECKING:  # pragma: no cover
 class UpdateServiceRequest(BaseModel):
     # ``None`` leaves a field unchanged (so the UI can save one field without
     # re-entering the others). Fields not declared by a service are ignored.
-    # The ``api_key_2..4`` slots exist only for OMDb's rotation keys.
+    # The ``api_key_2..4`` slots exist only for OMDb's rotation keys; Plex keeps
+    # its X-Plex-Token in ``api_key``.
     url: str | None = None
     api_key: str | None = None
     api_key_2: str | None = None
@@ -51,6 +52,7 @@ def _client_for(ctx: AppContext, name: str):
         "omdb": ctx.omdb,
         "sabnzbd": ctx.sabnzbd,
         "qbittorrent": ctx.qbittorrent,
+        "plex": ctx.plex,
     }[name]
 
 

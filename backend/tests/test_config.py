@@ -69,6 +69,8 @@ def test_service_seeds_shape() -> None:
         SABNZBD_API_KEY="zk",
         QBITTORRENT_URL="http://qb:8080",
         QBITTORRENT_API_KEY="qbt_key",
+        PLEX_URL="http://plex:32400",
+        PLEX_TOKEN="plex-token",
     )
     seeds = settings.service_seeds
     assert seeds["seer"] == {"url": "http://js:5055", "api_key": "jk"}
@@ -83,6 +85,8 @@ def test_service_seeds_shape() -> None:
     }
     assert seeds["sabnzbd"] == {"url": "http://sab:8080", "api_key": "zk"}
     assert seeds["qbittorrent"] == {"url": "http://qb:8080", "api_key": "qbt_key"}
+    # The X-Plex-Token seeds Plex's api_key slot.
+    assert seeds["plex"] == {"url": "http://plex:32400", "api_key": "plex-token"}
 
 
 def test_masked_hides_secrets() -> None:
@@ -94,6 +98,8 @@ def test_masked_hides_secrets() -> None:
         OMDB_API_KEY="ok",
         SABNZBD_API_KEY="zk",
         QBITTORRENT_API_KEY="qbt_key",
+        PLEX_URL="http://plex:32400",
+        PLEX_TOKEN="plex-token",
         **_VALID,
     )
     masked = settings.masked()
@@ -105,5 +111,8 @@ def test_masked_hides_secrets() -> None:
     assert masked["OMDB_API_KEY"] == "***"
     assert masked["SABNZBD_API_KEY"] == "***"
     assert masked["QBITTORRENT_API_KEY"] == "***"
+    assert masked["PLEX_TOKEN"] == "***"
+    # The Plex URL is not a secret.
+    assert masked["PLEX_URL"] == "http://plex:32400"
     # A non-secret field is shown in clear.
     assert masked["WEBHOOK_PORT"] == 3223

@@ -1,6 +1,6 @@
 """Shared base for the internal Sonarr/Radarr (Servarr) API clients.
 
-Findarr, Deletarr and Languagarr each need a small outbound client that holds a
+Findarr, Deletarr, Languagarr and Remindarr each need a small outbound client that holds a
 base URL + API key and issues authenticated requests against the shared Servarr
 v3 contract. This base owns that plumbing (the ``X-Api-Key`` header,
 ``raise_for_status``, empty-body handling) plus the read endpoints and the
@@ -64,6 +64,18 @@ def parse_version(value: str) -> tuple[int, int, int]:
     while len(parts) < 3:
         parts.append(0)
     return tuple(parts)  # type: ignore[return-value]
+
+
+def series_slug(series: dict[str, Any]) -> str | None:
+    """Return a Sonarr series' non-blank ``titleSlug``, else ``None``.
+
+    The series page lives at ``/series/{slug}``, so Languagarr and Remindarr
+    both store it for their Sonarr links.
+    """
+    slug = series.get("titleSlug")
+    if not isinstance(slug, str):
+        return None
+    return slug.strip() or None
 
 
 def _normalise_app_name(value: str) -> str:
@@ -187,6 +199,18 @@ class ServarrClient:
                 "GET", "/api/v3/episodefile", params={"seriesId": series_id}
             )
         )
+
+    async def episodes(self, series_id: int) -> list[dict[str, Any]]:
+        """Return `/api/v3/episode?seriesId=` (Sonarr); each carries ``episodeFileId``."""
+        return self._as_dicts(
+            await self._request(
+                "GET", "/api/v3/episode", params={"seriesId": series_id}
+            )
+        )
+
+    async def tags(self) -> list[dict[str, Any]]:
+        """Return `/api/v3/tag`: every tag as ``{id, label}``."""
+        return self._as_dicts(await self._request("GET", "/api/v3/tag"))
 
     async def aclose(self) -> None:
         """Close the underlying HTTP client."""

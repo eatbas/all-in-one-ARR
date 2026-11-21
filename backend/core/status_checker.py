@@ -165,4 +165,5 @@ class StatusChecker:
             "omdb": self._ctx.omdb,
             "sabnzbd": self._ctx.sabnzbd,
             "qbittorrent": self._ctx.qbittorrent,
+            "plex": self._ctx.plex,
         }

@@ -41,6 +41,7 @@ def bandwidth_app(db):
         anilist=StubService(),
         sabnzbd=sab,
         qbittorrent=qbit,
+        plex=StubService(),
         scheduler=AsyncMock(),
         webhooks=WebhookRegistry(),
         settings_store=StubSettingsStore(),

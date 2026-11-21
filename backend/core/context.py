@@ -15,6 +15,7 @@ from core.anime_ids import AnimeIdMap
 from core.clients.anilist import AnilistClient
 from core.clients.arr_client import ArrClient
 from core.clients.omdb import OmdbClient
+from core.clients.plex import PlexClient
 from core.clients.qbittorrent import QbittorrentClient
 from core.clients.sabnzbd import SabnzbdClient
 from core.clients.seer import SeerClient
@@ -105,6 +106,7 @@ class AppContext:
     anilist: AnilistClient
     sabnzbd: SabnzbdClient
     qbittorrent: QbittorrentClient
+    plex: PlexClient
     scheduler: SchedulerService
     webhooks: WebhookRegistry
     settings_store: SettingsStore
@@ -201,3 +203,14 @@ class AppContext:
     cleanarr_clear_strikes: Callable[[], Awaitable[dict]] | None = field(default=None)
     cleanarr_ignore: Callable[[str], Awaitable[dict]] | None = field(default=None)
     cleanarr_gate: SyncGate = field(default_factory=SyncGate)
+    # Remindarr callables, set by the module during setup(); the core router
+    # calls these so the Sonarr/Plex refresh stays module-owned. The gate keeps
+    # scheduled and manual refreshes from overlapping.
+    remindarr_status: Callable[[], Awaitable[dict]] | None = field(default=None)
+    remindarr_results: Callable[[], Awaitable[dict]] | None = field(default=None)
+    remindarr_tags: Callable[[], Awaitable[list[dict]]] | None = field(default=None)
+    remindarr_run_now: Callable[[], Awaitable[dict]] | None = field(default=None)
+    remindarr_update_settings: Callable[[dict], Awaitable[dict]] | None = field(
+        default=None
+    )
+    remindarr_gate: SyncGate = field(default_factory=SyncGate)

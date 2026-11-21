@@ -1,6 +1,7 @@
 """Per-module settings sections of :class:`core.settings_store.SettingsStore`.
 
-Findarr, Deletarr, Languagarr and Cleanarr each own a small getter/updater pair over their
+Findarr, Deletarr, Languagarr, Cleanarr and Remindarr each own a small
+getter/updater pair over their
 own settings dict. They live in this mixin so ``settings_store.py`` keeps the
 shared concerns (load/seed/persist, Trakt, services, lists, masking) and does not
 grow with every module. The host class owns the lock, the logger, the per-module
@@ -20,11 +21,12 @@ from core.settings_normalisers import (
     normalise_deletarr_settings,
     normalise_findarr_settings,
     normalise_languagarr_settings,
+    normalise_remindarr_settings,
 )
 
 
 class ModuleSettingsMixin:
-    """Findarr / Deletarr / Languagarr / Cleanarr settings accessors for ``SettingsStore``."""
+    """Findarr / Deletarr / Languagarr / Cleanarr / Remindarr settings accessors."""
 
     _lock: threading.RLock
     _log: logging.Logger
@@ -32,6 +34,7 @@ class ModuleSettingsMixin:
     _deletarr_settings: dict[str, Any]
     _languagarr_settings: dict[str, Any]
     _cleanarr_settings: dict[str, Any]
+    _remindarr_settings: dict[str, Any]
 
     if TYPE_CHECKING:  # pragma: no cover
 
@@ -133,6 +136,30 @@ class ModuleSettingsMixin:
             self._save_locked()
             self._log.info("updated Languagarr settings")
             return copy.deepcopy(self._languagarr_settings)
+
+    # ---- Remindarr ----
+
+    def remindarr_settings(self) -> dict[str, Any]:
+        """Return a copy of the persisted Remindarr settings."""
+        with self._lock:
+            return copy.deepcopy(self._remindarr_settings)
+
+    def remindarr_interval_minutes(self) -> int:
+        """Return the Remindarr scheduled-refresh interval in minutes."""
+        with self._lock:
+            return int(self._remindarr_settings["interval_minutes"])
+
+    def update_remindarr_settings(self, updates: dict[str, Any]) -> dict[str, Any]:
+        """Merge ``updates`` into Remindarr settings; ``None`` leaves a field unchanged."""
+        with self._lock:
+            merged = copy.deepcopy(self._remindarr_settings)
+            for key, value in updates.items():
+                if key in merged and value is not None:
+                    merged[key] = value
+            self._remindarr_settings = normalise_remindarr_settings(merged)
+            self._save_locked()
+            self._log.info("updated Remindarr settings")
+            return copy.deepcopy(self._remindarr_settings)
 
     # ---- Cleanarr ----
 

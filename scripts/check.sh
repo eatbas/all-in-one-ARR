@@ -25,6 +25,9 @@ echo "==> Backend type check (mypy)"
 echo "==> Backend tests"
 (cd backend && "$VENV_PY" -m pytest)
 
+echo "==> Backend distribution (wheel contents and installed module discovery)"
+"$VENV_PY" scripts/check_distribution.py
+
 echo "==> Frontend dependencies"
 if [[ "${CI:-}" == "true" ]]; then
   (cd frontend && npm ci)

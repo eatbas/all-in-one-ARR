@@ -1,7 +1,7 @@
 import {
   CheckboxGroup,
   type CheckboxOption,
-} from "@/features/languagarr/components/checkbox-group"
+} from "@/shared/components/checkbox-group"
 import { LANGUAGARR_MAX_PROFILES } from "@/shared/lib/api"
 import { useLanguagarrProfiles } from "@/shared/lib/queries"
 

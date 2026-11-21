@@ -59,7 +59,9 @@ async def test_check_now_runs_and_returns_snapshot(checker) -> None:
     await checker.check_now()
     result = checker.get_statuses()
     assert result.last_check_at is not None
-    assert len(result.services) == 8
+    # Trakt plus every managed service, Plex included.
+    assert len(result.services) == 9
+    assert "plex" in result.services
 
 
 async def test_start_stop_lifecycle(checker) -> None:

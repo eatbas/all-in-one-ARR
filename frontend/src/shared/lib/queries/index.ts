@@ -112,6 +112,15 @@ export {
   useUpdateLanguagarrSettings,
 } from "@/shared/lib/queries/languagarr"
 export {
+  useRemindarrBadgeCount,
+  useRemindarrResults,
+  useRemindarrSettings,
+  useRemindarrStatus,
+  useRemindarrTags,
+  useRunRemindarr,
+  useUpdateRemindarrSettings,
+} from "@/shared/lib/queries/remindarr"
+export {
   useAddTrending,
   useTrending,
   useTrendingSearch,

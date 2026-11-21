@@ -32,6 +32,7 @@ const PLOTTED = [
   "findarr.sonarr.missing_total",
   "findarr.radarr.upgrade_total",
   "languagarr.non_compliant",
+  "remindarr.unwatched_episodes",
 ]
 
 function history(days: DashboardHistory["days"], withPoints = true) {
@@ -128,7 +129,7 @@ describe("TrendCharts", () => {
       "Radarr movies with files and missing movies per day",
       "Free disk space per day",
       "Seer requests by status per day",
-      "Findarr searches per day and Languagarr non-compliant files",
+      "Findarr searches per day, Languagarr non-compliant files and Remindarr unwatched episodes",
     ]) {
       expect(screen.getByRole("img", { name })).toBeInTheDocument()
     }
@@ -137,15 +138,18 @@ describe("TrendCharts", () => {
     expect(
       within(modules).getByText("Findarr searches per day"),
     ).toBeInTheDocument()
+    expect(
+      within(modules).getByText("Remindarr unwatched episodes"),
+    ).toBeInTheDocument()
     expect(container.querySelectorAll(".recharts-area-area").length).toBe(2)
     expect(
       container.querySelectorAll(".recharts-bar-rectangle").length,
     ).toBeGreaterThan(0)
-    // Line series: one each for Sonarr, Radarr and module activity, two for
-    // disk free and three for requests.
+    // Line series: one each for Sonarr and Radarr, two each for module
+    // activity (Languagarr, Remindarr) and disk free, and three for requests.
     expect(
       container.querySelectorAll(".recharts-line .recharts-line-curve").length,
-    ).toBe(8)
+    ).toBe(9)
     expect(screen.getAllByText("21 Oct").length).toBeGreaterThan(0)
   })
 

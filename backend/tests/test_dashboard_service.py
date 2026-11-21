@@ -452,6 +452,32 @@ async def test_take_snapshot_stores_ok_snapshot_metrics_only(
     assert rows[0]["recorded_at"] == _START.isoformat()
 
 
+async def test_summary_and_snapshot_include_remindarr(db, clock, monkeypatch) -> None:
+    remindarr = _Collector(
+        "remindarr",
+        metrics={
+            "remindarr.unwatched_episodes": 14,
+            "remindarr.unmatched_series": 2,
+        },
+    )
+    service = _service(db, clock, monkeypatch, _spec(remindarr))
+
+    source = _source(await service.summary(), "remindarr")
+    assert source["state"] == "ok"
+    assert [(metric["key"], metric["value"]) for metric in source["metrics"]] == [
+        ("remindarr.unwatched_episodes", 14),
+        ("remindarr.unmatched_series", 2),
+    ]
+
+    # Both Remindarr gauges are snapshot metrics.
+    assert await service.take_snapshot() == 2
+    rows = db.dashboard_snapshot_range(start_day="2026-10-27", end_day="2026-10-27")
+    assert {(row["metric"], row["value"]) for row in rows} == {
+        ("remindarr.unwatched_episodes", 14.0),
+        ("remindarr.unmatched_series", 2.0),
+    }
+
+
 async def test_take_snapshot_prunes_rows_older_than_retention(
     db, clock, monkeypatch
 ) -> None:

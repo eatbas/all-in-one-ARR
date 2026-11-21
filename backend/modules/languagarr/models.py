@@ -5,19 +5,14 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any, Literal
 
+from core.clients.servarr import series_slug
 from core.coerce import coerce_int
 from modules.languagarr.audio import AudioStatus
 
 RecommendedAction = Literal["search", "delete_and_search"]
 QueueStatus = Literal["none", "pending", "searched", "failed"]
 
-
-def series_slug(series: dict[str, Any]) -> str | None:
-    """Return a Sonarr series' non-blank ``titleSlug``, else ``None``."""
-    slug = series.get("titleSlug")
-    if not isinstance(slug, str):
-        return None
-    return slug.strip() or None
+__all__ = ["AuditItem", "ScanState", "Scope", "series_slug"]
 
 
 @dataclass(frozen=True)

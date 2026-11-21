@@ -2311,6 +2311,284 @@ export type ListSummary = {
 };
 
 /**
+ * RemindarrCounts
+ */
+export type RemindarrCounts = {
+    /**
+     * Series With Unwatched
+     */
+    series_with_unwatched: number;
+    /**
+     * Tracked Series
+     */
+    tracked_series: number;
+    /**
+     * Unmatched Series
+     */
+    unmatched_series: number;
+    /**
+     * Unwatched
+     */
+    unwatched: number;
+};
+
+/**
+ * RemindarrEpisode
+ */
+export type RemindarrEpisode = {
+    /**
+     * Added At
+     */
+    added_at: string | null;
+    /**
+     * Air Date Utc
+     */
+    air_date_utc: string | null;
+    /**
+     * Episode File Id
+     */
+    episode_file_id: number;
+    /**
+     * Episode Id
+     */
+    episode_id: number;
+    /**
+     * Episode Number
+     */
+    episode_number: number;
+    /**
+     * Label
+     */
+    label: string;
+    /**
+     * New Today
+     */
+    new_today: boolean;
+    /**
+     * Season Number
+     */
+    season_number: number;
+    /**
+     * Series Id
+     */
+    series_id: number;
+    /**
+     * Title
+     */
+    title: string;
+};
+
+/**
+ * RemindarrResults
+ */
+export type RemindarrResults = {
+    /**
+     * Last Success At
+     */
+    last_success_at: string | null;
+    /**
+     * Series
+     */
+    series: Array<RemindarrSeriesGroup>;
+    /**
+     * Unmatched
+     */
+    unmatched: Array<RemindarrUnmatchedSeries>;
+};
+
+/**
+ * RemindarrRunResult
+ */
+export type RemindarrRunResult = {
+    /**
+     * Series With Unwatched
+     */
+    series_with_unwatched: number;
+    /**
+     * Status
+     */
+    status: 'success' | 'disabled';
+    /**
+     * Tracked Series
+     */
+    tracked_series: number;
+    /**
+     * Unmatched Series
+     */
+    unmatched_series: number;
+    /**
+     * Unwatched
+     */
+    unwatched: number;
+};
+
+/**
+ * RemindarrSeriesGroup
+ */
+export type RemindarrSeriesGroup = {
+    /**
+     * Episodes
+     */
+    episodes: Array<RemindarrEpisode>;
+    /**
+     * Episodes Not In Plex
+     */
+    episodes_not_in_plex: number;
+    /**
+     * Latest Added At
+     */
+    latest_added_at: string | null;
+    /**
+     * New Today
+     */
+    new_today: number;
+    /**
+     * Series Id
+     */
+    series_id: number;
+    /**
+     * Series Slug
+     */
+    series_slug: string | null;
+    /**
+     * Series Title
+     */
+    series_title: string;
+    /**
+     * Tvdb Id
+     */
+    tvdb_id: number | null;
+};
+
+/**
+ * RemindarrSettings
+ */
+export type RemindarrSettings = {
+    /**
+     * Enabled
+     */
+    enabled: boolean;
+    /**
+     * Interval Minutes
+     */
+    interval_minutes: number;
+    /**
+     * Monitored Only
+     */
+    monitored_only: boolean;
+    /**
+     * Tag Ids
+     */
+    tag_ids: Array<number>;
+};
+
+/**
+ * RemindarrSettingsUpdate
+ *
+ * Partial settings update; bounds are the normaliser's, exposed in OpenAPI.
+ */
+export type RemindarrSettingsUpdate = {
+    /**
+     * Enabled
+     */
+    enabled?: boolean | null;
+    /**
+     * Interval Minutes
+     */
+    interval_minutes?: number | null;
+    /**
+     * Monitored Only
+     */
+    monitored_only?: boolean | null;
+    /**
+     * Tag Ids
+     */
+    tag_ids?: Array<number> | null;
+};
+
+/**
+ * RemindarrStatus
+ */
+export type RemindarrStatus = {
+    counts: RemindarrCounts;
+    /**
+     * Last Attempt At
+     */
+    last_attempt_at: string | null;
+    /**
+     * Last Error
+     */
+    last_error: string | null;
+    /**
+     * Last Success At
+     */
+    last_success_at: string | null;
+    /**
+     * Missing Tag Ids
+     */
+    missing_tag_ids: Array<number>;
+    /**
+     * Plex Configured
+     */
+    plex_configured: boolean;
+    /**
+     * Running
+     */
+    running: boolean;
+    settings: RemindarrSettings;
+    /**
+     * Stale
+     */
+    stale: boolean;
+};
+
+/**
+ * RemindarrTag
+ *
+ * A Sonarr tag offered in the tag checklist.
+ */
+export type RemindarrTag = {
+    /**
+     * Id
+     */
+    id: number;
+    /**
+     * Label
+     */
+    label: string;
+};
+
+/**
+ * RemindarrUnmatchedSeries
+ */
+export type RemindarrUnmatchedSeries = {
+    /**
+     * Reason
+     */
+    reason: 'no_tvdb_id' | 'not_in_plex';
+    /**
+     * Reason Label
+     */
+    reason_label: string;
+    /**
+     * Series Id
+     */
+    series_id: number;
+    /**
+     * Series Slug
+     */
+    series_slug: string | null;
+    /**
+     * Series Title
+     */
+    series_title: string;
+    /**
+     * Tvdb Id
+     */
+    tvdb_id: number | null;
+};
+
+/**
  * ServiceStatus
  */
 export type ServiceStatus = {
@@ -3690,6 +3968,113 @@ export type GetPosterApiPostersMediaTypeTmdbIdGetResponses = {
     200: unknown;
 };
 
+export type GetResultsApiRemindarrResultsGetData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/remindarr/results';
+};
+
+export type GetResultsApiRemindarrResultsGetResponses = {
+    /**
+     * Successful Response
+     */
+    200: RemindarrResults;
+};
+
+export type GetResultsApiRemindarrResultsGetResponse = GetResultsApiRemindarrResultsGetResponses[keyof GetResultsApiRemindarrResultsGetResponses];
+
+export type PostRunApiRemindarrRunPostData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/remindarr/run';
+};
+
+export type PostRunApiRemindarrRunPostResponses = {
+    /**
+     * Successful Response
+     */
+    200: RemindarrRunResult;
+};
+
+export type PostRunApiRemindarrRunPostResponse = PostRunApiRemindarrRunPostResponses[keyof PostRunApiRemindarrRunPostResponses];
+
+export type GetSettingsApiRemindarrSettingsGetData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/remindarr/settings';
+};
+
+export type GetSettingsApiRemindarrSettingsGetResponses = {
+    /**
+     * Successful Response
+     */
+    200: RemindarrSettings;
+};
+
+export type GetSettingsApiRemindarrSettingsGetResponse = GetSettingsApiRemindarrSettingsGetResponses[keyof GetSettingsApiRemindarrSettingsGetResponses];
+
+export type PutSettingsApiRemindarrSettingsPutData = {
+    body: RemindarrSettingsUpdate;
+    path?: never;
+    query?: never;
+    url: '/api/remindarr/settings';
+};
+
+export type PutSettingsApiRemindarrSettingsPutErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type PutSettingsApiRemindarrSettingsPutError = PutSettingsApiRemindarrSettingsPutErrors[keyof PutSettingsApiRemindarrSettingsPutErrors];
+
+export type PutSettingsApiRemindarrSettingsPutResponses = {
+    /**
+     * Successful Response
+     */
+    200: RemindarrStatus;
+};
+
+export type PutSettingsApiRemindarrSettingsPutResponse = PutSettingsApiRemindarrSettingsPutResponses[keyof PutSettingsApiRemindarrSettingsPutResponses];
+
+export type GetStatusApiRemindarrStatusGetData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/remindarr/status';
+};
+
+export type GetStatusApiRemindarrStatusGetResponses = {
+    /**
+     * Successful Response
+     */
+    200: RemindarrStatus;
+};
+
+export type GetStatusApiRemindarrStatusGetResponse = GetStatusApiRemindarrStatusGetResponses[keyof GetStatusApiRemindarrStatusGetResponses];
+
+export type GetTagsApiRemindarrTagsGetData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/remindarr/tags';
+};
+
+export type GetTagsApiRemindarrTagsGetResponses = {
+    /**
+     * Response Get Tags Api Remindarr Tags Get
+     *
+     * Successful Response
+     */
+    200: Array<RemindarrTag>;
+};
+
+export type GetTagsApiRemindarrTagsGetResponse = GetTagsApiRemindarrTagsGetResponses[keyof GetTagsApiRemindarrTagsGetResponses];
+
 export type TestServiceApiServicesNameTestPostData = {
     body?: never;
     path: {
@@ -4375,6 +4760,22 @@ export type SpaEntryListSyncarrGetResponses = {
 };
 
 export type SpaEntryListSyncarrGetResponse = SpaEntryListSyncarrGetResponses[keyof SpaEntryListSyncarrGetResponses];
+
+export type SpaEntryRemindarrGetData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/remindarr';
+};
+
+export type SpaEntryRemindarrGetResponses = {
+    /**
+     * Successful Response
+     */
+    200: string;
+};
+
+export type SpaEntryRemindarrGetResponse = SpaEntryRemindarrGetResponses[keyof SpaEntryRemindarrGetResponses];
 
 export type SpaEntrySettingsGetData = {
     body?: never;

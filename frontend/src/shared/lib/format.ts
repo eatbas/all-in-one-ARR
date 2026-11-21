@@ -71,6 +71,14 @@ export function formatRelativeTime(
   return `${weeks} ${weeks === 1 ? "week" : "weeks"} ago`
 }
 
+/**
+ * `count` followed by the singular or plural form of a regular `noun`
+ * ("1 unwatched episode", "14 unwatched episodes").
+ */
+export function formatCount(count: number, noun: string): string {
+  return `${count} ${noun}${count === 1 ? "" : "s"}`
+}
+
 /** Format a byte count as a human-readable size from B through TB. */
 export function formatBytes(bytes: number): string {
   if (bytes === 0) {

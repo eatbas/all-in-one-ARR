@@ -71,6 +71,9 @@ async def test_build_context_real(tmp_path) -> None:
         assert ctx.omdb is not None
         assert ctx.sabnzbd is not None
         assert ctx.qbittorrent is not None
+        # Plex is built from the settings store's (empty) Plex connection.
+        assert ctx.plex is not None
+        assert ctx.plex.configured is False
         # The poster cache is wired from the TMDB/OMDb clients.
         assert ctx.poster_cache is not None
         # The AniList client and the anime id map back the anilist source.
@@ -91,6 +94,7 @@ async def test_build_context_real(tmp_path) -> None:
             ctx.anime_ids,
             ctx.sabnzbd,
             ctx.qbittorrent,
+            ctx.plex,
         ):
             await client.aclose()
         ctx.db.close()
@@ -126,10 +130,15 @@ def test_lifespan_authenticated_placeholder_frontend(
         assert "aio_arr_scheduler_job_runs_total" in metrics.text
         assert "aio_arr_findarr_runs_total" in metrics.text
         assert "aio_arr_deletarr_scans_total" in metrics.text
+        assert "aio_arr_remindarr_runs_total" in metrics.text
+        assert "aio_arr_remindarr_unwatched_episodes" in metrics.text
         # Bandwidth router is reachable through the assembled app.
         assert client.get("/api/bandwidth/status").status_code == 200
         # Deletarr router is registered through the assembled app.
         assert client.get("/api/deletarr/settings").status_code == 200
+        # Remindarr's router is registered and its module loaded at start-up.
+        assert client.get("/api/remindarr/settings").status_code == 200
+        assert client.get("/api/remindarr/status").status_code == 200
         # Placeholder served at root.
         assert "All-in-One ARR" in client.get("/").text
 
@@ -142,6 +151,7 @@ def test_lifespan_authenticated_placeholder_frontend(
     ctx.anime_ids.aclose.assert_awaited()
     ctx.sabnzbd.aclose.assert_awaited()
     ctx.qbittorrent.aclose.assert_awaited()
+    ctx.plex.aclose.assert_awaited()
 
 
 def test_lifespan_stops_boot_snapshot_before_closing_resources(
@@ -215,6 +225,11 @@ def test_openapi_includes_frontend_api_routes(_env, monkeypatch, tmp_path) -> No
         "/api/findarr/status",
         "/api/cleanarr/status",
         "/api/cleanarr/queue",
+        "/api/remindarr/status",
+        "/api/remindarr/results",
+        "/api/remindarr/settings",
+        "/api/remindarr/tags",
+        "/api/remindarr/run",
         "/api/trending",
         "/api/trending/rating",
         "/api/trending/add",
@@ -240,6 +255,8 @@ def test_lifespan_serves_built_frontend(_env, monkeypatch, tmp_path) -> None:
         assert "built spa" in client.get("/findarr").text
         assert "built spa" in client.get("/deletarr").text
         assert "built spa" in client.get("/cleanarr").text
+        # A hard refresh on the Remindarr page is served by the SPA.
+        assert "built spa" in client.get("/remindarr").text
         # The Trending page's SPA route is served so a hard refresh on /trending works.
         assert "built spa" in client.get("/trending").text
         assert client.get("/api/status").status_code == 200

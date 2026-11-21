@@ -80,6 +80,9 @@ _CATALOGUE: tuple[MetricSpec, ...] = (
     _gauge("languagarr.non_compliant", "Non-compliant files"),
     _gauge("languagarr.queue_pending", "Queue pending"),
     _gauge("languagarr.queue_failed", "Queue failed"),
+    # Remindarr: the last successful refresh's unwatched and unmatched counts.
+    _gauge("remindarr.unwatched_episodes", "Unwatched episodes"),
+    _gauge("remindarr.unmatched_series", "Series not found in Plex"),
     # Sonarr library, queue and disk space.
     _gauge("sonarr.series_total", "Series"),
     _gauge("sonarr.series_monitored", "Monitored series"),

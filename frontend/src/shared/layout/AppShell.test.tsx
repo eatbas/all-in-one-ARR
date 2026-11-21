@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react"
+import { render, screen, within } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { MemoryRouter, Route, Routes } from "react-router-dom"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
@@ -7,12 +7,18 @@ vi.mock("@/shared/layout/Topbar", () => ({
   Topbar: () => <div data-testid="topbar" />,
 }))
 
+vi.mock("@/shared/lib/queries", () => ({
+  useRemindarrBadgeCount: vi.fn(() => null),
+}))
+
 import { AppShell } from "@/shared/layout/AppShell"
+import { useRemindarrBadgeCount } from "@/shared/lib/queries"
 import { SIDEBAR_COLLAPSED_STORAGE_KEY } from "@/shared/layout/sidebar-state"
 import { APP_VERSION } from "@/shared/lib/version"
 
 beforeEach(() => {
   localStorage.clear()
+  vi.mocked(useRemindarrBadgeCount).mockReturnValue(null)
 })
 
 afterEach(() => {
@@ -29,6 +35,7 @@ function renderAt(path: string) {
           <Route path="/cleanarr" element={<div>cleanarr-page</div>} />
           <Route path="/deletarr" element={<div>deletarr-page</div>} />
           <Route path="/languagarr" element={<div>languagarr-page</div>} />
+          <Route path="/remindarr" element={<div>remindarr-page</div>} />
         </Route>
       </Routes>
     </MemoryRouter>,
@@ -130,6 +137,44 @@ describe("AppShell", () => {
       "aria-current",
       "page",
     )
+  })
+
+  it("lists Remindarr after Languagarr and marks it active on its route", () => {
+    renderAt("/remindarr")
+
+    expect(screen.getByText("remindarr-page")).toBeInTheDocument()
+    const names = screen
+      .getAllByRole("link")
+      .map((item) => item.textContent?.trim())
+    expect(names.indexOf("Remindarr")).toBe(names.indexOf("Languagarr") + 1)
+    const link = screen.getByRole("link", { name: "Remindarr" })
+    expect(link).toHaveAttribute("aria-current", "page")
+    expect(link).toHaveAttribute(
+      "title",
+      "Unwatched episodes from your selected Sonarr tags",
+    )
+    // No count, no badge.
+    expect(screen.queryByLabelText(/unwatched episode/)).not.toBeInTheDocument()
+  })
+
+  it("shows the Remindarr badge after the label, then over the icon on the rail", async () => {
+    vi.mocked(useRemindarrBadgeCount).mockReturnValue(14)
+    const user = userEvent.setup()
+    renderAt("/")
+
+    const link = screen.getByRole("link", { name: /^Remindarr/ })
+    const badge = within(link).getByLabelText("14 unwatched episodes")
+    expect(badge).toHaveClass("ml-auto")
+    // Only the Remindarr entry carries a badge.
+    expect(screen.getAllByLabelText("14 unwatched episodes")).toHaveLength(1)
+
+    await user.click(screen.getByRole("button", { name: /collapse sidebar/i }))
+
+    const railBadge = within(
+      screen.getByRole("link", { name: /Remindarr/ }),
+    ).getByLabelText("14 unwatched episodes")
+    expect(railBadge).toHaveClass("absolute")
+    expect(railBadge.parentElement).toHaveClass("relative")
   })
 
   it("collapses the sidebar to a rail and persists the choice", async () => {

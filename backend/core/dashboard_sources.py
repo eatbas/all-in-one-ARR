@@ -157,6 +157,38 @@ async def collect_languagarr(ctx: AppContext) -> SourceResult:
     )
 
 
+async def collect_remindarr(ctx: AppContext) -> SourceResult:
+    """Remindarr's stored results; reads cached status only, never refreshes.
+
+    Unlike Languagarr, a disabled Remindarr reports no figures: its stored
+    results stop being refreshed, so they would read as current when they are
+    not.
+    """
+    if ctx.remindarr_status is None:
+        return _spec_result("remindarr", "disabled")
+    status = await ctx.remindarr_status()
+    if not status.get("settings", {}).get("enabled"):
+        return _spec_result("remindarr", "disabled")
+    if not _service_configured(ctx, "plex"):
+        return _spec_result(
+            "remindarr", "not_configured", detail="Plex is not connected."
+        )
+    counts = status.get("counts", {})
+    metrics = {
+        "remindarr.unwatched_episodes": float(counts.get("unwatched", 0)),
+        "remindarr.unmatched_series": float(counts.get("unmatched_series", 0)),
+    }
+    error = status.get("last_error")
+    detail = f"Last refresh failed: {str(error).rstrip('.')}." if error else None
+    return _spec_result(
+        "remindarr",
+        "ok",
+        detail=detail,
+        metrics=metrics,
+        updated_at=status.get("last_success_at"),
+    )
+
+
 async def collect_bandwidth(ctx: AppContext) -> SourceResult:
     """Bandwidth-Controllarr: whether it currently holds SABnzbd paused."""
     if (
@@ -288,6 +320,9 @@ SOURCES: tuple[SourceSpec, ...] = (
     SourceSpec("deletarr", "Deletarr", collect_deletarr, LIVE_TTL_SECONDS, "/deletarr"),
     SourceSpec(
         "languagarr", "Languagarr", collect_languagarr, LIVE_TTL_SECONDS, "/languagarr"
+    ),
+    SourceSpec(
+        "remindarr", "Remindarr", collect_remindarr, LIVE_TTL_SECONDS, "/remindarr"
     ),
     SourceSpec(
         "bandwidth",

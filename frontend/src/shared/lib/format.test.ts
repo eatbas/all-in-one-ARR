@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest"
 import {
   displayTitle,
   formatBytes,
+  formatCount,
   formatCountdown,
   formatNextSync,
   formatRelativeTime,
@@ -17,6 +18,16 @@ describe("displayTitle", () => {
 
   it("falls back to 'Untitled' when the title is null", () => {
     expect(displayTitle(null)).toBe("Untitled")
+  })
+})
+
+describe("formatCount", () => {
+  it.each([
+    [0, "0 unwatched episodes"],
+    [1, "1 unwatched episode"],
+    [14, "14 unwatched episodes"],
+  ])("counts %i", (count, text) => {
+    expect(formatCount(count, "unwatched episode")).toBe(text)
   })
 })
 

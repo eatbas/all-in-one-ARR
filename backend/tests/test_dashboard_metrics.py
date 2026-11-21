@@ -35,6 +35,9 @@ def test_snapshot_keys_exclude_live_only_metrics() -> None:
     assert "sabnzbd.active_downloads" not in keys
     assert "qbittorrent.active_downloads" not in keys
     assert "sabnzbd.queue_size" in keys
+    # Remindarr's counts are stored by the daily snapshot.
+    assert "remindarr.unwatched_episodes" in keys
+    assert "remindarr.unmatched_series" in keys
     assert set(keys) == {key for key, spec in METRICS.items() if spec.snapshot}
 
 
@@ -49,6 +52,12 @@ def test_metrics_for_source_filters_in_catalogue_order() -> None:
         "seer.requests_declined",
     ]
     assert metrics_for_source("trending") == ()
+    remindarr = metrics_for_source("remindarr")
+    assert [(spec.key, spec.label) for spec in remindarr] == [
+        ("remindarr.unwatched_episodes", "Unwatched episodes"),
+        ("remindarr.unmatched_series", "Series not found in Plex"),
+    ]
+    assert all(spec.kind == "gauge" for spec in remindarr)
 
 
 def test_findarr_totals_are_counters_and_the_rest_gauges() -> None:

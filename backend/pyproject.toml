@@ -46,6 +46,7 @@ packages = [
     "modules.deletarr",
     "modules.cleanarr",
     "modules.languagarr",
+    "modules.remindarr",
 ]
 
 [tool.pytest.ini_options]

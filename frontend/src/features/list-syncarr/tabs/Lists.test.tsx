@@ -43,6 +43,7 @@ const SERVICES: ServicesSettings = {
   omdb: { api_key_set: false },
   sabnzbd: { url: "", api_key_set: false },
   qbittorrent: { url: "", api_key_set: false },
+  plex: { url: "", api_key_set: false },
 }
 
 const lists: ListSummary[] = [

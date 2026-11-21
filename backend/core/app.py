@@ -29,6 +29,7 @@ from core.cleanarr_api import create_cleanarr_router
 from core.clients.anilist import AnilistClient
 from core.clients.arr_client import ArrClient
 from core.clients.omdb import OmdbClient
+from core.clients.plex import PlexClient
 from core.clients.qbittorrent import QbittorrentClient
 from core.clients.sabnzbd import SabnzbdClient
 from core.clients.seer import SeerClient
@@ -45,6 +46,7 @@ from core.findarr_api import create_findarr_router
 from core.languagarr_api import create_languagarr_router
 from core.logging import configure_logging, get_logger
 from core.posters import PosterCache
+from core.remindarr_api import create_remindarr_router
 from core.scheduler import SchedulerService
 from core.services_api import create_services_router
 from core.settings_store import SettingsStore
@@ -121,6 +123,8 @@ def build_context(settings: Settings) -> AppContext:
     qbittorrent = QbittorrentClient(
         base_url=qbit_fields["url"], api_key=qbit_fields["api_key"]
     )
+    plex_fields = settings_store.service_fields("plex")
+    plex = PlexClient(base_url=plex_fields["url"], api_key=plex_fields["api_key"])
 
     ctx = AppContext(
         settings=settings,
@@ -134,6 +138,7 @@ def build_context(settings: Settings) -> AppContext:
         anilist=anilist,
         sabnzbd=sabnzbd,
         qbittorrent=qbittorrent,
+        plex=plex,
         scheduler=SchedulerService(),
         webhooks=WebhookRegistry(),
         settings_store=settings_store,
@@ -243,6 +248,7 @@ def _mount_frontend(app: FastAPI) -> None:
         @app.get("/cleanarr", response_class=HTMLResponse)
         @app.get("/deletarr", response_class=HTMLResponse)
         @app.get("/languagarr", response_class=HTMLResponse)
+        @app.get("/remindarr", response_class=HTMLResponse)
         @app.get("/settings", response_class=HTMLResponse)
         async def _spa_entry() -> FileResponse:
             return FileResponse(index_file)
@@ -308,6 +314,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             await ctx.anime_ids.aclose()
         await ctx.sabnzbd.aclose()
         await ctx.qbittorrent.aclose()
+        await ctx.plex.aclose()
         ctx.db.close()
 
 
@@ -339,6 +346,7 @@ def create_app() -> FastAPI:
     app.include_router(create_deletarr_router(ctx))
     app.include_router(create_languagarr_router(ctx))
     app.include_router(create_cleanarr_router(ctx))
+    app.include_router(create_remindarr_router(ctx))
     app.include_router(create_trending_router(ctx))
     app.include_router(create_dashboard_router(ctx))
     app.include_router(ctx.webhooks.router)

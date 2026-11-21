@@ -32,6 +32,7 @@ const emptyServiceSettings: ServicesSettings = {
   omdb: { api_key_set: false },
   sabnzbd: { url: "", api_key_set: false },
   qbittorrent: { url: "", api_key_set: false },
+  plex: { url: "", api_key_set: false },
 }
 
 const checkNowMutate = vi.fn()
@@ -72,6 +73,15 @@ describe("IntegrationsSection", () => {
         .getByText("Trakt", { selector: "[data-slot='card-title']" })
         .closest(".grid"),
     ).toHaveClass("grid-cols-2", "gap-3", "sm:grid-cols-4")
+  })
+
+  it("lists a Plex tile at the end of the integrations grid", () => {
+    render(<IntegrationsSection />)
+
+    const titles = screen
+      .getAllByText(/.+/, { selector: "[data-slot='card-title']" })
+      .map((title) => title.textContent)
+    expect(titles.at(-1)).toBe("Plex")
   })
 
   it("renders integration status and the last check before 'Check now'", () => {

@@ -28,8 +28,8 @@ interface CheckboxGroupProps {
 
 /**
  * A labelled checklist for picking several values (Languagarr's quality
- * profiles and target languages). Exposed as an ARIA group named by `label`, so
- * each checkbox is reachable by its own option label.
+ * profiles and target languages, Remindarr's Sonarr tags). Exposed as an ARIA
+ * group named by `label`, so each checkbox is reachable by its own option label.
  */
 export function CheckboxGroup({
   id,

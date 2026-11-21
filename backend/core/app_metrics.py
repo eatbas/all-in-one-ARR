@@ -136,6 +136,23 @@ cleanarr_health_warnings = Gauge(
     "Cleanarr health warnings from the last run",
 )
 
+remindarr_runs_total = Counter(
+    "aio_arr_remindarr_runs_total",
+    "Remindarr refreshes by outcome",
+    ("status",),
+)
+remindarr_unwatched_episodes = Gauge(
+    "aio_arr_remindarr_unwatched_episodes",
+    "Downloaded episodes of tagged Sonarr series the Plex token owner has not watched",
+)
+remindarr_unmatched_series = Gauge(
+    "aio_arr_remindarr_unmatched_series",
+    "Tagged Sonarr series Remindarr could not match to a Plex show",
+)
+
+# Closed Remindarr run outcomes: ``skipped`` is a run while disabled.
+REMINDARR_RUN_STATUSES = ("success", "error", "skipped")
+
 # Closed Cleanarr label values, initialised so dashboards see zero series.
 CLEANARR_RUN_STATUSES = ("completed", "skipped", "error")
 CLEANARR_APPS = ("sonarr", "radarr")
@@ -159,6 +176,7 @@ def initialise_metrics() -> None:
         "omdb",
         "sabnzbd",
         "qbittorrent",
+        "plex",
     ):
         service_status.labels(service).set(0)
         service_last_check_timestamp_seconds.labels(service).set(0)
@@ -168,6 +186,7 @@ def initialise_metrics() -> None:
         "findarr_poll",
         "languagarr_poll",
         "cleanarr_poll",
+        "remindarr_poll",
         "trending_sync",
         "poster_cache_churn",
     ):
@@ -199,6 +218,15 @@ def initialise_metrics() -> None:
     for verdict in ("missing_language", "unknown"):
         languagarr_noncompliant_files.labels(verdict).set(0)
     _initialise_cleanarr_metrics()
+    _initialise_remindarr_metrics()
+
+
+def _initialise_remindarr_metrics() -> None:
+    """Initialise Remindarr's closed label set and zero its gauges."""
+    for status in REMINDARR_RUN_STATUSES:
+        remindarr_runs_total.labels(status)
+    remindarr_unwatched_episodes.set(0)
+    remindarr_unmatched_series.set(0)
 
 
 def _initialise_cleanarr_metrics() -> None:
@@ -340,6 +368,17 @@ def record_cleanarr_file_actions(*, action: str, count: int, dry_run: bool) -> N
 def update_cleanarr_health_warnings(count: int) -> None:
     """Set the number of Cleanarr health warnings from the last run."""
     cleanarr_health_warnings.set(max(0, count))
+
+
+def record_remindarr_run(*, status: str) -> None:
+    """Record one Remindarr refresh outcome (``success``/``error``/``skipped``)."""
+    remindarr_runs_total.labels(status).inc()
+
+
+def update_remindarr_counts(*, unwatched: int, unmatched_series: int) -> None:
+    """Set the Remindarr gauges from the stored results."""
+    remindarr_unwatched_episodes.set(max(0, unwatched))
+    remindarr_unmatched_series.set(max(0, unmatched_series))
 
 
 initialise_metrics()

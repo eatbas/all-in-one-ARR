@@ -63,6 +63,7 @@ beforeEach(() => {
     omdb: { api_key_set: false },
     sabnzbd: { url: "", api_key_set: false },
     qbittorrent: { url: "", api_key_set: false },
+    plex: { url: "", api_key_set: false },
   })
   vi.mocked(api.getServiceStatuses).mockResolvedValue({
     interval_seconds: 60,
@@ -246,6 +247,7 @@ describe("service connection hooks", () => {
       omdb: { api_key_set: false },
       sabnzbd: { url: "", api_key_set: false },
       qbittorrent: { url: "", api_key_set: false },
+      plex: { url: "", api_key_set: false },
     })
     const { queryClient, wrapper } = setup()
     const invalidate = vi.spyOn(queryClient, "invalidateQueries")

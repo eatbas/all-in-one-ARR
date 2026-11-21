@@ -148,6 +148,7 @@ const SERVICES: ServicesSettings = {
   omdb: { api_key_set: false },
   sabnzbd: { url: "", api_key_set: false },
   qbittorrent: { url: "", api_key_set: false },
+  plex: { url: "", api_key_set: false },
 }
 
 let updateMutate: ReturnType<typeof vi.fn>
@@ -1077,6 +1078,52 @@ describe("Settings — service tabs", () => {
     })
 
     vi.useRealTimers()
+  })
+
+  it("renders the Plex tab with an X-Plex-Token field instead of an API key", async () => {
+    const user = userEvent.setup()
+    render(<Settings />)
+    await user.click(screen.getByRole("tab", { name: "Plex" }))
+    expect(
+      screen.getByText("Connection settings for Plex."),
+    ).toBeInTheDocument()
+    expect(screen.getByText("URL")).toBeInTheDocument()
+    expect(screen.getByText("X-Plex-Token")).toBeInTheDocument()
+    expect(screen.getByLabelText("X-Plex-Token")).toHaveAttribute(
+      "type",
+      "password",
+    )
+    expect(screen.queryByText("API key")).not.toBeInTheDocument()
+    await expectHelpTooltip(
+      user,
+      "Explain X-Plex-Token",
+      "X-Plex-Token saved server-side. Existing tokens are never returned to the browser.",
+    )
+  })
+
+  it("autosaves the Plex URL and token and tests the connection", async () => {
+    const user = userEvent.setup()
+    render(<Settings />)
+    await user.click(screen.getByRole("tab", { name: "Plex" }))
+    vi.useFakeTimers()
+
+    act(() => {
+      fireEvent.change(screen.getByPlaceholderText("http://host:port"), {
+        target: { value: "http://plex:32400" },
+      })
+      fireEvent.change(screen.getByLabelText("X-Plex-Token"), {
+        target: { value: "plex-token" },
+      })
+    })
+    act(() => vi.advanceTimersByTime(800))
+    expect(serviceUpdateMutate).toHaveBeenCalledWith({
+      name: "plex",
+      body: { url: "http://plex:32400", api_key: "plex-token" },
+    })
+    vi.useRealTimers()
+
+    await user.click(screen.getByRole("button", { name: "Test connection" }))
+    expect(serviceTestMutate).toHaveBeenCalledWith("plex")
   })
 
   it("does not autosave qBittorrent when nothing changed", async () => {

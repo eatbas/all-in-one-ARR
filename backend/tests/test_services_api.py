@@ -60,7 +60,7 @@ def test_put_service_without_change_does_not_record_activity(db) -> None:
 
 def test_put_unknown_service_is_404(db) -> None:
     ctx = make_ctx(db=db)
-    resp = build_client(ctx).put("/api/settings/services/plex", json={"url": "x"})
+    resp = build_client(ctx).put("/api/settings/services/jellyfin", json={"url": "x"})
     assert resp.status_code == 404
 
 
@@ -123,7 +123,7 @@ def test_test_service_failure(db) -> None:
 
 def test_test_unknown_service_is_404(db) -> None:
     ctx = make_ctx(db=db)
-    resp = build_client(ctx).post("/api/services/plex/test")
+    resp = build_client(ctx).post("/api/services/jellyfin/test")
     assert resp.status_code == 404
 
 
@@ -168,6 +168,34 @@ def test_put_qbittorrent_service_applies_url_and_api_key(db) -> None:
     qbit.update_credentials.assert_called_once_with(
         base_url="http://qb:8080", api_key="qbt_key"
     )
+
+
+def test_put_plex_service_applies_url_and_token(db) -> None:
+    plex = StubService()
+    ctx = make_ctx(db=db, plex=plex)
+    resp = build_client(ctx).put(
+        "/api/settings/services/plex",
+        json={"url": "http://plex:32400", "api_key": "plex-token"},
+    )
+    assert resp.status_code == 200
+    # The token is reduced to a boolean like every other secret.
+    assert resp.json()["plex"] == {"url": "http://plex:32400", "api_key_set": True}
+    assert "plex-token" not in resp.text
+    plex.update_credentials.assert_called_once_with(
+        base_url="http://plex:32400", api_key="plex-token"
+    )
+    assert "Plex connection saved" in _activity_actions(ctx)
+
+
+def test_test_plex_service_ok(db) -> None:
+    plex = StubService()
+    plex.test_connection = AsyncMock(
+        return_value={"ok": True, "detail": "Connected to Plex Home (1.41.0)"}
+    )
+    ctx = make_ctx(db=db, plex=plex)
+    body = build_client(ctx).post("/api/services/plex/test").json()
+    assert body == {"ok": True, "detail": "Connected to Plex Home (1.41.0)"}
+    assert "Plex connection test passed" in _activity_actions(ctx)
 
 
 def test_test_new_service_ok(db) -> None:

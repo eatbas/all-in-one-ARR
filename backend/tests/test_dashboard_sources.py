@@ -22,6 +22,7 @@ from core.dashboard_sources import (
     collect_list_syncarr,
     collect_qbittorrent,
     collect_radarr,
+    collect_remindarr,
     collect_sabnzbd,
     collect_seer,
     collect_sonarr,
@@ -193,6 +194,69 @@ async def test_languagarr_reports_last_scan_and_queue(db, enabled, state) -> Non
         "languagarr.queue_pending": 2.0,
         "languagarr.queue_failed": 1.0,
     }
+
+
+# ---- Remindarr ----
+
+_PLEX = {"plex": {"url": "http://plex:32400", "api_key": "token"}}
+
+
+def _remindarr_status(*, enabled: bool = True, last_error: str | None = None):
+    return AsyncMock(
+        return_value={
+            "settings": {"enabled": enabled},
+            "last_success_at": "2026-11-21T09:00:00+00:00",
+            "last_error": last_error,
+            "counts": {"unwatched": 14, "tracked_series": 7, "unmatched_series": 2},
+        }
+    )
+
+
+async def test_remindarr_disabled_when_module_missing(db) -> None:
+    result = await collect_remindarr(make_ctx(db=db))
+    assert result.state == "disabled"
+    assert result.metrics == {}
+    assert result.link == "/remindarr"
+
+
+async def test_remindarr_disabled_reports_no_figures(db) -> None:
+    ctx = make_ctx(db=db, settings_store=StubSettingsStore(services=_PLEX))
+    ctx.remindarr_status = _remindarr_status(enabled=False)
+    result = await collect_remindarr(ctx)
+    assert result.state == "disabled"
+    assert result.metrics == {}
+
+
+async def test_remindarr_not_configured_without_plex(db) -> None:
+    ctx = make_ctx(db=db)
+    ctx.remindarr_status = _remindarr_status()
+    result = await collect_remindarr(ctx)
+    assert result.state == "not_configured"
+    assert result.detail == "Plex is not connected."
+    assert result.metrics == {}
+
+
+async def test_remindarr_reports_stored_counts(db) -> None:
+    ctx = make_ctx(db=db, settings_store=StubSettingsStore(services=_PLEX))
+    ctx.remindarr_status = _remindarr_status()
+    result = await collect_remindarr(ctx)
+    assert result.state == "ok"
+    assert result.detail is None
+    assert result.updated_at == "2026-11-21T09:00:00+00:00"
+    assert result.metrics == {
+        "remindarr.unwatched_episodes": 14.0,
+        "remindarr.unmatched_series": 2.0,
+    }
+
+
+async def test_remindarr_stale_names_the_last_error(db) -> None:
+    ctx = make_ctx(db=db, settings_store=StubSettingsStore(services=_PLEX))
+    ctx.remindarr_status = _remindarr_status(last_error="Plex rejected the token")
+    result = await collect_remindarr(ctx)
+    # Stale results stay "ok" with their figures; the detail explains why.
+    assert result.state == "ok"
+    assert result.detail == "Last refresh failed: Plex rejected the token."
+    assert result.metrics["remindarr.unwatched_episodes"] == 14.0
 
 
 # ---- Bandwidth-Controllarr ----
@@ -424,6 +488,7 @@ def test_sources_order_ttls_and_lookup() -> None:
         "findarr",
         "deletarr",
         "languagarr",
+        "remindarr",
         "bandwidth",
         "trending",
         "sonarr",

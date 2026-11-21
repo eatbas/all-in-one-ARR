@@ -49,6 +49,13 @@ def test_sync_and_service_metrics_update() -> None:
     assert service_status.labels("trakt")._value.get() == 1
 
 
+def test_initialise_metrics_includes_plex_service_label() -> None:
+    initialise_metrics()
+    assert service_status.labels("plex")._value.get() == 0
+    update_service_metrics("plex", ok=True, checked_at=123)
+    assert service_status.labels("plex")._value.get() == 1
+
+
 @pytest.mark.asyncio
 async def test_scheduler_job_metrics_update() -> None:
     before = _counter_value(scheduler_job_runs_total, "findarr_poll", "success")

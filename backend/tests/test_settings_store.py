@@ -260,6 +260,36 @@ def test_backfills_new_services_from_seed_on_upgrade(tmp_path) -> None:
     assert reopened.service_connection("seer") == ("http://js", "jk")
 
 
+def test_backfills_plex_into_existing_store_without_it(tmp_path) -> None:
+    # A store written before Plex existed holds every other service but not
+    # "plex": the load backfills it from the env seed and re-saves the file.
+    path = tmp_path / "settings.json"
+    SettingsStore(str(path)).load_or_seed(client_id="cid", client_secret="sec")
+    data = json.loads(path.read_text())
+    data["services"].pop("plex")
+    path.write_text(json.dumps(data), encoding="utf-8")
+
+    store = SettingsStore(str(path))
+    store.load_or_seed(
+        client_id="cid",
+        client_secret="sec",
+        services={"plex": {"url": " http://plex:32400 ", "api_key": "plex-token"}},
+    )
+    assert store.service_fields("plex") == {
+        "url": "http://plex:32400",
+        "api_key": "plex-token",
+    }
+    assert store.masked_services()["plex"] == {
+        "url": "http://plex:32400",
+        "api_key_set": True,
+    }
+    saved = json.loads(path.read_text())
+    assert saved["services"]["plex"] == {
+        "url": "http://plex:32400",
+        "api_key": "plex-token",
+    }
+
+
 def test_update_service_connection_leaves_unset_fields(tmp_path) -> None:
     store = SettingsStore(str(tmp_path / "settings.json"))
     store.load_or_seed(client_id="c", client_secret="s")

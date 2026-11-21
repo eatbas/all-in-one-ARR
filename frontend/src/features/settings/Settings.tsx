@@ -275,7 +275,6 @@ function CredentialsCard() {
   )
 }
 
-/** Edit a service connection (URL / API key) and test it. */
 /** UI metadata for the API-key slots a service tab can declare. */
 const API_KEY_FIELDS = [
   {
@@ -306,7 +305,16 @@ const API_KEY_FIELDS = [
 
 type ApiKeyFieldMeta = (typeof API_KEY_FIELDS)[number]
 
-function ServiceConnectionCard({ name, label, fields }: ServiceTab) {
+/**
+ * Edit a service connection (URL / API key) and test it. `apiKeyLabel` renames
+ * the primary key field and its saved-state help (Plex: "X-Plex-Token").
+ */
+function ServiceConnectionCard({
+  name,
+  label,
+  fields,
+  apiKeyLabel,
+}: ServiceTab) {
   const { data: services } = useServiceSettings()
   const { data: statuses } = useServiceStatuses()
   const {
@@ -399,6 +407,19 @@ function ServiceConnectionCard({ name, label, fields }: ServiceTab) {
     return current?.[key.setFlag] ? "Saved" : "Not set"
   }
 
+  function keyLabel(key: ApiKeyFieldMeta): string {
+    return key.payload === "api_key" && apiKeyLabel ? apiKeyLabel : key.label
+  }
+
+  function keyHelpText(key: ApiKeyFieldMeta): string {
+    if (key.payload !== "api_key") {
+      return "Optional rotation key: lookups switch to it when the previous key hits its daily request limit."
+    }
+    return apiKeyLabel
+      ? `${apiKeyLabel} saved server-side. Existing tokens are never returned to the browser.`
+      : "API key saved server-side. Existing keys are never returned to the browser."
+  }
+
   function clearSavedKey(key: ApiKeyFieldMeta) {
     // Extras are cleared by saving an explicit empty value (the regular
     // convention is "blank keeps current", so blanking alone cannot clear).
@@ -438,20 +459,16 @@ function ServiceConnectionCard({ name, label, fields }: ServiceTab) {
         {keyFields.map((key) => (
           <Field
             key={key.payload}
-            label={key.label}
+            label={keyLabel(key)}
             hint={keyHint(key)}
-            helpText={
-              key.payload === "api_key"
-                ? "API key saved server-side. Existing keys are never returned to the browser."
-                : "Optional rotation key: lookups switch to it when the previous key hits its daily request limit."
-            }
+            helpText={keyHelpText(key)}
           >
             <Input
               type="password"
               value={keyEdits[key.payload] ?? ""}
               onChange={(event) => editKey(key.payload, event.target.value)}
               placeholder="Leave blank to keep current"
-              aria-label={key.label}
+              aria-label={keyLabel(key)}
             />
             {key.payload !== "api_key" && current?.[key.setFlag] ? (
               <Button
@@ -877,7 +894,7 @@ function AppSchedulerCard() {
 /**
  * Settings page: a header (title and one-line description) above a tab per area —
  * General, Database, Trakt, then one per managed service (Seer, Sonarr, Radarr,
- * TMDB, OMDb, SABnzbd, qBittorrent), driven by {@link SERVICE_TABS}. The header
+ * TMDB, OMDb, SABnzbd, qBittorrent, Plex), driven by {@link SERVICE_TABS}. The header
  * mirrors the other top-level pages so the layout stays consistent.
  */
 export function Settings() {
@@ -934,6 +951,7 @@ export function Settings() {
               name={tab.name}
               label={tab.label}
               fields={tab.fields}
+              apiKeyLabel={tab.apiKeyLabel}
             />
           </TabsContent>
         ))}

@@ -11,6 +11,11 @@ export interface ServiceTab {
    * UI; shown as the card link when no URL setting exists.
    */
   homepage?: string
+  /**
+   * Label for the primary key field when the service does not call it an
+   * "API key" (Plex stores its X-Plex-Token in the same slot).
+   */
+  apiKeyLabel?: string
 }
 
 /**
@@ -37,6 +42,12 @@ export const SERVICE_TABS: readonly ServiceTab[] = [
   },
   { name: "sabnzbd", label: "SABnzbd", fields: ["url", "apiKey"] },
   { name: "qbittorrent", label: "qBittorrent", fields: ["url", "apiKey"] },
+  {
+    name: "plex",
+    label: "Plex",
+    fields: ["url", "apiKey"],
+    apiKeyLabel: "X-Plex-Token",
+  },
 ]
 
 /** Every tab value that can be persisted in the settings active-tab store. */

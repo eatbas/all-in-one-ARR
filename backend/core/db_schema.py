@@ -209,4 +209,33 @@ CREATE TABLE IF NOT EXISTS cleanarr_quarantine (
     categories TEXT NOT NULL DEFAULT '[]',
     quarantined_at TEXT NOT NULL
 );
+
+-- Remindarr: the last successful refresh's results, replaced as a whole in one
+-- transaction (core.db_remindarr). One row per tracked Sonarr series, matched
+-- to Plex by TVDB id or recorded with the reason it could not be.
+CREATE TABLE IF NOT EXISTS remindarr_series (
+    series_id INTEGER PRIMARY KEY,
+    series_title TEXT NOT NULL,
+    series_slug TEXT,
+    tvdb_id INTEGER,
+    plex_match TEXT NOT NULL
+        CHECK(plex_match IN ('matched','no_tvdb_id','not_in_plex')),
+    episodes_not_in_plex INTEGER NOT NULL DEFAULT 0,
+    latest_added_at TEXT
+);
+
+-- One row per downloaded episode the Plex token owner has not watched.
+CREATE TABLE IF NOT EXISTS remindarr_episodes (
+    episode_id INTEGER PRIMARY KEY,
+    series_id INTEGER NOT NULL
+        REFERENCES remindarr_series(series_id) ON DELETE CASCADE,
+    episode_file_id INTEGER NOT NULL,
+    season_number INTEGER NOT NULL,
+    episode_number INTEGER NOT NULL,
+    title TEXT NOT NULL DEFAULT '',
+    air_date_utc TEXT,
+    added_at TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_remindarr_episodes_series
+    ON remindarr_episodes(series_id);
 """

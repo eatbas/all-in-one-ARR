@@ -21,6 +21,7 @@ from core.db_cleanarr import CleanarrMixin
 from core.db_dashboard import DashboardSnapshotMixin
 from core.db_findarr import FindarrMixin
 from core.db_languagarr import LanguagarrQueueMixin
+from core.db_remindarr import RemindarrMixin
 from core.db_schema import INIT_SQL
 from core.logging import get_logger
 from core.timefmt import utcnow_iso as utcnow_iso
@@ -37,7 +38,11 @@ ITEM_STATUSES = ("synced", "requested", "available", "removed")
 
 
 class Database(
-    FindarrMixin, LanguagarrQueueMixin, DashboardSnapshotMixin, CleanarrMixin
+    FindarrMixin,
+    LanguagarrQueueMixin,
+    DashboardSnapshotMixin,
+    CleanarrMixin,
+    RemindarrMixin,
 ):
     """Thin, thread-safe wrapper around a SQLite connection."""
 

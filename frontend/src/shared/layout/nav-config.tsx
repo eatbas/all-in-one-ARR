@@ -1,4 +1,5 @@
 import {
+  BellIcon,
   BrushCleaningIcon,
   GaugeIcon,
   LanguagesIcon,
@@ -11,6 +12,9 @@ import {
   type LucideIcon,
 } from "lucide-react"
 
+/** The count a navigation entry can carry as a badge. */
+export type NavBadgeSource = "remindarr"
+
 /** A single primary navigation entry. */
 export interface NavItem {
   /** User-facing label. */
@@ -21,6 +25,8 @@ export interface NavItem {
   icon: LucideIcon
   /** Short description used for tooltips and accessibility. */
   description: string
+  /** Optional count badge shown beside the label (over the icon when collapsed). */
+  badge?: NavBadgeSource
 }
 
 /**
@@ -75,6 +81,13 @@ export const NAV_ITEMS: ReadonlyArray<NavItem> = [
     to: "/languagarr",
     icon: LanguagesIcon,
     description: "Find anime missing your audio language and replace it",
+  },
+  {
+    title: "Remindarr",
+    to: "/remindarr",
+    icon: BellIcon,
+    description: "Unwatched episodes from your selected Sonarr tags",
+    badge: "remindarr",
   },
   {
     title: "Settings",

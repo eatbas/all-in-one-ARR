@@ -446,6 +446,59 @@ def normalise_languagarr_settings(raw: dict[str, Any] | None = None) -> dict[str
     }
 
 
+# Remindarr bounds. The API rejects out-of-range input (HTTP 422); the normaliser
+# below clamps, de-duplicates or caps anything already persisted.
+REMINDARR_INTERVAL_MIN = 15
+REMINDARR_INTERVAL_MAX = 1440
+REMINDARR_TAG_IDS_MAX = 50
+
+# Remindarr: lists downloaded, unwatched episodes of Sonarr series carrying any
+# selected tag, using the Plex token owner's watch state. ``enabled`` gates both
+# the scheduled refresh and the manual one (a disabled module makes no upstream
+# call); an empty tag selection tracks nothing.
+DEFAULT_REMINDARR_SETTINGS: dict[str, Any] = {
+    "enabled": False,
+    "interval_minutes": 60,
+    "tag_ids": [],
+    # Unmonitored series and episodes are skipped by default, like Languagarr.
+    "monitored_only": True,
+}
+
+
+def _normalise_remindarr_tag_ids(value: Any) -> list[int]:
+    """Return unique positive Sonarr tag ids in their original order, capped.
+
+    Booleans, non-integers and non-positive values are dropped; anything that
+    is not a list yields no tags (tracking nothing, never everything).
+    """
+    if not isinstance(value, list):
+        return []
+    tag_ids: list[int] = []
+    for entry in value:
+        if isinstance(entry, bool) or not isinstance(entry, int) or entry <= 0:
+            continue
+        if entry not in tag_ids:
+            tag_ids.append(entry)
+    return tag_ids[:REMINDARR_TAG_IDS_MAX]
+
+
+def normalise_remindarr_settings(raw: dict[str, Any] | None = None) -> dict[str, Any]:
+    """Merge and validate persisted Remindarr settings with safe defaults."""
+    raw = raw or {}
+    defaults = DEFAULT_REMINDARR_SETTINGS
+    return {
+        "enabled": bool(raw.get("enabled", defaults["enabled"])),
+        "interval_minutes": bounded_int(
+            raw.get("interval_minutes"),
+            default=defaults["interval_minutes"],
+            minimum=REMINDARR_INTERVAL_MIN,
+            maximum=REMINDARR_INTERVAL_MAX,
+        ),
+        "tag_ids": _normalise_remindarr_tag_ids(raw.get("tag_ids")),
+        "monitored_only": bool(raw.get("monitored_only", defaults["monitored_only"])),
+    }
+
+
 # Cleanarr bounds. The API rejects out-of-range input (HTTP 422); the normaliser
 # below clamps or falls back for anything already persisted.
 CLEANARR_INTERVAL_MIN = 5

@@ -1,8 +1,8 @@
 """Outbound Sonarr client for Languagarr's audit, search and delete actions.
 
-Series and episode-file listing, the system-status call and the version check
-are inherited from :class:`ServarrClient`; this client adds only the endpoints
-Languagarr alone needs. Deletion goes through Sonarr's own API so Sonarr stays
+Series, episode and episode-file listing, the system-status call and the
+version check are inherited from :class:`ServarrClient`; this client adds only
+the endpoints Languagarr alone needs. Deletion goes through Sonarr's own API so Sonarr stays
 the owner of the file (and of its recycle-bin behaviour) — Languagarr never
 touches the filesystem.
 """
@@ -32,14 +32,6 @@ class LanguagarrSonarrClient(ServarrClient):
     async def quality_profiles(self) -> list[dict[str, Any]]:
         """Return `/api/v3/qualityprofile` (id, name, cutoffFormatScore, ...)."""
         return self._as_dicts(await self._request("GET", "/api/v3/qualityprofile"))
-
-    async def episodes(self, series_id: int) -> list[dict[str, Any]]:
-        """Return `/api/v3/episode?seriesId=`; each carries ``episodeFileId``."""
-        return self._as_dicts(
-            await self._request(
-                "GET", "/api/v3/episode", params={"seriesId": series_id}
-            )
-        )
 
     async def episodes_for_file(self, episode_file_id: int) -> list[dict[str, Any]]:
         """Return `/api/v3/episode?episodeFileId=`: the episodes one file covers."""

@@ -119,11 +119,19 @@ export interface AddListPayload {
 
 /** The connection services managed from the Settings tabs. */
 export type ServiceName =
-  "seer" | "sonarr" | "radarr" | "tmdb" | "omdb" | "sabnzbd" | "qbittorrent"
+  | "seer"
+  | "sonarr"
+  | "radarr"
+  | "tmdb"
+  | "omdb"
+  | "sabnzbd"
+  | "qbittorrent"
+  | "plex"
 
 /**
  * A service's masked connection. Fields are optional because services differ in
- * shape: most carry a URL + API key and TMDB/OMDb are API-key-only (no URL).
+ * shape: most carry a URL + API key (Plex's X-Plex-Token lives in the API-key
+ * slot) and TMDB/OMDb are API-key-only (no URL).
  * Secrets are exposed only as `*_set`.
  */
 export interface ServiceConnection {

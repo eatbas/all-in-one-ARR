@@ -4009,6 +4009,490 @@
         "title": "ListSummary",
         "type": "object"
       },
+      "RemindarrCounts": {
+        "properties": {
+          "series_with_unwatched": {
+            "title": "Series With Unwatched",
+            "type": "integer"
+          },
+          "tracked_series": {
+            "title": "Tracked Series",
+            "type": "integer"
+          },
+          "unmatched_series": {
+            "title": "Unmatched Series",
+            "type": "integer"
+          },
+          "unwatched": {
+            "title": "Unwatched",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "unwatched",
+          "series_with_unwatched",
+          "tracked_series",
+          "unmatched_series"
+        ],
+        "title": "RemindarrCounts",
+        "type": "object"
+      },
+      "RemindarrEpisode": {
+        "properties": {
+          "added_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Added At"
+          },
+          "air_date_utc": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Air Date Utc"
+          },
+          "episode_file_id": {
+            "title": "Episode File Id",
+            "type": "integer"
+          },
+          "episode_id": {
+            "title": "Episode Id",
+            "type": "integer"
+          },
+          "episode_number": {
+            "title": "Episode Number",
+            "type": "integer"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "new_today": {
+            "title": "New Today",
+            "type": "boolean"
+          },
+          "season_number": {
+            "title": "Season Number",
+            "type": "integer"
+          },
+          "series_id": {
+            "title": "Series Id",
+            "type": "integer"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "episode_id",
+          "series_id",
+          "episode_file_id",
+          "season_number",
+          "episode_number",
+          "label",
+          "title",
+          "air_date_utc",
+          "added_at",
+          "new_today"
+        ],
+        "title": "RemindarrEpisode",
+        "type": "object"
+      },
+      "RemindarrResults": {
+        "properties": {
+          "last_success_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Success At"
+          },
+          "series": {
+            "items": {
+              "$ref": "#/components/schemas/RemindarrSeriesGroup"
+            },
+            "title": "Series",
+            "type": "array"
+          },
+          "unmatched": {
+            "items": {
+              "$ref": "#/components/schemas/RemindarrUnmatchedSeries"
+            },
+            "title": "Unmatched",
+            "type": "array"
+          }
+        },
+        "required": [
+          "last_success_at",
+          "series",
+          "unmatched"
+        ],
+        "title": "RemindarrResults",
+        "type": "object"
+      },
+      "RemindarrRunResult": {
+        "properties": {
+          "series_with_unwatched": {
+            "title": "Series With Unwatched",
+            "type": "integer"
+          },
+          "status": {
+            "enum": [
+              "success",
+              "disabled"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "tracked_series": {
+            "title": "Tracked Series",
+            "type": "integer"
+          },
+          "unmatched_series": {
+            "title": "Unmatched Series",
+            "type": "integer"
+          },
+          "unwatched": {
+            "title": "Unwatched",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "status",
+          "unwatched",
+          "series_with_unwatched",
+          "tracked_series",
+          "unmatched_series"
+        ],
+        "title": "RemindarrRunResult",
+        "type": "object"
+      },
+      "RemindarrSeriesGroup": {
+        "properties": {
+          "episodes": {
+            "items": {
+              "$ref": "#/components/schemas/RemindarrEpisode"
+            },
+            "title": "Episodes",
+            "type": "array"
+          },
+          "episodes_not_in_plex": {
+            "title": "Episodes Not In Plex",
+            "type": "integer"
+          },
+          "latest_added_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Latest Added At"
+          },
+          "new_today": {
+            "title": "New Today",
+            "type": "integer"
+          },
+          "series_id": {
+            "title": "Series Id",
+            "type": "integer"
+          },
+          "series_slug": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Series Slug"
+          },
+          "series_title": {
+            "title": "Series Title",
+            "type": "string"
+          },
+          "tvdb_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tvdb Id"
+          }
+        },
+        "required": [
+          "series_id",
+          "series_title",
+          "series_slug",
+          "tvdb_id",
+          "episodes_not_in_plex",
+          "latest_added_at",
+          "new_today",
+          "episodes"
+        ],
+        "title": "RemindarrSeriesGroup",
+        "type": "object"
+      },
+      "RemindarrSettings": {
+        "properties": {
+          "enabled": {
+            "title": "Enabled",
+            "type": "boolean"
+          },
+          "interval_minutes": {
+            "title": "Interval Minutes",
+            "type": "integer"
+          },
+          "monitored_only": {
+            "title": "Monitored Only",
+            "type": "boolean"
+          },
+          "tag_ids": {
+            "items": {
+              "type": "integer"
+            },
+            "title": "Tag Ids",
+            "type": "array"
+          }
+        },
+        "required": [
+          "enabled",
+          "interval_minutes",
+          "tag_ids",
+          "monitored_only"
+        ],
+        "title": "RemindarrSettings",
+        "type": "object"
+      },
+      "RemindarrSettingsUpdate": {
+        "description": "Partial settings update; bounds are the normaliser's, exposed in OpenAPI.",
+        "properties": {
+          "enabled": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Enabled"
+          },
+          "interval_minutes": {
+            "anyOf": [
+              {
+                "maximum": 1440.0,
+                "minimum": 15.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Interval Minutes"
+          },
+          "monitored_only": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Monitored Only"
+          },
+          "tag_ids": {
+            "anyOf": [
+              {
+                "items": {
+                  "minimum": 1.0,
+                  "type": "integer"
+                },
+                "maxItems": 50,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tag Ids"
+          }
+        },
+        "title": "RemindarrSettingsUpdate",
+        "type": "object"
+      },
+      "RemindarrStatus": {
+        "properties": {
+          "counts": {
+            "$ref": "#/components/schemas/RemindarrCounts"
+          },
+          "last_attempt_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Attempt At"
+          },
+          "last_error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Error"
+          },
+          "last_success_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Success At"
+          },
+          "missing_tag_ids": {
+            "items": {
+              "type": "integer"
+            },
+            "title": "Missing Tag Ids",
+            "type": "array"
+          },
+          "plex_configured": {
+            "title": "Plex Configured",
+            "type": "boolean"
+          },
+          "running": {
+            "title": "Running",
+            "type": "boolean"
+          },
+          "settings": {
+            "$ref": "#/components/schemas/RemindarrSettings"
+          },
+          "stale": {
+            "title": "Stale",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "settings",
+          "running",
+          "plex_configured",
+          "last_success_at",
+          "last_attempt_at",
+          "last_error",
+          "stale",
+          "missing_tag_ids",
+          "counts"
+        ],
+        "title": "RemindarrStatus",
+        "type": "object"
+      },
+      "RemindarrTag": {
+        "description": "A Sonarr tag offered in the tag checklist.",
+        "properties": {
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "label"
+        ],
+        "title": "RemindarrTag",
+        "type": "object"
+      },
+      "RemindarrUnmatchedSeries": {
+        "properties": {
+          "reason": {
+            "enum": [
+              "no_tvdb_id",
+              "not_in_plex"
+            ],
+            "title": "Reason",
+            "type": "string"
+          },
+          "reason_label": {
+            "title": "Reason Label",
+            "type": "string"
+          },
+          "series_id": {
+            "title": "Series Id",
+            "type": "integer"
+          },
+          "series_slug": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Series Slug"
+          },
+          "series_title": {
+            "title": "Series Title",
+            "type": "string"
+          },
+          "tvdb_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tvdb Id"
+          }
+        },
+        "required": [
+          "series_id",
+          "series_title",
+          "series_slug",
+          "tvdb_id",
+          "reason",
+          "reason_label"
+        ],
+        "title": "RemindarrUnmatchedSeries",
+        "type": "object"
+      },
       "ServiceStatus": {
         "properties": {
           "checked_at": {
@@ -6193,6 +6677,154 @@
         "summary": "Get Poster"
       }
     },
+    "/api/remindarr/results": {
+      "get": {
+        "operationId": "get_results_api_remindarr_results_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RemindarrResults"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Get Results",
+        "tags": [
+          "remindarr"
+        ]
+      }
+    },
+    "/api/remindarr/run": {
+      "post": {
+        "operationId": "post_run_api_remindarr_run_post",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RemindarrRunResult"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Post Run",
+        "tags": [
+          "remindarr"
+        ]
+      }
+    },
+    "/api/remindarr/settings": {
+      "get": {
+        "operationId": "get_settings_api_remindarr_settings_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RemindarrSettings"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Get Settings",
+        "tags": [
+          "remindarr"
+        ]
+      },
+      "put": {
+        "operationId": "put_settings_api_remindarr_settings_put",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RemindarrSettingsUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RemindarrStatus"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Put Settings",
+        "tags": [
+          "remindarr"
+        ]
+      }
+    },
+    "/api/remindarr/status": {
+      "get": {
+        "operationId": "get_status_api_remindarr_status_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RemindarrStatus"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Get Status",
+        "tags": [
+          "remindarr"
+        ]
+      }
+    },
+    "/api/remindarr/tags": {
+      "get": {
+        "operationId": "get_tags_api_remindarr_tags_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/RemindarrTag"
+                  },
+                  "title": "Response Get Tags Api Remindarr Tags Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Get Tags",
+        "tags": [
+          "remindarr"
+        ]
+      }
+    },
     "/api/services/{name}/test": {
       "post": {
         "operationId": "test_service_api_services__name__test_post",
@@ -7146,6 +7778,24 @@
     "/list-syncarr": {
       "get": {
         "operationId": "_spa_entry_list_syncarr_get",
+        "responses": {
+          "200": {
+            "content": {
+              "text/html": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": " Spa Entry"
+      }
+    },
+    "/remindarr": {
+      "get": {
+        "operationId": "_spa_entry_remindarr_get",
         "responses": {
           "200": {
             "content": {

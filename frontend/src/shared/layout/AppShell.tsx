@@ -7,6 +7,7 @@ import { Button } from "@/shared/components/ui/button"
 import { cn } from "@/shared/lib/utils"
 import { APP_VERSION } from "@/shared/lib/version"
 import { Topbar } from "@/shared/layout/Topbar"
+import { NavBadge } from "@/shared/layout/nav-badge"
 import { NAV_ITEMS } from "@/shared/layout/nav-config"
 import { SIDEBAR_COLLAPSED_STORAGE_KEY } from "@/shared/layout/sidebar-state"
 
@@ -22,7 +23,8 @@ interface SidebarProps {
  * {@link SidebarProps.collapsed} is set the labels collapse to an icon-only
  * rail; labels stay in the accessibility tree (via `sr-only`) so links keep
  * their accessible names, and the native `title` tooltip surfaces each label on
- * hover. The sidebar is a static, full-height child of the fixed-height app
+ * hover. An entry with a `badge` shows its count after the label, or as a small
+ * count over the icon on the rail. The sidebar is a static, full-height child of the fixed-height app
  * shell — the document never scrolls (see `index.css`), so the rail and its
  * `mt-auto` version footer physically cannot leave the viewport however tall
  * the routed page grows; only `<main>` scrolls past it.
@@ -83,8 +85,16 @@ function Sidebar({ collapsed, onToggle }: SidebarProps) {
               )
             }
           >
-            <item.icon className="size-4 shrink-0" />
+            <span className="relative inline-flex shrink-0">
+              <item.icon className="size-4" />
+              {item.badge && collapsed ? (
+                <NavBadge source={item.badge} collapsed />
+              ) : null}
+            </span>
             <span className={cn(collapsed && "sr-only")}>{item.title}</span>
+            {item.badge && !collapsed ? (
+              <NavBadge source={item.badge} collapsed={false} />
+            ) : null}
           </NavLink>
         ))}
       </nav>

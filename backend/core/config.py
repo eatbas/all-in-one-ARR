@@ -27,6 +27,7 @@ _SECRET_FIELDS = frozenset(
         "OMDB_API_KEY_4",
         "SABNZBD_API_KEY",
         "QBITTORRENT_API_KEY",
+        "PLEX_TOKEN",
     }
 )
 
@@ -76,6 +77,10 @@ class Settings(BaseSettings):
     # ---- qBittorrent (URL + WebUI API key; requires qBittorrent >= 5.2.0) ----
     QBITTORRENT_URL: str = ""
     QBITTORRENT_API_KEY: str = ""
+
+    # ---- Plex (URL + X-Plex-Token; used by Remindarr's watch-state lookups) ----
+    PLEX_URL: str = ""
+    PLEX_TOKEN: str = ""
 
     # ---- Sync behaviour ----
     SYNC_INTERVAL_MIN: int = 15
@@ -174,6 +179,7 @@ class Settings(BaseSettings):
                 "url": self.QBITTORRENT_URL,
                 "api_key": self.QBITTORRENT_API_KEY,
             },
+            "plex": {"url": self.PLEX_URL, "api_key": self.PLEX_TOKEN},
         }
 
     def masked(self) -> dict[str, Any]:

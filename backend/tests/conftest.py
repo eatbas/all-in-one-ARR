@@ -15,6 +15,7 @@ from core.settings_modules import with_ignored_download
 from core.settings_normalisers import (
     normalise_cleanarr_settings,
     normalise_languagarr_settings,
+    normalise_remindarr_settings,
 )
 from core.settings_store import TrackedList
 from core.status_checker import StatusChecker
@@ -109,6 +110,7 @@ class StubSettingsStore:
         deletarr_use_arr_source: bool = False,
         languagarr_settings: dict[str, Any] | None = None,
         cleanarr_settings: dict[str, Any] | None = None,
+        remindarr_settings: dict[str, Any] | None = None,
     ) -> None:
         # Defaults to True (unlike the real store, which seeds False) so the
         # availability-removal tests exercise the enabled path without having to opt
@@ -129,6 +131,7 @@ class StubSettingsStore:
         }
         self._languagarr_settings = normalise_languagarr_settings(languagarr_settings)
         self._cleanarr_settings = normalise_cleanarr_settings(cleanarr_settings)
+        self._remindarr_settings = normalise_remindarr_settings(remindarr_settings)
         self._findarr_settings = {
             "enabled": False,
             "interval_minutes": 30,
@@ -391,6 +394,20 @@ class StubSettingsStore:
         )
         return self.cleanarr_settings()
 
+    def remindarr_settings(self) -> dict[str, Any]:
+        return copy.deepcopy(self._remindarr_settings)
+
+    def remindarr_interval_minutes(self) -> int:
+        return int(self._remindarr_settings["interval_minutes"])
+
+    def update_remindarr_settings(self, updates: dict[str, Any]) -> dict[str, Any]:
+        merged = {**self._remindarr_settings}
+        merged.update(
+            {key: value for key, value in updates.items() if value is not None}
+        )
+        self._remindarr_settings = normalise_remindarr_settings(merged)
+        return self.remindarr_settings()
+
     def masked_services(self) -> dict[str, dict[str, Any]]:
         return {
             desc.name: masked_entry(desc, self._services[desc.name])
@@ -495,7 +512,7 @@ class FakeDeletarrArr:
 class StubService:
     """Minimal stand-in for the simple connection-test clients.
 
-    Covers TMDB/OMDb/SABnzbd/qBittorrent, which share the
+    Covers TMDB/OMDb/SABnzbd/qBittorrent/Plex, which share the
     ``update_credentials``/``test_connection``/``aclose`` contract. The
     Bandwidth-Controllarr methods are included so control-loop tests can use
     the generic stub when they do not care about specific client behaviour.
@@ -565,6 +582,7 @@ def make_ctx(
     anime_ids: Any | None = None,
     sabnzbd: Any | None = None,
     qbittorrent: Any | None = None,
+    plex: Any | None = None,
     settings: Any | None = None,
     settings_store: Any | None = None,
 ) -> AppContext:
@@ -582,6 +600,7 @@ def make_ctx(
         anilist=anilist or StubService(),
         sabnzbd=sabnzbd or StubService(),
         qbittorrent=qbittorrent or StubService(),
+        plex=plex or StubService(),
         scheduler=scheduler,
         webhooks=WebhookRegistry(),
         settings_store=settings_store or StubSettingsStore(),

@@ -184,7 +184,8 @@ const TREND_CHARTS: ReadonlyArray<TrendChartDefinition> = [
   {
     id: "modules",
     title: "Module activity",
-    description: "Findarr searches per day and Languagarr non-compliant files",
+    description:
+      "Findarr searches per day, Languagarr non-compliant files and Remindarr unwatched episodes",
     unit: "count",
     wide: true,
     series: [
@@ -201,6 +202,14 @@ const TREND_CHARTS: ReadonlyArray<TrendChartDefinition> = [
         metrics: ["languagarr.non_compliant"],
         label: "Languagarr non-compliant files",
         colour: "var(--chart-1)",
+        kind: "line",
+        axis: "left",
+      },
+      {
+        key: "remindarr_unwatched",
+        metrics: ["remindarr.unwatched_episodes"],
+        label: "Remindarr unwatched episodes",
+        colour: "var(--chart-2)",
         kind: "line",
         axis: "left",
       },

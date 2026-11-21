@@ -16,15 +16,19 @@ anime episode files, lists every file without a track in your target audio
 language(s) (English by default), and
 replaces them through bounded Sonarr searches or a reviewed
 delete-and-search (searches off by default).
+It also includes **Remindarr**, which lists the downloaded episodes of Sonarr
+series carrying the tags you choose that you have not watched in **Plex** yet,
+newest first, with an unwatched count on its menu entry (off by default;
+read-only towards Sonarr and Plex).
 Its **Dashboard** is a read-only statistics page for every app it manages —
 the modules plus Sonarr, Radarr, Seer, SABnzbd and qBittorrent — with headline
 figures, one card per app, disk space, 7/30/90-day trends from daily snapshots,
 and the recent activity feed.
 It uses **official REST APIs only** (no scraping).
 
-This is the plugin **core** plus six modules, **`list_syncarr`**,
-**`bandwidth_controllarr`**, **`findarr`**, **`cleanarr`**, **`deletarr`**, and
-**`languagarr`**. Future modules
+This is the plugin **core** plus seven modules, **`list_syncarr`**,
+**`bandwidth_controllarr`**, **`findarr`**, **`cleanarr`**, **`deletarr`**,
+**`languagarr`** and **`remindarr`**. Future modules
 drop into `backend/modules/` and auto-load — see [Adding a module](#adding-a-module).
 
 ## How it works
@@ -73,6 +77,7 @@ backend/
       trakt.py       # device auth, token refresh, list read/remove
       seer.py        # status check, create request
       arr_client.py  # outbound Radarr/Sonarr connection test
+      plex.py        # read-only Plex Media Server client (X-Plex-Token header)
   modules/
     list_syncarr/         # poll/request, availability-driven removal, reconcile
     bandwidth_controllarr/  # pause SABnzbd while qBittorrent has active torrents
@@ -80,6 +85,7 @@ backend/
     cleanarr/             # strike/remove stuck usenet downloads, SABnzbd tidying
     deletarr/             # reviewed junk-file scans and validated deletion
     languagarr/           # anime audio-language audit, search queue, reviewed delete
+    remindarr/            # unwatched episodes of tagged Sonarr series, via Plex
   main.py            # entrypoint: `uvicorn main:app --app-dir backend`
   pyproject.toml     # packaging + pytest + coverage config
   tests/             # backend test suite (100% coverage)
@@ -121,6 +127,8 @@ cp .env.example .env
 | `SABNZBD_API_KEY` | – | SABnzbd API key (seeds the store; settable in the UI) |
 | `QBITTORRENT_URL` | – | Base URL of the qBittorrent WebUI (seeds the store; settable in the UI) |
 | `QBITTORRENT_API_KEY` | – | qBittorrent WebUI API key, requires qBittorrent ≥ 5.2.0 (seeds the store; settable in the UI) |
+| `PLEX_URL` | – | Base URL of Plex Media Server, e.g. `http://192.168.0.2:32400` (seeds the store; settable in the UI) |
+| `PLEX_TOKEN` | – | X-Plex-Token used by Remindarr; watch state is read for the account that owns it. Sent only as the `X-Plex-Token` header, never in a URL (seeds the store; settable in the UI) |
 | `SYNC_INTERVAL_MIN` | `15` | Poll interval in minutes (seeds the store; settable in the UI) |
 | `AUTO_REMOVE_WHEN_AVAILABLE` | `false` | Auto-remove items from their Trakt list once Seer reports them available or partially available; deletes the Trakt entry and the Seer request, never the media files (seeds the store, settable in the UI). The legacy `AUTO_REMOVE_ON_IMPORT` name is still accepted. |
 | `BANDWIDTH_CONTROL_ENABLED` | `false` | Enable the Bandwidth-Controllarr loop (seeds the store; toggleable in the UI). Off by default so SABnzbd is never paused without opt-in. |
@@ -343,6 +351,11 @@ Sonarr/Radarr mount, trend charts and the recent activity feed. It is read-only:
   snapshot with a "stale since" time, the rest of the page keeps working, and the
   failure is cached for the same lifetime so a dead service is not retried on
   every poll.
+- **Remindarr card.** Placed after Languagarr, it shows *Unwatched episodes* and
+  *Series not found in Plex* from the stored results (it never starts a refresh).
+  It is *Not configured* with "Plex is not connected." while Plex has no URL or
+  token, and *Disabled* — with no figures — while Remindarr is off. When the last
+  refresh failed, the figures stay and the card names the error.
 - **Daily snapshots.** A `dashboard_snapshot` job stores every snapshot metric at
   **23:55 local time** (the container's `TZ`) under that day's date, and a
   catch-up snapshot runs at start-up when today has none yet. Re-running on the
@@ -353,7 +366,8 @@ Sonarr/Radarr mount, trend charts and the recent activity feed. It is read-only:
 - **Trends.** `GET /api/dashboard/history?days=7|30|90` returns one series per
   snapshot metric. Findarr's all-time search totals are returned as per-day
   increases (a day whose previous day is missing has no point); every other metric
-  is plotted as stored. Days without a snapshot are left as gaps in the charts. On
+  is plotted as stored; the "Module activity" chart includes Remindarr's
+  unwatched episodes. Days without a snapshot are left as gaps in the charts. On
   a fresh install the charts say they are collecting data until the first snapshot
   exists.
 
@@ -361,7 +375,7 @@ Sonarr/Radarr mount, trend charts and the recent activity feed. It is read-only:
 
 The dashboard **Settings** page is organised into tabs —
 **General**, **Database**, **Trakt**, **Seer**, **Sonarr**, **Radarr**, **TMDB**,
-**OMDb**, **SABnzbd**, **qBittorrent** — and manages every connection without
+**OMDb**, **SABnzbd**, **qBittorrent**, **Plex** — and manages every connection without
 touching `.env`. All values are persisted server-side in `SETTINGS_STORE_PATH`.
 
 **General tab** (the default): the status-check interval and the
@@ -415,6 +429,14 @@ connection** button, which authenticates with an `Authorization: Bearer` header
 and reads the application version. The base URL is shown in the input; the key
 is stored server-side and never returned in clear (the API only exposes whether
 a key is set). Edits autosave after you stop typing.
+
+**Plex tab:** takes a **base URL** and an **X-Plex-Token** and offers a **Test
+connection** button, which reads the server identity (`GET /`) and reports the
+server name and version, or "Plex rejected the token" for a 401/403. The token
+is stored in the service's API-key slot, sent only in the `X-Plex-Token`
+request header (never in a query string or log), and never returned in clear.
+Edits autosave after you stop typing. Plex also appears in the Dashboard's
+Integrations grid.
 
 ### Bandwidth-Controllarr page
 
@@ -741,6 +763,53 @@ track in your target language(s)**. Configure **Sonarr** in **Settings** first.
   quality group on the anime profile so the score decides; Sonarr's interactive
   search shows each release's rejection reason.
 
+### Remindarr page
+
+The dashboard **Remindarr** page (left menu) lists the downloaded episodes you
+have not watched in Plex yet, from Sonarr series carrying the tags you choose.
+Configure **Sonarr** (4+) and **Plex** in **Settings** first. Remindarr only
+reads from Sonarr and Plex; it never changes either.
+
+- **Tags** — check one or more Sonarr tags in **Remindarr → Settings**. The
+  checklist is read live from Sonarr (at most 50). A series is tracked when it
+  carries **any** checked tag. A newly checked tag Sonarr does not know is
+  rejected (`422`); a saved tag Sonarr has since deleted stays listed as *not in
+  Sonarr* so it can be unchecked, and simply matches no series.
+- **Monitored only** (on by default) — unmonitored series and unmonitored
+  episodes are skipped. Only episodes with a file in Sonarr count.
+- **Matching** — each series is matched to every Plex TV show whose GUIDs carry
+  its `tvdb://` id (Plex's modern agents), and each episode by season and episode
+  number. An episode counts as watched when **any** matched Plex item has
+  watched it, so a copy in a 4K library counts. A downloaded episode Plex does
+  not list yet (not scanned, or numbered differently) is counted as *not in Plex
+  yet* and never shown as unwatched.
+- **Not found in Plex** — series without a TVDB id in Sonarr, or with no Plex
+  show carrying that id, are listed separately with the reason. Shows on Plex's
+  legacy TheTVDB agent (`com.plexapp.agents.thetvdb`) and anime on agents such as
+  HAMA expose no `tvdb://` GUID and always land here. Absolute-numbered anime
+  may also be numbered differently in Plex and Sonarr.
+- **Whose watch state** — Plex reports watch state for the account that owns the
+  X-Plex-Token, so an admin token does not reflect other household accounts.
+- **Refresh** — a scheduled refresh runs every **Refresh interval** (15 minutes
+  to 1 day, default 1 hour) and stores its results in SQLite; **Refresh now** runs
+  one on demand. Scheduled and manual refreshes never overlap (`409` while one
+  runs). A refresh reads every Plex TV show's GUIDs and the episodes of the
+  matched tracked shows only, at most four requests at a time.
+- **New today** — an episode whose Sonarr file was added on today's date in the
+  container's local zone (`TZ`) is highlighted. This is worked out when the page
+  loads, so the highlight clears after midnight without a refresh.
+- **Stale results** — when a refresh fails (Sonarr or Plex unreachable, a
+  rejected token, Sonarr older than 4, or Plex not connected), the previous
+  results and badge are kept and an amber banner names the error and the time of
+  the results shown. One activity entry is written when refreshing starts
+  failing and one when it recovers; repeated failures are not logged again.
+- **Disabled** (the default) — nothing is fetched: the scheduled refresh does
+  nothing, **Refresh now** is unavailable, and the menu badge is hidden.
+- **Badge** — the **Remindarr** menu entry shows the total unwatched count (a
+  small count over the bell when the sidebar is collapsed). It reads the stored
+  results once a minute, never Sonarr or Plex, and is hidden at zero, while
+  disabled, or when the status request fails.
+
 ### Trending page
 
 The dashboard **Trending** page (left menu, directly below the Dashboard)
@@ -1049,10 +1118,11 @@ after both check jobs have passed.
 - `POST /api/trakt/lists` – add a list by `{ "url": … }` or `{ owner_user, slug }`.
 - `DELETE /api/trakt/lists/{owner_user}/{slug}` – stop syncing a list.
 - `GET /api/settings/services` – masked connection state for every service
-  (seer, sonarr, radarr, tmdb, omdb, sabnzbd, qbittorrent); each emits only
+  (seer, sonarr, radarr, tmdb, omdb, sabnzbd, qbittorrent, plex); each emits only
   its own fields, with secrets reduced to `<field>_set` booleans.
 - `PUT /api/settings/services/{name}` – update a service's fields
-  `{ url?, api_key? }` (only the fields it declares apply).
+  `{ url?, api_key? }` (only the fields it declares apply; Plex's X-Plex-Token
+  goes in `api_key`).
 - `POST /api/services/{name}/test` – test a service connection.
 - `GET /api/settings/database` – storage overview: DB size, poster cache size,
   and row counts for `items`, `activity`, and `list_state`.
@@ -1139,13 +1209,36 @@ after both check jobs have passed.
   `POST /api/languagarr/run` – inspect the queue, drop pending rows, or send one
   batch of searches now (`{ status, searched, failed, resolved }`, where
   `resolved` counts rows dropped because the file no longer needed a search).
+- `GET /api/remindarr/settings` / `PUT /api/remindarr/settings` – Remindarr
+  settings `{ enabled, interval_minutes, tag_ids, monitored_only }`. The `PUT`
+  returns the status; out-of-range values (interval 15–1440, at most 50 positive
+  tag ids) or a newly added tag id Sonarr does not know return `422`, `502` when
+  Sonarr cannot be read to check new tags, and a changed interval reschedules the
+  refresh.
+- `GET /api/remindarr/tags` – Sonarr's tags `[{ id, label }]`, sorted by label,
+  for the Settings checklist; `502` when Sonarr is unreachable.
+- `GET /api/remindarr/status` – settings, running flag, `plex_configured`, the
+  last success / attempt / error, `stale`, the selected tag ids Sonarr no longer
+  reported (`missing_tag_ids`) and the stored counts (`unwatched`,
+  `series_with_unwatched`, `tracked_series`, `unmatched_series`). Reads SQLite
+  only.
+- `GET /api/remindarr/results` – the stored results: series with unwatched
+  episodes (newest first, each episode with `new_today` computed per request)
+  and the series not found in Plex with their reason.
+- `POST /api/remindarr/run` – refresh now and return the counts;
+  `{ status: "disabled" }` without any upstream call while disabled, `409` while
+  a refresh runs, `502` when Sonarr or Plex fails (the stored results are kept).
 - `GET /metrics` – Prometheus-compatible text exposition. Existing
   Bandwidth-Controllarr gauges are preserved (`bw_qbit_*`, `bw_sab_*`,
   `bw_check_status`), and application-wide `aio_arr_*` metrics cover sync runs,
   integration health, scheduled jobs, Findarr activity, Deletarr scans /
   deletions, Languagarr scans, non-compliant file counts, searches and
-  deletions, and Cleanarr runs, strikes, removals (`live`/`dry_run`), file
-  actions and health warnings (`aio_arr_cleanarr_*`).
+  deletions, Cleanarr runs, strikes, removals (`live`/`dry_run`), file
+  actions and health warnings (`aio_arr_cleanarr_*`), and Remindarr refreshes
+  by outcome (`aio_arr_remindarr_runs_total{status="success"|"error"|"skipped"}`)
+  with the stored unwatched-episode and unmatched-series counts
+  (`aio_arr_remindarr_unwatched_episodes`, `aio_arr_remindarr_unmatched_series`).
+  The integration-health series include `plex`.
 - `GET /api/trending?source=&media=&category=[&window=]` – normalised trending or
   popular items for the Trending page. `source` is `trakt|tmdb|seer`, `media` is
   `movie|show`, `category` is `trending|popular`, and `window` (`day|week`, TMDB
