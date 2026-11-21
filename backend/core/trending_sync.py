@@ -83,8 +83,21 @@ _REFRESH_ACTIVE = False
 # The feed matrix refreshed each cycle. TMDB trending uses the weekly window — the
 # only window the dashboard ever requests — so it is the only one kept warm. The
 # anime variants and AniList are full members of the matrix so the Anime tab is
-# served from the same warmed snapshot.
-_SOURCES = ("trakt", "tmdb", "seer", "trakt-anime", "tmdb-anime", "anilist")
+# served from the same warmed snapshot, and so are the Animation genre variants
+# behind the Trakt/TMDB/Seer tabs' "All | Animation" toggle. Only the base
+# ``seer`` source takes the mixed-feed trending path (``_store_seer_trending``);
+# ``seer-animation`` is per media type like every other feed.
+_SOURCES = (
+    "trakt",
+    "tmdb",
+    "seer",
+    "trakt-anime",
+    "tmdb-anime",
+    "anilist",
+    "trakt-animation",
+    "tmdb-animation",
+    "seer-animation",
+)
 _MEDIA = ("movie", "show")
 _CATEGORIES = ("trending", "popular")
 SYNC_WINDOW = "week"

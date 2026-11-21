@@ -30,6 +30,33 @@ def _is_official(owner_user: str) -> bool:
     return owner_user == OFFICIAL_OWNER
 
 
+def _has_genre(obj: dict[str, Any], slug: str) -> bool:
+    """Whether an ``extended=full`` media object carries the genre ``slug``.
+
+    Membership is exact and needs a list: a missing, empty or malformed
+    (non-list) ``genres`` value carries no genre, so it neither satisfies an
+    inclusion filter nor triggers an exclusion.
+    """
+    genres = obj.get("genres")
+    return isinstance(genres, list) and slug in genres
+
+
+def _wrapped_objects(entries: Any, media_type: str) -> list[dict[str, Any]]:
+    """Unwrap ``{"<media>": {...}, ...}`` entries into their media objects.
+
+    Trakt's trending and search responses wrap each media object; an entry
+    that is not an object, or whose wrapped value is not an object, is
+    malformed and skipped rather than failing the whole response.
+    """
+    if not isinstance(entries, list):
+        return []
+    return [
+        entry[media_type]
+        for entry in entries
+        if isinstance(entry, dict) and isinstance(entry.get(media_type), dict)
+    ]
+
+
 _OAUTH_REDIRECT = "urn:ietf:wg:oauth:2.0:oob"
 # Refresh this many seconds before the access token actually expires.
 _REFRESH_MARGIN_SECONDS = 24 * 60 * 60
@@ -303,50 +330,146 @@ class TraktClient:
             "year": obj.get("year"),
         }
 
+    @staticmethod
+    def _page_objects(
+        entries: Any, *, media_type: str, unwrap: bool
+    ) -> list[dict[str, Any]]:
+        """Return the media objects from one discovery page.
+
+        ``unwrap`` selects the trending shape, where each entry wraps its media
+        object as ``{"watchers": N, "<media>": {...}}`` (see
+        :func:`_wrapped_objects`); otherwise the entries are the flat media
+        objects the popular endpoint returns. Malformed entries are skipped.
+        """
+        if unwrap:
+            return _wrapped_objects(entries, media_type)
+        if not isinstance(entries, list):
+            return []
+        return [entry for entry in entries if isinstance(entry, dict)]
+
+    @staticmethod
+    def _is_repeat(row: dict[str, Any], seen: set[int]) -> bool:
+        """Whether ``row``'s Trakt id was already kept, recording it if not.
+
+        Rows without an integer Trakt id cannot be matched and are never
+        treated as repeats.
+        """
+        trakt_id = row["trakt"]
+        if not isinstance(trakt_id, int):
+            return False
+        if trakt_id in seen:
+            return True
+        seen.add(trakt_id)
+        return False
+
+    async def _discover_rows(
+        self,
+        path: str,
+        *,
+        media_type: str,
+        unwrap: bool,
+        limit: int,
+        genres: str | None,
+        exclude_genre: str | None,
+        pages: int,
+    ) -> list[dict[str, Any]]:
+        """Fetch one trending/popular feed as uniform discovery rows.
+
+        Shared by :meth:`get_trending` and :meth:`get_popular`. ``genres`` is
+        the server-side inclusion filter (see :meth:`_discovery_params`).
+        Trakt has no server-side exclusion filter, so ``exclude_genre`` requests
+        the ``extended=full`` payload (which carries each title's genre slugs)
+        and drops matching titles client-side.
+
+        With ``pages > 1``, pages of ``limit`` rows are requested so a
+        client-side exclusion can still fill ``limit``. Each page is filtered
+        as it arrives and titles repeated across pages (the live ranking can
+        shift between requests) are kept once; paging stops as soon as
+        ``limit`` unique rows are held, or at the first page shorter than
+        ``limit`` (an empty page included), so a later page that would fail can
+        never discard a full result set. With ``pages=1`` the request carries
+        exactly the ``limit``/``genres`` parameters (plus ``extended`` for an
+        exclusion) and no deduplication applies, as before paging existed.
+        """
+        params = self._discovery_params(limit, genres)
+        if exclude_genre is not None:
+            params["extended"] = "full"
+        rows: list[dict[str, Any]] = []
+        # Cross-page deduplication only applies to paged requests.
+        seen: set[int] | None = set() if pages > 1 else None
+        for page in range(1, pages + 1):
+            page_params = params if pages == 1 else {**params, "page": page}
+            response = await self._client.get(
+                path, headers=self._public_headers(), params=page_params
+            )
+            response.raise_for_status()
+            entries = response.json()
+            for obj in self._page_objects(
+                entries, media_type=media_type, unwrap=unwrap
+            ):
+                if exclude_genre is not None and _has_genre(obj, exclude_genre):
+                    continue
+                row = self._discovery_row(obj, media_type)
+                if seen is not None and self._is_repeat(row, seen):
+                    continue
+                rows.append(row)
+            page_size = len(entries) if isinstance(entries, list) else 0
+            if len(rows) >= limit or page_size < limit:
+                break
+        return rows[:limit]
+
     async def get_trending(
-        self, *, media_type: str, limit: int = 20, genres: str | None = None
+        self,
+        *,
+        media_type: str,
+        limit: int = 20,
+        genres: str | None = None,
+        exclude_genre: str | None = None,
+        pages: int = 1,
     ) -> list[dict[str, Any]]:
         """Return Trakt trending movies or shows as uniform discovery rows.
 
         ``media_type`` is ``movie`` or ``show``. Trakt wraps each trending entry in
         a ``{"watchers": N, "<media>": {...}}`` object; the inner media object is
         unwrapped and normalised. Uses the public (API-key-only) headers. See
-        :meth:`_discovery_params` for the ``genres`` filter.
+        :meth:`_discover_rows` for ``genres``, ``exclude_genre`` and ``pages``.
         """
         segment = _MEDIA_SEGMENT[media_type]
-        response = await self._client.get(
+        return await self._discover_rows(
             f"/{segment}/trending",
-            headers=self._public_headers(),
-            params=self._discovery_params(limit, genres),
+            media_type=media_type,
+            unwrap=True,
+            limit=limit,
+            genres=genres,
+            exclude_genre=exclude_genre,
+            pages=pages,
         )
-        response.raise_for_status()
-        return [
-            self._discovery_row(entry[media_type], media_type)
-            for entry in response.json()
-            if isinstance(entry.get(media_type), dict)
-        ]
 
     async def get_popular(
-        self, *, media_type: str, limit: int = 20, genres: str | None = None
+        self,
+        *,
+        media_type: str,
+        limit: int = 20,
+        genres: str | None = None,
+        exclude_genre: str | None = None,
+        pages: int = 1,
     ) -> list[dict[str, Any]]:
         """Return Trakt popular movies or shows as uniform discovery rows.
 
         ``media_type`` is ``movie`` or ``show``. Unlike trending, the popular
         endpoint returns flat media objects (no ``watchers`` wrapper). See
-        :meth:`_discovery_params` for the ``genres`` filter.
+        :meth:`_discover_rows` for ``genres``, ``exclude_genre`` and ``pages``.
         """
         segment = _MEDIA_SEGMENT[media_type]
-        response = await self._client.get(
+        return await self._discover_rows(
             f"/{segment}/popular",
-            headers=self._public_headers(),
-            params=self._discovery_params(limit, genres),
+            media_type=media_type,
+            unwrap=False,
+            limit=limit,
+            genres=genres,
+            exclude_genre=exclude_genre,
+            pages=pages,
         )
-        response.raise_for_status()
-        return [
-            self._discovery_row(entry, media_type)
-            for entry in response.json()
-            if isinstance(entry, dict)
-        ]
 
     async def search(
         self,
@@ -355,6 +478,7 @@ class TraktClient:
         query: str,
         limit: int = 20,
         genres: str | None = None,
+        exclude_genre: str | None = None,
     ) -> list[dict[str, Any]]:
         """Return Trakt title-search results as uniform discovery rows.
 
@@ -365,13 +489,14 @@ class TraktClient:
         headers.
 
         Unlike the discovery feeds, Trakt's search endpoint supports no
-        server-side filters, so a ``genres`` slug is applied here instead: the
+        server-side filters, so the genre filters are applied here instead: the
         results are requested with ``extended=full`` (which carries each
-        title's genre slugs) and filtered client-side.
+        title's genre slugs) and filtered client-side. ``genres`` keeps only
+        titles carrying that slug; ``exclude_genre`` drops titles carrying it.
         """
         params = self._discovery_params(limit, None)
         params["query"] = query
-        if genres is not None:
+        if genres is not None or exclude_genre is not None:
             params["extended"] = "full"
         response = await self._client.get(
             f"/search/{media_type}",
@@ -379,13 +504,11 @@ class TraktClient:
             params=params,
         )
         response.raise_for_status()
-        objects = [
-            entry[media_type]
-            for entry in response.json()
-            if isinstance(entry.get(media_type), dict)
-        ]
+        objects = _wrapped_objects(response.json(), media_type)
         if genres is not None:
-            objects = [obj for obj in objects if genres in (obj.get("genres") or [])]
+            objects = [obj for obj in objects if _has_genre(obj, genres)]
+        if exclude_genre is not None:
+            objects = [obj for obj in objects if not _has_genre(obj, exclude_genre)]
         return [self._discovery_row(obj, media_type) for obj in objects]
 
     async def lookup_ids(

@@ -2,7 +2,9 @@
 
 Backs the dashboard's Trending page: per-source trending and popular feeds
 (Trakt / TMDB / Seer, plus the anime variants ``trakt-anime`` / ``tmdb-anime``
-and the AniList source backing the Anime tab), a live per-source title search,
+and the AniList source backing the Anime tab, and the Animation genre variants
+``trakt-animation`` / ``tmdb-animation`` / ``seer-animation`` behind the Trakt,
+TMDB and Seer tabs' "All | Animation" toggle), a live per-source title search,
 an IMDb rating overlay served from the persistent store the budgeted backfill
 fills (``core.trending_sync``), and an "add to an owned Trakt list, then sync"
 action. The add never creates a Seer request directly — it adds to Trakt and
@@ -13,19 +15,26 @@ normal pipeline.
 from __future__ import annotations
 
 import asyncio
-from typing import TYPE_CHECKING, Any, Literal
+from typing import TYPE_CHECKING, Any, Literal, TypedDict
 
 from fastapi import APIRouter, Query
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
+from core.animation import TRAKT_ANIMATION_GENRE, TRAKT_ANIME_GENRE
 from core.anime_seasons import dedupe_anilist_show_seasons
+from core.clients.seer import (
+    SEER_ANIMATION_POPULAR_SORT,
+    SEER_ANIMATION_TRENDING_SORT,
+)
 from core.context import SyncAlreadyRunning
 from core.db import Database
 from core.logging import get_logger
 from core.timefmt import next_sync_at
 from core.trending import (
+    ANIMATION_SYNC_PAGES,
     SEER_TRENDING_SYNC_PAGES,
+    TRAKT_ANIMATION_SYNC_PAGES,
     TRENDING_ITEM_LIMIT,
     TRENDING_SEARCH_LIMIT,
     TRENDING_SEARCH_PAGES,
@@ -44,9 +53,19 @@ if TYPE_CHECKING:  # pragma: no cover
 
 # The discovery sources one Trending feed can come from. ``trakt-anime`` and
 # ``tmdb-anime`` are the genre-filtered variants of their base sources;
-# ``anilist`` is anime-only by nature.
+# ``anilist`` is anime-only by nature. The ``*-animation`` variants are the
+# Animation genre view of the Trakt/TMDB/Seer tabs, with anime excluded (see
+# :mod:`core.animation`).
 TrendingSourceName = Literal[
-    "trakt", "tmdb", "seer", "trakt-anime", "tmdb-anime", "anilist"
+    "trakt",
+    "tmdb",
+    "seer",
+    "trakt-anime",
+    "tmdb-anime",
+    "anilist",
+    "trakt-animation",
+    "tmdb-animation",
+    "seer-animation",
 ]
 
 
@@ -98,6 +117,148 @@ async def fetch_seer_trending_buckets(
     )
 
 
+def _provider(source: str) -> str:
+    """Return the provider behind a Trending source name.
+
+    Genre variants share their base provider's prefix (``trakt-anime`` and
+    ``trakt-animation`` are Trakt), so the dispatchers route on the provider
+    and leave the variant choice to the provider-specific helpers.
+    """
+    return source.partition("-")[0]
+
+
+class _TraktGenreFilters(TypedDict, total=False):
+    """Genre keyword arguments accepted by the Trakt discovery and search calls."""
+
+    genres: str
+    exclude_genre: str
+
+
+def _trakt_genre_filters(source: str) -> _TraktGenreFilters:
+    """Return the Trakt genre keyword arguments for a Trakt source variant.
+
+    ``trakt-anime`` includes the anime slug; ``trakt-animation`` includes the
+    Animation slug and excludes anime (see :mod:`core.animation`); the base
+    ``trakt`` source sends no genre filter at all.
+    """
+    if source == "trakt-animation":
+        return {"genres": TRAKT_ANIMATION_GENRE, "exclude_genre": TRAKT_ANIME_GENRE}
+    if source == "trakt-anime":
+        return {"genres": TRAKT_ANIME_GENRE}
+    return {}
+
+
+async def _fetch_trakt_feed(
+    ctx: AppContext, *, source: str, media: str, category: str, limit: int
+) -> list[dict]:
+    """Fetch one Trakt-backed feed (``trakt``, ``trakt-anime``, ``trakt-animation``).
+
+    The Animation variant drops anime client-side, so it pages
+    :data:`TRAKT_ANIMATION_SYNC_PAGES` x ``limit`` rows to still fill
+    ``limit``; the other variants keep their single-page request.
+    """
+    fetch = ctx.trakt.get_trending if category == "trending" else ctx.trakt.get_popular
+    filters = _trakt_genre_filters(source)
+    if source == "trakt-animation":
+        return await fetch(
+            media_type=media,
+            limit=limit,
+            pages=TRAKT_ANIMATION_SYNC_PAGES,
+            **filters,
+        )
+    return await fetch(media_type=media, limit=limit, **filters)
+
+
+async def _fetch_tmdb_feed(
+    ctx: AppContext,
+    *,
+    source: str,
+    media: str,
+    category: str,
+    window: str,
+    limit: int,
+    pages: int,
+) -> list[dict]:
+    """Fetch one TMDB-backed feed (``tmdb``, ``tmdb-anime``, ``tmdb-animation``).
+
+    Only the base source has a genuine trending feed with a ``window``; the
+    genre variants come from ``/discover`` sorted by popularity ("trending")
+    or vote count ("popular"). The Animation variant drops anime client-side,
+    so it fetches at least :data:`ANIMATION_SYNC_PAGES` pages.
+    """
+    trending = category == "trending"
+    if source == "tmdb":
+        if trending:
+            return await ctx.tmdb.get_trending(
+                media_type=media, window=window, limit=limit, pages=pages
+            )
+        return await ctx.tmdb.get_popular(media_type=media, limit=limit, pages=pages)
+    if source == "tmdb-anime":
+        fetch = ctx.tmdb.get_anime_trending if trending else ctx.tmdb.get_anime_popular
+        return await fetch(media_type=media, limit=limit, pages=pages)
+    # source == "tmdb-animation"
+    fetch = (
+        ctx.tmdb.get_animation_trending if trending else ctx.tmdb.get_animation_popular
+    )
+    return await fetch(
+        media_type=media, limit=limit, pages=max(pages, ANIMATION_SYNC_PAGES)
+    )
+
+
+async def _fetch_seer_feed(
+    ctx: AppContext,
+    *,
+    source: str,
+    media: str,
+    category: str,
+    limit: int,
+    pages: int,
+) -> list[dict]:
+    """Fetch one Seer-backed feed (``seer`` or ``seer-animation``).
+
+    The base trending feed mixes media types on one endpoint, so it is
+    bucket-filled before returning the requested type. The Animation variant
+    has no genre-filterable trending feed: its "trending" is ``/discover``
+    sorted by popularity, its "popular" is sorted by vote count, and it
+    fetches at least :data:`ANIMATION_SYNC_PAGES` pages because anime is
+    dropped client-side.
+    """
+    if source == "seer-animation":
+        sort_by = (
+            SEER_ANIMATION_TRENDING_SORT
+            if category == "trending"
+            else SEER_ANIMATION_POPULAR_SORT
+        )
+        return await ctx.seer.discover_animation(
+            media_type=media,
+            sort_by=sort_by,
+            limit=limit,
+            pages=max(pages, ANIMATION_SYNC_PAGES),
+        )
+    if category == "trending":
+        buckets = await fetch_seer_trending_buckets(ctx, limit=limit, pages=pages)
+        return buckets[media]
+    return await ctx.seer.discover_popular(media_type=media, limit=limit, pages=pages)
+
+
+async def _finish_anilist_rows(
+    ctx: AppContext, rows: list[dict], *, media: str
+) -> list[dict]:
+    """Enrich AniList rows with cross-provider ids and collapse show seasons.
+
+    AniList rows carry only AniList/MAL ids; the cached Fribb mapping fills in
+    TMDB/TVDB/IMDb so the overlays and the Trakt add work. AniList lists every
+    season separately, so shows are collapsed to one row per series to keep
+    the persisted snapshot and the downstream poster and rating jobs free of
+    season duplicates.
+    """
+    if ctx.anime_ids is not None:
+        rows = await ctx.anime_ids.enrich(rows)
+    if media == "show":
+        rows = dedupe_anilist_show_seasons(rows)
+    return rows
+
+
 async def fetch_feed(
     ctx: AppContext,
     *,
@@ -111,56 +272,75 @@ async def fetch_feed(
     """Fetch and normalise one ``(source, media, category)`` discovery feed.
 
     Shared by the live cold-feed fallback in the router (``pages=1``) and the
-    scheduled refresh (deeper ``pages``/``limit``). The Seer trending feed mixes
-    media types on one endpoint, so it is bucket-filled before returning the
-    requested type.
+    scheduled refresh (deeper ``pages``/``limit``). Each provider's variants
+    (base, anime and Animation) are resolved by that provider's helper.
     """
-    if source == "trakt":
-        if category == "trending":
-            return await ctx.trakt.get_trending(media_type=media, limit=limit)
-        return await ctx.trakt.get_popular(media_type=media, limit=limit)
-    if source == "trakt-anime":
-        if category == "trending":
-            return await ctx.trakt.get_trending(
-                media_type=media, limit=limit, genres="anime"
-            )
-        return await ctx.trakt.get_popular(
-            media_type=media, limit=limit, genres="anime"
+    provider = _provider(source)
+    if provider == "trakt":
+        return await _fetch_trakt_feed(
+            ctx, source=source, media=media, category=category, limit=limit
         )
-    if source == "tmdb":
-        if category == "trending":
-            return await ctx.tmdb.get_trending(
-                media_type=media, window=window, limit=limit, pages=pages
-            )
-        return await ctx.tmdb.get_popular(media_type=media, limit=limit, pages=pages)
-    if source == "tmdb-anime":
-        if category == "trending":
-            return await ctx.tmdb.get_anime_trending(
-                media_type=media, limit=limit, pages=pages
-            )
-        return await ctx.tmdb.get_anime_popular(
-            media_type=media, limit=limit, pages=pages
+    if provider == "tmdb":
+        return await _fetch_tmdb_feed(
+            ctx,
+            source=source,
+            media=media,
+            category=category,
+            window=window,
+            limit=limit,
+            pages=pages,
         )
-    if source == "anilist":
+    if provider == "anilist":
         if category == "trending":
             rows = await ctx.anilist.get_trending(media_type=media, limit=limit)
         else:
             rows = await ctx.anilist.get_popular(media_type=media, limit=limit)
-        # AniList rows carry only AniList/MAL ids; the cached Fribb mapping
-        # fills in TMDB/TVDB/IMDb so the overlays and the Trakt add work.
-        if ctx.anime_ids is not None:
-            rows = await ctx.anime_ids.enrich(rows)
-        if media == "show":
-            # AniList lists every season separately; collapse to one row per
-            # series so the persisted snapshot and the downstream poster and
-            # rating jobs stay free of season duplicates.
-            rows = dedupe_anilist_show_seasons(rows)
-        return rows
-    # source == "seer"
-    if category == "trending":
-        buckets = await fetch_seer_trending_buckets(ctx, limit=limit, pages=pages)
-        return buckets[media]
-    return await ctx.seer.discover_popular(media_type=media, limit=limit, pages=pages)
+        return await _finish_anilist_rows(ctx, rows, media=media)
+    # provider == "seer"
+    return await _fetch_seer_feed(
+        ctx,
+        source=source,
+        media=media,
+        category=category,
+        limit=limit,
+        pages=pages,
+    )
+
+
+async def _fetch_tmdb_search(
+    ctx: AppContext, *, source: str, media: str, query: str, limit: int
+) -> list[dict]:
+    """Run one TMDB-backed title search, choosing the variant's result filter.
+
+    TMDB's search endpoints accept no genre filter, so the anime and Animation
+    variants post-filter the same request client-side (see
+    :mod:`core.clients.tmdb`).
+    """
+    search = ctx.tmdb.search
+    if source == "tmdb-anime":
+        search = ctx.tmdb.search_anime
+    elif source == "tmdb-animation":
+        search = ctx.tmdb.search_animation
+    return await search(
+        media_type=media, query=query, limit=limit, pages=TRENDING_SEARCH_PAGES
+    )
+
+
+async def _fetch_seer_search(
+    ctx: AppContext, *, source: str, media: str, query: str, limit: int
+) -> list[dict]:
+    """Run one Seer-backed title search (``seer`` or ``seer-animation``).
+
+    The Animation variant keeps only animated, non-anime results client-side
+    (see :mod:`core.clients.seer`).
+    """
+    if source == "seer-animation":
+        return await ctx.seer.search_animation(
+            media_type=media, query=query, limit=limit, pages=TRENDING_SEARCH_PAGES
+        )
+    return await ctx.seer.search(
+        media_type=media, query=query, limit=limit, pages=TRENDING_SEARCH_PAGES
+    )
 
 
 async def fetch_search(
@@ -174,33 +354,27 @@ async def fetch_search(
     """Fetch and normalise one source's live title-search results.
 
     The search-box counterpart of :func:`fetch_feed`: each source is queried
-    through its own search endpoint and emits uniform discovery rows. AniList
-    rows get the same id enrichment and show-season dedupe as the browse feeds.
+    through its own search endpoint and emits uniform discovery rows. No
+    provider's search filters by genre server-side, so the genre variants are
+    filtered client-side (Trakt by genre slug, TMDB and Seer by genre id and
+    original language; see :mod:`core.animation`). AniList rows get the same
+    id enrichment and show-season dedupe as the browse feeds.
     """
-    if source == "trakt":
-        return await ctx.trakt.search(media_type=media, query=query, limit=limit)
-    if source == "trakt-anime":
+    provider = _provider(source)
+    if provider == "trakt":
         return await ctx.trakt.search(
-            media_type=media, query=query, limit=limit, genres="anime"
+            media_type=media, query=query, limit=limit, **_trakt_genre_filters(source)
         )
-    if source == "tmdb":
-        return await ctx.tmdb.search(
-            media_type=media, query=query, limit=limit, pages=TRENDING_SEARCH_PAGES
+    if provider == "tmdb":
+        return await _fetch_tmdb_search(
+            ctx, source=source, media=media, query=query, limit=limit
         )
-    if source == "tmdb-anime":
-        return await ctx.tmdb.search_anime(
-            media_type=media, query=query, limit=limit, pages=TRENDING_SEARCH_PAGES
-        )
-    if source == "anilist":
+    if provider == "anilist":
         rows = await ctx.anilist.search(media_type=media, query=query, limit=limit)
-        if ctx.anime_ids is not None:
-            rows = await ctx.anime_ids.enrich(rows)
-        if media == "show":
-            rows = dedupe_anilist_show_seasons(rows)
-        return rows
-    # source == "seer"
-    return await ctx.seer.search(
-        media_type=media, query=query, limit=limit, pages=TRENDING_SEARCH_PAGES
+        return await _finish_anilist_rows(ctx, rows, media=media)
+    # provider == "seer"
+    return await _fetch_seer_search(
+        ctx, source=source, media=media, query=query, limit=limit
     )
 
 

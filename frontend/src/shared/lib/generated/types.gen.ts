@@ -4489,7 +4489,7 @@ export type GetTrendingApiTrendingGetData = {
         /**
          * Source
          */
-        source: 'trakt' | 'tmdb' | 'seer' | 'trakt-anime' | 'tmdb-anime' | 'anilist';
+        source: 'trakt' | 'tmdb' | 'seer' | 'trakt-anime' | 'tmdb-anime' | 'anilist' | 'trakt-animation' | 'tmdb-animation' | 'seer-animation';
         /**
          * Media
          */
@@ -4596,7 +4596,7 @@ export type GetTrendingSearchApiTrendingSearchGetData = {
         /**
          * Source
          */
-        source: 'trakt' | 'tmdb' | 'seer' | 'trakt-anime' | 'tmdb-anime' | 'anilist';
+        source: 'trakt' | 'tmdb' | 'seer' | 'trakt-anime' | 'tmdb-anime' | 'anilist' | 'trakt-animation' | 'tmdb-animation' | 'seer-animation';
         /**
          * Query
          */

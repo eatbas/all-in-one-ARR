@@ -74,4 +74,59 @@ export const SOURCE_LABELS: Record<TrendingSource, string> = {
   "trakt-anime": "Trakt",
   "tmdb-anime": "TMDB",
   anilist: "AniList",
+  "trakt-animation": "Trakt",
+  "tmdb-animation": "TMDB",
+  "seer-animation": "Seer",
+}
+
+/**
+ * The genre filters offered on the Trakt, TMDB and Seer tabs, in display order;
+ * the first is the default. Not persisted: every visit starts on "All".
+ */
+export const GENRE_FILTERS = ["all", "animation"] as const
+
+export type GenreFilter = (typeof GENRE_FILTERS)[number]
+
+/** Human-facing label for each genre filter. */
+export const GENRE_FILTER_LABELS: Record<GenreFilter, string> = {
+  all: "All",
+  animation: "Animation",
+}
+
+/**
+ * The Animation-genre variant of each base source that offers the genre
+ * filter. The variants list animated titles with anime left out, since the
+ * Anime tab already covers anime.
+ */
+export const ANIMATION_SOURCE_BY_BASE = {
+  trakt: "trakt-animation",
+  tmdb: "tmdb-animation",
+  seer: "seer-animation",
+} as const satisfies Partial<Record<TrendingSource, TrendingSource>>
+
+export type GenreFilterableSource = keyof typeof ANIMATION_SOURCE_BY_BASE
+
+/**
+ * Whether `source` offers the "All | Animation" genre filter. Only the Trakt,
+ * TMDB and Seer base sources do; the Anime tab's sources do not.
+ */
+export function isGenreFilterable(
+  source: TrendingSource,
+): source is GenreFilterableSource {
+  return Object.hasOwn(ANIMATION_SOURCE_BY_BASE, source)
+}
+
+/**
+ * The source a panel actually queries for its base `source` and the chosen
+ * `genre`: the Animation variant when "Animation" is chosen on a filterable
+ * source, otherwise `source` unchanged.
+ */
+export function resolveTrendingSource(
+  source: TrendingSource,
+  genre: GenreFilter,
+): TrendingSource {
+  if (genre === "animation" && isGenreFilterable(source)) {
+    return ANIMATION_SOURCE_BY_BASE[source]
+  }
+  return source
 }

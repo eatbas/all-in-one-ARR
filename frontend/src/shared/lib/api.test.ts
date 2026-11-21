@@ -851,6 +851,60 @@ describe("trendingSourceUrl", () => {
       ),
     ).toBeNull()
   })
+
+  it("links the Animation variants like their base sources", () => {
+    expect(
+      trendingSourceUrl(
+        trendingItem({
+          source: "tmdb-animation",
+          media_type: "show",
+          tmdb: 60625,
+        }),
+      ),
+    ).toBe("https://www.themoviedb.org/tv/60625")
+    expect(
+      trendingSourceUrl(trendingItem({ source: "tmdb-animation", tmdb: null })),
+    ).toBeNull()
+    expect(
+      trendingSourceUrl(
+        trendingItem({ source: "trakt-animation", slug: "shrek-2001" }),
+      ),
+    ).toBe("https://trakt.tv/movies/shrek-2001")
+    expect(
+      trendingSourceUrl(
+        trendingItem({ source: "trakt-animation", slug: null }),
+      ),
+    ).toBeNull()
+  })
+
+  it("links Seer Animation items to the configured instance", () => {
+    expect(
+      trendingSourceUrl(
+        trendingItem({ source: "seer-animation", media_type: "show", tmdb: 7 }),
+        "https://seer.example.com",
+      ),
+    ).toBe("https://seer.example.com/tv/7")
+    expect(
+      trendingSourceUrl(trendingItem({ source: "seer-animation", tmdb: 7 })),
+    ).toBeNull()
+    expect(
+      trendingSourceUrl(
+        trendingItem({ source: "seer-animation", tmdb: null }),
+        "https://seer.example.com",
+      ),
+    ).toBeNull()
+  })
+
+  it("gives a source this build does not know no link, not a Seer one", () => {
+    // Simulates a newer server sending a source outside the TrendingSource union.
+    const unknownSource = "future-source" as TrendingItem["source"]
+    expect(
+      trendingSourceUrl(
+        trendingItem({ source: unknownSource, tmdb: 7, slug: "x", anilist: 7 }),
+        "https://seer.example.com",
+      ),
+    ).toBeNull()
+  })
 })
 
 describe("findarr", () => {

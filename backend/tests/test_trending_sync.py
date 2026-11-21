@@ -9,8 +9,17 @@ from unittest.mock import AsyncMock, call
 import pytest
 
 from core import trending_sync
+from core.clients.seer import (
+    SEER_ANIMATION_POPULAR_SORT,
+    SEER_ANIMATION_TRENDING_SORT,
+)
 from core.db import utcnow_iso
-from core.trending import SEER_TRENDING_SYNC_PAGES, TRENDING_ITEM_LIMIT
+from core.trending import (
+    ANIMATION_SYNC_PAGES,
+    SEER_TRENDING_SYNC_PAGES,
+    TRAKT_ANIMATION_SYNC_PAGES,
+    TRENDING_ITEM_LIMIT,
+)
 from core.trending_sync import (
     _PREWARM_TASKS,
     _prewarm_targets,
@@ -20,7 +29,12 @@ from core.trending_sync import (
     refresh_trending_store,
     start_trending_sync,
 )
-from tests.conftest import make_ctx
+from tests.conftest import (
+    SYNTHETIC_TMDB_KEY,
+    capture_logger,
+    failing_tmdb_client,
+    make_ctx,
+)
 
 
 def _row(tmdb: int, media_type: str = "movie") -> dict:
@@ -107,9 +121,93 @@ async def test_refresh_covers_anime_sources(db) -> None:
         source="anilist", media="show", category="trending", window="week"
     ) == [{"media_type": "show", "anilist": 1, "title": "A", "year": 2026}]
     # The trakt-anime feeds go through the same client with the genre filter.
-    assert ctx.trakt.get_trending.await_args.kwargs.get("genres") == "anime"
+    # Later matrix members (the Animation variants) also call Trakt, so the
+    # anime call is looked up among every call rather than read off the last.
+    for media in ("movie", "show"):
+        assert (
+            call(media_type=media, limit=TRENDING_ITEM_LIMIT, genres="anime")
+            in ctx.trakt.get_trending.await_args_list
+        )
     ctx.tmdb.get_anime_trending.assert_awaited()
     ctx.tmdb.get_anime_popular.assert_awaited()
+
+
+async def test_refresh_covers_animation_sources(db) -> None:
+    # The Animation genre variants are full members of the scheduled matrix, so
+    # the Trakt/TMDB/Seer tabs' Animation toggle is served from the warm snapshot.
+    ctx = make_ctx(db=db)
+    ctx.tmdb.get_animation_trending.return_value = [_row(800, media_type="show")]
+    ctx.seer.discover_animation.return_value = [_row(900)]
+
+    await refresh_trending_store(ctx)
+
+    store = ctx.trending_store
+    persisted = {
+        (feed["source"], feed["media"], feed["category"])
+        for feed in db.trending_feeds_load()
+    }
+    expected = {
+        (source, media, category)
+        for source in ("trakt-animation", "tmdb-animation", "seer-animation")
+        for media in ("movie", "show")
+        for category in ("trending", "popular")
+    }
+    assert len(expected) == 12
+    for source, media, category in expected:
+        assert (
+            store.get(source=source, media=media, category=category, window="week")
+            is not None
+        ), (source, media, category)
+    assert expected <= persisted
+    assert store.get(
+        source="tmdb-animation", media="show", category="trending", window="week"
+    ) == [_row(800, media_type="show")]
+    assert db.trending_cycle_last_synced() is not None
+
+    # Each variant goes through its own client call with the deeper page count.
+    for media in ("movie", "show"):
+        assert (
+            call(
+                media_type=media,
+                limit=TRENDING_ITEM_LIMIT,
+                genres="animation",
+                exclude_genre="anime",
+                pages=TRAKT_ANIMATION_SYNC_PAGES,
+            )
+            in ctx.trakt.get_trending.await_args_list
+        )
+        assert (
+            call(
+                media_type=media,
+                limit=TRENDING_ITEM_LIMIT,
+                genres="animation",
+                exclude_genre="anime",
+                pages=TRAKT_ANIMATION_SYNC_PAGES,
+            )
+            in ctx.trakt.get_popular.await_args_list
+        )
+    assert ctx.tmdb.get_animation_trending.await_count == 2
+    assert ctx.tmdb.get_animation_popular.await_count == 2
+    assert all(
+        awaited.kwargs["pages"] == ANIMATION_SYNC_PAGES
+        for awaited in ctx.tmdb.get_animation_trending.await_args_list
+    )
+    ctx.seer.discover_animation.assert_has_awaits(
+        [
+            call(
+                media_type=media,
+                sort_by=sort_by,
+                limit=TRENDING_ITEM_LIMIT,
+                pages=ANIMATION_SYNC_PAGES,
+            )
+            for media in ("movie", "show")
+            for sort_by in (SEER_ANIMATION_TRENDING_SORT, SEER_ANIMATION_POPULAR_SORT)
+        ],
+        any_order=True,
+    )
+    # Seer Animation is per media type: the mixed trending bucket fetch runs
+    # once, for the base seer source only.
+    ctx.seer.discover_trending_buckets.assert_awaited_once()
 
 
 async def test_refresh_keeps_previous_snapshot_when_a_feed_fails(db) -> None:
@@ -1157,3 +1255,15 @@ async def test_ambiguous_anime_mapping_resolves_rating_via_tmdb(db) -> None:
     stored = db.trending_ratings_get_many(["show:42828", "tt-right"])
     assert stored["show:42828"]["imdb_rating"] == 8.4
     assert stored["tt-right"]["imdb_rating"] == 8.4
+
+
+async def test_scheduled_tmdb_failure_logs_without_the_api_key(db, caplog) -> None:
+    ctx = make_ctx(db=db, tmdb=failing_tmdb_client())
+    with capture_logger(caplog, "aio_arr.trending_sync"):
+        await refresh_trending_store(ctx)
+    # Every TMDB feed (base, anime and Animation) failed and was logged.
+    assert "source=tmdb-animation" in caplog.text
+    assert "TMDB /3/discover/tv returned HTTP 503" in caplog.text
+    assert "TMDB /3/trending/movie/week returned HTTP 503" in caplog.text
+    assert SYNTHETIC_TMDB_KEY not in caplog.text
+    assert ctx.trending_store.last_synced_at() is None

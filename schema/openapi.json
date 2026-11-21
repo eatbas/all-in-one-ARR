@@ -7354,7 +7354,10 @@
                 "seer",
                 "trakt-anime",
                 "tmdb-anime",
-                "anilist"
+                "anilist",
+                "trakt-animation",
+                "tmdb-animation",
+                "seer-animation"
               ],
               "title": "Source",
               "type": "string"
@@ -7578,7 +7581,10 @@
                 "seer",
                 "trakt-anime",
                 "tmdb-anime",
-                "anilist"
+                "anilist",
+                "trakt-animation",
+                "tmdb-animation",
+                "seer-animation"
               ],
               "title": "Source",
               "type": "string"

@@ -6,15 +6,28 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from core import trending as trending_mod
+from core.clients.seer import (
+    SEER_ANIMATION_POPULAR_SORT,
+    SEER_ANIMATION_TRENDING_SORT,
+)
 from core.context import SyncAlreadyRunning
 from core.settings_store import TrackedList
 from core.trending import (
+    ANIMATION_SYNC_PAGES,
     SEER_TRENDING_SYNC_PAGES,
+    TRAKT_ANIMATION_SYNC_PAGES,
+    TRENDING_ITEM_LIMIT,
     TRENDING_SEARCH_LIMIT,
     TRENDING_SEARCH_PAGES,
+    TRENDING_SYNC_PAGES,
 )
-from core.trending_api import create_trending_router, fetch_feed
-from tests.conftest import make_ctx
+from core.trending_api import create_trending_router, fetch_feed, fetch_search
+from tests.conftest import (
+    SYNTHETIC_TMDB_KEY,
+    capture_logger,
+    failing_tmdb_client,
+    make_ctx,
+)
 
 
 def build_client(ctx) -> TestClient:
@@ -171,6 +184,205 @@ def test_tmdb_anime_dispatches_to_discover_methods(db) -> None:
     ).json()
     assert popular[0]["tmdb"] == 601
     ctx.tmdb.get_anime_popular.assert_awaited_once()
+
+
+# ---- Animation genre variants (anime excluded) ----
+
+
+def test_trakt_animation_includes_animation_excludes_anime_and_pages(db) -> None:
+    ctx = make_ctx(db=db)
+    ctx.trakt.get_trending.return_value = [_row(media_type="show", tmdb=700)]
+    ctx.trakt.get_popular.return_value = [_row(media_type="movie", tmdb=701)]
+    client = build_client(ctx)
+
+    trending = client.get(
+        "/api/trending",
+        params={"source": "trakt-animation", "media": "show", "category": "trending"},
+    ).json()
+    assert trending[0]["source"] == "trakt-animation"
+    assert trending[0]["tmdb"] == 700
+    ctx.trakt.get_trending.assert_awaited_once_with(
+        media_type="show",
+        limit=TRENDING_ITEM_LIMIT,
+        genres="animation",
+        exclude_genre="anime",
+        pages=TRAKT_ANIMATION_SYNC_PAGES,
+    )
+
+    popular = client.get(
+        "/api/trending",
+        params={"source": "trakt-animation", "media": "movie", "category": "popular"},
+    ).json()
+    assert popular[0]["tmdb"] == 701
+    ctx.trakt.get_popular.assert_awaited_once_with(
+        media_type="movie",
+        limit=TRENDING_ITEM_LIMIT,
+        genres="animation",
+        exclude_genre="anime",
+        pages=TRAKT_ANIMATION_SYNC_PAGES,
+    )
+
+
+def test_tmdb_animation_dispatches_with_raised_pages(db) -> None:
+    ctx = make_ctx(db=db)
+    ctx.tmdb.get_animation_trending.return_value = [_row(media_type="show", tmdb=800)]
+    ctx.tmdb.get_animation_popular.return_value = [_row(media_type="movie", tmdb=801)]
+    client = build_client(ctx)
+
+    trending = client.get(
+        "/api/trending",
+        params={"source": "tmdb-animation", "media": "show", "category": "trending"},
+    ).json()
+    assert trending[0]["source"] == "tmdb-animation"
+    assert trending[0]["tmdb"] == 800
+    # The live fallback asks for TRENDING_SYNC_PAGES; the variant raises it.
+    assert ANIMATION_SYNC_PAGES > TRENDING_SYNC_PAGES
+    ctx.tmdb.get_animation_trending.assert_awaited_once_with(
+        media_type="show", limit=TRENDING_ITEM_LIMIT, pages=ANIMATION_SYNC_PAGES
+    )
+
+    popular = client.get(
+        "/api/trending",
+        params={"source": "tmdb-animation", "media": "movie", "category": "popular"},
+    ).json()
+    assert popular[0]["tmdb"] == 801
+    ctx.tmdb.get_animation_popular.assert_awaited_once_with(
+        media_type="movie", limit=TRENDING_ITEM_LIMIT, pages=ANIMATION_SYNC_PAGES
+    )
+    ctx.tmdb.get_trending.assert_not_awaited()
+    ctx.tmdb.get_popular.assert_not_awaited()
+
+
+def test_seer_animation_dispatches_to_discover_animation_with_sorts(db) -> None:
+    ctx = make_ctx(db=db)
+    ctx.seer.discover_animation.return_value = [
+        _row(media_type="movie", tmdb=900, seer_status=5)
+    ]
+    client = build_client(ctx)
+
+    trending = client.get(
+        "/api/trending",
+        params={"source": "seer-animation", "media": "movie", "category": "trending"},
+    ).json()
+    assert trending[0]["source"] == "seer-animation"
+    assert trending[0]["seer_status"] == 5
+    assert ctx.seer.discover_animation.await_args.kwargs == {
+        "media_type": "movie",
+        "sort_by": SEER_ANIMATION_TRENDING_SORT,
+        "limit": TRENDING_ITEM_LIMIT,
+        "pages": ANIMATION_SYNC_PAGES,
+    }
+
+    client.get(
+        "/api/trending",
+        params={"source": "seer-animation", "media": "show", "category": "popular"},
+    )
+    assert ctx.seer.discover_animation.await_args.kwargs == {
+        "media_type": "show",
+        "sort_by": SEER_ANIMATION_POPULAR_SORT,
+        "limit": TRENDING_ITEM_LIMIT,
+        "pages": ANIMATION_SYNC_PAGES,
+    }
+    # The mixed-feed trending bucket path belongs to the base seer source only.
+    ctx.seer.discover_trending_buckets.assert_not_awaited()
+    ctx.seer.discover_popular.assert_not_awaited()
+
+
+async def test_animation_feed_keeps_a_deeper_requested_page_count(db) -> None:
+    ctx = make_ctx(db=db)
+    deeper = ANIMATION_SYNC_PAGES + 2
+
+    await fetch_feed(
+        ctx,
+        source="tmdb-animation",
+        media="movie",
+        category="trending",
+        window="week",
+        limit=10,
+        pages=deeper,
+    )
+    await fetch_feed(
+        ctx,
+        source="seer-animation",
+        media="movie",
+        category="popular",
+        window="week",
+        limit=10,
+        pages=deeper,
+    )
+    # Trakt pages by its own constant whatever the caller asks for.
+    await fetch_feed(
+        ctx,
+        source="trakt-animation",
+        media="movie",
+        category="trending",
+        window="week",
+        limit=10,
+        pages=deeper,
+    )
+
+    assert ctx.tmdb.get_animation_trending.await_args.kwargs["pages"] == deeper
+    assert ctx.seer.discover_animation.await_args.kwargs["pages"] == deeper
+    assert (
+        ctx.trakt.get_trending.await_args.kwargs["pages"] == TRAKT_ANIMATION_SYNC_PAGES
+    )
+
+
+def test_animation_fetch_error_degrades_to_empty_list(db) -> None:
+    ctx = make_ctx(db=db)
+    ctx.seer.discover_animation.side_effect = RuntimeError("seer down")
+    response = build_client(ctx).get(
+        "/api/trending",
+        params={"source": "seer-animation", "category": "popular"},
+    )
+    assert response.status_code == 200
+    assert response.json() == []
+
+
+def test_animation_rows_get_the_local_overlays(db) -> None:
+    db.upsert_item(
+        trakt_id=1,
+        type="movie",
+        title="Tracked",
+        year=2020,
+        tmdb=100,
+        tvdb=None,
+        imdb=None,
+        list_id="my-list",
+    )
+    ctx = make_ctx(db=db)
+    ctx.radarr.library_items.return_value = [{"tmdbId": 200, "hasFile": True}]
+    ctx.tmdb.get_animation_trending.return_value = [
+        _row(tmdb=100),
+        _row(tmdb=200),
+        _row(tmdb=300, seer_status=2),
+    ]
+    result = (
+        build_client(ctx)
+        .get(
+            "/api/trending",
+            params={
+                "source": "tmdb-animation",
+                "media": "movie",
+                "category": "trending",
+            },
+        )
+        .json()
+    )
+    flags = {
+        item["tmdb"]: (
+            item["already_tracked"],
+            item["in_library"],
+            item["in_library_available"],
+            item["seer_status"],
+        )
+        for item in result
+    }
+    assert flags == {
+        100: (True, False, False, None),
+        200: (False, True, True, None),
+        300: (False, False, False, 2),
+    }
 
 
 def test_anilist_rows_are_enriched_and_carry_anime_fields(db) -> None:
@@ -470,6 +682,11 @@ def test_invalid_source_is_422(db) -> None:
         "/api/trending", params={"source": "imdb"}
     )
     assert response.status_code == 422
+    # An unknown genre variant is rejected the same way.
+    response = build_client(make_ctx(db=db)).get(
+        "/api/trending", params={"source": "anilist-animation"}
+    )
+    assert response.status_code == 422
 
 
 def test_get_trending_serves_warm_store_without_fetching(db) -> None:
@@ -665,6 +882,90 @@ def test_search_seer_dispatch(db) -> None:
     assert result[0]["seer_status"] == 5
     kwargs = ctx.seer.search.await_args.kwargs
     assert kwargs["pages"] == TRENDING_SEARCH_PAGES
+
+
+def test_search_trakt_animation_includes_animation_and_excludes_anime(db) -> None:
+    ctx = make_ctx(db=db)
+    ctx.trakt.search.return_value = [_row(tmdb=808)]
+    result = (
+        build_client(ctx)
+        .get(
+            "/api/trending/search",
+            params={"source": "trakt-animation", "media": "movie", "query": "shrek"},
+        )
+        .json()
+    )
+    assert result[0]["source"] == "trakt-animation"
+    ctx.trakt.search.assert_awaited_once_with(
+        media_type="movie",
+        query="shrek",
+        limit=TRENDING_SEARCH_LIMIT,
+        genres="animation",
+        exclude_genre="anime",
+    )
+
+
+def test_search_tmdb_animation_dispatches_to_search_animation(db) -> None:
+    ctx = make_ctx(db=db)
+    ctx.tmdb.search_animation.return_value = [_row(tmdb=808)]
+    result = (
+        build_client(ctx)
+        .get(
+            "/api/trending/search",
+            params={"source": "tmdb-animation", "media": "movie", "query": "shrek"},
+        )
+        .json()
+    )
+    assert result[0]["tmdb"] == 808
+    ctx.tmdb.search_animation.assert_awaited_once_with(
+        media_type="movie",
+        query="shrek",
+        limit=TRENDING_SEARCH_LIMIT,
+        pages=TRENDING_SEARCH_PAGES,
+    )
+    ctx.tmdb.search.assert_not_awaited()
+
+
+def test_search_seer_animation_dispatches_to_search_animation(db) -> None:
+    ctx = make_ctx(db=db)
+    ctx.seer.search_animation.return_value = [
+        _row(media_type="show", tmdb=60625, seer_status=5)
+    ]
+    result = (
+        build_client(ctx)
+        .get(
+            "/api/trending/search",
+            params={"source": "seer-animation", "media": "show", "query": "rick"},
+        )
+        .json()
+    )
+    assert result[0]["seer_status"] == 5
+    ctx.seer.search_animation.assert_awaited_once_with(
+        media_type="show",
+        query="rick",
+        limit=TRENDING_SEARCH_LIMIT,
+        pages=TRENDING_SEARCH_PAGES,
+    )
+    ctx.seer.search.assert_not_awaited()
+
+
+async def test_fetch_search_routes_every_animation_source(db) -> None:
+    ctx = make_ctx(db=db)
+    for source in ("trakt-animation", "tmdb-animation", "seer-animation"):
+        await fetch_search(ctx, source=source, media="movie", query="up", limit=5)
+    ctx.trakt.search.assert_awaited_once()
+    ctx.tmdb.search_animation.assert_awaited_once()
+    ctx.seer.search_animation.assert_awaited_once()
+
+
+def test_search_animation_error_degrades_to_empty_list(db) -> None:
+    ctx = make_ctx(db=db)
+    ctx.tmdb.search_animation.side_effect = RuntimeError("tmdb down")
+    response = build_client(ctx).get(
+        "/api/trending/search", params={"source": "tmdb-animation", "query": "up"}
+    )
+    assert response.status_code == 200
+    assert response.json() == []
 
 
 def test_search_anilist_enriches_and_collapses_show_seasons(db) -> None:
@@ -1200,3 +1501,34 @@ def test_add_trakt_failure_is_502(db) -> None:
     )
     assert response.status_code == 502
     assert "trakt rejected" in response.json()["detail"]
+
+
+# ---- TMDB failures never log the API key ----
+
+
+def test_cold_feed_tmdb_failure_logs_without_the_api_key(db, caplog) -> None:
+    ctx = make_ctx(db=db, tmdb=failing_tmdb_client())
+    with capture_logger(caplog, "aio_arr.trending"):
+        response = build_client(ctx).get(
+            "/api/trending",
+            params={
+                "source": "tmdb-animation",
+                "media": "movie",
+                "category": "popular",
+            },
+        )
+    assert response.json() == []
+    assert "TMDB /3/discover/movie returned HTTP 503" in caplog.text
+    assert SYNTHETIC_TMDB_KEY not in caplog.text
+
+
+def test_live_search_tmdb_failure_logs_without_the_api_key(db, caplog) -> None:
+    ctx = make_ctx(db=db, tmdb=failing_tmdb_client())
+    with capture_logger(caplog, "aio_arr.trending"):
+        response = build_client(ctx).get(
+            "/api/trending/search",
+            params={"source": "tmdb-animation", "media": "show", "query": "shrek"},
+        )
+    assert response.json() == []
+    assert "TMDB /3/search/tv returned HTTP 503" in caplog.text
+    assert SYNTHETIC_TMDB_KEY not in caplog.text

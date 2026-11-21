@@ -16,6 +16,12 @@ from typing import Any
 
 import httpx
 
+from core.animation import (
+    ANIMATION_GENRE_ID,
+    is_anime_language,
+    keeps_discover_row,
+    keeps_search_row,
+)
 from core.logging import get_logger
 
 # TMDB's public API base; not user-configurable.
@@ -23,12 +29,17 @@ _BASE_URL = "https://api.themoviedb.org"
 # TMDB's image CDN base and the poster size used for thumbnails.
 _IMAGE_BASE = "https://image.tmdb.org/t/p"
 _POSTER_SIZE = "w342"
-# Discover filter for anime: the Animation genre (16) limited to Japanese
+# Discover filter for anime: the Animation genre limited to Japanese
 # productions. TMDB's /trending endpoints cannot be genre-filtered, so the
 # anime feeds are built from /discover with an explicit sort instead.
-_ANIME_DISCOVER_PARAMS = {"with_genres": "16", "with_origin_country": "JP"}
-# TMDB's Animation genre id, used by the anime search post-filter.
-_ANIMATION_GENRE_ID = 16
+_ANIME_DISCOVER_PARAMS = {
+    "with_genres": str(ANIMATION_GENRE_ID),
+    "with_origin_country": "JP",
+}
+# Discover filter for the Animation genre view: every animated title, with
+# anime dropped client-side by :func:`_is_non_anime_discover_result` (TMDB's
+# /discover has no "exclude origin country" filter).
+_ANIMATION_DISCOVER_PARAMS = {"with_genres": str(ANIMATION_GENRE_ID)}
 
 
 def _is_anime_result(item: dict[str, Any]) -> bool:
@@ -41,12 +52,56 @@ def _is_anime_result(item: dict[str, Any]) -> bool:
     country to match on).
     """
     genre_ids = item.get("genre_ids") or []
-    return _ANIMATION_GENRE_ID in genre_ids and item.get("original_language") == "ja"
+    return ANIMATION_GENRE_ID in genre_ids and is_anime_language(
+        item.get("original_language")
+    )
+
+
+def _is_non_anime_discover_result(item: dict[str, Any]) -> bool:
+    """Whether a raw Animation ``/discover`` result is kept (anime excluded).
+
+    The request already filters to the Animation genre, so only a positive
+    Japanese original language drops the row (see
+    :func:`core.animation.keeps_discover_row`).
+    """
+    return keeps_discover_row(item.get("original_language"))
+
+
+def _is_non_anime_animation_result(item: dict[str, Any]) -> bool:
+    """Whether a raw TMDB search result belongs in the Animation view.
+
+    Search applies no genre filter, so the result must positively carry the
+    Animation genre id and must not be Japanese-language (see
+    :func:`core.animation.keeps_search_row`).
+    """
+    return keeps_search_row(item.get("genre_ids"), item.get("original_language"))
 
 
 def _is_v4_token(api_key: str) -> bool:
     """Whether a key looks like a v4 read-access token (a JWT)."""
     return api_key.startswith("eyJ") and api_key.count(".") == 2
+
+
+class TmdbRequestError(RuntimeError):
+    """A failed TMDB discovery/search request, described without credentials.
+
+    httpx renders the full request URL into its error messages, and a v3 key
+    travels as the ``api_key`` query parameter, so the raw exception would
+    leak the key into every log line that formats it. This error carries only
+    the credential-free endpoint path and the HTTP status or transport error
+    class.
+    """
+
+
+def _sanitised_failure(path: str, exc: httpx.HTTPError) -> TmdbRequestError:
+    """Describe an httpx failure on ``path`` without the request URL or query.
+
+    ``path`` is the endpoint path below :data:`_BASE_URL`, which never holds a
+    credential (the key is a query parameter or header).
+    """
+    if isinstance(exc, httpx.HTTPStatusError):
+        return TmdbRequestError(f"TMDB {path} returned HTTP {exc.response.status_code}")
+    return TmdbRequestError(f"TMDB {path} request failed: {type(exc).__name__}")
 
 
 class TmdbClient:
@@ -118,27 +173,37 @@ class TmdbClient:
     ) -> list[dict[str, Any]]:
         """Fetch and normalise a TMDB discovery endpoint's ``results`` array.
 
-        ``pages`` consecutive pages (1-indexed) are fetched and concatenated before
-        the ``limit`` cap, so the scheduled refresh can build a deeper grid than a
-        single page; an empty page short-circuits the rest. ``pages=1`` preserves
-        the original single-page behaviour for live calls. ``extra_params`` are
-        merged into every page request (used for the /discover filters).
-        ``result_filter`` drops raw results before normalisation (used where the
-        endpoint cannot filter server-side); paging stops on an empty *response*
-        page, not an all-filtered one.
+        Up to ``pages`` consecutive pages (1-indexed) are fetched and concatenated
+        before the ``limit`` cap, so the scheduled refresh can build a deeper grid
+        than a single page. Paging stops at the first empty *response* page (not
+        an all-filtered one) or as soon as ``limit`` accepted results are held, so
+        a later page that would fail can never discard a full result set.
+        ``pages=1`` preserves the original single-page behaviour for live calls.
+        ``extra_params`` are merged into every page request (used for the
+        /discover filters). ``result_filter`` drops raw results before
+        normalisation (used where the endpoint cannot filter server-side).
+
+        Raises :class:`TmdbRequestError` (never the raw httpx error, whose message
+        embeds the v3 key) when a page request fails.
         """
+        path = url.removeprefix(_BASE_URL)
         results: list[dict[str, Any]] = []
         for page in range(1, pages + 1):
             kwargs = self._auth_kwargs()
             params = {**kwargs.get("params", {}), **(extra_params or {}), "page": page}
-            response = await self._client.get(url, **{**kwargs, "params": params})
-            response.raise_for_status()
+            try:
+                response = await self._client.get(url, **{**kwargs, "params": params})
+                response.raise_for_status()
+            except httpx.HTTPError as exc:
+                # ``from None`` drops the chained httpx error so a traceback
+                # logged further up cannot print the keyed URL either.
+                raise _sanitised_failure(path, exc) from None
             page_results = response.json().get("results") or []
             if result_filter is None:
                 results.extend(page_results)
             else:
                 results.extend(item for item in page_results if result_filter(item))
-            if not page_results:
+            if not page_results or len(results) >= limit:
                 break
         return [self._discovery_row(item, media_type) for item in results[:limit]]
 
@@ -169,6 +234,33 @@ class TmdbClient:
             url, media_type=media_type, limit=limit, pages=pages
         )
 
+    async def _discover_by_genre(
+        self,
+        *,
+        media_type: str,
+        sort_by: str,
+        filter_params: dict[str, str],
+        limit: int,
+        pages: int,
+        result_filter: Callable[[dict[str, Any]], bool] | None = None,
+    ) -> list[dict[str, Any]]:
+        """Fetch a genre-filtered ``/3/discover`` feed (anime and Animation views).
+
+        ``filter_params`` are the ``/discover`` filters merged with ``sort_by``;
+        ``result_filter`` drops raw results the filters cannot express (see
+        :meth:`_discover`).
+        """
+        endpoint = "movie" if media_type == "movie" else "tv"
+        url = f"{_BASE_URL}/3/discover/{endpoint}"
+        return await self._discover(
+            url,
+            media_type=media_type,
+            limit=limit,
+            pages=pages,
+            extra_params={**filter_params, "sort_by": sort_by},
+            result_filter=result_filter,
+        )
+
     async def get_anime_trending(
         self, *, media_type: str, limit: int = 20, pages: int = 1
     ) -> list[dict[str, Any]]:
@@ -179,14 +271,12 @@ class TmdbClient:
         genre-filterable proxy for its trending feed (see
         :data:`_ANIME_DISCOVER_PARAMS`).
         """
-        endpoint = "movie" if media_type == "movie" else "tv"
-        url = f"{_BASE_URL}/3/discover/{endpoint}"
-        return await self._discover(
-            url,
+        return await self._discover_by_genre(
             media_type=media_type,
+            sort_by="popularity.desc",
+            filter_params=_ANIME_DISCOVER_PARAMS,
             limit=limit,
             pages=pages,
-            extra_params={**_ANIME_DISCOVER_PARAMS, "sort_by": "popularity.desc"},
         )
 
     async def get_anime_popular(
@@ -198,14 +288,51 @@ class TmdbClient:
         ``vote_count.desc`` — a long-term popularity proxy, distinct from the
         recency-weighted sort used by :meth:`get_anime_trending`.
         """
-        endpoint = "movie" if media_type == "movie" else "tv"
-        url = f"{_BASE_URL}/3/discover/{endpoint}"
-        return await self._discover(
-            url,
+        return await self._discover_by_genre(
             media_type=media_type,
+            sort_by="vote_count.desc",
+            filter_params=_ANIME_DISCOVER_PARAMS,
             limit=limit,
             pages=pages,
-            extra_params={**_ANIME_DISCOVER_PARAMS, "sort_by": "vote_count.desc"},
+        )
+
+    async def get_animation_trending(
+        self, *, media_type: str, limit: int = 20, pages: int = 1
+    ) -> list[dict[str, Any]]:
+        """Return currently-buzzing TMDB animation (anime excluded) as rows.
+
+        Built from ``/discover`` with the Animation genre sorted by
+        ``popularity.desc`` — the same trending proxy as
+        :meth:`get_anime_trending` — with Japanese-language results dropped by
+        :func:`_is_non_anime_discover_result`. Paging continues past a page the
+        filter empties and stops at the first empty response page.
+        """
+        return await self._discover_by_genre(
+            media_type=media_type,
+            sort_by="popularity.desc",
+            filter_params=_ANIMATION_DISCOVER_PARAMS,
+            limit=limit,
+            pages=pages,
+            result_filter=_is_non_anime_discover_result,
+        )
+
+    async def get_animation_popular(
+        self, *, media_type: str, limit: int = 20, pages: int = 1
+    ) -> list[dict[str, Any]]:
+        """Return all-time popular TMDB animation (anime excluded) as rows.
+
+        Built from ``/discover`` with the Animation genre sorted by
+        ``vote_count.desc`` — the same long-term proxy as
+        :meth:`get_anime_popular` — with Japanese-language results dropped by
+        :func:`_is_non_anime_discover_result`.
+        """
+        return await self._discover_by_genre(
+            media_type=media_type,
+            sort_by="vote_count.desc",
+            filter_params=_ANIMATION_DISCOVER_PARAMS,
+            limit=limit,
+            pages=pages,
+            result_filter=_is_non_anime_discover_result,
         )
 
     async def _search(
@@ -259,6 +386,24 @@ class TmdbClient:
             limit=limit,
             pages=pages,
             result_filter=_is_anime_result,
+        )
+
+    async def search_animation(
+        self, *, media_type: str, query: str, limit: int = 20, pages: int = 1
+    ) -> list[dict[str, Any]]:
+        """Return TMDB title-search results filtered to animation, anime excluded.
+
+        Same request as :meth:`search`, with the raw results post-filtered by
+        :func:`_is_non_anime_animation_result`: a result must carry the
+        Animation genre id and must not be Japanese-language. Results without
+        genre ids are dropped.
+        """
+        return await self._search(
+            media_type=media_type,
+            query=query,
+            limit=limit,
+            pages=pages,
+            result_filter=_is_non_anime_animation_result,
         )
 
     async def fetch_external_ids(self, *, media_type: str, tmdb_id: int) -> str | None:

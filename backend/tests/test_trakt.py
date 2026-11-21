@@ -336,6 +336,263 @@ async def test_discovery_genre_filter_forwarded_only_when_set(tmp_path) -> None:
     assert "genres" not in popular.calls.last.request.url.params
 
 
+def _trakt_show(trakt_id: int, *genres: str) -> dict:
+    """Build a minimal ``extended=full`` Trakt show object for paging tests."""
+    return {
+        "title": f"Show {trakt_id}",
+        "year": 2020,
+        "ids": {"trakt": trakt_id, "tmdb": trakt_id * 10},
+        "genres": list(genres),
+    }
+
+
+@respx.mock
+async def test_discovery_default_sends_no_page_or_extended(tmp_path) -> None:
+    trending = respx.get(f"{TRAKT_BASE_URL}/movies/trending").mock(
+        return_value=httpx.Response(200, json=[])
+    )
+    popular = respx.get(f"{TRAKT_BASE_URL}/shows/popular").mock(
+        return_value=httpx.Response(200, json=[])
+    )
+    client = make_client(tmp_path)
+
+    await client.get_trending(media_type="movie", limit=5)
+    await client.get_popular(media_type="show", limit=5, genres="animation")
+    # The single-page, no-exclusion path keeps today's request exactly.
+    assert dict(trending.calls.last.request.url.params) == {"limit": "5"}
+    assert dict(popular.calls.last.request.url.params) == {
+        "limit": "5",
+        "genres": "animation",
+    }
+
+
+@respx.mock
+async def test_trending_exclude_genre_requests_extended_and_drops_matches(
+    tmp_path,
+) -> None:
+    route = respx.get(f"{TRAKT_BASE_URL}/shows/trending").mock(
+        return_value=httpx.Response(
+            200,
+            json=[
+                {"watchers": 9, "show": _trakt_show(1, "animation", "comedy")},
+                {"watchers": 8, "show": _trakt_show(2, "animation", "anime")},
+                # No genres in the payload: nothing to exclude, so kept.
+                {"watchers": 7, "show": {"title": "Bare", "ids": {"trakt": 3}}},
+            ],
+        )
+    )
+    client = make_client(tmp_path)
+    rows = await client.get_trending(
+        media_type="show", limit=5, genres="animation", exclude_genre="anime"
+    )
+    assert [row["trakt"] for row in rows] == [1, 3]
+    params = route.calls.last.request.url.params
+    assert params["extended"] == "full"
+    assert params["genres"] == "animation"
+    # A single page sends no page parameter.
+    assert "page" not in params
+
+
+@respx.mock
+async def test_popular_exclude_genre_drops_matches_on_flat_objects(tmp_path) -> None:
+    route = respx.get(f"{TRAKT_BASE_URL}/movies/popular").mock(
+        return_value=httpx.Response(
+            200,
+            json=[
+                _trakt_show(1, "animation", "anime"),
+                _trakt_show(2, "animation", "family"),
+                "broken",  # skipped: not a dict
+            ],
+        )
+    )
+    client = make_client(tmp_path)
+    rows = await client.get_popular(
+        media_type="movie", limit=5, genres="animation", exclude_genre="anime"
+    )
+    assert [row["trakt"] for row in rows] == [2]
+    assert rows[0]["media_type"] == "movie"
+    assert route.calls.last.request.url.params["extended"] == "full"
+
+
+@respx.mock
+async def test_trending_pages_until_a_short_page_and_trims(tmp_path) -> None:
+    route = respx.get(f"{TRAKT_BASE_URL}/shows/trending").mock(
+        side_effect=[
+            httpx.Response(
+                200,
+                json=[
+                    {"watchers": 1, "show": _trakt_show(1, "anime")},
+                    {"watchers": 1, "show": _trakt_show(2, "animation")},
+                ],
+            ),
+            # Shorter than the limit: the last page, so no third request.
+            httpx.Response(
+                200,
+                json=[{"watchers": 1, "show": _trakt_show(3, "animation")}],
+            ),
+        ]
+    )
+    client = make_client(tmp_path)
+    rows = await client.get_trending(
+        media_type="show", limit=2, exclude_genre="anime", pages=3
+    )
+    assert [row["trakt"] for row in rows] == [2, 3]
+    assert route.call_count == 2
+    assert [call.request.url.params["page"] for call in route.calls] == ["1", "2"]
+    assert all(call.request.url.params["limit"] == "2" for call in route.calls)
+
+
+@respx.mock
+async def test_popular_pages_stop_on_empty_page(tmp_path) -> None:
+    route = respx.get(f"{TRAKT_BASE_URL}/shows/popular").mock(
+        side_effect=[
+            httpx.Response(200, json=[_trakt_show(1, "anime"), _trakt_show(2)]),
+            httpx.Response(
+                200, json=[_trakt_show(3, "anime"), _trakt_show(4, "anime")]
+            ),
+            httpx.Response(200, json=[]),
+        ]
+    )
+    client = make_client(tmp_path)
+    rows = await client.get_popular(
+        media_type="show", limit=2, exclude_genre="anime", pages=5
+    )
+    # Full pages that leave the quota unfilled keep paging; the empty third
+    # page stops it.
+    assert [row["trakt"] for row in rows] == [2]
+    assert route.call_count == 3
+
+
+@respx.mock
+async def test_paging_stops_at_the_page_cap_while_pages_are_full(tmp_path) -> None:
+    route = respx.get(f"{TRAKT_BASE_URL}/movies/trending").mock(
+        side_effect=[
+            httpx.Response(
+                200, json=[{"watchers": 1, "movie": _trakt_show(1, "anime")}]
+            ),
+            httpx.Response(
+                200, json=[{"watchers": 1, "movie": _trakt_show(2, "anime")}]
+            ),
+        ]
+    )
+    client = make_client(tmp_path)
+    rows = await client.get_trending(
+        media_type="movie", limit=1, exclude_genre="anime", pages=2
+    )
+    # Every page was full but filtered empty, so only the page cap bounds
+    # the requests.
+    assert route.call_count == 2
+    assert rows == []
+
+
+@pytest.mark.parametrize(
+    ("method", "segment", "wrap"),
+    [("get_trending", "trending", True), ("get_popular", "popular", False)],
+)
+@respx.mock
+async def test_paging_stops_once_the_quota_is_full(
+    tmp_path, method: str, segment: str, wrap: bool
+) -> None:
+    def entry(obj: dict) -> dict:
+        return {"watchers": 1, "show": obj} if wrap else obj
+
+    route = respx.get(f"{TRAKT_BASE_URL}/shows/{segment}").mock(
+        side_effect=[
+            httpx.Response(
+                200,
+                json=[entry(_trakt_show(1, "anime")), entry(_trakt_show(2))],
+            ),
+            # Title 2 repeats: it must not count towards the quota twice.
+            httpx.Response(200, json=[entry(_trakt_show(2)), entry(_trakt_show(3))]),
+            # The quota is already full, so this failure must never be requested.
+            httpx.Response(503),
+        ]
+    )
+    client = make_client(tmp_path)
+    rows = await getattr(client, method)(
+        media_type="show", limit=2, exclude_genre="anime", pages=5
+    )
+    assert [row["trakt"] for row in rows] == [2, 3]
+    assert route.call_count == 2
+
+
+@respx.mock
+async def test_single_page_keeps_repeated_ids_like_before_paging(tmp_path) -> None:
+    respx.get(f"{TRAKT_BASE_URL}/movies/popular").mock(
+        return_value=httpx.Response(200, json=[_trakt_show(1), _trakt_show(1)])
+    )
+    client = make_client(tmp_path)
+    rows = await client.get_popular(media_type="movie", limit=5)
+    # Cross-page deduplication is scoped to paged requests: a legacy
+    # single-page call returns the response as it came.
+    assert [row["trakt"] for row in rows] == [1, 1]
+
+
+@respx.mock
+async def test_trending_skips_malformed_entries_beside_valid_ones(tmp_path) -> None:
+    respx.get(f"{TRAKT_BASE_URL}/shows/trending").mock(
+        return_value=httpx.Response(
+            200,
+            json=[
+                None,
+                "broken",
+                {"watchers": 1, "show": None},
+                {"watchers": 1, "show": _trakt_show(1, "animation")},
+                # A numeric genres value carries no genre: neither excluded
+                # nor a crash.
+                {"watchers": 1, "show": {**_trakt_show(2), "genres": 7}},
+            ],
+        )
+    )
+    client = make_client(tmp_path)
+    rows = await client.get_trending(
+        media_type="show",
+        limit=5,
+        genres="animation",
+        exclude_genre="anime",
+        pages=2,
+    )
+    assert [row["trakt"] for row in rows] == [1, 2]
+
+
+@respx.mock
+async def test_popular_skips_malformed_genres_and_non_list_pages(tmp_path) -> None:
+    respx.get(f"{TRAKT_BASE_URL}/movies/popular").mock(
+        side_effect=[
+            httpx.Response(
+                200,
+                json=[None, {**_trakt_show(1), "genres": 3}, _trakt_show(2, "anime")],
+            ),
+            # A non-list page carries no objects and ends paging.
+            httpx.Response(200, json={"error": "unexpected"}),
+        ]
+    )
+    client = make_client(tmp_path)
+    rows = await client.get_popular(
+        media_type="movie", limit=3, exclude_genre="anime", pages=3
+    )
+    assert [row["trakt"] for row in rows] == [1]
+
+
+@respx.mock
+async def test_paging_keeps_titles_repeated_across_pages_once(tmp_path) -> None:
+    respx.get(f"{TRAKT_BASE_URL}/shows/popular").mock(
+        side_effect=[
+            httpx.Response(200, json=[_trakt_show(1, "anime"), _trakt_show(2)]),
+            # The live ranking shifted: title 2 reappears on page two.
+            httpx.Response(200, json=[_trakt_show(2), {"title": "No id", "ids": {}}]),
+            httpx.Response(200, json=[]),
+        ]
+    )
+    client = make_client(tmp_path)
+    rows = await client.get_popular(
+        media_type="show", limit=2, exclude_genre="anime", pages=3
+    )
+    # Title 2 is kept once; a row without an integer trakt id cannot be
+    # deduplicated and is kept.
+    assert [row["trakt"] for row in rows] == [2, None]
+
+
 @respx.mock
 async def test_search_movies_unwraps_and_skips_non_dict(tmp_path) -> None:
     route = respx.get(f"{TRAKT_BASE_URL}/search/movie").mock(
@@ -437,6 +694,94 @@ async def test_search_genre_filter_is_applied_client_side(tmp_path) -> None:
     # no unsupported `genres` parameter is sent to the endpoint.
     assert params["extended"] == "full"
     assert "genres" not in params
+
+
+@respx.mock
+async def test_search_combines_genre_inclusion_and_exclusion(tmp_path) -> None:
+    route = respx.get(f"{TRAKT_BASE_URL}/search/movie").mock(
+        return_value=httpx.Response(
+            200,
+            json=[
+                {"type": "movie", "score": 9.0, "movie": _trakt_show(1, "animation")},
+                # Animation but anime: dropped by the exclusion.
+                {
+                    "type": "movie",
+                    "score": 8.0,
+                    "movie": _trakt_show(2, "animation", "anime"),
+                },
+                # Not animation: dropped by the inclusion.
+                {"type": "movie", "score": 7.0, "movie": _trakt_show(3, "comedy")},
+            ],
+        )
+    )
+    client = make_client(tmp_path)
+    rows = await client.search(
+        media_type="movie",
+        query="shrek",
+        limit=5,
+        genres="animation",
+        exclude_genre="anime",
+    )
+    assert [row["trakt"] for row in rows] == [1]
+    params = route.calls.last.request.url.params
+    assert params["extended"] == "full"
+    assert "genres" not in params
+
+
+@respx.mock
+async def test_search_skips_malformed_entries_beside_valid_ones(tmp_path) -> None:
+    respx.get(f"{TRAKT_BASE_URL}/search/movie").mock(
+        return_value=httpx.Response(
+            200,
+            json=[
+                None,
+                {"type": "movie", "score": 9.0, "movie": _trakt_show(1, "animation")},
+                # A numeric genres value cannot satisfy the inclusion filter.
+                {
+                    "type": "movie",
+                    "score": 8.0,
+                    "movie": {**_trakt_show(2), "genres": 16},
+                },
+            ],
+        )
+    )
+    client = make_client(tmp_path)
+    rows = await client.search(
+        media_type="movie",
+        query="toy",
+        limit=5,
+        genres="animation",
+        exclude_genre="anime",
+    )
+    assert [row["trakt"] for row in rows] == [1]
+
+
+@respx.mock
+async def test_search_non_list_response_returns_no_rows(tmp_path) -> None:
+    respx.get(f"{TRAKT_BASE_URL}/search/show").mock(
+        return_value=httpx.Response(200, json={"error": "unexpected"})
+    )
+    client = make_client(tmp_path)
+    assert await client.search(media_type="show", query="x", limit=5) == []
+
+
+@respx.mock
+async def test_search_exclusion_alone_requests_extended(tmp_path) -> None:
+    route = respx.get(f"{TRAKT_BASE_URL}/search/show").mock(
+        return_value=httpx.Response(
+            200,
+            json=[
+                {"type": "show", "score": 9.0, "show": _trakt_show(1, "anime")},
+                {"type": "show", "score": 8.0, "show": _trakt_show(2, "drama")},
+            ],
+        )
+    )
+    client = make_client(tmp_path)
+    rows = await client.search(
+        media_type="show", query="x", limit=5, exclude_genre="anime"
+    )
+    assert [row["trakt"] for row in rows] == [2]
+    assert route.calls.last.request.url.params["extended"] == "full"
 
 
 @respx.mock

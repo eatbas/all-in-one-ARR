@@ -7,10 +7,12 @@ so they can be reconfigured from the dashboard at runtime via
 
 from __future__ import annotations
 
-from typing import Any
+from collections.abc import Callable
+from typing import Any, Final
 
 import httpx
 
+from core.animation import ANIMATION_GENRE_ID, keeps_discover_row, keeps_search_row
 from core.coerce import coerce_int
 from core.logging import get_logger, log_action
 
@@ -43,6 +45,52 @@ REQUEST_COUNT_KEYS = (
 
 # httpx errors meaning the connection itself failed — Seer was never reached.
 _CONNECT_FAILURES = (httpx.ConnectError, httpx.ConnectTimeout)
+
+# ``sortBy`` values for the Animation genre view's discover feeds, mirroring the
+# TMDB client's trending (recency-weighted popularity) and popular (all-time
+# vote count) proxies. Seer forwards ``sortBy`` to TMDB, but an older or
+# stricter Seer may reject ``vote_count.desc``; the plan's manual verification
+# checks it and names the fallback (see the "Seer sortBy" risk).
+SEER_ANIMATION_TRENDING_SORT: Final = "popularity.desc"
+SEER_ANIMATION_POPULAR_SORT: Final = "vote_count.desc"
+
+
+def _first_present(result: dict[str, Any], *keys: str) -> Any:
+    """Return the first of ``keys`` present (not ``None``) in a raw Seer result.
+
+    Overseerr/Jellyseerr variants spell fields in camelCase or snake_case, so
+    the filters read both spellings.
+    """
+    for key in keys:
+        value = result.get(key)
+        if value is not None:
+            return value
+    return None
+
+
+def _is_non_anime_discover_result(result: dict[str, Any]) -> bool:
+    """Whether a raw Animation discover result is kept (anime excluded).
+
+    The request already filters to the Animation genre, so only a positive
+    Japanese original language drops the row (see
+    :func:`core.animation.keeps_discover_row`).
+    """
+    return keeps_discover_row(
+        _first_present(result, "originalLanguage", "original_language")
+    )
+
+
+def _is_non_anime_animation_result(result: dict[str, Any]) -> bool:
+    """Whether a raw Seer search result belongs in the Animation view.
+
+    Search applies no genre filter, so the result must positively carry the
+    Animation genre id and must not be Japanese-language (see
+    :func:`core.animation.keeps_search_row`).
+    """
+    return keeps_search_row(
+        _first_present(result, "genreIds", "genre_ids"),
+        _first_present(result, "originalLanguage", "original_language"),
+    )
 
 
 class SeerError(RuntimeError):
@@ -213,17 +261,17 @@ class SeerClient:
         """Return Seer's trending feed (mixed movies and shows) as discovery rows.
 
         People entries are dropped; each row carries its own ``media_type`` from the
-        ``mediaType`` discriminator, so the caller can filter by type. ``pages``
-        consecutive pages are fetched and concatenated before the ``limit`` cap (an
-        empty page short-circuits the rest); ``pages=1`` is the single-page default.
+        ``mediaType`` discriminator, so the caller can filter by type. Up to
+        ``pages`` consecutive pages are fetched until ``limit`` rows are held (see
+        :meth:`_discover_pages`); ``pages=1`` is the single-page default.
         """
-        rows: list[dict[str, Any] | None] = []
-        for page in range(1, pages + 1):
-            results = await self._discover("discover/trending", params={"page": page})
-            if not results:
-                break
-            rows.extend(self._normalise_discover(result) for result in results)
-        return [row for row in rows if row is not None][:limit]
+        return await self._discover_pages(
+            "discover/trending",
+            params={},
+            default_media_type=None,
+            limit=limit,
+            pages=pages,
+        )
 
     async def discover_trending_buckets(
         self, *, limit_per_media: int = 20, pages: int = 1
@@ -263,54 +311,156 @@ class SeerClient:
                 break
         return buckets
 
+    @classmethod
+    def _accepted_rows(
+        cls,
+        results: list[dict[str, Any]],
+        *,
+        default_media_type: str | None,
+        wanted_media_type: str | None,
+        result_filter: Callable[[dict[str, Any]], bool] | None,
+    ) -> list[dict[str, Any]]:
+        """Return the discovery rows one raw Seer page contributes.
+
+        ``result_filter`` runs on each raw result before normalisation (used
+        where Seer cannot filter server-side); rows the normaliser rejects are
+        dropped, and so is any row whose media type is not
+        ``wanted_media_type`` when one is given (the mixed ``/search`` feed).
+        """
+        accepted: list[dict[str, Any]] = []
+        for result in results:
+            if result_filter is not None and not result_filter(result):
+                continue
+            row = cls._normalise_discover(result, default_media_type=default_media_type)
+            if row is None:
+                continue
+            if wanted_media_type is not None and row["media_type"] != wanted_media_type:
+                continue
+            accepted.append(row)
+        return accepted
+
+    async def _discover_pages(
+        self,
+        path: str,
+        *,
+        params: dict[str, Any],
+        default_media_type: str | None,
+        limit: int,
+        pages: int,
+        wanted_media_type: str | None = None,
+        result_filter: Callable[[dict[str, Any]], bool] | None = None,
+    ) -> list[dict[str, Any]]:
+        """Fetch up to ``pages`` consecutive pages of a Seer feed as discovery rows.
+
+        ``params`` are sent with every page request alongside ``page``. Each
+        page's rows pass through :meth:`_accepted_rows` as it arrives, and
+        paging stops at the first empty *response* page (a page the filters
+        empty does not stop it) or as soon as ``limit`` accepted rows are held,
+        so a later page that would fail can never discard a full result set.
+        Returns at most ``limit`` rows.
+        """
+        rows: list[dict[str, Any]] = []
+        for page in range(1, pages + 1):
+            results = await self._discover(path, params={**params, "page": page})
+            if not results:
+                break
+            rows.extend(
+                self._accepted_rows(
+                    results,
+                    default_media_type=default_media_type,
+                    wanted_media_type=wanted_media_type,
+                    result_filter=result_filter,
+                )
+            )
+            if len(rows) >= limit:
+                break
+        return rows[:limit]
+
     async def discover_popular(
         self, *, media_type: str, limit: int = 20, pages: int = 1
     ) -> list[dict[str, Any]]:
         """Return Seer's popular movies or shows (sorted by popularity) as rows.
 
-        ``pages`` consecutive pages are fetched and concatenated before the ``limit``
-        cap (an empty page short-circuits the rest); ``pages=1`` is the default.
+        Up to ``pages`` consecutive pages are fetched until ``limit`` rows are
+        held (see :meth:`_discover_pages`); ``pages=1`` is the default.
         """
         endpoint = "movies" if media_type == "movie" else "tv"
-        default = "movie" if media_type == "movie" else "tv"
-        rows: list[dict[str, Any] | None] = []
-        for page in range(1, pages + 1):
-            results = await self._discover(
-                f"discover/{endpoint}",
-                params={"sortBy": "popularity.desc", "page": page},
-            )
-            if not results:
-                break
-            rows.extend(
-                self._normalise_discover(result, default_media_type=default)
-                for result in results
-            )
-        return [row for row in rows if row is not None][:limit]
+        return await self._discover_pages(
+            f"discover/{endpoint}",
+            params={"sortBy": "popularity.desc"},
+            default_media_type="movie" if media_type == "movie" else "tv",
+            limit=limit,
+            pages=pages,
+        )
+
+    async def discover_animation(
+        self, *, media_type: str, sort_by: str, limit: int = 20, pages: int = 1
+    ) -> list[dict[str, Any]]:
+        """Return Seer's animated movies or shows, anime excluded, as rows.
+
+        Requests ``discover/{movies|tv}`` filtered to the Animation genre and
+        sorted by ``sort_by`` (:data:`SEER_ANIMATION_TRENDING_SORT` or
+        :data:`SEER_ANIMATION_POPULAR_SORT`). Seer has no origin-exclusion
+        filter, so Japanese-language results are dropped client-side by
+        :func:`_is_non_anime_discover_result`; paging continues past a page the
+        filter empties and stops once ``limit`` kept rows are held. Raises
+        :class:`SeerError` like the other discover calls.
+        """
+        endpoint = "movies" if media_type == "movie" else "tv"
+        return await self._discover_pages(
+            f"discover/{endpoint}",
+            params={"genre": ANIMATION_GENRE_ID, "sortBy": sort_by},
+            default_media_type="movie" if media_type == "movie" else "tv",
+            limit=limit,
+            pages=pages,
+            result_filter=_is_non_anime_discover_result,
+        )
 
     async def search(
-        self, *, media_type: str, query: str, limit: int = 20, pages: int = 1
+        self,
+        *,
+        media_type: str,
+        query: str,
+        limit: int = 20,
+        pages: int = 1,
+        result_filter: Callable[[dict[str, Any]], bool] | None = None,
     ) -> list[dict[str, Any]]:
         """Return Seer title-search results for one media type as rows.
 
         Seer's ``/search`` endpoint mixes movies, shows and people in one feed:
         people are dropped by the normaliser and the other media type is
         filtered out, so fewer than ``limit`` rows can come back even when more
-        matches exist. ``pages`` consecutive pages are fetched and concatenated
-        before the ``limit`` cap (an empty page short-circuits the rest).
+        matches exist. Up to ``pages`` consecutive pages are fetched until
+        ``limit`` matching rows are held (see :meth:`_discover_pages`).
+        ``result_filter`` drops raw results before normalisation.
         """
-        wanted = "movie" if media_type == "movie" else "show"
-        rows: list[dict[str, Any] | None] = []
-        for page in range(1, pages + 1):
-            results = await self._discover(
-                "search", params={"query": query, "page": page}
-            )
-            if not results:
-                break
-            rows.extend(self._normalise_discover(result) for result in results)
-        matching = [
-            row for row in rows if row is not None and row["media_type"] == wanted
-        ]
-        return matching[:limit]
+        return await self._discover_pages(
+            "search",
+            params={"query": query},
+            default_media_type=None,
+            limit=limit,
+            pages=pages,
+            wanted_media_type="movie" if media_type == "movie" else "show",
+            result_filter=result_filter,
+        )
+
+    async def search_animation(
+        self, *, media_type: str, query: str, limit: int = 20, pages: int = 1
+    ) -> list[dict[str, Any]]:
+        """Return Seer title-search results filtered to animation, anime excluded.
+
+        Same request as :meth:`search`, with the raw results post-filtered by
+        :func:`_is_non_anime_animation_result`: a result must carry the
+        Animation genre id and must not be Japanese-language. Results without
+        genre ids are dropped.
+        """
+        return await self.search(
+            media_type=media_type,
+            query=query,
+            limit=limit,
+            pages=pages,
+            result_filter=_is_non_anime_animation_result,
+        )
 
     async def create_request(self, *, media_type: str, tmdb_id: int) -> int | None:
         """Create a Seer request.

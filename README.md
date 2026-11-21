@@ -820,6 +820,17 @@ Trakt list without leaving the app. It is organised as **per-source tabs**:
   trending/popular feed. A **Movies | Shows** toggle and a **Trending | Popular**
   toggle apply per tab. A **Hide available** switch filters out titles you already
   have — anything in Radarr/Sonarr (the green ones) or reported *Available* in Seer.
+- **All | Animation** — the Trakt, TMDB and Seer tabs also have a **Genre**
+  toggle, straight after Trending | Popular. **Animation** switches that tab's
+  feed to animated movies or shows with **Japanese anime left out** (the Anime
+  tab covers anime): TMDB and Seer drop titles whose original language is
+  Japanese, and Trakt drops titles tagged `anime`. TMDB and Seer have no
+  genre-filterable trending feed, so their Animation **Trending** list is the
+  animation catalogue sorted by popularity (and **Popular** is sorted by vote
+  count) — it differs from the All trending list. The toggle also filters
+  search results to animation, so it stays usable while a query is set. It is
+  **not remembered**: every visit starts on **All**. The Animation feeds are
+  kept warm by the scheduled refresh like every other feed.
 - **Search** — each tab also has a **search box**: type at least two characters
   and the grid swaps from the feed to live title-search results from that same
   source (Anime searches whichever sub-source is selected), with the usual
@@ -1240,15 +1251,19 @@ after both check jobs have passed.
   (`aio_arr_remindarr_unwatched_episodes`, `aio_arr_remindarr_unmatched_series`).
   The integration-health series include `plex`.
 - `GET /api/trending?source=&media=&category=[&window=]` – normalised trending or
-  popular items for the Trending page. `source` is `trakt|tmdb|seer`, `media` is
-  `movie|show`, `category` is `trending|popular`, and `window` (`day|week`, TMDB
-  only) defaults to `week` — the endpoint still accepts it, but the UI no longer
-  exposes a time-window control. A failing/unconfigured source degrades to `[]`.
+  popular items for the Trending page. `source` is
+  `trakt|tmdb|seer|trakt-anime|tmdb-anime|anilist|trakt-animation|tmdb-animation|seer-animation`
+  (the `*-animation` sources are the Animation genre view, anime excluded),
+  `media` is `movie|show`, `category` is `trending|popular`, and `window`
+  (`day|week`, TMDB only) defaults to `week` — the endpoint still accepts it,
+  but the UI no longer exposes a time-window control. A failing/unconfigured
+  source degrades to `[]`.
 - `GET /api/trending/search?source=&media=&query=` – live title search on one
-  discovery source, returning the same normalised item shape (overlays included)
-  as `GET /api/trending`. `query` needs at least two characters; results are
-  never persisted in the scheduled snapshot, and a failing source degrades to
-  `[]`.
+  discovery source (the same `source` values as `GET /api/trending`; the
+  `*-animation` sources keep only animated, non-anime titles), returning the
+  same normalised item shape (overlays included) as `GET /api/trending`.
+  `query` needs at least two characters; results are never persisted in the
+  scheduled snapshot, and a failing source degrades to `[]`.
 - `GET /api/trending/rating?imdb=` *or* `?media=&tmdb=` – compat single-item
   lookup of `{ imdb_rating, imdb_votes }`, served from the persistent rating
   store the scheduled backfill fills (no live OMDb/TMDB call). The dashboard now

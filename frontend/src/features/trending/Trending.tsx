@@ -40,7 +40,10 @@ import {
   TRENDING_SEARCH_MIN_LENGTH,
   TRENDING_TAB_STORAGE_KEY,
   VALID_TRENDING_TABS,
+  isGenreFilterable,
+  resolveTrendingSource,
   type AnimeSource,
+  type GenreFilter,
   type PerRow,
   type TrendingTab,
 } from "@/features/trending/trending-tab"
@@ -81,11 +84,13 @@ function PanelStatusMessage({
 }
 
 /**
- * Data toggles (media / category) and the search box on the left, display
- * options (per-row density / hide-available) on the right, then the grid. A
- * settled search query swaps the grid from the scheduled feed to live search
- * results from the same source. Results are revealed three rows at a time via
- * an infinite-scroll sentinel rather than paged.
+ * Data toggles (media / category, plus the genre filter on the Trakt, TMDB and
+ * Seer tabs) and the search box on the left, display options (per-row density /
+ * hide-available) on the right, then the grid. Choosing "Animation" swaps the
+ * feed and search to the source's Animation variant. A settled search query
+ * swaps the grid from the scheduled feed to live search results from the same
+ * source. Results are revealed three rows at a time via an infinite-scroll
+ * sentinel rather than paged.
  */
 function SourcePanel({
   source,
@@ -97,6 +102,8 @@ function SourcePanel({
 }) {
   const [media, setMedia] = useState<ItemType>(defaultMedia)
   const [category, setCategory] = useState<TrendingCategory>("trending")
+  // Deliberately not persisted: every visit starts on "All".
+  const [genre, setGenre] = useState<GenreFilter>("all")
   const [search, setSearch] = useState("")
   const [hideAvailable, setHideAvailable] = useState(false)
   const [perRow, setPerRow] = useState<PerRow>(() =>
@@ -107,10 +114,12 @@ function SourcePanel({
     TRENDING_SEARCH_DEBOUNCE_MS,
   ).trim()
   const isSearching = searchQuery.length >= TRENDING_SEARCH_MIN_LENGTH
-  const query: TrendingQuery = { source, media, category }
+  const genreFilterable = isGenreFilterable(source)
+  const effectiveSource = resolveTrendingSource(source, genre)
+  const query: TrendingQuery = { source: effectiveSource, media, category }
   const feed = useTrending(query)
   const searchState = useTrendingSearch(
-    { source, media, query: searchQuery },
+    { source: effectiveSource, media, query: searchQuery },
     isSearching,
   )
   // The grid renders whichever query is active; the feed stays cached in the
@@ -143,6 +152,10 @@ function SourcePanel({
     setCategory(next)
     resetReveal()
   }
+  function changeGenre(next: GenreFilter) {
+    setGenre(next)
+    resetReveal()
+  }
   function changeSearch(next: string) {
     setSearch(next)
     // Reset on the keystroke, not the settled query: the outgoing grid is
@@ -172,8 +185,10 @@ function SourcePanel({
         isFetching={active.isFetching}
         isInitialLoading={isInitialLoading}
         lastSyncedAt={status?.last_synced_at}
+        genre={genreFilterable ? genre : undefined}
         onChangeMedia={changeMedia}
         onChangeCategory={changeCategory}
+        onChangeGenre={genreFilterable ? changeGenre : undefined}
         onChangeSearch={changeSearch}
         onChangeHideAvailable={changeHideAvailable}
         onChangePerRow={changePerRow}
@@ -185,7 +200,7 @@ function SourcePanel({
           hasItems={items.length > 0}
           isSearching={isSearching}
           searchQuery={searchQuery}
-          source={source}
+          source={effectiveSource}
         />
       ) : (
         <TrendingResultGrid
@@ -278,8 +293,9 @@ export function Trending() {
         <h1 className="text-2xl font-semibold tracking-tight">Trending</h1>
         <p className="text-sm text-muted-foreground">
           Trending and popular movies and shows from Trakt, TMDB and Seer, plus
-          anime from AniList. Add any to one of your Trakt lists and it is
-          synced and requested in Seer.
+          anime from AniList. Switch a Trakt, TMDB or Seer tab to Animation to
+          see animated titles without anime. Add any to one of your Trakt lists
+          and it is synced and requested in Seer.
         </p>
       </div>
 

@@ -3,11 +3,16 @@
 from __future__ import annotations
 
 import copy
+import logging
+from collections.abc import Iterator
+from contextlib import contextmanager
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
+import httpx
 import pytest
 
+from core.clients.tmdb import TmdbClient
 from core.context import AppContext
 from core.db import Database
 from core.service_registry import BY_NAME, SERVICES, empty_values, masked_entry
@@ -29,6 +34,43 @@ def db() -> Database:
     database.init_db()
     yield database
     database.close()
+
+
+# A recognisable fake v3 key: tests assert it never reaches a log line.
+SYNTHETIC_TMDB_KEY = "synthetic-v3-tmdb-key-0000"
+
+
+def failing_tmdb_client(status_code: int = 503) -> TmdbClient:
+    """Return a real :class:`TmdbClient` whose every request gets ``status_code``.
+
+    It is keyed with :data:`SYNTHETIC_TMDB_KEY` (a v3 key, so it travels as the
+    ``api_key`` query parameter) and served by an in-process mock transport, so
+    the client's real error path runs without network access.
+    """
+    transport = httpx.MockTransport(lambda _request: httpx.Response(status_code))
+    return TmdbClient(
+        api_key=SYNTHETIC_TMDB_KEY,
+        http_client=httpx.AsyncClient(transport=transport),
+    )
+
+
+@contextmanager
+def capture_logger(
+    caplog: pytest.LogCaptureFixture, name: str, level: int = logging.WARNING
+) -> Iterator[None]:
+    """Capture ``name``'s records into ``caplog`` regardless of propagation.
+
+    :func:`core.logging.configure_logging` stops the ``aio_arr`` tree from
+    propagating to the root logger caplog listens on, so the capture handler
+    is attached to the named logger directly for the duration of the block.
+    """
+    logger = logging.getLogger(name)
+    logger.addHandler(caplog.handler)
+    try:
+        with caplog.at_level(level, logger=name):
+            yield
+    finally:
+        logger.removeHandler(caplog.handler)
 
 
 class StubTrakt:
@@ -435,7 +477,9 @@ class StubSeer:
             return_value={"movie": [], "show": []}
         )
         self.discover_popular = AsyncMock(return_value=[])
+        self.discover_animation = AsyncMock(return_value=[])
         self.search = AsyncMock(return_value=[])
+        self.search_animation = AsyncMock(return_value=[])
         self.update_credentials = MagicMock()
         self.test_connection = AsyncMock(
             return_value={"ok": True, "detail": "Connected"}
@@ -531,8 +575,11 @@ class StubService:
         self.get_popular = AsyncMock(return_value=[])
         self.get_anime_trending = AsyncMock(return_value=[])
         self.get_anime_popular = AsyncMock(return_value=[])
+        self.get_animation_trending = AsyncMock(return_value=[])
+        self.get_animation_popular = AsyncMock(return_value=[])
         self.search = AsyncMock(return_value=[])
         self.search_anime = AsyncMock(return_value=[])
+        self.search_animation = AsyncMock(return_value=[])
         self.fetch_external_ids = AsyncMock(return_value=None)
         self.fetch_rating = AsyncMock(
             return_value={"imdb_rating": None, "imdb_votes": None}

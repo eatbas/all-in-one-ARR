@@ -112,6 +112,53 @@ describe("useTrendingSearch", () => {
       query: "dune part",
     })
   })
+
+  it.each([
+    {
+      change: "source (All to Animation)",
+      next: { ...SEARCH, source: "trakt-animation" },
+    },
+    { change: "media type", next: { ...SEARCH, media: "show" } },
+  ] satisfies { change: string; next: TrendingSearchQuery }[])(
+    "drops the previous results while a $change change is pending",
+    async ({ next }) => {
+      const nextItem: TrendingItem = {
+        ...ITEM,
+        source: next.source,
+        media_type: next.media,
+        tmdb: 200,
+        title: "Next",
+      }
+      let resolveNext: (items: TrendingItem[]) => void = () => undefined
+      vi.mocked(api.searchTrending)
+        .mockResolvedValueOnce([ITEM])
+        .mockImplementationOnce(
+          () =>
+            new Promise<TrendingItem[]>((resolve) => {
+              resolveNext = resolve
+            }),
+        )
+      const { wrapper } = setup()
+      const hook = renderHook(
+        ({ query }: { query: TrendingSearchQuery }) =>
+          useTrendingSearch(query, true),
+        { wrapper, initialProps: { query: SEARCH } },
+      )
+      await waitFor(() => expect(hook.result.current.isSuccess).toBe(true))
+
+      hook.rerender({ query: next })
+      // The new response is held open: nothing from the old scope may show.
+      await waitFor(() =>
+        expect(api.searchTrending).toHaveBeenLastCalledWith(next),
+      )
+      expect(hook.result.current.data).toBeUndefined()
+      expect(hook.result.current.isPlaceholderData).toBe(false)
+      expect(hook.result.current.isLoading).toBe(true)
+
+      act(() => resolveNext([nextItem]))
+      await waitFor(() => expect(hook.result.current.data).toEqual([nextItem]))
+    },
+  )
 })
 
 describe("useTrendingStatus", () => {

@@ -9,6 +9,8 @@ import respx
 from core.clients.seer import (
     AVAILABLE,
     REQUEST_DECLINED,
+    SEER_ANIMATION_POPULAR_SORT,
+    SEER_ANIMATION_TRENDING_SORT,
     SeerClient,
     SeerError,
     SeerUnavailableError,
@@ -660,6 +662,311 @@ async def test_discover_network_error_raises() -> None:
     )
     with pytest.raises(SeerError):
         await make_client().discover_trending()
+
+
+@pytest.mark.parametrize(
+    ("media_type", "endpoint", "sort_by", "expected_type"),
+    [
+        ("movie", "movies", SEER_ANIMATION_TRENDING_SORT, "movie"),
+        ("show", "tv", SEER_ANIMATION_POPULAR_SORT, "show"),
+    ],
+)
+@respx.mock
+async def test_discover_animation_filters_genre_and_sorts(
+    media_type: str, endpoint: str, sort_by: str, expected_type: str
+) -> None:
+    route = respx.get(f"{_BASE}/api/v1/discover/{endpoint}").mock(
+        return_value=httpx.Response(
+            200,
+            json={
+                "results": [
+                    {
+                        "id": 862,
+                        "title": "Toy Story",
+                        "releaseDate": "1995-11-22",
+                        "originalLanguage": "en",
+                    }
+                ]
+            },
+        )
+    )
+    rows = await make_client().discover_animation(
+        media_type=media_type, sort_by=sort_by, limit=10
+    )
+    assert rows == [
+        {
+            "media_type": expected_type,
+            "tmdb": 862,
+            "title": "Toy Story",
+            "year": 1995,
+            "seer_status": None,
+        }
+    ]
+    params = route.calls.last.request.url.params
+    assert params["genre"] == "16"
+    assert params["sortBy"] == sort_by
+    assert params["page"] == "1"
+
+
+def test_seer_animation_sort_constants() -> None:
+    assert SEER_ANIMATION_TRENDING_SORT == "popularity.desc"
+    assert SEER_ANIMATION_POPULAR_SORT == "vote_count.desc"
+
+
+@respx.mock
+async def test_discover_animation_drops_japanese_in_either_spelling() -> None:
+    respx.get(f"{_BASE}/api/v1/discover/tv").mock(
+        return_value=httpx.Response(
+            200,
+            json={
+                "results": [
+                    {"id": 1, "name": "Arcane", "originalLanguage": "en"},
+                    # camelCase Japanese: anime, dropped.
+                    {"id": 2, "name": "Frieren", "originalLanguage": "ja"},
+                    # snake_case Japanese: anime, dropped.
+                    {"id": 3, "name": "Dan Da Dan", "original_language": "ja"},
+                    # No language: the feed is genre filtered, so kept.
+                    {"id": 4, "name": "Bluey"},
+                    # snake_case non-Japanese: kept.
+                    {"id": 5, "name": "Bob's Burgers", "original_language": "en"},
+                ]
+            },
+        )
+    )
+    rows = await make_client().discover_animation(
+        media_type="show", sort_by=SEER_ANIMATION_TRENDING_SORT, limit=10
+    )
+    assert [row["tmdb"] for row in rows] == [1, 4, 5]
+    assert all(row["media_type"] == "show" for row in rows)
+
+
+@respx.mock
+async def test_discover_animation_pages_past_filtered_page_stops_and_caps() -> None:
+    route = respx.get(f"{_BASE}/api/v1/discover/movies").mock(
+        side_effect=[
+            # Every result is anime, but the response page is non-empty, so
+            # paging continues.
+            httpx.Response(
+                200, json={"results": [{"id": 1, "originalLanguage": "ja"}]}
+            ),
+            httpx.Response(
+                200,
+                json={
+                    "results": [
+                        {"id": 2, "originalLanguage": "en"},
+                        {"id": 3, "originalLanguage": "fr"},
+                    ]
+                },
+            ),
+            httpx.Response(200, json={"results": [{"id": 4}]}),
+            # The empty page stops paging before the page cap.
+            httpx.Response(200, json={"results": []}),
+        ]
+    )
+    rows = await make_client().discover_animation(
+        media_type="movie", sort_by=SEER_ANIMATION_POPULAR_SORT, limit=40, pages=10
+    )
+    assert [row["tmdb"] for row in rows] == [2, 3, 4]
+    assert route.call_count == 4
+    assert [call.request.url.params["page"] for call in route.calls] == [
+        "1",
+        "2",
+        "3",
+        "4",
+    ]
+
+
+@respx.mock
+async def test_discover_animation_stops_once_kept_rows_fill_the_limit() -> None:
+    route = respx.get(f"{_BASE}/api/v1/discover/tv").mock(
+        side_effect=[
+            httpx.Response(
+                200,
+                json={
+                    "results": [
+                        {"id": 1, "originalLanguage": "ja"},
+                        {"id": 2, "originalLanguage": "en"},
+                    ]
+                },
+            ),
+            httpx.Response(
+                200, json={"results": [{"id": 3, "originalLanguage": "en"}]}
+            ),
+            # The limit is already met after the filter, so this failure must
+            # never be requested.
+            httpx.Response(503),
+        ]
+    )
+    rows = await make_client().discover_animation(
+        media_type="show", sort_by=SEER_ANIMATION_TRENDING_SORT, limit=2, pages=10
+    )
+    assert [row["tmdb"] for row in rows] == [2, 3]
+    assert route.call_count == 2
+
+
+@respx.mock
+async def test_search_stops_once_matching_media_fills_the_limit() -> None:
+    route = respx.get(f"{_BASE}/api/v1/search").mock(
+        side_effect=[
+            # Only the wanted media type counts towards the limit.
+            httpx.Response(
+                200,
+                json={
+                    "results": [
+                        {"id": 1, "mediaType": "movie", "genreIds": [16]},
+                        {"id": 2, "mediaType": "tv", "genreIds": [16]},
+                    ]
+                },
+            ),
+            httpx.Response(
+                200,
+                json={"results": [{"id": 3, "mediaType": "tv", "genreIds": [16]}]},
+            ),
+            httpx.Response(503),
+        ]
+    )
+    rows = await make_client().search_animation(
+        media_type="show", query="x", limit=2, pages=10
+    )
+    assert [row["tmdb"] for row in rows] == [2, 3]
+    assert route.call_count == 2
+
+
+@respx.mock
+async def test_discover_popular_stops_once_the_limit_is_met() -> None:
+    route = respx.get(f"{_BASE}/api/v1/discover/movies").mock(
+        side_effect=[
+            httpx.Response(200, json={"results": [{"id": 1}, {"id": 2}]}),
+            httpx.Response(503),
+        ]
+    )
+    rows = await make_client().discover_popular(media_type="movie", limit=2, pages=5)
+    assert [row["tmdb"] for row in rows] == [1, 2]
+    assert route.call_count == 1
+
+
+@respx.mock
+async def test_discover_animation_caps_at_limit() -> None:
+    respx.get(f"{_BASE}/api/v1/discover/movies").mock(
+        return_value=httpx.Response(
+            200, json={"results": [{"id": 1}, {"id": 2}, {"id": 3}]}
+        )
+    )
+    rows = await make_client().discover_animation(
+        media_type="movie", sort_by=SEER_ANIMATION_TRENDING_SORT, limit=2
+    )
+    assert [row["tmdb"] for row in rows] == [1, 2]
+
+
+@respx.mock
+async def test_discover_animation_non_200_raises() -> None:
+    respx.get(f"{_BASE}/api/v1/discover/tv").mock(return_value=httpx.Response(400))
+    with pytest.raises(SeerError) as exc_info:
+        await make_client().discover_animation(
+            media_type="show", sort_by=SEER_ANIMATION_POPULAR_SORT
+        )
+    assert not isinstance(exc_info.value, SeerUnavailableError)
+
+
+@respx.mock
+async def test_discover_animation_connect_error_raises_unavailable() -> None:
+    respx.get(f"{_BASE}/api/v1/discover/movies").mock(
+        side_effect=httpx.ConnectError("down")
+    )
+    with pytest.raises(SeerUnavailableError):
+        await make_client().discover_animation(
+            media_type="movie", sort_by=SEER_ANIMATION_TRENDING_SORT
+        )
+
+
+@respx.mock
+async def test_search_animation_keeps_only_non_anime_animation() -> None:
+    route = respx.get(f"{_BASE}/api/v1/search").mock(
+        return_value=httpx.Response(
+            200,
+            json={
+                "results": [
+                    {
+                        "id": 808,
+                        "mediaType": "movie",
+                        "title": "Shrek",
+                        "genreIds": [16, 35],
+                        "originalLanguage": "en",
+                    },
+                    {
+                        # snake_case spellings are read too: kept.
+                        "id": 809,
+                        "mediaType": "movie",
+                        "title": "Shrek 2",
+                        "genre_ids": [16],
+                        "original_language": "en",
+                    },
+                    {
+                        # Animation but Japanese: anime, dropped.
+                        "id": 129,
+                        "mediaType": "movie",
+                        "title": "Spirited Away",
+                        "genreIds": [16],
+                        "originalLanguage": "ja",
+                    },
+                    {
+                        # Not Animation: dropped.
+                        "id": 2,
+                        "mediaType": "movie",
+                        "title": "Shrek the Musical",
+                        "genreIds": [10402],
+                        "originalLanguage": "en",
+                    },
+                    {
+                        # No genre ids: search has no server-side genre
+                        # filter, so the row is dropped.
+                        "id": 3,
+                        "mediaType": "movie",
+                        "title": "Bare Result",
+                        "originalLanguage": "en",
+                    },
+                    {
+                        # Animation, but the other media type: dropped.
+                        "id": 4,
+                        "mediaType": "tv",
+                        "name": "Shrek Show",
+                        "genreIds": [16],
+                        "originalLanguage": "en",
+                    },
+                ]
+            },
+        )
+    )
+    rows = await make_client().search_animation(
+        media_type="movie", query="shrek", limit=10
+    )
+    assert [row["tmdb"] for row in rows] == [808, 809]
+    assert route.calls.last.request.url.params["query"] == "shrek"
+
+
+@respx.mock
+async def test_search_animation_pages_past_filtered_page_and_caps() -> None:
+    respx.get(f"{_BASE}/api/v1/search").mock(
+        side_effect=[
+            httpx.Response(
+                200,
+                json={"results": [{"id": 1, "mediaType": "tv", "genreIds": [18]}]},
+            ),
+            httpx.Response(
+                200,
+                json={
+                    "results": [
+                        {"id": 2, "mediaType": "tv", "genreIds": [16]},
+                        {"id": 3, "mediaType": "tv", "genreIds": [16]},
+                    ]
+                },
+            ),
+        ]
+    )
+    rows = await make_client().search_animation(
+        media_type="show", query="x", limit=1, pages=2
+    )
+    assert [row["tmdb"] for row in rows] == [2]
 
 
 async def test_aclose() -> None:

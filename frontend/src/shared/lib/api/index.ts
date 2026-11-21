@@ -727,9 +727,20 @@ export function clearFindarrHistory(): Promise<FindarrCountResult> {
  * A discovery source backing one feed of the Trending page. `trakt-anime` and
  * `tmdb-anime` are the anime-genre-filtered variants of their base sources;
  * `anilist` is anime-only by nature. The Anime tab toggles between the three.
+ * `trakt-animation`, `tmdb-animation` and `seer-animation` are the Animation
+ * genre view of the Trakt, TMDB and Seer tabs: animated titles with anime left
+ * out.
  */
 export type TrendingSource =
-  "trakt" | "tmdb" | "seer" | "trakt-anime" | "tmdb-anime" | "anilist"
+  | "trakt"
+  | "tmdb"
+  | "seer"
+  | "trakt-anime"
+  | "tmdb-anime"
+  | "anilist"
+  | "trakt-animation"
+  | "tmdb-animation"
+  | "seer-animation"
 
 /** A discovery category exposed by the Trending page. */
 export type TrendingCategory = "trending" | "popular"
@@ -846,28 +857,43 @@ export function addTrending(
  * `null` when it cannot be resolved. TMDB items link to themoviedb.org by TMDB id
  * (the bare id redirects to the slug page); Trakt items link to trakt.tv by their
  * slug (the only reliable Trakt web route); Seer items link to the configured
- * Overseerr/Seer instance's media page via {@link seerMediaUrl}.
+ * Overseerr/Seer instance's media page via {@link seerMediaUrl}. Each source's
+ * genre variants link like their base source. The switch is exhaustive over
+ * {@link TrendingSource}, so a new source fails type-checking until it is
+ * routed here; a source the server sends that this build does not know gets no
+ * link.
  */
 export function trendingSourceUrl(
   item: TrendingItem,
   seerBaseUrl?: string,
 ): string | null {
-  if (item.source === "tmdb" || item.source === "tmdb-anime") {
-    if (item.tmdb === null) return null
-    const path = item.media_type === "movie" ? "movie" : "tv"
-    return `https://www.themoviedb.org/${path}/${item.tmdb}`
+  switch (item.source) {
+    case "tmdb":
+    case "tmdb-anime":
+    case "tmdb-animation": {
+      if (item.tmdb === null) return null
+      const path = item.media_type === "movie" ? "movie" : "tv"
+      return `https://www.themoviedb.org/${path}/${item.tmdb}`
+    }
+    case "trakt":
+    case "trakt-anime":
+    case "trakt-animation": {
+      if (!item.slug) return null
+      const path = item.media_type === "movie" ? "movies" : "shows"
+      return `https://trakt.tv/${path}/${item.slug}`
+    }
+    case "anilist":
+      // AniList uses one /anime/ route for both movies and shows.
+      if (item.anilist === null) return null
+      return `https://anilist.co/anime/${item.anilist}`
+    case "seer":
+    case "seer-animation":
+      if (!seerBaseUrl || item.tmdb === null) return null
+      return seerMediaUrl(seerBaseUrl, item.media_type, item.tmdb)
+    default: {
+      const unhandled: never = item.source
+      void unhandled
+      return null
+    }
   }
-  if (item.source === "trakt" || item.source === "trakt-anime") {
-    if (!item.slug) return null
-    const path = item.media_type === "movie" ? "movies" : "shows"
-    return `https://trakt.tv/${path}/${item.slug}`
-  }
-  if (item.source === "anilist") {
-    // AniList uses one /anime/ route for both movies and shows.
-    if (item.anilist === null) return null
-    return `https://anilist.co/anime/${item.anilist}`
-  }
-  // source === "seer"
-  if (!seerBaseUrl || item.tmdb === null) return null
-  return seerMediaUrl(seerBaseUrl, item.media_type, item.tmdb)
 }

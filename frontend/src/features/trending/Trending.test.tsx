@@ -544,6 +544,160 @@ describe("Trending", () => {
   })
 })
 
+describe("Trending genre filter", () => {
+  const BASE_TABS = [
+    { tab: "Trakt", source: "trakt" },
+    { tab: "TMDB", source: "tmdb" },
+    { tab: "Seer", source: "seer" },
+  ] as const
+
+  it.each(BASE_TABS)(
+    "offers an All | Animation toggle on the $tab tab, defaulting to All",
+    async ({ tab }) => {
+      const user = userEvent.setup()
+      render(<Trending />)
+      await user.click(screen.getByRole("tab", { name: tab }))
+      const genre = screen.getByRole("group", { name: "Genre" })
+      expect(
+        within(genre).getByRole("button", { name: "All" }),
+      ).toHaveAttribute("aria-pressed", "true")
+      expect(
+        within(genre).getByRole("button", { name: "Animation" }),
+      ).toHaveAttribute("aria-pressed", "false")
+    },
+  )
+
+  it.each(BASE_TABS)(
+    "queries the $source Animation variant and restores $source on All",
+    async ({ tab, source }) => {
+      const user = userEvent.setup()
+      render(<Trending />)
+      await user.click(screen.getByRole("tab", { name: tab }))
+      const genre = screen.getByRole("group", { name: "Genre" })
+
+      await user.click(within(genre).getByRole("button", { name: "Animation" }))
+      expect(useTrending).toHaveBeenLastCalledWith({
+        source: `${source}-animation`,
+        media: "movie",
+        category: "trending",
+      })
+      expect(
+        within(genre).getByRole("button", { name: "Animation" }),
+      ).toHaveAttribute("aria-pressed", "true")
+
+      // Media and category still apply on top of the genre.
+      await user.click(screen.getByRole("button", { name: "Shows" }))
+      await user.click(screen.getByRole("button", { name: "Popular" }))
+      expect(useTrending).toHaveBeenLastCalledWith({
+        source: `${source}-animation`,
+        media: "show",
+        category: "popular",
+      })
+
+      await user.click(within(genre).getByRole("button", { name: "All" }))
+      expect(useTrending).toHaveBeenLastCalledWith({
+        source,
+        media: "show",
+        category: "popular",
+      })
+    },
+  )
+
+  it("places the Genre toggle straight after the Category toggle", () => {
+    render(<Trending />)
+    const groups = screen
+      .getAllByRole("group")
+      .map((group) => group.getAttribute("aria-label"))
+    expect(groups.slice(0, 3)).toEqual(["Media type", "Category", "Genre"])
+  })
+
+  it("shows no Genre toggle on the Anime tab for any sub-source", async () => {
+    const user = userEvent.setup()
+    render(<Trending />)
+    await user.click(screen.getByRole("tab", { name: "Anime" }))
+    const sourceToggle = screen.getByRole("group", { name: "Anime source" })
+    for (const label of ["AniList", "Trakt", "TMDB"]) {
+      await user.click(
+        within(sourceToggle).getByRole("button", { name: label }),
+      )
+      expect(
+        screen.queryByRole("group", { name: "Genre" }),
+      ).not.toBeInTheDocument()
+    }
+    // The anime sub-sources are queried unchanged.
+    expect(useTrending).toHaveBeenLastCalledWith(
+      expect.objectContaining({ source: "tmdb-anime" }),
+    )
+  })
+
+  it("collapses the reveal back to the first batch when the genre changes", async () => {
+    vi.mocked(useTrending).mockReturnValue(queryResult(items(16)))
+    const scroll = installIntersectionObserver()
+    const user = userEvent.setup()
+    render(<Trending />)
+    scroll.scrollToSentinel()
+    expect(screen.getByTitle("Item 16")).toBeInTheDocument()
+    await user.click(screen.getByRole("button", { name: "Animation" }))
+    expect(screen.queryByTitle("Item 16")).not.toBeInTheDocument()
+    expect(screen.getByTitle("Item 15")).toBeInTheDocument()
+  })
+
+  it("names the base provider in the empty state of an Animation feed", async () => {
+    vi.mocked(useTrending).mockReturnValue(queryResult<TrendingItem[]>([]))
+    const user = userEvent.setup()
+    localStorage.setItem(TRENDING_TAB_STORAGE_KEY, "tmdb")
+    render(<Trending />)
+    await user.click(screen.getByRole("button", { name: "Animation" }))
+    expect(
+      screen.getByText(
+        "Nothing to show. Check the TMDB connection in Settings.",
+      ),
+    ).toBeInTheDocument()
+  })
+
+  it("starts on All again after remounting (the choice is not persisted)", async () => {
+    const user = userEvent.setup()
+    const first = render(<Trending />)
+    await user.click(screen.getByRole("button", { name: "Animation" }))
+    expect(useTrending).toHaveBeenLastCalledWith(
+      expect.objectContaining({ source: "trakt-animation" }),
+    )
+    first.unmount()
+
+    render(<Trending />)
+    expect(screen.getByRole("button", { name: "All" })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    )
+    expect(useTrending).toHaveBeenLastCalledWith(
+      expect.objectContaining({ source: "trakt" }),
+    )
+  })
+
+  it("starts on All on another tab (each tab has its own choice)", async () => {
+    const user = userEvent.setup()
+    render(<Trending />)
+    await user.click(screen.getByRole("button", { name: "Animation" }))
+    await user.click(screen.getByRole("tab", { name: "Seer" }))
+    expect(screen.getByRole("button", { name: "All" })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    )
+    expect(useTrending).toHaveBeenLastCalledWith(
+      expect.objectContaining({ source: "seer" }),
+    )
+  })
+
+  it("mentions the Animation filter in the page description", () => {
+    render(<Trending />)
+    expect(
+      screen.getByText(
+        /Switch a Trakt, TMDB or Seer tab to Animation to see animated titles without anime\./,
+      ),
+    ).toBeInTheDocument()
+  })
+})
+
 describe("Trending search", () => {
   const SEARCH_ITEM: TrendingItem = {
     ...ITEM,
@@ -639,6 +793,35 @@ describe("Trending search", () => {
     expect(popular).toBeEnabled()
     expect(screen.getByTitle("Dune")).toBeInTheDocument()
     expect(screen.queryByTitle("Dune Messiah")).not.toBeInTheDocument()
+  })
+
+  it("searches the Animation variant and keeps the Genre toggle usable", () => {
+    vi.mocked(useTrendingSearch).mockReturnValue(queryResult([SEARCH_ITEM]))
+    vi.useFakeTimers()
+    localStorage.setItem(TRENDING_TAB_STORAGE_KEY, "seer")
+    render(<Trending />)
+    act(() => {
+      fireEvent.click(screen.getByRole("button", { name: "Animation" }))
+    })
+
+    typeSearch("shrek")
+    expect(useTrendingSearch).toHaveBeenLastCalledWith(
+      { source: "seer-animation", media: "movie", query: "shrek" },
+      true,
+    )
+    // Category is greyed out during a search, but the genre still filters the
+    // results, so its toggle stays enabled and switching it re-queries.
+    expect(screen.getByRole("button", { name: "Popular" })).toBeDisabled()
+    const all = screen.getByRole("button", { name: "All" })
+    expect(all).toBeEnabled()
+    expect(screen.getByRole("button", { name: "Animation" })).toBeEnabled()
+    act(() => {
+      fireEvent.click(all)
+    })
+    expect(useTrendingSearch).toHaveBeenLastCalledWith(
+      { source: "seer", media: "movie", query: "shrek" },
+      true,
+    )
   })
 
   it("applies the hide-available filter to search results", () => {

@@ -32,6 +32,17 @@ TRENDING_SYNC_PAGES = 5
 # BOTH media buckets to reach TRENDING_ITEM_LIMIT before the feed is exhausted
 # (the bucket fetch stops once both are full or Seer runs out of pages).
 SEER_TRENDING_SYNC_PAGES = 15
+# Pages for the TMDB/Seer Animation genre feeds (tmdb-animation, seer-animation):
+# about 2 x TRENDING_SYNC_PAGES, because roughly half of popular animated TV is
+# Japanese and is dropped client-side as anime, so ~20 rows per page x 10 pages
+# leaves room to still reach TRENDING_ITEM_LIMIT. Each client stops at the first
+# empty response page, so a short feed costs fewer requests.
+ANIMATION_SYNC_PAGES = 10
+# Pages of TRENDING_ITEM_LIMIT rows for the Trakt Animation feed (trakt-animation):
+# Trakt filters to the animation genre server-side, but anime is dropped
+# client-side, so up to 3 x 100 rows are fetched to fill 100 after the exclusion.
+# The client stops at the first page shorter than the limit.
+TRAKT_ANIMATION_SYNC_PAGES = 3
 # Item cap for the live per-source title search behind the Trending page's
 # search box. Search is uncached and long-tail, so it stays well below the
 # snapshot feeds' TRENDING_ITEM_LIMIT.

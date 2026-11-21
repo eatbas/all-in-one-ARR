@@ -1,5 +1,4 @@
 import {
-  keepPreviousData,
   useMutation,
   useQuery,
   useQueryClient,
@@ -38,10 +37,31 @@ export function useTrending(
   })
 }
 
+type TrendingSearchKey = ReturnType<typeof queryKeys.trendingSearch>
+
+/**
+ * Whether a previous search's results may stand in for `query` while it
+ * fetches: only when the search text changed on the same effective source and
+ * media type. Results from another source (e.g. "All" before the user chose
+ * "Animation") or media type would show titles, and source links, that the
+ * new query may exclude.
+ */
+function sharesSearchScope(
+  previousKey: TrendingSearchKey | undefined,
+  query: TrendingSearchQuery,
+): boolean {
+  if (previousKey === undefined) {
+    return false
+  }
+  const [, , previousSource, previousMedia] = previousKey
+  return previousSource === query.source && previousMedia === query.media
+}
+
 /**
  * Live title search on one source, gated by `enabled` (the caller decides when
- * the query is long enough). The previous results stay in place as placeholder
- * data while a new query fetches, so the grid never flashes empty mid-typing.
+ * the query is long enough). While the search text changes on the same source
+ * and media type, the previous results stay in place as placeholder data so the
+ * grid never flashes empty mid-typing; a source or media change drops them.
  */
 export function useTrendingSearch(
   query: TrendingSearchQuery,
@@ -53,7 +73,10 @@ export function useTrendingSearch(
     enabled,
     staleTime: TRENDING_STALE_TIME,
     gcTime: TRENDING_GC_TIME,
-    placeholderData: keepPreviousData,
+    placeholderData: (previousData, previousQuery) =>
+      sharesSearchScope(previousQuery?.queryKey, query)
+        ? previousData
+        : undefined,
   })
 }
 

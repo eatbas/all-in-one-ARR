@@ -3,9 +3,10 @@
 from __future__ import annotations
 
 import httpx
+import pytest
 import respx
 
-from core.clients.tmdb import TmdbClient
+from core.clients.tmdb import TmdbClient, TmdbRequestError
 
 _URL = "https://api.themoviedb.org/3/configuration"
 
@@ -432,6 +433,289 @@ async def test_search_anime_pages_past_an_all_filtered_page() -> None:
         media_type="movie", query="spirited", limit=5, pages=2
     )
     assert [row["tmdb"] for row in rows] == [129]
+
+
+@respx.mock
+async def test_get_animation_trending_show_uses_genre_only_discover() -> None:
+    route = respx.get(_DISCOVER_TV).mock(
+        return_value=httpx.Response(
+            200,
+            json={
+                "results": [
+                    {
+                        "id": 60625,
+                        "name": "Rick and Morty",
+                        "first_air_date": "2013-12-02",
+                        "original_language": "en",
+                    },
+                    {
+                        # Japanese-language animation is anime: dropped.
+                        "id": 240411,
+                        "name": "Dan Da Dan",
+                        "first_air_date": "2024-10-04",
+                        "original_language": "ja",
+                    },
+                    {
+                        # No language at all: the feed is already genre
+                        # filtered, so the row is kept.
+                        "id": 94605,
+                        "name": "Arcane",
+                        "first_air_date": "2021-11-06",
+                    },
+                ]
+            },
+        )
+    )
+    rows = await TmdbClient(api_key="v3key").get_animation_trending(
+        media_type="show", limit=5
+    )
+    assert rows == [
+        {"media_type": "show", "tmdb": 60625, "title": "Rick and Morty", "year": 2013},
+        {"media_type": "show", "tmdb": 94605, "title": "Arcane", "year": 2021},
+    ]
+    params = route.calls.last.request.url.params
+    assert params["with_genres"] == "16"
+    assert "with_origin_country" not in params
+    assert params["sort_by"] == "popularity.desc"
+
+
+@respx.mock
+async def test_get_animation_popular_movie_sorts_by_vote_count() -> None:
+    route = respx.get(_DISCOVER_MOVIE).mock(
+        return_value=httpx.Response(
+            200,
+            json={
+                "results": [
+                    {
+                        "id": 862,
+                        "title": "Toy Story",
+                        "release_date": "1995-11-22",
+                        "original_language": "en",
+                    },
+                    {
+                        "id": 129,
+                        "title": "Spirited Away",
+                        "release_date": "2001-07-20",
+                        "original_language": "ja",
+                    },
+                ]
+            },
+        )
+    )
+    rows = await TmdbClient(api_key="v3key").get_animation_popular(
+        media_type="movie", limit=5
+    )
+    assert rows == [
+        {"media_type": "movie", "tmdb": 862, "title": "Toy Story", "year": 1995}
+    ]
+    params = route.calls.last.request.url.params
+    assert params["with_genres"] == "16"
+    assert "with_origin_country" not in params
+    assert params["sort_by"] == "vote_count.desc"
+
+
+@respx.mock
+async def test_get_animation_trending_pages_past_an_all_filtered_page() -> None:
+    respx.get(_DISCOVER_MOVIE).mock(
+        side_effect=[
+            # Every result is anime, but the response page is non-empty, so
+            # paging continues to the next page.
+            httpx.Response(
+                200,
+                json={"results": [{"id": 1, "title": "A", "original_language": "ja"}]},
+            ),
+            httpx.Response(
+                200,
+                json={
+                    "results": [
+                        {"id": 2, "title": "B", "original_language": "en"},
+                        {"id": 3, "title": "C", "original_language": "fr"},
+                        {"id": 4, "title": "D", "original_language": "en"},
+                    ]
+                },
+            ),
+            httpx.Response(200, json={"results": []}),
+        ]
+    )
+    rows = await TmdbClient(api_key="v3key").get_animation_trending(
+        media_type="movie", limit=2, pages=5
+    )
+    # Pages concatenate past the filtered page, then the limit caps the result.
+    assert [row["tmdb"] for row in rows] == [2, 3]
+
+
+@respx.mock
+async def test_get_animation_trending_stops_once_kept_results_fill_the_limit() -> None:
+    route = respx.get(_DISCOVER_TV).mock(
+        side_effect=[
+            httpx.Response(
+                200,
+                json={
+                    "results": [
+                        {"id": 1, "name": "A", "original_language": "ja"},
+                        {"id": 2, "name": "B", "original_language": "en"},
+                    ]
+                },
+            ),
+            httpx.Response(
+                200,
+                json={"results": [{"id": 3, "name": "C", "original_language": "en"}]},
+            ),
+            # The limit is already met after the filter, so this failure must
+            # never be requested.
+            httpx.Response(503),
+        ]
+    )
+    rows = await TmdbClient(api_key="v3key").get_animation_trending(
+        media_type="show", limit=2, pages=10
+    )
+    assert [row["tmdb"] for row in rows] == [2, 3]
+    assert route.call_count == 2
+
+
+@respx.mock
+async def test_get_popular_stops_once_the_limit_is_met() -> None:
+    route = respx.get(_POPULAR_MOVIE).mock(
+        side_effect=[
+            httpx.Response(200, json={"results": [{"id": 1}, {"id": 2}]}),
+            httpx.Response(503),
+        ]
+    )
+    rows = await TmdbClient(api_key="v3key").get_popular(
+        media_type="movie", limit=2, pages=5
+    )
+    assert [row["tmdb"] for row in rows] == [1, 2]
+    assert route.call_count == 1
+
+
+_SECRET_KEY = "synthetic-v3-secret-key"
+
+
+@respx.mock
+async def test_discovery_http_error_omits_the_api_key() -> None:
+    respx.get(_DISCOVER_MOVIE).mock(return_value=httpx.Response(503))
+    with pytest.raises(TmdbRequestError) as caught:
+        await TmdbClient(api_key=_SECRET_KEY).get_animation_popular(
+            media_type="movie", limit=5, pages=2
+        )
+    message = str(caught.value)
+    assert message == "TMDB /3/discover/movie returned HTTP 503"
+    assert _SECRET_KEY not in message
+    # The keyed httpx error is not chained, so a logged traceback cannot
+    # print it either.
+    assert caught.value.__cause__ is None
+    assert caught.value.__suppress_context__ is True
+
+
+@respx.mock
+async def test_search_transport_error_omits_the_api_key() -> None:
+    respx.get(_SEARCH_TV).mock(
+        side_effect=httpx.ConnectError(f"failed for ?api_key={_SECRET_KEY}")
+    )
+    with pytest.raises(TmdbRequestError) as caught:
+        await TmdbClient(api_key=_SECRET_KEY).search_animation(
+            media_type="show", query="x"
+        )
+    assert str(caught.value) == "TMDB /3/search/tv request failed: ConnectError"
+    assert caught.value.__suppress_context__ is True
+
+
+@respx.mock
+async def test_get_animation_popular_stops_on_empty_page() -> None:
+    route = respx.get(_DISCOVER_TV).mock(
+        side_effect=[
+            httpx.Response(
+                200,
+                json={"results": [{"id": 1, "name": "A", "original_language": "en"}]},
+            ),
+            httpx.Response(200, json={"results": []}),
+        ]
+    )
+    rows = await TmdbClient(api_key="v3key").get_animation_popular(
+        media_type="show", limit=40, pages=10
+    )
+    assert [row["tmdb"] for row in rows] == [1]
+    assert route.call_count == 2
+
+
+@respx.mock
+async def test_search_animation_keeps_only_non_anime_animation() -> None:
+    route = respx.get(_SEARCH_MOVIE).mock(
+        return_value=httpx.Response(
+            200,
+            json={
+                "results": [
+                    {
+                        "id": 808,
+                        "title": "Shrek",
+                        "release_date": "2001-05-18",
+                        "genre_ids": [16, 35],
+                        "original_language": "en",
+                    },
+                    {
+                        # Animation but Japanese: anime, dropped.
+                        "id": 129,
+                        "title": "Spirited Away",
+                        "genre_ids": [16],
+                        "original_language": "ja",
+                    },
+                    {
+                        # Not Animation: dropped.
+                        "id": 2,
+                        "title": "Shrek the Musical",
+                        "genre_ids": [10402],
+                        "original_language": "en",
+                    },
+                    {
+                        # No genre metadata: search applies no server-side
+                        # genre filter, so the row is dropped.
+                        "id": 3,
+                        "title": "Bare Result",
+                        "original_language": "en",
+                    },
+                    {
+                        # Animation with no language: kept.
+                        "id": 10192,
+                        "title": "Shrek Forever After",
+                        "release_date": "2010-05-16",
+                        "genre_ids": [16],
+                    },
+                ]
+            },
+        )
+    )
+    rows = await TmdbClient(api_key="v3key").search_animation(
+        media_type="movie", query="shrek", limit=5
+    )
+    assert [row["tmdb"] for row in rows] == [808, 10192]
+    params = route.calls.last.request.url.params
+    assert params["query"] == "shrek"
+    assert params["include_adult"] == "false"
+
+
+@respx.mock
+async def test_search_animation_pages_and_caps() -> None:
+    respx.get(_SEARCH_TV).mock(
+        side_effect=[
+            httpx.Response(
+                200,
+                json={"results": [{"id": 1, "name": "A", "genre_ids": [18]}]},
+            ),
+            httpx.Response(
+                200,
+                json={
+                    "results": [
+                        {"id": 2, "name": "B", "genre_ids": [16]},
+                        {"id": 3, "name": "C", "genre_ids": [16]},
+                    ]
+                },
+            ),
+        ]
+    )
+    rows = await TmdbClient(api_key="v3key").search_animation(
+        media_type="show", query="b", limit=1, pages=2
+    )
+    assert [row["tmdb"] for row in rows] == [2]
 
 
 @respx.mock
