@@ -944,7 +944,7 @@ compatible local check environment. Python stays on 3.14.10; 3.15 is a separate
 interpreter migration. npm stays at the bundled 11.20.0; npm 12 is a separate
 package-manager migration because it blocks dependency lifecycle scripts unless
 they are explicitly allowed. TypeScript stays at **6.0.3** because
-`typescript-eslint@8.72.2` requires TypeScript `>=4.8.4 <6.1.0`. Dependabot
+`typescript-eslint@8.73.0` requires TypeScript `>=4.8.4 <6.1.0`. Dependabot
 therefore ignores TypeScript major and minor updates. APScheduler stays at
 **4.0.0a6**; see Notes & limitations below. Prettier is pinned exactly at
 **3.10.1**.
@@ -953,19 +953,17 @@ Install the lock generator in the virtual environment and regenerate the univers
 Python lock from the repository root with the assessed versions:
 
 ```bash
-.venv/bin/python -m pip install pip==26.3 uv==0.13.8
+.venv/bin/python -m pip install pip==26.3 uv==0.13.9
 .venv/bin/uv pip compile --refresh backend/pyproject.toml --all-extras --universal --prerelease explicit \
-  --upgrade-package 'annotated-doc==0.0.6' \
-  --upgrade-package 'click==8.5.1' \
-  --upgrade-package 'coverage==7.17.3' \
-  --upgrade-package 'fastapi==0.163.1' \
-  --upgrade-package 'mypy-extensions==1.2.0' \
-  --upgrade-package 'pydantic==2.14.3' \
-  --upgrade-package 'pydantic-core==2.50.4' \
-  --upgrade-package 'pydantic-settings==2.16.3' \
-  --upgrade-package 'pytest-asyncio==1.5.0' \
-  --upgrade-package 'ruff==0.17.5' \
-  --upgrade-package 'typing-inspection==0.4.5' \
+  --upgrade-package 'annotated-doc==0.0.7' \
+  --upgrade-package 'certifi==2026.11.20' \
+  --upgrade-package 'coverage==7.17.4' \
+  --upgrade-package 'fastapi==0.165.0' \
+  --upgrade-package 'librt==0.17.0' \
+  --upgrade-package 'pydantic==2.14.4' \
+  --upgrade-package 'pydantic-core==2.50.5' \
+  --upgrade-package 'pyyaml==6.0.4' \
+  --upgrade-package 'ruff==0.17.6' \
   -o backend/requirements.lock
 ```
 

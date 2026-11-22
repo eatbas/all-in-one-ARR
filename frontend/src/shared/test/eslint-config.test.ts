@@ -32,7 +32,7 @@ describe("ESLint configuration", () => {
         "utf8",
       ),
     ) as { version: string }
-    expect(matcher.version).toBe("11.0.8")
+    expect(matcher.version).toBe("11.0.9")
   })
 
   it.each([
