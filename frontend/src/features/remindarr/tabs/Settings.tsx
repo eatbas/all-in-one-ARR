@@ -138,7 +138,7 @@ function SettingsForm({ settings, onSave, isPending }: SettingsFormProps) {
   }
 
   return (
-    <Card className="max-w-[860px]">
+    <Card>
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
           <SettingsIcon className="size-4 text-muted-foreground" />
