@@ -20,7 +20,7 @@
     "api:types": "openapi-ts -i ../schema/openapi.json -o ./src/shared/lib/generated -p @hey-api/typescript --no-log-file"
   },
   "dependencies": {
-    "@tanstack/react-query": "^5.108.2",
+    "@tanstack/react-query": "^5.108.3",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "lucide-react": "^1.77.0",
